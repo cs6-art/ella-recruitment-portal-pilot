@@ -23,7 +23,9 @@ const queueParameters = {
   documentId: { __rl: true, mode: 'id', value: sheetDocument },
   sheetName: { __rl: true, mode: 'name', value: 'Bulk_Resume_Queue' },
   columns: { mappingMode: 'autoMapInputData', value: {}, schema: queueSchema },
-  options: { handlingExtraData: 'ignoreIt', cellFormat: 'USER_ENTERED', locationDefine: { values: { headerRow: 1 } } },
+  // RAW, not USER_ENTERED: a leading "+" on preferredMobile would otherwise
+  // be parsed by Sheets as an arithmetic expression and stored as #ERROR!.
+  options: { handlingExtraData: 'ignoreIt', cellFormat: 'RAW', locationDefine: { values: { headerRow: 1 } } },
 };
 const queueCredentials = { googleApi: newCredential('Google Sheets Service Account') };
 
@@ -90,7 +92,8 @@ const nameLines = resumeText.split(/\\r?\\n/).map((line) => String(line).replace
 const nameFromText = nameLines.map((line) => line.replace(/^(full\\s+name|candidate\\s+name|name)\\s*:\\s*/i, '')).find((line) => { const words = line.split(/\\s+/).filter((word) => /^[A-Za-z][A-Za-z'’-]*$/.test(word)); return words.length >= 2 && words.length <= 6 && !/@|https?:|\\d{3,}|^(resume|curriculum vitae|cv|profile|contact|experience|education|skills)\\b/i.test(line); }) || '';
 const name = String(data.candidate_name || data.candidateName || base.candidateName || nameFromText).trim();
 const email = String(data.candidate_email || data.candidateEmail || base.candidateEmail || firstEmail).trim().toLowerCase();
-const mobile = String(data.preferred_mobile || data.preferredMobile || base.preferredMobile || firstPhone).trim();
+const rawMobile = String(data.preferred_mobile || data.preferredMobile || base.preferredMobile || '').trim();
+const mobile = normalizePhone(rawMobile) || firstPhone;
 return { json: { ...base, candidateName: name, candidateEmail: email, preferredMobile: mobile, applicantCountry: country, valid: Boolean(name && email.includes('@') && /^\\+[1-9]\\d{7,14}$/.test(mobile)) } };` },
     position: [1920, 300],
   },
