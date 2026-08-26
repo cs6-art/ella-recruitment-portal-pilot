@@ -73,6 +73,9 @@ test("eligible final bookings invite the applicant through Google Calendar", () 
   assert.match(workflow, /requiredColumnCount - currentColumnCount/);
   assert.match(workflow, /High_Match_Profile", "CZ"/);
   assert.match(applications, /High_Match_Profile", "CZ"/);
+  assert.match(workflow, /Candidate_Name/);
+  assert.match(workflow, /Candidate_Email/);
+  assert.match(workflow, /Voice_Call_Scheduled_At/);
   assert.doesNotMatch(workflow, /High_Match_Profile", "BH"/);
   assert.doesNotMatch(applications, /High_Match_Profile", "BH"/);
 });

@@ -1046,12 +1046,24 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
     // here never results in an actual call.
     const applicantRecord = applicantData.rows[applicantIndex];
     const queueData = await readSheet("Voice_Call_Queue", "X");
+    const scheduledDate = field(matchingSlot, "Date");
+    const scheduledTime = field(matchingSlot, "Start_Time", "Start Time");
+    const scheduledTimezone = field(matchingSlot, "Timezone", "Time Zone") || "Asia/Singapore";
+    let scheduledAt = "";
+    try {
+      scheduledAt = scheduledInstant(scheduledDate, scheduledTime, scheduledTimezone).toISOString();
+    } catch {
+      // The booking has already passed the slot validation above. Keep the
+      // legacy date/time fields usable if a malformed timezone reaches here.
+    }
     const newQueueValues = queueData.headers.map((header) => {
       const key = normalize(header);
       if (key === normalize("Application_ID")) return context.applicationId;
-      if (key === normalize("Voice_Interview_Scheduled_Date")) return field(matchingSlot, "Date");
-      if (key === normalize("Voice_Interview_Scheduled_Time")) return field(matchingSlot, "Start_Time", "Start Time");
-      if (key === normalize("Voice_Interview_Timezone")) return field(matchingSlot, "Timezone", "Time Zone");
+      if (key === normalize("Candidate_Name")) return context.candidateName;
+      if (key === normalize("Candidate_Email")) return context.email;
+      if (key === normalize("Voice_Interview_Scheduled_Date")) return scheduledDate;
+      if (key === normalize("Voice_Interview_Scheduled_Time")) return scheduledTime;
+      if (key === normalize("Voice_Interview_Timezone")) return scheduledTimezone;
       if (key === normalize("Applicant_Country")) return field(applicantRecord, "Applicant_Country") || inferApplicantCountry(confirmedMobile);
       if (key === normalize("Preferred_Mobile")) return asTextCell(confirmedMobile);
       if (key === normalize("Contact_Number") || key === normalize("Contact Number")) return asTextCell(confirmedMobile);
@@ -1059,6 +1071,7 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
       if (key === normalize("Voice_Call_Status")) return "Scheduled";
       if (key === normalize("Voice_Call_Attempts")) return "0";
       if (key === normalize("Voice_Call_Max_Attempts")) return "1";
+      if (key === normalize("Voice_Call_Scheduled_At")) return scheduledAt;
       if (key === normalize("Last_Updated")) return now;
       return "";
     });
