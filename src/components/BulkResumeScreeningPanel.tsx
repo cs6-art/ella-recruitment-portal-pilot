@@ -88,7 +88,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
       // slow poll from overwriting a newer queue snapshot.
       if (requestId !== statusRequestId.current) return;
       setItems(result.items || []);
-      setCounts(result.counts || {});
+      setCounts(result.roleTotals || result.counts || {});
       setConfigured(result.configured !== false);
       if (result.error) setError(result.error);
     } catch (caught) {
@@ -363,7 +363,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
         )}
 
         <div className="bulk-screening-status-header">
-          <div><strong>Screening queue</strong><small>{roleId ? `Status for ${roleId}${anyPending ? " · updates automatically every minute" : ""}` : "Select a role to view its queue"}</small></div>
+          <div><strong>Role Total</strong><small>{roleId ? `All saved screening records for ${roleId}${anyPending ? " · latest status updates automatically every minute" : ""}` : "Select a role to view its records"}</small></div>
           <button type="button" className="btn btn-secondary" onClick={() => void refreshStatus()} disabled={loading}>{loading ? "Refreshing..." : "Refresh status"}</button>
         </div>
 

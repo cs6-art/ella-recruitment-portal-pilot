@@ -1,0 +1,85 @@
+{
+  "name": "McLink - Application Invite Email",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "application-invite-email",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "application-invite-email-webhook",
+      "name": "Application Invite Email Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [260, 300],
+      "webhookId": "application-invite-email",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Application invite webhook secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst text = (value) => String(value ?? '').trim();\nconst candidate = body.candidate ?? {};\nconst email = text(candidate.email).toLowerCase();\nconst link = text(body.applicationLink);\nif (body.eventType !== 'application_invite_email_requested') throw new Error('Invalid application invite email event.');\nif (!email || !email.includes('@')) throw new Error('Candidate email is missing.');\nif (!link || !/^https?:\\/\\//i.test(link)) throw new Error('Application link is missing.');\nreturn [{ json: { ...body, candidate: { name: text(candidate.name) || 'Candidate', email }, applicationLink: link, roleTitle: text(body.roleTitle) || 'the published role', expiresAt: text(body.expiresAt) } }];"
+      },
+      "id": "validate-application-invite-email",
+      "name": "Validate Invitation Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.candidate.email }}",
+        "subject": "={{ 'Application invitation for ' + $json.roleTitle }}",
+        "emailType": "html",
+        "message": "={{ '<p>Hello ' + $json.candidate.name + ',</p><p>You are invited to apply for <strong>' + $json.roleTitle + '</strong>.</p><p>Please use the link below to upload your resume and complete your application:</p><p><a href=\"' + $json.applicationLink + '\">Open your application</a></p><p>This link is personal, can be used once, and expires automatically' + ($json.expiresAt ? ' on ' + $json.expiresAt : '') + '.</p><p>Regards,<br>McLink Recruitment Team</p>' }}"
+      },
+      "id": "send-application-invite-email",
+      "name": "Send Application Invitation",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [800, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, invitationId: $('Validate Invitation Details').item.json.invitationId, recipient: $('Validate Invitation Details').item.json.candidate.email }) }}",
+        "options": {}
+      },
+      "id": "application-invite-email-response",
+      "name": "Confirm Email Sent",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [1080, 300]
+    }
+  ],
+  "connections": {
+    "Application Invite Email Webhook": {
+      "main": [[{ "node": "Validate Invitation Details", "type": "main", "index": 0 }]]
+    },
+    "Validate Invitation Details": {
+      "main": [[{ "node": "Send Application Invitation", "type": "main", "index": 0 }]]
+    },
+    "Send Application Invitation": {
+      "main": [[{ "node": "Confirm Email Sent", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "application-invite-email-v1",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

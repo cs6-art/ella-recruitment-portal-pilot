@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { canManagePipeline } from "@/lib/access-control";
-import { getBulkResumeQueue, getBulkResumeScreeningEvidence, type BulkResumeQueueItem } from "@/lib/candidate-applications";
+import { appendBulkResumeQueueEvent, getBulkResumeQueue, getBulkResumeScreeningEvidence, type BulkResumeQueueItem } from "@/lib/candidate-applications";
+import { extractResumeContactDetails } from "@/lib/resume-contact-extraction";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { bulkResumeEnvironment, bulkResumeIsUatMarked, bulkResumeWebhookConfig, productionUatBatchId } from "@/lib/bulk-resume-config";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
@@ -121,10 +122,12 @@ export async function POST(request: Request) {
 
     async function processFile({ file, queueId }: { file: File; sha256: string; queueId: string }) {
       let stored: Awaited<ReturnType<typeof storeResumeFile>> | null = null;
+      let resolvedQueueId = queueId;
+      const submittedAt = new Date().toISOString();
       try {
         if (file.size > MAX_RESUME_FILE_BYTES) throw new Error("Resume files must be 10 MB or smaller.");
         stored = await storeResumeFile(file, { environment });
-        const resolvedQueueId = queueIdForHash(roleId, stored.record.sha256);
+        resolvedQueueId = queueIdForHash(roleId, stored.record.sha256);
         const previous = latestByFile.get(resolvedQueueId) || latestByFile.get(legacyQueueIdForHash(stored.record.sha256));
         const previousStatus = previous?.status.toLowerCase() || "";
         const evidenceKey = `${roleId.toLowerCase()}|${resolvedQueueId.toLowerCase()}`;
@@ -141,6 +144,28 @@ export async function POST(request: Request) {
         }
 
         const fileUrl = driveFileUrl(stored.record.fileId);
+        const extractedContact = extractResumeContactDetails(stored.extractedText);
+        // Save the processing row first. Downstream parsing can now fail
+        // without making the upload disappear from Role Total.
+        await appendBulkResumeQueueEvent({
+          driveFileId: resolvedQueueId,
+          driveFileName: stored.record.fileName,
+          driveFileUrl: fileUrl,
+          driveFileMimeType: stored.record.mimeType,
+          roleId,
+          candidateName: extractedContact.candidateName,
+          candidateEmail: extractedContact.candidateEmail,
+          status: "Processing",
+          applicationId: `${isUat ? "UAT-" : ""}APP-${crypto.createHash("sha256").update(`${roleId}:${stored.record.sha256}`).digest("hex").slice(0, 24)}`,
+          discoveredAt: submittedAt,
+          processingStartedAt: submittedAt,
+          attemptCount: String(Number(previous?.attemptCount || 0) + 1),
+          lastUpdated: submittedAt,
+          environment: isUat ? "uat" : environment,
+          isUat,
+          batchId,
+          jobId: resolvedQueueId,
+        });
         const payload = {
           eventType: "bulk_resume_uploaded",
           batchId,
@@ -151,13 +176,18 @@ export async function POST(request: Request) {
           mimeType: stored.record.mimeType,
           sha256: stored.record.sha256,
           resumeText: stored.extractedText,
+          candidateName: extractedContact.candidateName,
+          candidateEmail: extractedContact.candidateEmail,
+          preferredMobile: extractedContact.preferredMobile,
+          applicantCountry: extractedContact.applicantCountry,
           resumeFile: stored.record,
           driveFileUrl: fileUrl,
-          submittedAt: new Date().toISOString(),
+          submittedAt,
           source: isUat ? "Portal Bulk Upload (UAT)" : "Portal Bulk Upload",
           environment: isUat ? "uat" : environment,
           isUat,
           is_uat: isUat,
+          attemptCount: String(Number(previous?.attemptCount || 0) + 1),
           jobId: resolvedQueueId,
         };
         const response = await fetch(webhookUrl, {
@@ -196,8 +226,30 @@ export async function POST(request: Request) {
         latestByFile.set(resolvedQueueId, queueItem);
         results.push({ fileName: stored.record.fileName, queueId: resolvedQueueId, applicationId: payload.applicationId, status: terminalStatus, driveFileUrl: fileUrl });
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unable to submit this resume.";
+        // Best effort only: if storage itself is unavailable, retain the
+        // upload result in the response while avoiding a second failure.
+        await appendBulkResumeQueueEvent({
+          driveFileId: resolvedQueueId,
+          driveFileName: stored?.record.fileName || file.name,
+          driveFileUrl: stored ? driveFileUrl(stored.record.fileId) : "",
+          driveFileMimeType: stored?.record.mimeType || file.type,
+          roleId,
+          status: "Failed",
+          applicationId: stored ? `${isUat ? "UAT-" : ""}APP-${crypto.createHash("sha256").update(`${roleId}:${stored.record.sha256}`).digest("hex").slice(0, 24)}` : "",
+          errorMessage,
+          discoveredAt: submittedAt,
+          processingStartedAt: submittedAt,
+          processedAt: submittedAt,
+          attemptCount: "1",
+          lastUpdated: new Date().toISOString(),
+          environment: isUat ? "uat" : environment,
+          isUat,
+          batchId,
+          jobId: resolvedQueueId,
+        }).catch((queueError) => console.error("[Bulk Resume Upload] Could not save failure queue event:", queueError));
         if (stored && !results.some((result) => result.queueId === queueIdForHash(roleId, stored?.record.sha256 || ""))) await deleteResumeFile(stored.record).catch(() => undefined);
-        results.push({ fileName: file.name, queueId, status: "Failed", error: error instanceof Error ? error.message : "Unable to submit this resume." });
+        results.push({ fileName: file.name, queueId: resolvedQueueId, status: "Failed", error: errorMessage });
       }
     }
 

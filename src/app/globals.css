@@ -5177,6 +5177,8 @@ textarea:focus-visible {
 .resume-invite-generator p { max-width: 680px; margin: 0; color: var(--muted); line-height: 1.5; }
 .resume-invite-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 14px; }
 .resume-invite-fields select, .resume-invite-fields input { min-height: 44px; }
+.resume-invite-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.resume-invite-actions .btn { flex: 1 1 170px; white-space: nowrap; }
 .resume-invite-result { display: grid; gap: 8px; }
 .resume-invite-link-row { display: flex; gap: 10px; }
 .resume-invite-link-row input { flex: 1 1 auto; min-height: 42px; padding: 0 12px; border: 1px solid #bce4d4; border-radius: 8px; color: var(--navy); background: #fff; font-size: 13px; }
@@ -5187,6 +5189,7 @@ textarea:focus-visible {
 
 @media (max-width: 640px) {
   .resume-invite-link-row { flex-direction: column; }
+  .resume-invite-actions { flex-direction: column; }
 }
 
 /* Candidate booking presents dates first, then the smaller set of times for

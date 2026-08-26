@@ -177,10 +177,18 @@ const normalize = node({
 const data = typeof value === 'string' ? JSON.parse(value) : value;
 const base = $('Select Unscreened Resumes').item.json;
 const extracted = $('Extract Resume Text').item.json;
-const name = String(data.candidate_name || data.candidateName || '').trim();
-const email = String(data.candidate_email || data.candidateEmail || '').trim().toLowerCase();
-const mobile = String(data.preferred_mobile || data.preferredMobile || '').trim();
-return { json: { ...base, resumeText: String(extracted.text || ''), candidateName: name, candidateEmail: email, preferredMobile: mobile, applicantCountry: String(data.applicant_country || data.applicantCountry || '').trim().toUpperCase(), valid: Boolean(name && email && mobile) } };` },
+const resumeText = String(extracted.text || '');
+const firstEmail = (resumeText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/ig) || [])[0] || '';
+const phoneCandidates = resumeText.match(/(?:\\+|00)?\\d[\\d\\s().-]{7,}\\d/g) || [];
+const country = String(data.applicant_country || data.applicantCountry || '').trim().toUpperCase();
+const normalizePhone = (value) => { const raw = String(value || '').trim(); const digits = raw.replace(/\\D/g, ''); if (digits.length < 8 || digits.length > 15) return ''; if (raw.startsWith('+')) return '+' + digits; if (digits.startsWith('00')) return '+' + digits.slice(2); if (/^(63|65|60)/.test(digits)) return '+' + digits; if (country === 'PH' && digits.startsWith('0')) return '+63' + digits.slice(1); if (country === 'SG' && digits.length === 8) return '+65' + digits; if (country === 'MY' && digits.startsWith('0')) return '+60' + digits.slice(1); return ''; };
+const firstPhone = phoneCandidates.map(normalizePhone).find(Boolean) || '';
+const nameLines = resumeText.split(/\\r?\\n/).map((line) => String(line).replace(/\\s+/g, ' ').trim()).filter(Boolean).slice(0, 35);
+const nameFromText = nameLines.map((line) => line.replace(/^(full\\s+name|candidate\\s+name|name)\\s*:\\s*/i, '')).find((line) => { const words = line.split(/\\s+/).filter((word) => /^[A-Za-z][A-Za-z'’-]*$/.test(word)); return words.length >= 2 && words.length <= 6 && !/@|https?:|\\d{3,}|^(resume|curriculum vitae|cv|profile|contact|experience|education|skills)\\b/i.test(line); }) || '';
+const name = String(data.candidate_name || data.candidateName || nameFromText).trim();
+const email = String(data.candidate_email || data.candidateEmail || firstEmail).trim().toLowerCase();
+const mobile = String(data.preferred_mobile || data.preferredMobile || firstPhone).trim();
+return { json: { ...base, resumeText, candidateName: name, candidateEmail: email, preferredMobile: mobile, applicantCountry: country, valid: Boolean(name && email.includes('@') && /^\\+[1-9]\\d{7,14}$/.test(mobile)) } };` },
     position: [2520, 440],
   },
   output: [{ driveFileId: 'drive-file-1', roleId: 'AC01', candidateName: 'Alex Chen', candidateEmail: 'alex@example.com', preferredMobile: '+639171234567', valid: true, resumeText: 'Candidate resume text...' }],
@@ -227,7 +235,7 @@ export default workflow('bulk-resume-screening', 'Bulk Resume Screening')
   .add(schedule).to(readQueue)
   .to(findDrive).to(selectFiles)
   .to(batch.onDone(saveScreened).onEachBatch(
-    claim.to(download).to(extract).to(extractCandidate).to(normalize).to(hasDetails
+    claim.to(download).to(extract).to(normalize).to(hasDetails
       .onTrue(submit.to(evaluate.to(accepted.onTrue(saveScreened.to(nextBatch(batch))).onFalse(saveFailed.to(nextBatch(batch))))))
       .onFalse(missing.to(saveMissing.to(nextBatch(batch))))
   )));

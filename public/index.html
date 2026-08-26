@@ -1981,8 +1981,20 @@ async function initApplicationForm() {
     recruitmentRole.appendChild(new Option(data.roleTitle || data.roleId, data.roleId, true, true));
     recruitmentRole.disabled = true;
     recruitmentRolesStatus.textContent = "Application link verified";
-    if (data.candidateName) document.getElementById("candidateName").value = data.candidateName;
-    if (data.candidateEmail) document.getElementById("email").value = data.candidateEmail;
+    if (data.candidateName) {
+      const candidateNameField = document.getElementById("candidateName");
+      candidateNameField.value = data.candidateName;
+      candidateNameField.readOnly = true;
+      candidateNameField.setAttribute("aria-readonly", "true");
+      candidateNameField.title = "This name was provided by the recruitment team.";
+    }
+    if (data.candidateEmail) {
+      const candidateEmailField = document.getElementById("email");
+      candidateEmailField.value = data.candidateEmail;
+      candidateEmailField.readOnly = true;
+      candidateEmailField.setAttribute("aria-readonly", "true");
+      candidateEmailField.title = "This email was provided by the recruitment team.";
+    }
   } catch (error) {
     console.error("Unable to verify the application link:", error);
     showInviteLinkError("invalid");

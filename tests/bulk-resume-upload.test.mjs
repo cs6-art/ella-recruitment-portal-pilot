@@ -20,6 +20,28 @@ test("bulk resume upload processes files with bounded, configurable concurrency 
   assert.match(route, /Array\.from\(\{ length: concurrency \}, worker\)/);
 });
 
+test("every bulk file gets a saved queue event before downstream parsing", () => {
+  const route = read("src/app/api/resume-screening/bulk/upload/route.ts");
+  const queue = read("src/lib/candidate-applications.ts");
+  assert.match(route, /appendBulkResumeQueueEvent/);
+  assert.match(route, /status: "Processing"/);
+  assert.match(route, /status: "Failed"/);
+  assert.match(queue, /getBulkResumeQueueTotals/);
+  assert.match(queue, /including retries/);
+});
+
+test("application invitations can send email and lock the invited identity", () => {
+  const inviteRoute = read("src/app/api/roles/[roleId]/resume-screening/invite/route.ts");
+  const emailSender = read("src/lib/application-invite-email.ts");
+  const candidatePage = read("public/index.html");
+  assert.match(inviteRoute, /sendEmail/);
+  assert.match(inviteRoute, /sendApplicationInviteEmail/);
+  assert.match(emailSender, /N8N_APPLICATION_INVITE_EMAIL_WEBHOOK_URL/);
+  assert.match(emailSender, /application_invite_email_requested/);
+  assert.match(candidatePage, /candidateNameField\.readOnly = true/);
+  assert.match(candidatePage, /candidateEmailField\.readOnly = true/);
+});
+
 test("same-batch duplicate files are reserved by content hash before any Drive/n8n work starts", () => {
   const route = read("src/app/api/resume-screening/bulk/upload/route.ts");
   assert.match(route, /claimedInBatch/);

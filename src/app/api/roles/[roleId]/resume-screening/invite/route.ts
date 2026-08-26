@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { canManagePipeline } from "@/lib/access-control";
+import { sendApplicationInviteEmail } from "@/lib/application-invite-email";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { getPublicAppBaseUrl } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
 const bodySchema = z.object({
   candidateName: z.string().trim().min(2).max(150),
   candidateEmail: z.string().trim().email().max(320),
+  sendEmail: z.boolean().optional().default(false),
 });
 
 function responseError(error: string, status: number) {
@@ -65,11 +67,26 @@ export async function POST(request: Request, context: { params: Promise<{ roleId
       createdByEmail: user.email,
       baseUrl,
     });
+    const email: { status: string; error?: string } = parsed.data.sendEmail
+      ? await sendApplicationInviteEmail({
+        invitationId: invitation.invitationId,
+        roleId: role.roleId,
+        roleTitle: role.jobTitle,
+        candidateName: parsed.data.candidateName,
+        candidateEmail: parsed.data.candidateEmail,
+        link: invitation.link,
+        expiresAt: invitation.expiresAt,
+        createdByName: user.name,
+        createdByEmail: user.email,
+      })
+      : { status: "not_requested" };
     return NextResponse.json({
       success: true,
       link: invitation.link,
       token: invitation.token,
       expiresAt: invitation.expiresAt,
+      emailStatus: email.status,
+      emailError: email.error || "",
     });
   } catch (error) {
     console.error("[API Resume Screening Invite] POST failed:", error);

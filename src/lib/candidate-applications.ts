@@ -171,6 +171,13 @@ export type BulkResumeQueueItem = {
   jobId?: string;
 };
 
+export type BulkResumeQueueEvent = Partial<BulkResumeQueueItem> & {
+  driveFileId: string;
+  driveFileMimeType?: string;
+  roleId: string;
+  status: string;
+};
+
 type SheetRow = Record<string, string>;
 
 function text(value: unknown) {
@@ -730,6 +737,103 @@ export async function getBulkResumeQueue(roleId = "", options: { fresh?: boolean
       }
     });
   return [...latestByFile.values()].sort((left, right) => eventTimestamp(right) - eventTimestamp(left));
+}
+
+// Google Sheets' append() picks "the next empty row" per request; two calls
+// landing close together can both target the same row and one silently
+// overwrites the other. The bulk upload route appends one event per file
+// through a concurrent worker pool, so without this lock a batch upload --
+// the normal case, not an edge case -- can lose queue rows with no error
+// anywhere. Serializing writes to this tab in-process closes that race for a
+// single app instance; a multi-instance deployment would need a shared lock.
+const bulkQueueEventLocks = new Map<string, Promise<void>>();
+
+async function withBulkQueueEventLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  const previous = bulkQueueEventLocks.get(key) || Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  const queued = previous.then(() => current);
+  bulkQueueEventLocks.set(key, queued);
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (bulkQueueEventLocks.get(key) === queued) bulkQueueEventLocks.delete(key);
+  }
+}
+
+/**
+ * Save an intake event before downstream screening starts. This makes every
+ * uploaded file visible even when text extraction or an external handoff
+ * fails before the downstream process can write its own result.
+ */
+export async function appendBulkResumeQueueEvent(event: BulkResumeQueueEvent) {
+  const targetSpreadsheetId = bulkResumeSpreadsheetId();
+  return withBulkQueueEventLock(`bulk-resume-queue:${targetSpreadsheetId}`, async () => {
+    const { headers } = await readTab("Bulk_Resume_Queue", "U", { fresh: true, spreadsheetId: targetSpreadsheetId });
+    if (!headers.length) throw new Error("The Bulk_Resume_Queue tab has no header row.");
+    const values = headers.map((header) => {
+      const key = normalizeHeader(header);
+      const aliases: Record<string, unknown> = {
+        drive_file_id: event.driveFileId,
+        drive_file_name: event.driveFileName,
+        drive_file_url: event.driveFileUrl,
+        drive_file_mime_type: (event as BulkResumeQueueEvent & { driveFileMimeType?: string }).driveFileMimeType,
+        role_id: event.roleId,
+        candidate_name: event.candidateName,
+        candidate_email: event.candidateEmail,
+        status: event.status,
+        application_id: event.applicationId,
+        error_message: event.errorMessage,
+        discovered_at: event.discoveredAt,
+        processing_started_at: event.processingStartedAt,
+        processed_at: event.processedAt,
+        attempt_count: event.attemptCount,
+        last_updated: event.lastUpdated,
+        environment: event.environment,
+        is_uat: event.isUat,
+        batch_id: event.batchId,
+        job_id: event.jobId,
+      };
+      return aliases[key] === undefined ? "" : aliases[key];
+    });
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: targetSpreadsheetId,
+      range: "'Bulk_Resume_Queue'!A:U",
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: { values: [values] },
+    });
+  });
+}
+
+/** Count every saved queue event for the selected role, including retries. */
+export async function getBulkResumeQueueTotals(roleId = "", options: { fresh?: boolean } = {}) {
+  const { rows } = await readTab("Bulk_Resume_Queue", "U", { ...options, spreadsheetId: bulkResumeSpreadsheetId() });
+  const normalizedRoleId = roleId.trim().toLowerCase();
+  const events = rows.map((record) => {
+    const rowRoleId = field(record, "Role_ID", "Role ID", "roleId").toLowerCase();
+    const rawStatus = field(record, "Status").toLowerCase();
+    const status = rawStatus === "screened" || rawStatus === "processed" ? "Screened" : rawStatus === "failed" ? "Failed" : rawStatus === "skipped" ? "Skipped" : rawStatus === "processing" ? "Processing" : "Queued";
+    const identity = `${rowRoleId}|${field(record, "Drive_File_ID", "Drive File ID", "driveFileId").toLowerCase()}`;
+    const timestamp = Date.parse(field(record, "Last_Updated", "Last Updated", "lastUpdated", "Processed_At", "Processed At", "processedAt", "Discovered_At", "Discovered At", "discoveredAt")) || 0;
+    return { rowRoleId, status, identity, timestamp };
+  }).filter((event) => !normalizedRoleId || event.rowRoleId === normalizedRoleId);
+  const latestByIdentity = new Map<string, { status: string; timestamp: number }>();
+  for (const event of events) {
+    const previous = latestByIdentity.get(event.identity);
+    if (!previous || event.timestamp >= previous.timestamp) latestByIdentity.set(event.identity, { status: event.status, timestamp: event.timestamp });
+  }
+  return events.reduce<Record<string, number>>((counts, event) => {
+    const terminal = ["Screened", "Failed", "Skipped"].includes(event.status);
+    const latest = latestByIdentity.get(event.identity);
+    // Processing/Queued is a current state, while terminal rows are kept as
+    // historical attempts. This prevents the initial Processing row from
+    // inflating a completed count, without losing repeated failures.
+    if (terminal || (latest?.status === event.status && latest.timestamp === event.timestamp)) counts[event.status] = (counts[event.status] || 0) + 1;
+    return counts;
+  }, {});
 }
 
 /**

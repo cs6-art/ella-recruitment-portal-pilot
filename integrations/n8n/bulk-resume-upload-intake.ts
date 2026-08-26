@@ -51,7 +51,7 @@ const batchId = text(body.batchId);
 const jobId = text(body.jobId) || queueId;
 if (!queueId || !text(body.roleId) || !text(body.resumeText)) throw new Error('Bulk resume payload is incomplete.');
 const now = new Date().toISOString();
-return [{ json: { skip: false, queueId, driveFileId: queueId, driveFileName: text(body.fileName), driveFileUrl: text(body.driveFileUrl), driveFileMimeType: text(body.mimeType), roleId: text(body.roleId), resumeText: text(body.resumeText), resumeFile: body.resumeFile || {}, applicationId: text(body.applicationId), environment, is_uat: isUat, batchId, jobId, status: 'Processing', discoveredAt: text(body.submittedAt) || now, processingStartedAt: now, processedAt: '', attemptCount: String(Number(body.attemptCount || 0) + 1), lastUpdated: now } }];`,
+return [{ json: { skip: false, queueId, driveFileId: queueId, driveFileName: text(body.fileName), driveFileUrl: text(body.driveFileUrl), driveFileMimeType: text(body.mimeType), roleId: text(body.roleId), resumeText: text(body.resumeText), candidateName: text(body.candidateName), candidateEmail: text(body.candidateEmail).toLowerCase(), preferredMobile: text(body.preferredMobile), applicantCountry: text(body.applicantCountry).toUpperCase(), resumeFile: body.resumeFile || {}, applicationId: text(body.applicationId), environment, is_uat: isUat, batchId, jobId, status: 'Processing', discoveredAt: text(body.submittedAt) || now, processingStartedAt: now, processedAt: '', attemptCount: String(Number(body.attemptCount || 0) + 1), lastUpdated: now } }];`,
     },
     position: [800, 300],
   },
@@ -80,10 +80,18 @@ const prepareCandidate = node({
     parameters: { mode: 'runOnceForEachItem', language: 'javaScript', jsCode: `const value = $json.output ?? $json;
 const data = typeof value === 'string' ? JSON.parse(value) : value;
 const base = $('Check Bulk Upload Duplicate').item.json;
-const name = String(data.candidate_name || data.candidateName || '').trim();
-const email = String(data.candidate_email || data.candidateEmail || '').trim().toLowerCase();
-const mobile = String(data.preferred_mobile || data.preferredMobile || '').trim();
-return { json: { ...base, candidateName: name, candidateEmail: email, preferredMobile: mobile, applicantCountry: String(data.applicant_country || data.applicantCountry || '').trim().toUpperCase(), valid: Boolean(name && email.includes('@') && /^\\+[1-9]\\d{7,14}$/.test(mobile)) } };` },
+const resumeText = String(base.resumeText || '');
+const firstEmail = (resumeText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/ig) || [])[0] || '';
+const phoneCandidates = resumeText.match(/(?:\\+|00)?\\d[\\d\\s().-]{7,}\\d/g) || [];
+const country = String(data.applicant_country || data.applicantCountry || base.applicantCountry || '').trim().toUpperCase();
+const normalizePhone = (value) => { const raw = String(value || '').trim(); const digits = raw.replace(/\\D/g, ''); if (digits.length < 8 || digits.length > 15) return ''; if (raw.startsWith('+')) return '+' + digits; if (digits.startsWith('00')) return '+' + digits.slice(2); if (/^(63|65|60)/.test(digits)) return '+' + digits; if (country === 'PH' && digits.startsWith('0')) return '+63' + digits.slice(1); if (country === 'SG' && digits.length === 8) return '+65' + digits; if (country === 'MY' && digits.startsWith('0')) return '+60' + digits.slice(1); return ''; };
+const firstPhone = phoneCandidates.map(normalizePhone).find(Boolean) || '';
+const nameLines = resumeText.split(/\\r?\\n/).map((line) => String(line).replace(/\\s+/g, ' ').trim()).filter(Boolean).slice(0, 35);
+const nameFromText = nameLines.map((line) => line.replace(/^(full\\s+name|candidate\\s+name|name)\\s*:\\s*/i, '')).find((line) => { const words = line.split(/\\s+/).filter((word) => /^[A-Za-z][A-Za-z'’-]*$/.test(word)); return words.length >= 2 && words.length <= 6 && !/@|https?:|\\d{3,}|^(resume|curriculum vitae|cv|profile|contact|experience|education|skills)\\b/i.test(line); }) || '';
+const name = String(data.candidate_name || data.candidateName || base.candidateName || nameFromText).trim();
+const email = String(data.candidate_email || data.candidateEmail || base.candidateEmail || firstEmail).trim().toLowerCase();
+const mobile = String(data.preferred_mobile || data.preferredMobile || base.preferredMobile || firstPhone).trim();
+return { json: { ...base, candidateName: name, candidateEmail: email, preferredMobile: mobile, applicantCountry: country, valid: Boolean(name && email.includes('@') && /^\\+[1-9]\\d{7,14}$/.test(mobile)) } };` },
     position: [1920, 300],
   },
   output: [{ queueId: 'BULK-example', roleId: 'AC01', candidateName: 'Alex Chen', candidateEmail: 'alex@example.com', preferredMobile: '+639171234567', applicantCountry: 'PH', valid: true, resumeText: 'Candidate resume text...' }],
@@ -125,7 +133,6 @@ const respond = node({
 export default workflow('bulk-resume-upload-intake', 'Bulk Resume Upload Intake')
   .add(webhook)
   .to(normalize)
-  .to(extractCandidate)
   .to(prepareCandidate)
   .to(validCandidate
     .onTrue(submit.to(evaluate.to(accepted.onTrue(saveScreened.to(respond)).onFalse(saveFailed.to(respond)))))
