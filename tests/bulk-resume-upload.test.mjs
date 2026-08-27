@@ -192,6 +192,7 @@ test("invite links can use a separate candidate page origin without breaking por
   const publicCors = read("src/lib/public-cors.ts");
   const envExample = read(".env.example");
   const homePage = read("src/app/page.tsx");
+  const proxy = read("proxy.ts");
   assert.match(inviteRoute, /RESUME_SCREENING_INVITE_BASE_URL/);
   assert.match(inviteRoute, /N8N_BULK_RESUME_PORTAL_BASE_URL/);
   assert.match(publicCors, /RESUME_SCREENING_INVITE_BASE_URL/);
@@ -215,6 +216,11 @@ test("invite links can use a separate candidate page origin without breaking por
   assert.match(candidatePage, /data\.applicationStatus/);
   assert.match(candidatePage, /data\.reason === "used"/);
   assert.match(homePage, /candidatePageUrl\.searchParams\.set\("invite", inviteValue\)/);
+  assert.match(proxy, /pathname === "\/index\.html"/);
+  assert.match(proxy, /searchParams\.get\("invite"\)/);
+  assert.match(candidatePage, /showInviteLinkError\("required"\)/);
+  assert.doesNotMatch(candidatePage, /recruitmentEndpoint\("\/recruitment\/apply"\)/);
+  assert.match(applications, /code: "INVITE_REQUIRED"/);
 });
 
 test("bulk UAT mode is fail-closed and carries environment correlation metadata", () => {

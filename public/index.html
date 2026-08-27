@@ -1632,9 +1632,7 @@ input:not([type="file"]), select { border-radius: 8px; border-color: #c2c7d0; }
 </script>
 
 <script>
-/* Phase 1 recruitment application client. Replace both placeholders before deployment. */
-const RECRUITMENT_WEBHOOK_BASE_URL =
-  "https://n8n.srv1457709.hstgr.cloud/webhook";
+/* Invite-only recruitment application client. */
 /* Recruitment portal API base. Single-use HR application links (?invite=...)
    are validated and submitted through the portal itself rather than n8n
    directly, so the portal can enforce "one use only" on the link. */
@@ -1686,10 +1684,6 @@ let applicationInProgress = false;
    working the moment they submit. */
 const inviteToken = (new URLSearchParams(window.location.search).get("invite") || "").trim();
 let activeInvitation = null;
-
-function recruitmentEndpoint(path) {
-  return `${RECRUITMENT_WEBHOOK_BASE_URL.replace(/\/$/, "")}${path}`;
-}
 
 function portalEndpoint(path) {
   return `${PORTAL_API_BASE_URL.replace(/\/$/, "")}${path}`;
@@ -1922,6 +1916,7 @@ function showInviteLinkError(reason) {
     expired: "This application link has expired. Please ask your recruiter for a new one.",
     revoked: "This application link is no longer valid. Please ask your recruiter for a new one.",
     invalid: "This application link is invalid. Please check the link or ask your recruiter for a new one.",
+    required: "A private application link is required. Please use the invitation sent by your recruiter.",
   };
   recruitmentForm.style.display = "none";
   recruitmentLoading.style.display = "none";
@@ -1958,7 +1953,7 @@ function showUsedInviteStatus(data) {
    the normal multi-role flow when no invite token is present. */
 async function initApplicationForm() {
   if (!inviteToken) {
-    await loadAvailableRoles();
+    showInviteLinkError("required");
     return;
   }
   recruitmentRolesStatus.textContent = "Checking your application link...";
@@ -2102,35 +2097,22 @@ recruitmentForm.addEventListener("submit", async (event) => {
   const dialCodes = { PH: "63", SG: "65", MY: "60" };
   try {
     let response;
-    if (inviteToken && activeInvitation) {
-      // Single-use invite links are submitted through the portal itself, so
-      // the token can be validated and burned atomically with the application.
-      const payload = new FormData();
-      payload.append("candidateName", document.getElementById("candidateName").value.trim());
-      payload.append("email", document.getElementById("email").value.trim());
-      payload.append("roleId", recruitmentRole.value);
-      const preferredMobile = `+${dialCodes[applicantCountry] || ""}${normalizedContactNumber}`;
-      payload.append("contactNumber", preferredMobile);
-      payload.append("phone", preferredMobile);
-      payload.append("preferredMobile", preferredMobile);
-      payload.append("applicantCountry", applicantCountry);
-      payload.append("applicationSource", "HR Invitation");
-      payload.append("consent", "true");
-      payload.append("resumeFile", recruitmentFile.files[0], recruitmentFile.files[0].name);
-      payload.append("inviteToken", inviteToken);
-      response = await fetch(portalEndpoint("/api/public/applications"), { method: "POST", body: payload, headers: { Accept: "application/json" } });
-    } else {
-      const payload = new FormData();
-      payload.append("candidate_name", document.getElementById("candidateName").value.trim());
-      payload.append("contact_number", normalizedContactNumber);
-      payload.append("applicant_country", applicantCountry);
-      payload.append("email", document.getElementById("email").value.trim());
-      payload.append("role_id", recruitmentRole.value);
-      payload.append("selected_role", selectedRole?.role || "");
-      payload.append("resume_file", recruitmentFile.files[0]);
-      payload.append("submission_timestamp", new Date().toISOString());
-      response = await fetch(recruitmentEndpoint("/recruitment/apply"), { method: "POST", body: payload, headers: { Accept: "application/json" } });
-    }
+    // Single-use invite links are submitted through the portal itself, so the
+    // token can be validated and burned atomically with the application.
+    const payload = new FormData();
+    payload.append("candidateName", document.getElementById("candidateName").value.trim());
+    payload.append("email", document.getElementById("email").value.trim());
+    payload.append("roleId", recruitmentRole.value);
+    const preferredMobile = `+${dialCodes[applicantCountry] || ""}${normalizedContactNumber}`;
+    payload.append("contactNumber", preferredMobile);
+    payload.append("phone", preferredMobile);
+    payload.append("preferredMobile", preferredMobile);
+    payload.append("applicantCountry", applicantCountry);
+    payload.append("applicationSource", "HR Invitation");
+    payload.append("consent", "true");
+    payload.append("resumeFile", recruitmentFile.files[0], recruitmentFile.files[0].name);
+    payload.append("inviteToken", inviteToken);
+    response = await fetch(portalEndpoint("/api/public/applications"), { method: "POST", body: payload, headers: { Accept: "application/json" } });
     const parsedData = await parseRecruitmentResponse(response, "Submission webhook");
     const data = Array.isArray(parsedData) ? (parsedData[0] || {}) : (parsedData || {});
     if (!response.ok || data.success === false) {

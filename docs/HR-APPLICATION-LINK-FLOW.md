@@ -3,6 +3,10 @@
 This is the simple process for sending one candidate a private application
 link using the supplied `index.html` candidate page.
 
+The candidate page is invite-only. Direct visits without an invitation token
+are redirected away, and the submission API independently rejects requests
+without a valid invitation.
+
 ## What HR does
 
 1. Open **Resume Screening**.
@@ -67,8 +71,8 @@ For example:
 https://recruitment.example.com/index.html
 ```
 
-The page already reads the `invite` value from the URL, checks the link, and
-sends it with the candidate's application. When the page is hosted by the
+The page reads the `invite` value from the URL, checks the link, and sends it
+with the candidate's application. When the page is hosted by the
 portal itself, it uses the same public address for the application service.
 When the page is hosted on a separate site, that site must be listed as an
 allowed candidate-page origin.

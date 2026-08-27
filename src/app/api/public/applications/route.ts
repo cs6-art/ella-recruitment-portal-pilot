@@ -46,6 +46,12 @@ export async function POST(request: Request) {
     // roleId is ignored so a tampered form field cannot redirect the
     // application to a different role than the one HR invited them for.
     const inviteToken = typeof intake.body.inviteToken === "string" ? intake.body.inviteToken.trim() : "";
+    if (!inviteToken) {
+      return responseError(request, "A valid application invitation is required.", 401, {
+        code: "INVITE_REQUIRED",
+        reason: "invalid",
+      });
+    }
     let invitation: Awaited<ReturnType<typeof getResumeScreeningInvitationByToken>> = null;
     if (inviteToken) {
       invitation = await getResumeScreeningInvitationByToken(inviteToken);
