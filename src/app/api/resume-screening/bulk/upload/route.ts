@@ -25,10 +25,13 @@ const STALE_PROCESSING_MS = 30 * 60 * 1000;
 // each other (distinct content hash, distinct queue row), so running several
 // in flight at once is safe; the concurrency is capped and configurable so
 // it can be tuned to the connected OpenAI/Google Sheets quota instead of
-// guessed. Keep this conservative by default — raise it only after
-// confirming no 429s appear in the n8n executions for this workflow.
-const DEFAULT_CONCURRENCY = 5;
-const MAX_CONCURRENCY = 10;
+// guessed. The production cap is intentionally conservative because each file
+// triggers several downstream Google Sheets reads/writes.
+// Keep the burst below the service account's per-user quota while retaining
+// limited parallelism for throughput.
+const DEFAULT_CONCURRENCY = 2;
+const MAX_CONCURRENCY = 2;
+const WORKER_START_INTERVAL_MS = 10_000;
 function resolveConcurrency(fileCount: number) {
   const configured = Number(process.env.BULK_RESUME_UPLOAD_CONCURRENCY);
   const bounded = Number.isFinite(configured) ? Math.min(Math.max(Math.trunc(configured), 1), MAX_CONCURRENCY) : DEFAULT_CONCURRENCY;
@@ -260,9 +263,23 @@ export async function POST(request: Request) {
     // pipeline does, only how many run at the same time.
     const concurrency = resolveConcurrency(toProcess.length);
     let cursor = 0;
+    let startedWorkers = 0;
+    let nextWorkerStartAt = 0;
+    async function waitForWorkerStart() {
+      const workerNumber = startedWorkers++;
+      if (workerNumber < concurrency) {
+        if (workerNumber === concurrency - 1) nextWorkerStartAt = Date.now() + WORKER_START_INTERVAL_MS;
+        return;
+      }
+      const startAt = Math.max(Date.now(), nextWorkerStartAt);
+      nextWorkerStartAt = startAt + WORKER_START_INTERVAL_MS;
+      const delay = startAt - Date.now();
+      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    }
     async function worker() {
       while (cursor < toProcess.length) {
         const index = cursor++;
+        await waitForWorkerStart();
         await processFile(toProcess[index]);
       }
     }

@@ -270,13 +270,18 @@ Configure the n8n environment with `GOOGLE_BULK_RESUME_DRIVE_FOLDER_ID` and
 (a local `http://localhost:3000` URL will not work from a hosted n8n instance).
 
 For local HR testing, the primary flow is the portal's direct multi-file upload.
-The portal extracts each PDF/DOC/DOCX locally and sends one JSON request at a time
-to `N8N_BULK_RESUME_UPLOAD_WEBHOOK_URL` at `/webhook/bulk-resume-upload`.
+The portal extracts each PDF/DOC/DOCX locally and sends at most two files in
+flight, starting later workers 10 seconds apart, to
+`N8N_BULK_RESUME_UPLOAD_WEBHOOK_URL` at `/webhook/bulk-resume-upload`.
 The `McLink - Bulk Resume Upload Intake` workflow extracts candidate contact
 details, writes the processing claim, calls the existing candidate screening
-workflow, and records the final queue status. It uses the SHA-256 file hash as
-the queue ID, so uploading the same file again does not create another
-screening request after it is marked `Screened`.
+workflow, retries quota-sensitive Sheets operations up to five times with a
+5-second delay, and records the final queue status. The portal also applies
+exponential backoff to its own Sheets reads. This conservative limit yields a
+long-run intake rate of approximately six resumes per minute, subject to AI and
+Sheets latency; completed results may be slower when retries are needed. It
+uses the SHA-256 file hash as the queue ID, so uploading the same file again
+does not create another screening request after it is marked `Screened`.
 
 The active workflow `JD Role Folder Bulk Resume Screening`
 (`MWt7W7LNFNZxcc0q`) reads active role-to-folder mappings from the

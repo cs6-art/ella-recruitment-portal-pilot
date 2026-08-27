@@ -1,5 +1,5 @@
 /**
- * Short-TTL cache + backoff wrapper for Google Sheets reads.
+ * Short-TTL cache + backoff wrapper for Google Sheets operations.
  *
  * A single `values.get` call costs the same read-quota unit regardless of
  * how many rows it returns, but repeating that call — which this codebase
@@ -51,7 +51,7 @@ function isQuotaError(error: unknown): boolean {
   return /429|quota|RESOURCE_EXHAUSTED/i.test(message);
 }
 
-async function withBackoff<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+export async function withSheetsBackoff<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
@@ -59,7 +59,9 @@ async function withBackoff<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
     } catch (error) {
       lastError = error;
       if (!isQuotaError(error) || attempt === attempts - 1) throw error;
-      const delay = 1_000 * 2 ** attempt + Math.random() * 1_000;
+      // Google recommends truncated exponential backoff for time-based quota
+      // errors. A 1s/2s retry window is shorter than the Sheets quota window.
+      const delay = Math.min(30_000, 2_000 * 2 ** attempt) + Math.random() * 1_000;
       await wait(delay);
     }
   }
@@ -83,7 +85,7 @@ export async function cachedSheetsRead<T>(key: string, fetcher: () => Promise<T>
   const read = (async () => {
     try {
       await waitForReadSlot();
-      const value = await withBackoff(fetcher);
+      const value = await withSheetsBackoff(fetcher);
       const cachedAt = Date.now();
       cache.set(key, { value, expiresAt: cachedAt + TTL_MS, cachedAt });
       return value;
@@ -110,7 +112,7 @@ export async function cachedSheetsRead<T>(key: string, fetcher: () => Promise<T>
  */
 export async function freshSheetsRead<T>(fetcher: () => Promise<T>): Promise<T> {
   await waitForReadSlot();
-  return withBackoff(fetcher);
+  return withSheetsBackoff(fetcher);
 }
 
 /** Call after any write to a tab so the next read reflects it, instead of

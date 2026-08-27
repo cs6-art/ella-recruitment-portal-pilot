@@ -164,12 +164,12 @@ test("VAPI prompt is interview-only and has no scheduling context", () => {
 test("AI voice interview emails disclose the AI interviewer and human review", () => {
   const contracts = fs.readFileSync("docs/N8N-CONTRACTS.md", "utf8");
   const workflow = fs.readFileSync("docs/WORKING-RECRUITMENT-WORKFLOW.md", "utf8");
-  assert.match(contracts, /upcoming voice interview will be conducted by Ella/);
-  assert.match(contracts, /same approved,/);
-  assert.match(contracts, /role-related questions for every applicant/);
-  assert.match(contracts, /hiring decision will be made by people/);
-  assert.match(contracts, /Face-to-Face\s+Interview invitations are for the human HR interviewer/);
-  assert.match(workflow, /AI interview assistant, will conduct the voice/);
+  assert.match(contracts, /AI Interview Notice: This interview will be conducted with the assistance of/);
+  assert.match(contracts, /may record, transcribe and assess your/);
+  assert.match(contracts, /official representation/);
+  assert.match(contracts, /commitment or offer by Mclink Group/);
+  assert.match(contracts, /Face-to-Face\s+Interview invitations are for the\s+human HR interviewer/);
+  assert.match(workflow, /AI Interview Notice: This interview will be conducted with the assistance/);
 });
 
 test("evaluation field catalog is shared between the schema, editor, and n8n payload", async () => {

@@ -12,12 +12,25 @@ function read(relativePath) {
 test("bulk resume upload processes files with bounded, configurable concurrency instead of one at a time", () => {
   const route = read("src/app/api/resume-screening/bulk/upload/route.ts");
   assert.match(route, /BULK_RESUME_UPLOAD_CONCURRENCY/);
-  assert.match(route, /MAX_CONCURRENCY = 10/);
+  assert.match(route, /DEFAULT_CONCURRENCY = 2/);
+  assert.match(route, /MAX_CONCURRENCY = 2/);
   // The old implementation awaited each n8n round trip inside a plain
   // `for...of` loop, which is exactly what capped bulk screening at
   // roughly one resume per minute. That pattern must not come back.
   assert.doesNotMatch(route, /for \(const file of files\)/);
   assert.match(route, /Array\.from\(\{ length: concurrency \}, worker\)/);
+  assert.match(route, /WORKER_START_INTERVAL_MS = 10_000/);
+  assert.match(route, /waitForWorkerStart/);
+});
+
+test("bulk Sheets reads use a quota-sized exponential backoff window", () => {
+  const cache = read("src/lib/sheets-cache.ts");
+  const queue = read("src/lib/candidate-applications.ts");
+  const intake = read("integrations/n8n/bulk-resume-upload-intake.ts");
+  assert.match(cache, /attempts = 5/);
+  assert.match(cache, /Math\.min\(30_000, 2_000 \* 2 \*\* attempt\)/);
+  assert.match(queue, /withSheetsBackoff/);
+  assert.match(intake, /retryOnFail: true, maxTries: 5, waitBetweenTries: 5000/);
 });
 
 test("every bulk file gets a saved queue event before downstream parsing", () => {

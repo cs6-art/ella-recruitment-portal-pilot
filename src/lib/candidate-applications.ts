@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account";
 import { bulkResumeSpreadsheetId } from "@/lib/bulk-resume-config";
-import { cachedSheetsRead, freshSheetsRead } from "@/lib/sheets-cache";
+import { cachedSheetsRead, freshSheetsRead, withSheetsBackoff } from "@/lib/sheets-cache";
 import { demoActiveBookingLinkRoleIds, demoApplicantRows, demoInterviewBookings } from "@/lib/demo-data";
 import { isDemoMode, isDemoWindowRecord } from "@/lib/demo-mode";
 import { getRoleRequestById, type RoleRequestDetails } from "@/lib/google-sheets";
@@ -747,6 +747,14 @@ export async function getBulkResumeQueue(roleId = "", options: { fresh?: boolean
 // anywhere. Serializing writes to this tab in-process closes that race for a
 // single app instance; a multi-instance deployment would need a shared lock.
 const bulkQueueEventLocks = new Map<string, Promise<void>>();
+let nextBulkQueueWriteAt = 0;
+
+async function waitForBulkQueueWriteSlot() {
+  const startAt = Math.max(Date.now(), nextBulkQueueWriteAt);
+  nextBulkQueueWriteAt = startAt + 1_200;
+  const delay = startAt - Date.now();
+  if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+}
 
 async function withBulkQueueEventLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
   const previous = bulkQueueEventLocks.get(key) || Promise.resolve();
@@ -771,7 +779,10 @@ async function withBulkQueueEventLock<T>(key: string, operation: () => Promise<T
 export async function appendBulkResumeQueueEvent(event: BulkResumeQueueEvent) {
   const targetSpreadsheetId = bulkResumeSpreadsheetId();
   return withBulkQueueEventLock(`bulk-resume-queue:${targetSpreadsheetId}`, async () => {
-    const { headers } = await readTab("Bulk_Resume_Queue", "U", { fresh: true, spreadsheetId: targetSpreadsheetId });
+    // Headers are structural metadata, not live queue state. Reuse the short
+    // cache here so a 15-file upload does not spend one Sheets read per event
+    // before n8n has even started screening.
+    const { headers } = await readTab("Bulk_Resume_Queue", "U", { spreadsheetId: targetSpreadsheetId });
     if (!headers.length) throw new Error("The Bulk_Resume_Queue tab has no header row.");
     const values = headers.map((header) => {
       const key = normalizeHeader(header);
@@ -798,13 +809,14 @@ export async function appendBulkResumeQueueEvent(event: BulkResumeQueueEvent) {
       };
       return aliases[key] === undefined ? "" : aliases[key];
     });
-    await sheets.spreadsheets.values.append({
+    await waitForBulkQueueWriteSlot();
+    await withSheetsBackoff(() => sheets.spreadsheets.values.append({
       spreadsheetId: targetSpreadsheetId,
       range: "'Bulk_Resume_Queue'!A:U",
       valueInputOption: "USER_ENTERED",
       insertDataOption: "INSERT_ROWS",
       requestBody: { values: [values] },
-    });
+    }));
   });
 }
 
