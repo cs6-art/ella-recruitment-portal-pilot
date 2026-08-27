@@ -134,7 +134,9 @@ Interview Questions are required.
 
 The full n8n event and response contract is documented in
 [docs/N8N-CONTRACTS.md](docs/N8N-CONTRACTS.md). Testing, deployment, migration,
-and troubleshooting instructions are in the `docs/` directory.
+and troubleshooting instructions are in the `docs/` directory. The CEO-ready
+requirements baseline is documented in
+[docs/USER-REQUIREMENTS-STUDY.md](docs/USER-REQUIREMENTS-STUDY.md).
 
 ## Protected routes
 
