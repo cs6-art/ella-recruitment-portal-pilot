@@ -228,7 +228,241 @@ The release shall be considered acceptable when:
    recovered using the documented process.
 9. Security, contract, workflow, and browser smoke tests pass for the release.
 
-## 9. Assumptions and decisions requiring confirmation
+## 9. Implementation roadmap and release plan
+
+The following phase-by-phase timeline is the delivery plan associated with this
+requirements baseline. Dates are target dates and may be adjusted through the
+change-control process. A phase is complete only when its stated exit criteria
+are met and no unresolved critical regression prevents progression.
+
+### Phase 1 — Critical QC fixes and core workflow
+
+**Target:** 26–28 August 2026
+
+**Objective:** Close the major functional blockers so the core recruitment flow
+is stable.
+
+| Date | Task | Owner | Deliverable |
+| --- | --- | --- | --- |
+| 26 Aug | Fix post-screening notifications | Julio | HR and candidate notifications trigger automatically after screening |
+| 26 Aug | Add F2F interview venue/address | Julio | Interview email includes physical address, room, and arrival details |
+| 26–27 Aug | Fix Ella interview summary misattribution | Julio | Candidate answers map to the proper interview question |
+| 26–27 Aug | Remove Management approval | Julio | Simplified workflow without a Management approval dependency |
+| 27–28 Aug | Implement credit-based pricing | Julio | Credit wallet, deductions, balance checking, and discount logic |
+| 27–28 Aug | Implement candidate no-show lifecycle | Julio | Attempt 1–3 retry flow and final handling |
+| 28 Aug | Quick regression test | Julio + QA | Core features retested after changes |
+
+**Phase exit criteria:** Post-screening alerts work; F2F invitations contain
+complete venue information; Ella summary mapping is resolved; Management
+approval is removed without breaking the workflow; the credit-system MVP and
+no-show/three-attempt lifecycle are functional; and no new P0 regression issues
+exist. The first four items directly address the functional and AI workflow
+blockers identified by QC.
+
+### Phase 2 — Backend and performance improvement
+
+**Target:** 27–31 August 2026
+
+**Objective:** Reduce system latency and prepare the backend for new
+integrations.
+
+| Date | Task | Owner | Deliverable |
+| --- | --- | --- | --- |
+| 27–28 Aug | Review Google Sheets dependencies | July | Identify critical tables/processes to migrate |
+| 28–30 Aug | Create target database structure | July | Database schema for users, jobs, candidates, screening, and interview data |
+| 29–31 Aug | Migrate critical backend processes | July | Critical read/write processes moved away from Google Sheets |
+| 29–31 Aug | Optimize n8n execution | July + Julio | Long-running workflows reduced or moved to asynchronous processing |
+| 31 Aug | Performance verification | July + Julio | Compare response time against the current workflow |
+
+**Phase exit criteria:** Critical backend operations no longer depend fully on
+Google Sheets; n8n workflows do not unnecessarily block the frontend;
+screening, parsing, and notification latency is improved; and existing records
+remain intact. The QC report identifies synchronous n8n execution as a
+performance and reliability failure.
+
+### Phase 3 — Cloud resume-upload integration
+
+**Target:** 29 August–2 September 2026
+
+**Objective:** Allow large resume batches to enter Ella without relying only on
+manual local uploads.
+
+**Google Drive — 29 August–1 September**
+
+- Configure Google Drive access and authentication.
+- Add file selection and multiple-resume selection.
+- Import selected files into Ella and push them into the existing screening queue.
+- Preserve filename and source metadata.
+- Add duplicate detection, batch progress, and failure handling.
+
+**OneDrive — 31 August–2 September**
+
+- Configure Microsoft/OneDrive authentication.
+- Add multi-file selection and connect selected files to the same screening pipeline.
+- Add permission handling, failure handling, duplicate protection, and batch status.
+
+**Owner:** Julio + July
+
+**Phase exit criteria:** Both Drive and OneDrive can import multiple resumes;
+imported files enter the same screening process as normal uploads; duplicate
+screening jobs are prevented; and failed files can be identified without
+stopping the whole batch.
+
+### Phase 4 — Documentation and AI support
+
+**Target:** 29 August–2 September 2026
+
+**Objective:** Produce client documentation and use it as the knowledge base
+for an in-system support assistant.
+
+**User manual — Owner: Julio — 29 August–2 September**
+
+The manual shall cover the system overview, HOD workflow, HR workflow,
+candidate flow, CV screening, AI phone interview, interview scheduling, credit
+system, bulk upload, and troubleshooting.
+
+**AI support bot — Owner: July — 1–2 September**
+
+Build the support assistant, connect it to the approved documentation, enable
+operational questions, provide step-by-step instructions, and add a fallback
+when information is unavailable.
+
+**Knowledge base — Owner: July — 2 September**
+
+Upload the finalized user manual, index the documentation, test document
+retrieval, and validate answers against the actual guide.
+
+**Phase exit criteria:** A client-ready manual exists; the support bot retrieves
+answers from the manual; and bot answers are grounded in approved system
+documentation.
+
+### Phase 5 — Hosting and batch-capacity validation
+
+**Target:** 1–2 September 2026
+
+**Owner:** Julio
+
+**Objective:** Determine whether direct GoDaddy uploads support large batches
+and define a safe upload limit.
+
+The validation shall review the GoDaddy upload configuration, individual file
+and request-size limits, timeout and memory limits, progressively larger batch
+tests, processing time, and the failure threshold. It shall compare direct
+uploads with Drive and OneDrive uploads and document the recommended maximum
+direct batch size.
+
+### Phase 6 — Ella AI-scoring validation
+
+**Target:** 2–3 September 2026
+
+**Owner:** Julio + HR/QA
+
+**Objective:** Validate Ella’s AI evaluation against the actual HR scoring
+standard.
+
+Representative candidate examples shall be manually scored by HR and run
+through Ella. The results shall be compared, material scoring differences
+identified, scoring prompts or logic tuned where necessary, and the benchmark
+rerun and documented.
+
+**Phase exit criteria:** Ella scoring has been formally compared with HR’s
+rubric; material discrepancies are corrected or documented; and QA/HR accepts
+the results for UAT. This closes the scoring-benchmark item pending in the QC
+report.
+
+### Phase 7 — Full regression testing
+
+**Target:** 3 September 2026
+
+**Owner:** Development + QA
+
+The complete system shall be tested across login/SSO, RBAC, job and role
+creation, the simplified approval flow, resume upload, Google Drive and
+OneDrive import, single and bulk screening, post-screening notifications,
+credit deductions and insufficient-credit handling, interview booking, F2F
+invitation, AI phone interview, missed-call handling, the three-attempt
+lifecycle, transcript generation, Ella summary, AI scoring, database
+operations, n8n performance, form persistence, and error handling.
+
+**Exit criterion:** No unresolved critical regression defects.
+
+### Phase 8 — Formal QC retest
+
+**Target:** 4 September 2026
+
+**Owner:** QA + Development
+
+QC shall specifically retest the six original open items:
+
+- Post-screening notifications.
+- F2F interview address.
+- Ella summary misattribution.
+- Applicant no-show handling.
+- n8n/system latency.
+- Ella scoring accuracy.
+
+The QC report currently blocks Code Freeze until remaining material issues are
+corrected and retested.
+
+**Exit criterion:** Original blockers are cleared or formally accepted.
+
+### Phase 9 — Critical fix window and Code Freeze
+
+**Target:** 5 September 2026
+
+**Owner:** Julio + July + QA
+
+Only critical issues found during the QC retest shall be fixed. The affected
+test cases shall be rerun, no P0/P1 blockers shall remain open, and the final
+release candidate shall be tagged.
+
+**Code Freeze — 5 September:** After this point there shall be no new features
+or workflow redesign; only critical defect fixes are permitted.
+
+### Phase 10 — Formal UAT
+
+**Target:** 6–7 September 2026
+
+**Owner:** HR + QA + Development
+
+UAT shall cover the following user and system scenarios:
+
+- **HOD:** Create a role/job, submit requirements, and follow the simplified workflow.
+- **HR:** Review roles and applications, perform screening, review Ella scoring, and arrange interviews.
+- **Candidate:** Application, screening, notification, booking, AI interview, and missed-call/retry scenarios.
+- **System:** Credit usage, notifications, upload integrations, support bot, and database performance.
+
+**Exit criterion:** Formal UAT sign-off.
+
+### Phase 11 — Production readiness
+
+**Target:** 8 September 2026
+
+**Owner:** Development team
+
+Before production deployment, the team shall confirm that UAT issues are
+closed; production configuration, database, and n8n workflows are verified;
+credit rules and notification credentials are verified; Drive and OneDrive
+integration is verified; backup and rollback procedures are confirmed; and
+documentation is finalized.
+
+### Final milestone summary
+
+| Milestone | Target |
+| --- | --- |
+| Core QC, workflow, and credits complete | 28 Aug 2026 |
+| Backend/performance improvement complete | 31 Aug 2026 |
+| Cloud upload, documentation, and support bot complete | 2 Sep 2026 |
+| AI validation and full regression | 3 Sep 2026 |
+| QC retest | 4 Sep 2026 |
+| Code Freeze | 5 Sep 2026 |
+| Formal UAT | 6–7 Sep 2026 |
+| Production ready | 8 Sep 2026 |
+
+The development sequence is: **Fix Core → Stabilize Backend → Add Integrations
+→ Validate AI → Regression → QC → Freeze → UAT → Production.**
+
+## 10. Assumptions and decisions requiring confirmation
 
 - McLink Group will nominate an owner for the portal, Google Workspace access,
   Google Sheets, n8n, AI voice provider, and shared calendar.
@@ -241,7 +475,7 @@ The release shall be considered acceptable when:
 - Legal or privacy review will be obtained where required by the jurisdictions
   in which candidates are recruited.
 
-## 10. Approval and sign-off
+## 11. Approval and sign-off
 
 By signing below, the CEO confirms that this User Requirements Study is an
 approved baseline for the McLink Group Recruitment Portal. Changes to these
@@ -261,4 +495,3 @@ ______________________________________________________________________________
 ______________________________________________________________________________
 
 ______________________________________________________________________________
-
