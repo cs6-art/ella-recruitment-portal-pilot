@@ -3,7 +3,8 @@
 ## User Requirements Study and Approval
 
 **Document status:** For CEO review and approval  
-**Version:** 1.0  
+**Version:** 1.1
+
 **Date:** 27 August 2026  
 **Prepared for:** McLink Group  
 **Prepared by:** Recruitment Portal Project Team
@@ -37,10 +38,8 @@ The portal shall:
 
 | User | Primary responsibilities | Required access |
 | --- | --- | --- |
-| CEO / Management approver | Review and approve management-stage role decisions | Review and approve |
 | HR / Recruiter | Create roles, complete recruitment setup, review candidates, manage interviews | Create, review, and operate recruitment workflows |
 | Hiring manager / HOD | Provide role information and participate in review or interviews | Access according to assigned permissions |
-| Interviewer | Conduct or review assigned interviews | Interview operations only |
 | Administrator | Manage users, settings, integrations, and access | Full administrative access |
 | Candidate | Apply, receive interview instructions, book an authorized slot, and attend interviews | Tokenized candidate links only |
 
