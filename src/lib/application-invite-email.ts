@@ -1,3 +1,5 @@
+import { getPortalConfigValue } from "@/lib/portal-config";
+
 export type ApplicationInviteEmailStatus = "sent" | "failed" | "not_configured";
 
 export async function sendApplicationInviteEmail(input: {
@@ -11,7 +13,7 @@ export async function sendApplicationInviteEmail(input: {
   createdByName: string;
   createdByEmail: string;
 }): Promise<{ status: ApplicationInviteEmailStatus; error?: string }> {
-  const url = process.env.N8N_APPLICATION_INVITE_EMAIL_WEBHOOK_URL?.trim();
+  const url = (await getPortalConfigValue("N8N_Application_Invite_Email_Webhook_URL")).trim();
   const secret = process.env.N8N_WEBHOOK_SECRET?.trim();
   if (!url || !secret) return { status: "not_configured" };
 

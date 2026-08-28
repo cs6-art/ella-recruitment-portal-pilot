@@ -11,7 +11,9 @@ function read(relativePath) {
 
 test("bulk resume upload processes files with bounded, configurable concurrency instead of one at a time", () => {
   const route = read("src/app/api/resume-screening/bulk/upload/route.ts");
-  assert.match(route, /BULK_RESUME_UPLOAD_CONCURRENCY/);
+  // Concurrency comes from portal config (Settings sheet value overrides the
+  // BULK_RESUME_UPLOAD_CONCURRENCY env var), still clamped to MAX_CONCURRENCY.
+  assert.match(route, /portalConfig\.Bulk_Resume_Upload_Concurrency/);
   assert.match(route, /DEFAULT_CONCURRENCY = 2/);
   assert.match(route, /MAX_CONCURRENCY = 2/);
   // The old implementation awaited each n8n round trip inside a plain
@@ -49,7 +51,7 @@ test("application invitations can send email and lock the invited identity", () 
   const candidatePage = read("public/index.html");
   assert.match(inviteRoute, /sendEmail/);
   assert.match(inviteRoute, /sendApplicationInviteEmail/);
-  assert.match(emailSender, /N8N_APPLICATION_INVITE_EMAIL_WEBHOOK_URL/);
+  assert.match(emailSender, /getPortalConfigValue\("N8N_Application_Invite_Email_Webhook_URL"\)/);
   assert.match(emailSender, /application_invite_email_requested/);
   assert.match(candidatePage, /candidateNameField\.readOnly = true/);
   assert.match(candidatePage, /candidateEmailField\.readOnly = true/);
@@ -206,8 +208,8 @@ test("invite links can use a separate candidate page origin without breaking por
   const envExample = read(".env.example");
   const homePage = read("src/app/page.tsx");
   const proxy = read("proxy.ts");
-  assert.match(inviteRoute, /RESUME_SCREENING_INVITE_BASE_URL/);
-  assert.match(inviteRoute, /N8N_BULK_RESUME_PORTAL_BASE_URL/);
+  assert.match(inviteRoute, /portalConfig\.Resume_Screening_Invite_Base_URL/);
+  assert.match(inviteRoute, /portalConfig\.N8N_Bulk_Resume_Portal_Base_URL/);
   assert.match(publicCors, /RESUME_SCREENING_INVITE_BASE_URL/);
   assert.match(envExample, /RESUME_SCREENING_INVITE_BASE_URL=https:\/\/your-portal-domain\/index\.html/);
   assert.match(inviteStore, /applicationInviteLink/);

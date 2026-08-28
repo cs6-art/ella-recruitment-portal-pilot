@@ -16,6 +16,8 @@ import {
   verifySessionToken,
 } from "@/lib/session";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
+import { getPortalConfigValue } from "@/lib/portal-config";
+import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -284,9 +286,7 @@ export async function POST(
     // Status transitions use the canonical role webhook. Prefer this over the
     // legacy request-only alias so a deployment cannot silently send status
     // events to a creation-only workflow.
-    const webhookUrl =
-      process.env.N8N_ROLE_WEBHOOK_URL ||
-      process.env.N8N_ROLE_REQUEST_WEBHOOK_URL;
+    const webhookUrl = await getPortalConfigValue("N8N_Role_Webhook_URL");
     const webhookSecret = process.env.N8N_WEBHOOK_SECRET;
 
     if (!webhookUrl || !webhookSecret) {
@@ -300,19 +300,7 @@ export async function POST(
           ? "Pending Management Approval"
           : "";
     const timestamp = new Date().toISOString();
-    const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL
-      ?.trim()
-      .replace(/\/$/, "");
-    const forwardedProto =
-      request.headers.get("x-forwarded-proto") || "https";
-    const forwardedHost =
-      request.headers.get("x-forwarded-host") ||
-      request.headers.get("host");
-    const appBaseUrl =
-      configuredAppUrl ||
-      (forwardedHost
-        ? `${forwardedProto}://${forwardedHost}`
-        : "");
+    const appBaseUrl = await resolvePublicAppBaseUrl(request);
 
     const payload = {
       eventType: "role_status_transition",

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { extractDocumentText, MAX_DOCUMENT_FILE_BYTES } from "@/lib/document-extraction";
+import { getPortalConfigValue } from "@/lib/portal-config";
 import { roleAiDraftSchema } from "@/lib/role-ai-draft-schema";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
     const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
     if (!user || user.canCreateRole !== true) return failure("Only authorized HR users can create role drafts.", 403);
 
-    const parserUrl = process.env.N8N_ROLE_DESCRIPTION_PARSER_WEBHOOK_URL?.trim();
+    const parserUrl = (await getPortalConfigValue("N8N_Role_Description_Parser_Webhook_URL")).trim();
     const webhookSecret = process.env.N8N_WEBHOOK_SECRET?.trim();
     if (!parserUrl || !webhookSecret) return failure("The AI job-description parser is not configured yet.", 503);
 

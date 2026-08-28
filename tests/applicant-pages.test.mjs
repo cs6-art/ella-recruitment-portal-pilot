@@ -113,7 +113,7 @@ test("applicant routes are protected and render populated sheet data", () => {
   // not excluded in favor of the Drive-folder poller as it was previously.
   assert.match(screening, /BulkResumeScreeningPanel/);
   assert.match(bulkPanel, /Upload from Google Drive/);
-  assert.match(screening, /GOOGLE_BULK_RESUME_DRIVE_URL/);
+  assert.match(screening, /getPortalConfigValue\("Bulk_Resume_Drive_URL"\)/);
   assert.match(screening, /sort\(\(left, right\) => left\.label\.localeCompare\(right\.label/);
   assert.match(detail, /verifySessionToken/);
   assert.match(detail, /getApplicantById/);

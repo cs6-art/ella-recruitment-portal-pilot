@@ -8,6 +8,7 @@ import WordExtractor from "word-extractor";
 
 import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account";
 import { requireBulkResumeUatConfig, type BulkResumeEnvironment } from "@/lib/bulk-resume-config";
+import { getPortalConfigValue } from "@/lib/portal-config";
 import { createPdfTextParser } from "@/lib/pdf-text-parser";
 
 // This module is the single server-side boundary for resume validation,
@@ -67,13 +68,13 @@ function drive() {
   return driveClient;
 }
 
-function resumeFolderId(environment: BulkResumeEnvironment = "production") {
+async function resumeFolderId(environment: BulkResumeEnvironment = "production") {
   if (environment === "uat") {
     requireBulkResumeUatConfig();
     return process.env.BULK_RESUME_UAT_DRIVE_FOLDER_ID!.trim();
   }
-  const folderId = process.env.RESUME_STORAGE_DRIVE_FOLDER_ID?.trim();
-  if (!folderId) throw new Error("RESUME_STORAGE_DRIVE_FOLDER_ID is not configured.");
+  const folderId = (await getPortalConfigValue("Resume_Storage_Drive_Folder_ID")).trim();
+  if (!folderId) throw new Error("Resume storage Drive folder is not configured (Settings -> Infrastructure or RESUME_STORAGE_DRIVE_FOLDER_ID).");
   return folderId;
 }
 
@@ -185,7 +186,7 @@ function recordFromDriveFile(file: DriveFileFields): ResumeFileRecord | null {
 /** Remove expired resumes from the Drive storage folder. */
 export async function cleanupExpiredResumeFiles(now = Date.now()) {
   const client = drive();
-  const folderId = resumeFolderId();
+  const folderId = await resumeFolderId();
   let scanned = 0;
   let deleted = 0;
   let pageToken: string | undefined;
@@ -252,8 +253,9 @@ export async function storeResumeFile(file: File, options: { environment?: BulkR
   // Queue history can predate the current jobId contract. Reuse a matching
   // non-expired Drive object when it is already present, so re-submitting a
   // resume after a lost historical queue write does not create another file.
+  const folderId = await resumeFolderId(options.environment);
   const existing = await drive().files.list({
-    q: `'${resumeFolderId(options.environment)}' in parents and trashed = false and properties has { key='sha256' and value='${sha256}' }`,
+    q: `'${folderId}' in parents and trashed = false and properties has { key='sha256' and value='${sha256}' }`,
     fields: "files(id, name, mimeType, size, createdTime, properties)",
     pageSize: 10,
     includeItemsFromAllDrives: true,
@@ -270,7 +272,7 @@ export async function storeResumeFile(file: File, options: { environment?: BulkR
     supportsAllDrives: true,
     requestBody: {
       name: fileName,
-      parents: [resumeFolderId(options.environment)],
+      parents: [folderId],
       properties: { kind, sha256, expiresAt },
     },
     media: { mimeType, body: Readable.from(buffer) },

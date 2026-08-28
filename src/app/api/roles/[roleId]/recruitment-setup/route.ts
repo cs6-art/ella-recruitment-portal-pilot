@@ -9,6 +9,8 @@ import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate
 import { evaluationFieldsForSetup, recruitmentSetupSchema } from "@/lib/recruitment-setup-schema";
 import { getSetupReadiness, setupStatusForAction } from "@/lib/recruitment-setup-readiness";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { getPortalConfig } from "@/lib/portal-config";
+import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { createConfiguredVoiceInterviewSlots } from "@/lib/applicant-workflow";
 import { serializeVoiceInterviewSlots } from "@/lib/voice-interview-availability";
 
@@ -128,7 +130,8 @@ export async function POST(request: Request, context: Context) {
     // anyway. The readiness check above is the real gate; this remains as a
     // defensive one.
     if (setupAction === "publish_role" && !readiness.valid) return NextResponse.json({ success: false, code: "RECRUITMENT_SETUP_NOT_READY", message: "Mark the setup as Ready for Publishing before publishing the role." }, { status: 409 });
-    const webhookUrl = process.env.N8N_RECRUITMENT_SETUP_WEBHOOK_URL || process.env.N8N_ROLE_REQUEST_WEBHOOK_URL || process.env.N8N_ROLE_WEBHOOK_URL;
+    const portalConfig = await getPortalConfig();
+    const webhookUrl = portalConfig.N8N_Recruitment_Setup_Webhook_URL || portalConfig.N8N_Role_Webhook_URL;
     const webhookSecret = process.env.N8N_WEBHOOK_SECRET;
     const workflowConfigured = Boolean(webhookUrl && webhookSecret);
     if (!workflowConfigured && setupAction !== "save_draft" && !isAutosaveDraft) return NextResponse.json({ success: false, error: "The recruitment setup workflow is not configured. Save can still be used, but publishing requires the workflow." }, { status: 503 });
@@ -137,9 +140,7 @@ export async function POST(request: Request, context: Context) {
     const finalInterviewCalendar = await getFinalInterviewCalendarConfig();
     const actionRequestId = setup.actionRequestId || crypto.randomUUID();
     const performerEmail = user.email.trim().toLowerCase();
-    const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
-    const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
-      const appBaseUrl = configuredAppUrl || (forwardedHost ? `${request.headers.get("x-forwarded-proto") || "https"}://${forwardedHost}` : "");
+    const appBaseUrl = await resolvePublicAppBaseUrl(request);
     const applicationLink = appBaseUrl ? `${appBaseUrl}/apply/${encodeURIComponent(role.roleId)}` : `/apply/${encodeURIComponent(role.roleId)}`;
     const nextRecruitmentSetupStatus = isAutosaveDraft ? role.recruitmentSetupStatus || "Draft" : setupStatusForAction(setupAction, role.recruitmentSetupStatus || "Draft");
     const initialInterviewQuestions = [

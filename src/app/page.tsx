@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import GoogleLogin from "@/components/GoogleLogin";
+import { getPortalConfigValue } from "@/lib/portal-config";
 import { safeAuthRedirect } from "@/lib/auth-redirect";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -16,7 +17,7 @@ export default async function Home({ searchParams }: HomePageProps) {
   const user = verifySessionToken(cookieStore.get(COOKIE_NAME)?.value);
   const query = searchParams ? await searchParams : undefined;
   const inviteValue = Array.isArray(query?.invite) ? query.invite[0] : query?.invite;
-  const candidatePageBaseUrl = process.env.RESUME_SCREENING_INVITE_BASE_URL?.trim();
+  const candidatePageBaseUrl = (await getPortalConfigValue("Resume_Screening_Invite_Base_URL")).trim();
   if (inviteValue && candidatePageBaseUrl) {
     let candidatePageUrl: URL | null = null;
     try {

@@ -9,6 +9,8 @@ import {
   sendCandidateApplicationWebhook,
 } from "@/lib/applicant-workflow";
 import { candidateBodyForValidation, readCandidateIntakeRequest } from "@/lib/candidate-intake";
+import { assertCreditsAvailable, EllaCreditsError, recordDeduction } from "@/lib/ella-credits";
+import { getPortalConfigValue } from "@/lib/portal-config";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { publicCorsOptionsResponse, withPublicCors } from "@/lib/public-cors";
 import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
@@ -91,7 +93,7 @@ export async function POST(request: Request) {
       return responseError(request, "This role is not accepting applications.", 404);
     }
 
-    const webhookUrl = process.env.N8N_CANDIDATE_APPLICATION_WEBHOOK_URL;
+    const webhookUrl = await getPortalConfigValue("N8N_Candidate_Application_Webhook_URL");
     const webhookSecret = process.env.N8N_WEBHOOK_SECRET;
     if (!webhookUrl || !webhookSecret) {
       return responseError(request, "The candidate application workflow is not configured.", 503);
@@ -99,6 +101,19 @@ export async function POST(request: Request) {
 
     // Reapplications are independent records by policy, even when the email
     // and role match an earlier submission.
+    // Screening this application costs 1 Ella Credit. Refuse before storing the
+    // resume or invoking the workflow if the balance can't cover it; the raw
+    // credit reason is logged, not shown to the candidate.
+    try {
+      await assertCreditsAvailable(1, "cv_analysis");
+    } catch (creditError) {
+      if (creditError instanceof EllaCreditsError) {
+        console.warn("[API Public Applications] Blocked by Ella Credits:", creditError.message);
+        return responseError(request, "Applications are temporarily paused. Please contact the recruiter who invited you.", 402, { code: creditError.code });
+      }
+      throw creditError;
+    }
+
     const applicationId = `APP-${crypto.randomUUID()}`;
     const submittedAt = new Date().toISOString();
     if (intake.resumeFile) storedResume = await storeResumeFile(intake.resumeFile);
@@ -132,6 +147,17 @@ export async function POST(request: Request) {
         console.error("[API Public Applications] Could not mark invitation used:", error);
       });
     }
+
+    // The screening workflow accepted the application: charge the credit. A
+    // ledger failure must not fail an accepted application, so this only logs.
+    await recordDeduction({
+      event: "cv_analysis",
+      units: 1,
+      reference: applicationId,
+      roleId,
+      actorEmail: invitation?.candidateEmail || "",
+      note: "HR invite application screening",
+    }).catch((error) => console.error("[API Public Applications] Could not record credit deduction:", error));
 
     // The workflow appends to Sheets independently of the portal process.
     // Invalidate the cached list before an HR reviewer opens Applicants.

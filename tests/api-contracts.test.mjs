@@ -17,7 +17,9 @@ test("status transition responses preserve n8n rejection details", () => {
 
 test("status transitions prefer the canonical role webhook", () => {
   const source = fs.readFileSync("src/app/api/roles/[roleId]/status/route.ts", "utf8");
-  assert.match(source, /N8N_ROLE_WEBHOOK_URL\s*\|\|\s*\n\s*process\.env\.N8N_ROLE_REQUEST_WEBHOOK_URL/);
+  // The role webhook URL is resolved from portal config (Settings sheet value
+  // overrides N8N_ROLE_REQUEST_WEBHOOK_URL / N8N_ROLE_WEBHOOK_URL env vars).
+  assert.match(source, /getPortalConfigValue\("N8N_Role_Webhook_URL"\)/);
   assert.match(source, /event_type: "role_status_transition"/);
   assert.match(source, /updateRoleRequestFields\(role\.roleId/);
   assert.match(source, /invalidateSheetsCache\("Role_Status_History"\)/);

@@ -7,6 +7,8 @@ import { invalidateSheetsCache } from "@/lib/sheets-cache";
 import { filterVisibleRoles } from "@/lib/access-control";
 import { roleRequestSchema } from "@/lib/role-schema";
 import { generateRoleId } from "@/lib/role-id";
+import { getPortalConfigValue } from "@/lib/portal-config";
+import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE } from "@/lib/recruitment-prompt";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
@@ -252,9 +254,7 @@ export async function POST(request: Request) {
         : "",
     });
 
-    const webhookUrl =
-      process.env.N8N_ROLE_REQUEST_WEBHOOK_URL ||
-      process.env.N8N_ROLE_WEBHOOK_URL;
+    const webhookUrl = await getPortalConfigValue("N8N_Role_Webhook_URL");
 
     const webhookSecret =
       process.env.N8N_WEBHOOK_SECRET;
@@ -279,19 +279,7 @@ export async function POST(request: Request) {
     const createdAt = new Date().toISOString();
     const initialStatus = "Pending HR Discussion";
     const performerEmail = user.email.trim().toLowerCase();
-    const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL
-      ?.trim()
-      .replace(/\/$/, "");
-    const forwardedProto =
-      request.headers.get("x-forwarded-proto") || "https";
-    const forwardedHost =
-      request.headers.get("x-forwarded-host") ||
-      request.headers.get("host");
-    const appBaseUrl =
-      configuredAppUrl ||
-      (forwardedHost
-        ? `${forwardedProto}://${forwardedHost}`
-        : "");
+    const appBaseUrl = await resolvePublicAppBaseUrl(request);
     // Include the canonical role URL so notification workflows can link
     // recipients directly back to the request in the recruitment portal.
     const portalUrl = appBaseUrl
