@@ -14,26 +14,16 @@ type Setting = {
   updatedAt: string;
   updatedBy: string;
   connectionStatus?: "active" | "stored";
-  /** For env/default-backed config keys: the value actually in effect. */
-  effectiveValue?: string;
-  source?: "sheet" | "env" | "default" | "stored";
   type?: "text" | "url" | "number" | "choice";
 };
 
 const categories = ["Access & Security", "Booking & Interview", "Workflow Rules", "Notifications", "Ella Credits"];
-const hiddenSettingKeys = new Set(["Ella_Credit_Cost_CV_Analysis", "Ella_Credit_Cost_Phone_Interview"]);
 const categoryDescriptions: Record<string, string> = {
-  "Access & Security": "Who may sign in. Changing these affects authentication immediately.",
+  "Access & Security": "Live access controls for the connected recruitment portal.",
   "Booking & Interview": "Defaults for the calendar and candidate booking links.",
-  "Workflow Rules": "Approval gates that keep candidate handoffs controlled.",
-  Notifications: "How connected automation should notify candidates and HR.",
+  "Workflow Rules": "Live limits and timing rules used by recruitment automation.",
+  Notifications: "Live notification behaviour for recruitment operations.",
   "Ella Credits": "Published pricing is fixed at 1 credit per CV analysis and 10 credits per AI phone interview. The balance is managed in the Ella Credits panel below.",
-};
-
-const sourceLabel: Record<string, string> = {
-  env: "From environment",
-  default: "Default",
-  sheet: "Overridden here",
 };
 
 function labelFor(key: string) {
@@ -59,7 +49,7 @@ export default function SettingsEditor() {
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to load settings.");
-        setSettings((data.settings || []).filter((setting: Setting) => categories.includes(setting.category) && !hiddenSettingKeys.has(setting.key)));
+        setSettings((data.settings || []).filter((setting: Setting) => categories.includes(setting.category) && setting.connectionStatus === "active"));
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Unable to load settings."))
       .finally(() => setLoading(false));
@@ -99,27 +89,24 @@ export default function SettingsEditor() {
         <div className="settings-header-note"><strong>HR Defaults</strong><span>Safe to edit. Secrets stay outside this page.</span></div>
       </header>
 
-      <section className="settings-guide"><span className="settings-guide-icon">i</span><div><strong>What should I change?</strong><p>Active settings are consumed by portal runtime logic. Stored-only values are labelled so they are not mistaken for live controls.</p></div></section>
+      <section className="settings-guide"><span className="settings-guide-icon">i</span><div><strong>What should I change?</strong><p>These are the live controls used by the portal and recruitment automation. Changes apply to new actions.</p></div></section>
 
       {loading && <div className="empty">Loading settings...</div>}
       {error && <ActionFeedback kind="error">{error}</ActionFeedback>}
       {saveError && <ValidationSummary error={saveError} title="Save failed" />}
       {message && <ActionFeedback kind="success">{message}</ActionFeedback>}
 
-      {!loading && !error && grouped.map(({ category, items }) => <section className="card settings-section" key={category}>
+      {!loading && !error && grouped.filter(({ items }) => items.length > 0).map(({ category, items }) => <section className="card settings-section" key={category}>
         <div className="settings-section-header"><div><h2>{category}</h2><p>{categoryDescriptions[category] || "Additional portal configuration."}</p></div><span>{items.length} setting{items.length === 1 ? "" : "s"}</span></div>
         <div className="settings-grid">{items.length === 0 ? <p className="settings-empty">No settings in this category.</p> : items.map((setting) => {
-          const isConfigKey = Boolean(setting.type);
-          const badge = isConfigKey && setting.source && sourceLabel[setting.source]
-            ? sourceLabel[setting.source]
-            : setting.connectionStatus === "active" ? "Active" : "Stored only";
-          const badgeClass = setting.source === "sheet" || setting.connectionStatus === "active" ? "is-active" : "is-stored";
+          const badge = "Active";
+          const badgeClass = "is-active";
           return <div className="settings-field" key={setting.key}>
             <div className="settings-field-heading"><label htmlFor={`setting-${setting.key}`}>{labelFor(setting.key)}</label><span className={`settings-runtime-status ${badgeClass}`}>{badge}</span></div>
             {isChoice(setting)
-              ? <select id={`setting-${setting.key}`} value={setting.value || setting.effectiveValue || "No"} onChange={(event) => update(setting.key, event.target.value)}><option>Yes</option><option>No</option></select>
-              : <input id={`setting-${setting.key}`} value={setting.value} placeholder={isConfigKey ? (setting.effectiveValue || "Not set") : ""} onChange={(event) => update(setting.key, event.target.value)} />}
-            <small>{setting.description || "No description provided."}{isConfigKey && setting.source !== "sheet" ? " Leave blank to keep using the environment value." : ""}</small>
+              ? <select id={`setting-${setting.key}`} value={setting.value || "No"} onChange={(event) => update(setting.key, event.target.value)}><option>Yes</option><option>No</option></select>
+              : <input id={`setting-${setting.key}`} value={setting.value} placeholder="Not configured" onChange={(event) => update(setting.key, event.target.value)} />}
+            <small>{setting.description || "No description provided."}</small>
           </div>;
         })}</div>
       </section>)}

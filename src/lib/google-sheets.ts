@@ -252,7 +252,6 @@ export const defaultPortalSettings: PortalSetting[] = [
   { key: "Final_Interview_Calendar_ID", value: "primary", category: "Booking & Interview", description: "Google Calendar ID used for HR interviews. Use primary for the connected HR account's main calendar.", updatedAt: "", updatedBy: "" },
   { key: "Voice_Interview_Duration_Minutes", value: "10", category: "Booking & Interview", description: "Fixed duration for an AI Voice Interview slot.", updatedAt: "", updatedBy: "" },
   { key: "Final_Interview_Duration_Minutes", value: "60", category: "Booking & Interview", description: "Expected duration for an HR Interview slot.", updatedAt: "", updatedBy: "" },
-  { key: "Booking_Link_Expiry_Days", value: "7", category: "Booking & Interview", description: "Number of days before a candidate booking link expires.", updatedAt: "", updatedBy: "" },
   { key: "Require_Resume_HR_Approval", value: "Yes", category: "Workflow Rules", description: "HR approval is required before the voice booking link is created.", updatedAt: "", updatedBy: "" },
   { key: "Require_Voice_HR_Approval", value: "Yes", category: "Workflow Rules", description: "HR approval is required before the HR interview booking link is created.", updatedAt: "", updatedBy: "" },
   { key: "Booking_Invitation_Auto_Send", value: "Yes", category: "Notifications", description: "Allow the connected automation to send candidate booking invitations.", updatedAt: "", updatedBy: "" },

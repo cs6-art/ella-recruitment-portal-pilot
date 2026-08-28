@@ -11,11 +11,22 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const configByKey = new Map(PORTAL_CONFIG_CATALOG.map((entry) => [entry.key, entry]));
-const runtimeSettingKeys = new Set([
+// Only expose settings that are backed by live runtime behaviour. Hosting
+// environment variables, webhook endpoints, and legacy sheet-only values are
+// intentionally kept out of the HR-facing Settings page.
+const editableSettingKeys = new Set([
+  "Allowed_Google_Domain",
   "Voice_Interview_Duration_Minutes",
   "Final_Interview_Calendar_Email",
   "Final_Interview_Calendar_ID",
-  ...PORTAL_CONFIG_CATALOG.map((entry) => entry.key),
+  "Booking_Link_Expiry_Days",
+  "Resume_Screening_Link_Expiry_Days",
+  "Bulk_Resume_Upload_Concurrency",
+  "Bulk_Resume_Notify_On_Success",
+  "Voice_Call_Max_Attempts",
+  "Voice_Call_Retry_Gap_Hours",
+  "Ella_Credit_Discount_Threshold",
+  "Ella_Credit_Discount_Percent",
 ]);
 
 function validateConfigValue(key: string, rawValue: string): string | null {
@@ -59,9 +70,9 @@ export async function GET() {
     const stored = await getPortalSettings();
     const storedByKey = new Map(stored.map((setting) => [setting.key, setting]));
     const settings = [...defaultPortalSettings.map((setting) => storedByKey.get(setting.key) || setting), ...stored.filter((setting) => !defaultPortalSettings.some((defaultSetting) => defaultSetting.key === setting.key))]
-      .filter((setting) => !secretKey(setting.key))
+      .filter((setting) => !secretKey(setting.key) && editableSettingKeys.has(setting.key))
       .map((setting) => {
-        const base = { ...setting, connectionStatus: runtimeSettingKeys.has(setting.key) ? "active" : "stored" };
+        const base = { ...setting, connectionStatus: "active" as const };
         // Config keys keep their raw sheet value (blank = not overridden) so a
         // save never accidentally freezes the env value into the sheet. The
         // resolved value is exposed separately for display, with `source`
