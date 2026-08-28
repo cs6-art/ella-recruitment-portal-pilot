@@ -12,6 +12,7 @@ import {
 import { candidateBodyForValidation, readCandidateIntakeRequest } from "@/lib/candidate-intake";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
+import { assertCreditsAvailable, creditCostFor, EllaCreditsError, recordDeduction } from "@/lib/ella-credits";
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { deleteResumeFile, storeResumeFile } from "@/lib/resume-files";
@@ -60,6 +61,17 @@ export async function POST(request: Request) {
       return responseError("The candidate application workflow is not configured.", 503);
     }
 
+    // Screening this candidate costs 1 Ella Credit. Refuse before storing the
+    // resume or invoking the workflow if the balance can't cover it.
+    try {
+      await assertCreditsAvailable(1, "cv_analysis");
+    } catch (creditError) {
+      if (creditError instanceof EllaCreditsError) {
+        return responseError("Not enough Ella Credits to screen this candidate. Top up Ella Credits in Settings.", 402, { code: creditError.code, required: creditError.required, available: creditError.available });
+      }
+      throw creditError;
+    }
+
     // Reapplications are independent records by policy, even when the email
     // and role match an earlier submission.
     const applicationId = `APP-${crypto.randomUUID()}`;
@@ -91,11 +103,22 @@ export async function POST(request: Request) {
     // sheet snapshot so the Applicants page immediately sees the new record.
     invalidateSheetsCache("High_Match_Profile");
 
+    await recordDeduction({
+      event: "cv_analysis",
+      units: 1,
+      reference: applicationId,
+      roleId,
+      actorName: user.name,
+      actorEmail: user.email,
+      note: "HR manual intake screening",
+    }).catch((error) => console.error("[API Applicants] Could not record credit deduction:", error));
+
     return NextResponse.json({
       success: true,
       applicationId,
       roleId,
       message: "Candidate added successfully.",
+      creditsCharged: await creditCostFor("cv_analysis"),
     }, { status: 201 });
   } catch (error) {
     if (storedResume) await deleteResumeFile(storedResume.record).catch(() => undefined);

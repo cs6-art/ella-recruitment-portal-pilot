@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 import { canManagePipeline } from "@/lib/access-control";
 import { appendBulkResumeQueueEvent, getBulkResumeQueue, getBulkResumeScreeningEvidence, type BulkResumeQueueItem } from "@/lib/candidate-applications";
-import { assertCreditsAvailable, EllaCreditsError, recordDeduction } from "@/lib/ella-credits";
+import { assertCreditsAvailable, creditCostFor, EllaCreditsError, recordDeduction } from "@/lib/ella-credits";
 import { getPortalConfig, isEnabledChoice } from "@/lib/portal-config";
 import { extractResumeContactDetails } from "@/lib/resume-contact-extraction";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
@@ -101,6 +101,9 @@ export async function POST(request: Request) {
     const latestByFile = new Map(queue.map((item) => [item.driveFileId, item]));
     const savedScreeningEvidence = await getBulkResumeScreeningEvidence(queue);
     const results: Array<Record<string, unknown>> = [];
+    // Files whose screening request was accepted downstream (and therefore
+    // charged an Ella Credit). Surfaced so the client meter can tick down live.
+    let creditedFiles = 0;
     // Keep one correlation id for the complete upload so the internal
     // notification contains a single, auditable batch summary.
     const batchId = configuredUatBatchId || `${isUat ? "UAT-BATCH" : "BATCH"}-${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
@@ -224,8 +227,9 @@ export async function POST(request: Request) {
           cache: "no-store",
         });
         if (!response.ok) throw new Error(`The screening workflow returned HTTP ${response.status}.`);
-        // The screening request was accepted downstream: charge 1 credit. A
+        // The screening request was accepted downstream: charge for it. A
         // ledger failure must not undo an accepted screening, so this only logs.
+        creditedFiles += 1;
         await recordDeduction({
           event: "cv_analysis",
           units: 1,
@@ -361,7 +365,8 @@ export async function POST(request: Request) {
     }
 
     const submitted = results.filter((result) => !result.skipped && String(result.status || "").toLowerCase() !== "failed").length;
-    return NextResponse.json({ success: true, roleId, batchId, environment: isUat ? "uat" : environment, isUat, results, notificationStatus, concurrency, submitted }, { status: 202 });
+    const creditsCharged = creditedFiles * (await creditCostFor("cv_analysis"));
+    return NextResponse.json({ success: true, roleId, batchId, environment: isUat ? "uat" : environment, isUat, results, notificationStatus, concurrency, submitted, creditsCharged }, { status: 202 });
   } catch (error) {
     console.error("[Bulk Resume Upload] POST failed:", error);
     return responseError(error instanceof Error ? error.message : "Unable to upload bulk resumes.", 400);

@@ -1,0 +1,83 @@
+.meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #cdddea;
+  border-radius: 10px;
+  background: #f4f8fb;
+  color: #0e4471;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background .25s ease, border-color .25s ease, color .25s ease;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: #0071f7;
+}
+
+.icon svg { display: block; width: 100%; height: 100%; }
+
+.value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+
+.label { color: #5e6b78; font-weight: 700; }
+
+/* Brief flash when the balance changes, so a live deduction is visible. */
+.changed { animation: creditPulse .9s ease; }
+
+@keyframes creditPulse {
+  0% { transform: none; }
+  30% { transform: translateY(-1px) scale(1.04); }
+  100% { transform: none; }
+}
+
+.low {
+  border-color: #f0c27a;
+  background: #fdf5e7;
+  color: #8a5a12;
+}
+.low .icon { color: #c17d19; }
+.low .label { color: #a9741f; }
+
+.empty {
+  border-color: #eab2ac;
+  background: #fdece9;
+  color: #a12b22;
+}
+.empty .icon { color: #c0392b; }
+.empty .label { color: #b5473c; }
+
+.loading { opacity: .55; }
+
+/* Sidebar variant: full-width block that sits in the AppShell rail. */
+.sidebar {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  margin: 10px 0 4px;
+}
+
+.sidebarCollapsed {
+  justify-content: center;
+  padding: 8px;
+  gap: 0;
+}
+.sidebarCollapsed .label,
+.sidebarCollapsed .sidebarValueWrap { display: none; }
+
+.sidebarValueWrap { display: inline-flex; align-items: baseline; gap: 5px; }
+
+/* Mobile header variant: compact, icon + number only. */
+.mobile { padding: 7px 10px; font-size: 12px; }
+.mobile .label { display: none; }
