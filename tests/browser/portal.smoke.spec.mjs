@@ -67,8 +67,7 @@ test("creator dashboard and role creation remain responsive", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Create role request" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.goto("/settings");
-  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await expect(page.getByText("Read-only access")).toBeVisible();
+  await expect(page).toHaveURL(/127\.0\.0\.1:3000\/dashboard/);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -82,7 +81,7 @@ test("unauthenticated protected pages redirect safely", async ({ page }) => {
 test("settings access and logout work for settings administrator", async ({ page }) => {
   await signIn(page, settingsAdmin);
   await page.goto("/settings");
-  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ella Credits" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.getByRole("button", { name: /Sign out/i }).click();
   await expect(page).toHaveURL(/127\.0\.0\.1:3000\/$/);

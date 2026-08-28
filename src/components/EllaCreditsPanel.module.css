@@ -65,7 +65,7 @@
 }
 .field small { color: var(--muted, #5e6b78); font-size: 11px; line-height: 1.4; }
 .amountField, .noteField { width: auto; }
-.form button { align-self: end; min-height: 42px; margin-bottom: 20px; white-space: nowrap; }
+.form button { align-self: start; min-height: 42px; margin-top: 22px; white-space: nowrap; }
 
 .feedback { padding: 0 22px 8px; }
 
@@ -105,5 +105,5 @@
   .stats { grid-template-columns: 1fr; }
   .form { grid-template-columns: 1fr; }
   .amountField, .noteField { width: 100%; }
-  .form button { align-self: start; margin-bottom: 0; }
+  .form button { margin-top: 0; }
 }
