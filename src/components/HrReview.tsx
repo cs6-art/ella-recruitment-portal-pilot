@@ -41,7 +41,6 @@ type HrReviewProps = {
   roleId: string;
   status: string;
   canReviewRole: boolean;
-  canApproveRole: boolean;
   history: RoleStatusHistoryEntry[];
   onSuccess: (message: string, warning?: string, status?: string) => void;
   onConflict?: () => void;
@@ -65,7 +64,6 @@ export default function HrReview({
   roleId,
   status,
   canReviewRole,
-  canApproveRole,
   history,
   onSuccess,
   onConflict,
@@ -78,33 +76,21 @@ export default function HrReview({
   const retryRequest = useRef<{ action: string; id: string } | null>(null);
 
   const hold = latestHold(history);
-  const holdResumeTarget = hold?.resumeTargetStatus;
 
+  // The Management-approval step was removed: an HR reviewer approves or
+  // rejects directly from HR discussion, and every hold/return resumes to HR
+  // discussion.
   const actions =
     status === "Pending HR Discussion" && canReviewRole
       ? [
-          "send_for_management_approval",
+          "approve_role",
+          "reject_role",
           "return_for_revision_hr",
           "place_on_hold_hr",
         ]
-      : status === "Pending Management Approval" && canApproveRole
-        ? [
-            "approve_role",
-            "reject_role",
-            "return_for_revision_management",
-            "place_on_hold_management",
-          ]
-        : status === "Returned for Revision" && canReviewRole
-          ? ["resume_hr_review"]
-          : status === "On Hold" &&
-              ((holdResumeTarget === "Pending HR Discussion" && canReviewRole) ||
-                (holdResumeTarget === "Pending Management Approval" && canApproveRole))
-            ? [
-                holdResumeTarget === "Pending HR Discussion"
-                  ? "resume_hr_review"
-                  : "resume_management_approval",
-              ]
-            : [];
+      : (status === "Returned for Revision" || status === "On Hold") && canReviewRole
+        ? ["resume_hr_review"]
+        : [];
 
   async function submitAction(action: string) {
     if (submissionLock.current) return;
@@ -164,7 +150,7 @@ export default function HrReview({
           : "";
         throw new Error(
           missingFields
-            ? `${data.error || "Complete the requisition before requesting approval."} Missing: ${missingFields}.`
+            ? `${data.error || "Complete the requisition before approving this role."} Missing: ${missingFields}.`
             : [data.error || "Unable to update the role status.", data.workflowError]
                 .filter(Boolean)
                 .join(" "),
@@ -216,13 +202,7 @@ export default function HrReview({
       {actions.length > 0 && (
         <section className="card role-section">
           <div className="card-header">
-            <h2>
-              {status === "Pending Management Approval"
-                ? "Management Approval"
-                : status === "Pending HR Discussion"
-                  ? "HR Review"
-                  : "Workflow Action"}
-            </h2>
+            <h2>{status === "Pending HR Discussion" ? "HR Review" : "Workflow Action"}</h2>
           </div>
 
           <div className="section">
@@ -249,7 +229,7 @@ export default function HrReview({
               <button
                 key={action}
                 type="button"
-                className={action.includes("approve") || action.includes("send") || action.includes("resume") ? "btn btn-primary" : "btn btn-secondary"}
+                className={action === "approve_role" || action.includes("resume") ? "btn btn-primary" : "btn btn-secondary"}
                 disabled={submittingAction !== null}
                 onClick={() => void submitAction(action)}
               >

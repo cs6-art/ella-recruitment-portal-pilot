@@ -47,13 +47,16 @@ export async function POST(request: Request) {
   try {
     const parsed = topUpSchema.safeParse(await request.json().catch(() => ({})));
     if (!parsed.success) return NextResponse.json({ success: false, error: "Enter a non-zero whole number and a short note." }, { status: 422 });
-    const { balance, totals } = await recordTopUp({
+    const { balance, totals, bonus } = await recordTopUp({
       amount: parsed.data.amount,
       note: parsed.data.note,
       actorName: user.name,
       actorEmail: user.email,
     });
-    return NextResponse.json({ success: true, balance, totals, message: `Balance updated to ${balance} credits.` });
+    const message = bonus > 0
+      ? `Added ${parsed.data.amount} credits plus a ${bonus}-credit volume discount. Balance is now ${balance}.`
+      : `Balance updated to ${balance} credits.`;
+    return NextResponse.json({ success: true, balance, totals, bonus, message });
   } catch (error) {
     console.error("[API Ella Credits] POST failed:", error);
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to update the balance." }, { status: 500 });

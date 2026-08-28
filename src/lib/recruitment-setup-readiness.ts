@@ -19,6 +19,7 @@ export type SetupReadinessInput = {
   licenseRequirementStatus?: string;
   licenseOrCertificateRequired?: string;
   hodInterviewRequired?: string;
+  finalInterviewVenue?: string;
 };
 
 export type MissingReadinessField = { key: string; label: string };
@@ -47,6 +48,7 @@ export function getSetupReadiness(input: SetupReadinessInput, level: SetupReadin
 
   if (!['Disclosed', 'Not disclosed'].includes(text(input.salaryDisclosureStatus))) missingFields.push({ key: "Salary_Disclosure_Status", label: "Salary visibility (Disclosed or Not disclosed)" });
   if (!["Required", "Not required"].includes(text(input.hodInterviewRequired))) missingFields.push({ key: "HOD_Interview_Required", label: "HR interview requirement" });
+  else if (text(input.hodInterviewRequired) === "Required") requireField("Final_Interview_Venue", "Face-to-Face Interview Venue", input.finalInterviewVenue);
   if (!["Required", "Preferred", "Not required"].includes(text(input.licenseRequirementStatus))) missingFields.push({ key: "License_Requirement_Status", label: "License or certificate requirement" });
   else if (text(input.licenseRequirementStatus) === "Required") requireField("License_or_Certificate_Required", "License or Certificate Required", input.licenseOrCertificateRequired);
   return { valid: missingFields.length === 0, missingFields };

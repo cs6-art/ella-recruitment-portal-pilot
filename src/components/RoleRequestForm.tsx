@@ -541,10 +541,9 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
       <aside className="sidebar-card">
         <h3>What happens next</h3>
         <div className="sidebar-list">
-          <div><strong>1. HR discussion</strong><br />HR reviews the submitted role request.</div>
-          <div><strong>2. Management approval</strong><br />The request is approved, returned, or rejected.</div>
-          <div><strong>3. Recruitment setup</strong><br />HR confirms Ella's generated screening setup.</div>
-          <div><strong>4. Job posting</strong><br />Approved roles can be published to the selected channels.</div>
+          <div><strong>1. HR review and approval</strong><br />HR reviews the request and approves, returns, or rejects it.</div>
+          <div><strong>2. Recruitment setup</strong><br />HR confirms Ella's generated screening setup.</div>
+          <div><strong>3. Job posting</strong><br />Approved roles can be published to the selected channels.</div>
         </div>
       </aside>
     </form>

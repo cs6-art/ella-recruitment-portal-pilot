@@ -24,15 +24,24 @@ export const dynamic = "force-dynamic";
 
 // Status transitions are handled by this dynamic API route.
 
+// The Management-approval step was removed (URS Phase 1): an HR reviewer now
+// approves or rejects a role directly from the HR discussion stage. The
+// "Pending Management Approval" status and its management-only actions no
+// longer exist.
 const transitions = {
   submit_draft_for_hr: {
     source: ["Draft"],
     target: "Pending HR Discussion",
     permission: "create",
   },
-  send_for_management_approval: {
+  approve_role: {
     source: ["Pending HR Discussion"],
-    target: "Pending Management Approval",
+    target: "Approved",
+    permission: "review",
+  },
+  reject_role: {
+    source: ["Pending HR Discussion"],
+    target: "Rejected",
     permission: "review",
   },
   return_for_revision_hr: {
@@ -45,35 +54,10 @@ const transitions = {
     target: "On Hold",
     permission: "review",
   },
-  approve_role: {
-    source: ["Pending Management Approval"],
-    target: "Approved",
-    permission: "approve",
-  },
-  reject_role: {
-    source: ["Pending Management Approval"],
-    target: "Rejected",
-    permission: "approve",
-  },
-  return_for_revision_management: {
-    source: ["Pending Management Approval"],
-    target: "Returned for Revision",
-    permission: "approve",
-  },
-  place_on_hold_management: {
-    source: ["Pending Management Approval"],
-    target: "On Hold",
-    permission: "approve",
-  },
   resume_hr_review: {
     source: ["Returned for Revision", "On Hold"],
     target: "Pending HR Discussion",
     permission: "review",
-  },
-  resume_management_approval: {
-    source: ["On Hold"],
-    target: "Pending Management Approval",
-    permission: "approve",
   },
 } as const;
 
@@ -172,9 +156,7 @@ export async function POST(
     const transition = transitions[action];
     const permitted = transition.permission === "review"
       ? user.canReviewRole === true
-      : transition.permission === "approve"
-        ? user.canApproveRole === true
-        : user.canCreateRole === true;
+      : user.canCreateRole === true;
 
     if (!permitted) {
       return jsonError("You do not have permission to perform this action.", 403);
@@ -201,7 +183,7 @@ export async function POST(
       return jsonError("You do not have permission to perform this action.", 403);
     }
 
-    if (action === "send_for_management_approval" || action === "submit_draft_for_hr") {
+    if (action === "approve_role" || action === "submit_draft_for_hr") {
       const missingFields: string[] = [];
       if (!role.jobDescription?.trim()) missingFields.push("Job_Description");
       if (!role.jobTitle?.trim()) missingFields.push("Job_Title");
@@ -209,7 +191,7 @@ export async function POST(
       if (!role.numberOfVacancies || role.numberOfVacancies < 1) missingFields.push("Number_Of_Vacancies");
       if (!role.reasonForRequest?.trim()) missingFields.push("Reason_For_Request");
       if (!role.targetHiringDate?.trim()) missingFields.push("Target_Hiring_Date");
-      if (missingFields.length) return jsonError("Complete the requisition before requesting approval.", 409, { code: "REQUISITION_INCOMPLETE", missingFields });
+      if (missingFields.length) return jsonError("Complete the requisition before approving this role.", 409, { code: "REQUISITION_INCOMPLETE", missingFields });
     }
 
     // Autosaved drafts are identified by a client-generated DRAFT-<uuid> id
@@ -257,31 +239,8 @@ export async function POST(
       );
     }
 
-    const latestHistory = history[0];
-    if (
-      action === "resume_hr_review" &&
-      role.status === "On Hold" &&
-      latestHistory?.resumeTargetStatus !==
-        "Pending HR Discussion"
-    ) {
-      return jsonError(
-        "This request is on hold for management approval.",
-        409,
-        { code: "STATUS_CONFLICT", currentStatus: role.status },
-      );
-    }
-
-    if (
-      action === "resume_management_approval" &&
-      latestHistory?.resumeTargetStatus !==
-        "Pending Management Approval"
-    ) {
-      return jsonError(
-        "This request is on hold for HR review.",
-        409,
-        { code: "STATUS_CONFLICT", currentStatus: role.status },
-      );
-    }
+    // All holds and revision returns now resume to HR discussion — there is no
+    // separate management-approval hold target to disambiguate.
 
     // Status transitions use the canonical role webhook. Prefer this over the
     // legacy request-only alias so a deployment cannot silently send status
@@ -293,12 +252,7 @@ export async function POST(
       return jsonError("The role status workflow is not configured.", 503);
     }
 
-    const resumeTargetStatus =
-      action === "place_on_hold_hr"
-        ? "Pending HR Discussion"
-        : action === "place_on_hold_management"
-          ? "Pending Management Approval"
-          : "";
+    const resumeTargetStatus = action === "place_on_hold_hr" ? "Pending HR Discussion" : "";
     const timestamp = new Date().toISOString();
     const appBaseUrl = await resolvePublicAppBaseUrl(request);
 

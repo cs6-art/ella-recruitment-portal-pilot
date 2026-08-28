@@ -161,6 +161,7 @@ export type RoleRequestDetails = {
   experienceRequirementStatus?: string;
   licenseRequirementStatus?: string;
   hodInterviewRequired?: string;
+  finalInterviewVenue?: string;
   recruitmentSetupUpdatedAt?: string;
   recruitmentSetupUpdatedByName?: string;
   recruitmentSetupUpdatedByEmail?: string;
@@ -630,6 +631,10 @@ function mapRoleRequest(
     hodInterviewRequired: getField(record, [
       "HOD_Interview_Required",
       "HOD Interview Required",
+    ]),
+    finalInterviewVenue: getField(record, [
+      "Final_Interview_Venue",
+      "Final Interview Venue",
     ]),
 
     status:

@@ -19,24 +19,27 @@ The transition payload includes `portalUrl`, built from `NEXT_PUBLIC_APP_URL`
 or the forwarded request host, followed by `/roles/{Role_ID}`. Use that value
 in email links; do not hardcode `localhost`.
 
+The Management-approval step was removed (URS Phase 1). An HR reviewer now
+approves or rejects a role directly from the HR discussion stage;
+`send_for_management_approval`, `return_for_revision_management`,
+`place_on_hold_management`, `resume_management_approval`, and the
+`Pending Management Approval` status no longer occur. Legacy history rows that
+still carry those action names should keep rendering with a readable label.
+
 | Action | Recipients |
 | --- | --- |
-| `send_for_management_approval` | `User_Directory` users with `Can_Approve_Role = TRUE` and `Active = TRUE` |
-| `return_for_revision_hr` | `Requester_Email` |
-| `place_on_hold_hr` | `Requester_Email` and active HR reviewers |
 | `approve_role` | `Requester_Email` and active HR reviewers |
 | `reject_role` | `Requester_Email` and active HR reviewers |
-| `return_for_revision_management` | `Requester_Email` and active HR reviewers |
-| `place_on_hold_management` | `Requester_Email` and active HR reviewers |
+| `return_for_revision_hr` | `Requester_Email` |
+| `place_on_hold_hr` | `Requester_Email` and active HR reviewers |
 | `resume_hr_review` | Active HR reviewers |
-| `resume_management_approval` | Active approvers |
 
 Return an HTTP 200 JSON response after the status and history writes complete:
 
 ```json
 {
   "success": true,
-  "status": "Pending Management Approval",
+  "status": "Approved",
   "notificationStatus": "sent",
   "notificationError": ""
 }

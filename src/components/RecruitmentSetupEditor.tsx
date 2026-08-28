@@ -22,6 +22,7 @@ import {
   type SetupReadinessLevel,
 } from "@/lib/recruitment-setup-readiness";
 import { parseVoiceInterviewSlots, type VoiceInterviewSlot } from "@/lib/voice-interview-availability";
+import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
 type Setup = {
@@ -57,6 +58,7 @@ type Setup = {
   experienceRequirementStatus?: string;
   licenseRequirementStatus?: string;
   hodInterviewRequired?: string;
+  finalInterviewVenue?: string;
   voiceInterviewAvailabilityMode?: string;
   voiceInterviewSlots?: VoiceInterviewSlot[] | string;
   voiceInterviewAutoStartDate?: string;
@@ -119,6 +121,7 @@ const setupFieldLabels: Record<string, string> = {
   License_Requirement_Status: "License or certificate requirement",
   License_or_Certificate_Required: "License or certificate details",
   HOD_Interview_Required: "HR interview requirement",
+  Final_Interview_Venue: "Face-to-Face interview venue",
   screeningCriteria: "Screening instructions",
   requiredInterviewQuestion1: "Question 1",
   requiredInterviewQuestion2: "Question 2",
@@ -129,6 +132,7 @@ const setupFieldLabels: Record<string, string> = {
   salaryDisclosureStatus: "Salary visibility",
   licenseRequirementStatus: "License requirement",
   hodInterviewRequired: "Face-to-Face interview",
+  finalInterviewVenue: "Face-to-Face interview venue",
   customEvaluationFields: "Custom evaluation fields",
 };
 
@@ -146,6 +150,7 @@ const setupFieldAnchors: Record<string, string> = {
   License_Requirement_Status: "#vapi-license-requirement",
   License_or_Certificate_Required: "#vapi-license",
   HOD_Interview_Required: "#vapi-hr-interview",
+  Final_Interview_Venue: "#vapi-final-interview-venue",
   screeningCriteria: "#vapi-screeningCriteria",
   requiredInterviewQuestion1: "#vapi-question-1",
   requiredInterviewQuestion2: "#vapi-question-2",
@@ -155,6 +160,7 @@ const setupFieldAnchors: Record<string, string> = {
   salaryDisclosureStatus: "#vapi-salary-disclosure",
   licenseRequirementStatus: "#vapi-license-requirement",
   hodInterviewRequired: "#vapi-hr-interview",
+  finalInterviewVenue: "#vapi-final-interview-venue",
 };
 
 function setupFieldLabel(field: string) {
@@ -216,7 +222,7 @@ function promptRenderInput(values: Setup) {
     roleTitle: values.roleTitle,
     jobDescription: values.jobDescription,
     screeningCriteria: values.screeningCriteria,
-    interviewQuestions: getQuestions(values).join("\n"),
+    interviewQuestions: buildNumberedInterviewQuestions(questionKeys.map((key) => valueText(values[key]))).join("\n"),
     licenseOrCertificateRequired: values.licenseOrCertificateRequired,
     keywordsToLookFor: values.keywordsToLookFor,
     transferableSkillsAccepted: values.transferableSkillsAccepted,
@@ -650,6 +656,19 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
             <label htmlFor="vapi-license-requirement"><span>License requirement *</span><select required id="vapi-license-requirement" value={values.licenseRequirementStatus || ""} disabled={!editable || saving} onChange={(event) => update("licenseRequirementStatus", event.target.value)}><option value="">Choose one</option><option>Required</option><option>Preferred</option><option>Not required</option></select></label>
             <label htmlFor="vapi-hr-interview"><span>Face-to-Face interview *</span><select required id="vapi-hr-interview" value={values.hodInterviewRequired || ""} disabled={!editable || saving} onChange={(event) => update("hodInterviewRequired", event.target.value)}><option value="">Choose one</option><option>Required</option><option>Not required</option></select></label>
           </div>
+          {values.hodInterviewRequired === "Required" && (
+            <Field
+              id="vapi-final-interview-venue"
+              label="Face-to-Face interview venue"
+              value={values.finalInterviewVenue || ""}
+              onChange={(value) => update("finalInterviewVenue", value)}
+              disabled={!editable || saving}
+              multiline
+              required
+              placeholder={"Full address, floor / room, arrival instructions, and who to ask for on arrival.\nExample: MCLink Group, 10 Anson Road, #12-05, Singapore 079903. Ask for HR reception on level 12."}
+              hint="Included in the candidate's face-to-face interview invitation and calendar event."
+            />
+          )}
         </div>
       </details>
 

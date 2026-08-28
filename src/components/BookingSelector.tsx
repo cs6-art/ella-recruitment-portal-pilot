@@ -17,6 +17,7 @@ type Context = {
   scheduledTime: string;
   timezone: string;
   preferredMobile: string;
+  finalInterviewVenue?: string;
   currentSlot?: Slot;
   slots: Slot[];
 };
@@ -104,6 +105,7 @@ export default function BookingSelector({ token, initialContext }: { token: stri
       <div className="booking-confirmed-icon">✓</div>
       <h2>{completed ? "Interview completed" : "Your interview is scheduled"}</h2>
       <p>{context.scheduledDate ? displayDate(context.scheduledDate) : "Your selected date"} · {context.scheduledTime || "Time confirmed"} {context.timezone || ""}</p>
+      {context.kind === "final" && context.finalInterviewVenue?.trim() && <div className="booking-venue"><strong>Venue</strong><p>{context.finalInterviewVenue.trim()}</p></div>}
       <small>{completed ? "The recruitment team has received the interview result." : "You may close this page. The recruitment team has received your booking."}</small>
     </div> : noAvailability ? <div className="booking-empty booking-no-availability" role="status"><strong>No times are currently available</strong><p>Please reply to your interview invitation email so the recruitment team can send you a new booking link.</p></div> : <>
       {noShow && <div className="booking-notice">This interview was marked <strong>No Show</strong>. You may choose a replacement time below.</div>}

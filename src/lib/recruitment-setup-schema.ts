@@ -96,6 +96,9 @@ export const recruitmentSetupSchema = z.object({
   experienceRequirementStatus: z.string().trim().max(30).default(""),
   licenseRequirementStatus: z.string().trim().max(30).default(""),
   hodInterviewRequired: z.string().trim().max(30).default(""),
+  // Physical venue for the human face-to-face interview: address, floor/room,
+  // arrival instructions, on-site contact. Surfaced in the F2F invitation.
+  finalInterviewVenue: z.string().trim().max(2000).default(""),
   voiceInterviewAvailabilityMode: z.enum(["none", "manual", "automatic"]).default("none"),
   voiceInterviewSlots: z.preprocess((value) => {
     if (typeof value === "string") {
@@ -112,6 +115,9 @@ export const recruitmentSetupSchema = z.object({
   comments: z.string().trim().max(5000).optional().default(""),
   actionRequestId: z.string().trim().min(1).max(200).optional(),
 }).superRefine((setup, context) => {
+  if (setup.setupAction === "publish_role" && setup.hodInterviewRequired === "Required" && !setup.finalInterviewVenue.trim()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["finalInterviewVenue"], message: "Enter the face-to-face interview venue and arrival instructions before publishing." });
+  }
   if (setup.voiceInterviewAvailabilityMode === "manual" && setup.voiceInterviewSlots.length === 0) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["voiceInterviewSlots"], message: "Add at least one manual AI Voice Interview slot or choose automatic availability." });
   }

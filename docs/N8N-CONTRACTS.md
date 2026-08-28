@@ -335,3 +335,57 @@ voice-interview and final-interview stages.
 
 The previous polling contract is preserved in
 `docs/LEGACY-APPLICATION-STATUS.md` for a future release.
+
+## URS Phase 1 changes
+
+All Phase-1 n8n work is done as **new workflows in the pilot n8n project**
+(`wwjZ8XFETyncXLez` / folder `5j9w9tazTxLIti82`) — the production workflows are
+never edited. See `docs/PHASE-1-N8N-CHANGES.md` for the build list.
+
+### Management-approval step removed
+
+The `send_for_management_approval`, `return_for_revision_management`,
+`place_on_hold_management`, and `resume_management_approval` actions and the
+`Pending Management Approval` status no longer occur. An HR reviewer approves
+or rejects directly from `Pending HR Discussion` via `approve_role` /
+`reject_role` (both sent with the existing `role_status_transition` contract).
+Route notifications for those actions to the requester and active HR reviewers.
+
+### Face-to-face interview venue
+
+`recruitment_setup_updated` payloads carry `Final_Interview_Venue` (and
+`recruitmentSetup.finalInterviewVenue`). On voice approval the portal also
+writes `Final_Interview_Venue` to `High_Match_Profile`. The face-to-face
+invitation email MUST include this venue text (address, floor/room, arrival
+instructions, on-site contact) alongside the `Final_Interview_Booking_Link`.
+
+### Numbered interview questions
+
+`Initial_Interview_Questions` and `VAPI_Resolved_System_Prompt` now contain a
+canonical numbered list (`Q1: …`, `Q2: …`). The post-call voice evaluator MUST
+associate each candidate answer to its question by the `Qn` number, echo that
+number in `Voice_Interview_Results` per-question fields, and never infer the
+mapping from transcript turn order. The approved license-clarification and
+start-availability follow-ups are not numbered questions and must not be
+recorded as `Q` answers.
+
+### AI voice interview — attempt 1–N retry
+
+The portal now sets `Voice_Call_Max_Attempts` (Settings, default 3) on each
+`Voice_Call_Queue` row and manages the missed-call state:
+`Voice_Call_Status = Retry Scheduled` with a bumped `Voice_Call_Attempts` and a
+future `Voice_Call_Scheduled_At` while attempts remain, then terminal `No Show`.
+The pilot calling workflow MUST: for a `Retry Scheduled` row, place the next
+call at `Voice_Call_Scheduled_At`; on a completed call write a `Completed`
+status and a `Voice_Interview_Results` row; never exceed `Voice_Call_Max_Attempts`
+calls; and write terminal `No Show` only when instructed by the row state, not
+independently.
+
+### Post-screening notifications
+
+The portal does not see screening completion (n8n appends the
+`High_Match_Profile` result row directly). A new pilot workflow must, right
+after appending each screening result, notify HR (recipients resolved from
+`User_Directory` `Can_Review_Role = TRUE`, include `Application_ID`,
+`roleTitle`, `Recommendation`, match score) and email the candidate that their
+application was received and reviewed.

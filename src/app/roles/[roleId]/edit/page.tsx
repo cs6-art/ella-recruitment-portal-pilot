@@ -109,6 +109,7 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
     experienceRequirementStatus: role.experienceRequirementStatus || "",
     licenseRequirementStatus: role.licenseRequirementStatus || "",
     hodInterviewRequired: role.hodInterviewRequired || "",
+    finalInterviewVenue: role.finalInterviewVenue || "",
     voiceInterviewAvailabilityMode: role.voiceInterviewAvailabilityMode || "none",
     voiceInterviewSlots: role.voiceInterviewSlots || "",
     voiceInterviewAutoStartDate: role.voiceInterviewAutoStartDate || "",

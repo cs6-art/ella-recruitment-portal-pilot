@@ -48,7 +48,6 @@ export default async function RoleDetailsPage({
         roleId={decodedRoleId}
         userEmail={user.email}
         canReviewRole={user.canReviewRole === true}
-        canApproveRole={user.canApproveRole === true}
       />
     </AppShell>
   );

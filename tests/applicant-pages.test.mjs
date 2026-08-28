@@ -58,7 +58,9 @@ test("dashboard includes candidate pipeline metrics without exposing them to cre
   assert.match(applicantMetrics, /currentApplicantStage/);
   assert.match(dashboard, /Role Request Actions/);
   assert.match(dashboard, /Pending HR Review/);
-  assert.match(dashboard, /Pending Approval/);
+  assert.match(dashboard, /Approved Roles/);
+  // The Management-approval step was removed — no "Pending Approval" card.
+  assert.doesNotMatch(dashboard, /Pending%20Management%20Approval/);
 });
 
 test("eligible final bookings invite the applicant through Google Calendar", () => {

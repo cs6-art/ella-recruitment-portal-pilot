@@ -4,7 +4,6 @@ export function calculateDashboardMetrics(roles: RoleRequestSummary[]) {
   const count = (status: string) => roles.filter((role) => role.status === status).length;
   return {
     pendingHrDiscussion: count("Pending HR Discussion"),
-    pendingManagementApproval: count("Pending Management Approval"),
     approved: count("Approved"),
     rejected: count("Rejected"),
     // "Job Posted" is what `publish_role` sets, so a published role is the most

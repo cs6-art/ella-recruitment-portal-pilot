@@ -1,14 +1,16 @@
 export const STATUS_ACTION_LABELS: Record<string, string> = {
-  send_for_management_approval: "Send for Management Approval",
-  return_for_revision_hr: "Return for Revision by HR",
-  place_on_hold_hr: "Place on Hold by HR",
   approve_role: "Approve Role",
   reject_role: "Reject Role",
-  return_for_revision_management: "Return for Revision by Management",
-  place_on_hold_management: "Place on Hold by Management",
+  return_for_revision_hr: "Return for Revision",
+  place_on_hold_hr: "Place on Hold",
   resume_hr_review: "Resume HR Review",
-  resume_management_approval: "Resume Management Approval",
   role_request_created: "Role Request Created",
+  // Retired with the Management-approval step; kept so historical timeline
+  // entries created before the change still render a readable label.
+  send_for_management_approval: "Sent for Management Approval",
+  return_for_revision_management: "Returned for Revision by Management",
+  place_on_hold_management: "Placed on Hold by Management",
+  resume_management_approval: "Resumed Management Approval",
 };
 
 export function getStatusActionLabel(action: string): string {

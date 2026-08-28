@@ -101,12 +101,13 @@ export default async function DashboardPage() {
 
                 <div>
                   <strong>
-                    HR discussion
+                    HR review and approval
                   </strong>
 
                   <p>
-                    HR reviews the role requirements
-                    and confirms the job details.
+                    HR reviews the requirements, then
+                    approves, returns, rejects, or
+                    holds the request.
                   </p>
                 </div>
               </div>
@@ -114,24 +115,6 @@ export default async function DashboardPage() {
               <div className="workflow-item">
                 <span className="workflow-number">
                   3
-                </span>
-
-                <div>
-                  <strong>
-                    Management approval
-                  </strong>
-
-                  <p>
-                    Management approves, returns,
-                    rejects, or places the request on
-                    hold.
-                  </p>
-                </div>
-              </div>
-
-              <div className="workflow-item">
-                <span className="workflow-number">
-                  4
                 </span>
 
                 <div>
@@ -144,7 +127,7 @@ export default async function DashboardPage() {
               </div>
 
               <div className="workflow-item">
-                <span className="workflow-number">5</span>
+                <span className="workflow-number">4</span>
                 <div>
                   <strong>Job Posting</strong>
                   <p>The approved role is published on the selected channels.</p>

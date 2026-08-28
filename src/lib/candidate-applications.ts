@@ -6,7 +6,7 @@ import { demoActiveBookingLinkRoleIds, demoApplicantRows, demoInterviewBookings 
 import { isDemoMode, isDemoWindowRecord } from "@/lib/demo-mode";
 import { getRoleRequestById, type RoleRequestDetails } from "@/lib/google-sheets";
 import { evaluationFieldsForSetup, type EvaluationField } from "@/lib/recruitment-setup-schema";
-import { normalizeInterviewQuestionCount } from "@/lib/interview-question-count";
+import { buildNumberedInterviewQuestions, normalizeInterviewQuestionCount } from "@/lib/interview-question-count";
 
 export {
   getCandidateStatusHistory,
@@ -284,6 +284,7 @@ function nextActionFor(record: SheetRow) {
   const voiceDecision = field(record, "Voice_HR_Decision").toLowerCase();
   const finalInterviewStatus = field(record, "Status 3 (Final Interview)").toLowerCase();
 
+  if (voiceStatus.includes("retry scheduled") || finalStatus.includes("retry scheduled")) return "Awaiting AI Call Retry";
   if (voiceStatus.includes("no show") || finalStatus.includes("voice interview no show")) return "Reschedule Voice Interview";
   if (finalInterviewStatus.includes("no show") || finalStatus.includes("final interview no show")) return "Reschedule Face-to-Face Interview";
   if (finalStatus.includes("approved for ai voice") || voiceStatus === "awaiting schedule") return "Schedule Voice Interview";
@@ -305,6 +306,7 @@ function workflowRecommendationFor(record: SheetRow) {
   const voiceDecision = field(record, "Voice_HR_Decision").toLowerCase();
   const finalInterviewStatus = field(record, "Status 3 (Final Interview)").toLowerCase();
 
+  if (voiceStatus.includes("retry scheduled") || finalStatus.includes("retry scheduled")) return "AI Voice Interview Retry Scheduled";
   if (voiceStatus.includes("no show") || finalStatus.includes("voice interview no show")) return "AI Voice Interview No Show";
   if (finalInterviewStatus.includes("no show") || finalStatus.includes("final interview no show")) return "Face-to-Face Interview No Show";
   if (["calling", "initiated", "in progress"].includes(voiceStatus) || finalStatus.includes("voice interview in progress")) {
@@ -1026,8 +1028,15 @@ export async function getApplicantById(id: string): Promise<ApplicantDetails | n
     roleDetails: role || undefined,
     aiAnalysisSummary: field(record, "AI_Analysis_Summary", "AI Analysis Summary")
       || (isGeneratedDemoRecord ? `The CV was reviewed against the ${summary.selectedRole} requirements. The match score and recommendation shown above summarize the historical screening result.` : ""),
-    interviewQuestions: field(record, "Interview_Questions", "Interview Questions")
-      || (isGeneratedDemoRecord ? `Describe the experience most relevant to the ${summary.selectedRole} role.\nHow would you approach the role's main responsibilities during your first 90 days?\nWhat strengths would you bring to the team?` : ""),
+    // Show HR the same canonical numbered list Ella was driven by (from the
+    // role's current setup), not a stale per-applicant snapshot, so the
+    // question numbers in the AI summary line up with what HR sees.
+    interviewQuestions: buildNumberedInterviewQuestions([
+      role?.requiredInterviewQuestion1, role?.requiredInterviewQuestion2, role?.requiredInterviewQuestion3,
+      role?.requiredInterviewQuestion4, role?.requiredInterviewQuestion5,
+    ]).join("\n")
+      || field(record, "Interview_Questions", "Interview Questions")
+      || (isGeneratedDemoRecord ? `Q1: Describe the experience most relevant to the ${summary.selectedRole} role.\nQ2: How would you approach the role's main responsibilities during your first 90 days?\nQ3: What strengths would you bring to the team?` : ""),
     resumeText: field(record, "Resume_Text", "Resume_CV", "Resume/CV", "Resume Text")
       || (isGeneratedDemoRecord ? "Historical demonstration record. The original CV file is not stored for generated applicants." : ""),
     resumeFileId: field(record, "Resume_File_Id"),
