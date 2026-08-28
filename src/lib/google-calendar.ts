@@ -250,6 +250,7 @@ export type CalendarEventInput = {
   endTime: string; // HH:mm:ss
   timezone: string;
   attendeeEmails: string[];
+  location?: string;
 };
 
 export type CalendarEventResult =
@@ -282,6 +283,7 @@ export async function createFinalInterviewEvent(input: CalendarEventInput): Prom
       requestBody: {
         summary: input.summary,
         description: input.description,
+        ...(input.location?.trim() ? { location: input.location.trim() } : {}),
         start: { dateTime: start.toISOString(), timeZone: input.timezone },
         end: { dateTime: end.toISOString(), timeZone: input.timezone },
         attendees: input.attendeeEmails.map((email) => ({ email })),

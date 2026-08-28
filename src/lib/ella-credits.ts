@@ -206,18 +206,29 @@ export async function recordDeduction(input: {
   ]);
 }
 
+/** Volume-discount bonus for a single positive top-up (0 when it doesn't qualify). */
+export async function volumeDiscountBonus(amount: number): Promise<{ bonus: number; percent: number; threshold: number }> {
+  const [threshold, percent] = await Promise.all([
+    getPortalConfigNumber("Ella_Credit_Discount_Threshold", 2000),
+    getPortalConfigNumber("Ella_Credit_Discount_Percent", 10),
+  ]);
+  if (amount <= 0 || threshold <= 0 || percent <= 0 || amount < threshold) return { bonus: 0, percent, threshold };
+  return { bonus: Math.floor(amount * (percent / 100)), percent, threshold };
+}
+
 export async function recordTopUp(input: {
   amount: number;
   actorName: string;
   actorEmail: string;
   note: string;
-}): Promise<CreditBalance> {
+}): Promise<CreditBalance & { bonus: number }> {
   const amount = Math.trunc(input.amount);
   if (!Number.isFinite(amount) || amount === 0) throw new Error("Top-up amount must be a non-zero whole number.");
+  const now = new Date().toISOString();
   const { balance } = await getCreditBalance({ fresh: true });
   await appendRow([
     `LDG-${crypto.randomUUID()}`,
-    new Date().toISOString(),
+    now,
     "TopUp",
     amount > 0 ? "manual_topup" : "manual_adjustment",
     Math.abs(amount),
@@ -229,5 +240,24 @@ export async function recordTopUp(input: {
     text(input.actorEmail),
     text(input.note),
   ]);
-  return getCreditBalance({ fresh: true });
+
+  const { bonus, percent } = await volumeDiscountBonus(amount);
+  if (bonus > 0) {
+    await appendRow([
+      `LDG-${crypto.randomUUID()}`,
+      new Date().toISOString(),
+      "TopUp",
+      "volume_discount",
+      bonus,
+      bonus,
+      balance + amount + bonus,
+      "",
+      "",
+      text(input.actorName),
+      text(input.actorEmail),
+      `${percent}% volume discount on a ${amount}-credit top-up`,
+    ]);
+  }
+
+  return { ...(await getCreditBalance({ fresh: true })), bonus };
 }

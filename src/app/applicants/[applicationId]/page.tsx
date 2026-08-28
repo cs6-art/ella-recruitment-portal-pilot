@@ -48,7 +48,9 @@ function latestDecisionComment(history: CandidateStatusHistoryEntry[], stage: Ca
 }
 
 function questionItems(value: string) {
-  return value.split(/\r?\n/).map((line) => line.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, "").trim()).filter(Boolean);
+  // Strip a leading bullet, "1." / "1)", or the canonical "Q1:" label so the
+  // list renders with its own consistent numbering.
+  return value.split(/\r?\n/).map((line) => line.replace(/^\s*(?:Q\s*\d+\s*[:.)-]?|[-•*]|\d+[.)])\s*/i, "").trim()).filter(Boolean);
 }
 
 function DetailField({ label, value, className = "" }: { label: string; value?: string; className?: string }) {

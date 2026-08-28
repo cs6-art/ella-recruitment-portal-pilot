@@ -31,6 +31,7 @@ type LedgerResponse = {
 const eventLabels: Record<string, string> = {
   manual_topup: "Manual top-up",
   manual_adjustment: "Manual adjustment",
+  volume_discount: "Volume discount bonus",
   cv_analysis: "AI CV analysis",
   phone_interview: "AI phone interview",
 };
@@ -138,7 +139,7 @@ export default function EllaCreditsPanel() {
           <div className={`${styles.field} ${styles.amountField}`}>
             <label htmlFor="ella-credit-amount">Adjust balance</label>
             <input id="ella-credit-amount" type="number" step="1" inputMode="numeric" placeholder="e.g. 2000 or -50" value={amount} onChange={(event) => setAmount(event.target.value)} />
-            <small>Positive adds credits; negative removes them.</small>
+            <small>Positive adds credits; negative removes them. A single top-up of 2,000+ credits earns a 10% bonus automatically.</small>
           </div>
           <div className={`${styles.field} ${styles.noteField}`}>
             <label htmlFor="ella-credit-note">Note</label>

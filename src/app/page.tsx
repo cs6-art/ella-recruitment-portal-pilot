@@ -41,11 +41,11 @@ export default async function Home({ searchParams }: HomePageProps) {
         <div className="login-hero">
           <span className="eyebrow">Internal recruitment system</span>
           <h1>Start every hire with the right role.</h1>
-          <p>Create a staff addition or replacement request, align the job requirements with HR, and move it through management approval before recruitment begins.</p>
+          <p>Create a staff addition or replacement request, align the job requirements with HR, and get HR approval before recruitment begins.</p>
           <div className="steps-preview">
-            <div><span className="step-dot">1</span> HR or management submits a request</div>
-            <div><span className="step-dot">2</span> HR confirms role requirements</div>
-            <div><span className="step-dot">3</span> Management approves before posting</div>
+            <div><span className="step-dot">1</span> HR or the authorised requester submits a request</div>
+            <div><span className="step-dot">2</span> HR confirms the role requirements</div>
+            <div><span className="step-dot">3</span> HR approves the request before posting</div>
           </div>
         </div>
         <div className="login-panel">

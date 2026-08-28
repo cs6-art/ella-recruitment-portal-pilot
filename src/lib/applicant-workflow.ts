@@ -162,6 +162,8 @@ export type BookingContext = {
   timezone: string;
   appliedAt: string;
   preferredMobile: string;
+  /** Physical venue for a face-to-face (final) interview, when configured. */
+  finalInterviewVenue?: string;
   currentSlot?: BookingSlot;
   slots: BookingSlot[];
 };
@@ -663,6 +665,9 @@ export async function getBookingContext(kind: BookingKind, token: string): Promi
       "Submitted_At",
       "Submitted At",
     ),
+    finalInterviewVenue: kind === "final"
+      ? (field(row, "Final_Interview_Venue") || role?.finalInterviewVenue || "")
+      : "",
     currentSlot: currentSlot?.slot,
     slots,
   };
@@ -1059,6 +1064,7 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
     // here never results in an actual call.
     const applicantRecord = applicantData.rows[applicantIndex];
     const queueData = await readSheet("Voice_Call_Queue", "X");
+    const voiceMaxAttempts = Math.max(1, Math.round(await getPortalConfigNumber("Voice_Call_Max_Attempts", 3)));
     const scheduledDate = field(matchingSlot, "Date");
     const scheduledTime = field(matchingSlot, "Start_Time", "Start Time");
     const scheduledTimezone = field(matchingSlot, "Timezone", "Time Zone") || "Asia/Singapore";
@@ -1083,7 +1089,7 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
       if (key === normalize("Role_ID")) return context.roleId;
       if (key === normalize("Voice_Call_Status")) return "Scheduled";
       if (key === normalize("Voice_Call_Attempts")) return "0";
-      if (key === normalize("Voice_Call_Max_Attempts")) return "1";
+      if (key === normalize("Voice_Call_Max_Attempts")) return String(voiceMaxAttempts);
       if (key === normalize("Voice_Call_Scheduled_At")) return scheduledAt;
       if (key === normalize("Last_Updated")) return now;
       return "";
@@ -1184,10 +1190,12 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
     // candidate's booking — this runs after updateCells and only logs.
     try {
       if (calendarHodEmail) {
+        const finalVenue = context.finalInterviewVenue?.trim() || role?.finalInterviewVenue?.trim() || "";
         const result = await createFinalInterviewEvent({
           hodEmail: calendarHodEmail,
           summary: `HR Interview: ${context.candidateName} — ${context.selectedRole}`,
-          description: `HR interview for ${context.candidateName} (${context.applicationId}) applying for ${context.selectedRole}.\n\nCandidate email: ${context.email}`,
+          description: `HR interview for ${context.candidateName} (${context.applicationId}) applying for ${context.selectedRole}.\n\nCandidate email: ${context.email}${finalVenue ? `\n\nVenue:\n${finalVenue}` : ""}`,
+          location: finalVenue,
           date: field(matchingSlot, "Date"),
           startTime: field(matchingSlot, "Start_Time", "Start Time"),
           endTime: field(matchingSlot, "End_Time", "End Time"),
@@ -1306,27 +1314,104 @@ export async function markInterviewNoShow(slotId: string) {
   const isVoice = field(slot, "Interview_Type", "Interview Type") === "AI Voice Interview";
   const interviewStatus = field(applicantsData.rows[applicantIndex], isVoice ? "Status 2 (Voice Interview)" : "Status 3 (Final Interview)").toLowerCase();
   if (interviewStatus.includes("interviewed") || interviewStatus.includes("completed")) throw new Error("This interview already has a completed result and cannot be marked as No Show.");
+  const roleId = field(applicantsData.rows[applicantIndex], "Role_ID", "Role ID");
+
+  // Voice interviews get an attempt 1..N retry lifecycle: a missed call is only
+  // a terminal No Show once every configured attempt is used up. Final (F2F)
+  // interviews stay a single-shot No Show.
+  const [maxAttempts, retryGapHours] = await Promise.all([
+    getPortalConfigNumber("Voice_Call_Max_Attempts", 3),
+    getPortalConfigNumber("Voice_Call_Retry_Gap_Hours", 24),
+  ]);
+  const queueData = isVoice ? await readSheet("Voice_Call_Queue", "X") : { rows: [] as Row[], rowNumbers: [] as number[] };
+  const priorMisses = queueData.rows.filter((queueRow) =>
+    field(queueRow, "Application_ID", "Application ID") === applicationId
+    && VOICE_MISS_QUEUE_STATUSES.includes(field(queueRow, "Voice_Call_Status").toLowerCase()),
+  ).length;
+  const outcome = isVoice
+    ? voiceNoShowOutcome(priorMisses, maxAttempts, retryGapHours)
+    : { terminal: true, attemptsUsed: 1, maxAttempts: 1, nextAttemptAt: "", slotStatus: "No Show", status2: "No Show", bookingStatus: "No Show", queueStatus: "No Show", finalStatus: "Final Interview No Show", historyAction: "No Show" as const, historyComment: "Face-to-face interview marked No Show." };
+
   const updates: CellUpdate[] = [
-    { tab: "Interview_Slots", row: slotRow, header: "Status", value: "No Show" },
+    { tab: "Interview_Slots", row: slotRow, header: "Status", value: outcome.slotStatus },
     { tab: "Interview_Slots", row: slotRow, header: "Last_Updated", value: now },
     { tab: "High_Match_Profile", row: applicantRow, header: "Last_Updated", value: now },
-    { tab: "High_Match_Profile", row: applicantRow, header: isVoice ? "Status 2 (Voice Interview)" : "Status 3 (Final Interview)", value: "No Show" },
-    { tab: "High_Match_Profile", row: applicantRow, header: "Final_Status", value: `${isVoice ? "AI Voice Interview" : "Final Interview"} No Show` },
+    { tab: "High_Match_Profile", row: applicantRow, header: isVoice ? "Status 2 (Voice Interview)" : "Status 3 (Final Interview)", value: outcome.status2 },
+    { tab: "High_Match_Profile", row: applicantRow, header: "Final_Status", value: outcome.finalStatus },
   ];
-  if (isVoice) updates.push({ tab: "High_Match_Profile", row: applicantRow, header: "Voice_Interview_Booking_Status", value: "No Show" });
+  if (isVoice) updates.push({ tab: "High_Match_Profile", row: applicantRow, header: "Voice_Interview_Booking_Status", value: outcome.bookingStatus });
   if (isVoice) {
-    const queueData = await readSheet("Voice_Call_Queue", "X");
     queueData.rows
       .map((queueRow, index) => ({ queueRow, rowNumber: queueData.rowNumbers[index] }))
       .filter(({ queueRow }) => field(queueRow, "Application_ID", "Application ID") === applicationId
-        && ["scheduled", "queued"].includes(field(queueRow, "Voice_Call_Status").toLowerCase()))
-      .forEach(({ rowNumber }) => updates.push(
-        { tab: "Voice_Call_Queue", row: rowNumber, header: "Voice_Call_Status", value: "No Show" },
-        { tab: "Voice_Call_Queue", row: rowNumber, header: "Last_Updated", value: now },
-      ));
+        && ["scheduled", "queued", "retry scheduled"].includes(field(queueRow, "Voice_Call_Status").toLowerCase()))
+      .forEach(({ rowNumber }) => {
+        updates.push(
+          { tab: "Voice_Call_Queue", row: rowNumber, header: "Voice_Call_Status", value: outcome.queueStatus },
+          { tab: "Voice_Call_Queue", row: rowNumber, header: "Voice_Call_Attempts", value: String(outcome.attemptsUsed) },
+          { tab: "Voice_Call_Queue", row: rowNumber, header: "Last_Updated", value: now },
+        );
+        if (!outcome.terminal && outcome.nextAttemptAt) {
+          updates.push({ tab: "Voice_Call_Queue", row: rowNumber, header: "Voice_Call_Scheduled_At", value: outcome.nextAttemptAt });
+        }
+      });
   }
   await updateCells(updates);
-  return { slotId: cleanSlotId, applicationId, status: "No Show" };
+
+  try {
+    const historyData = await readOptionalSheet("Candidate_Status_History", "M");
+    if (historyData) {
+      await appendRows("Candidate_Status_History", [candidateHistoryValues(buildCandidateStatusHistoryEntry({
+        applicationId,
+        roleId,
+        changedAt: now,
+        previousStatus: field(applicantsData.rows[applicantIndex], "Final_Status") || interviewStatus,
+        newStatus: outcome.finalStatus,
+        stage: isVoice ? "voice" : "final",
+        action: outcome.historyAction,
+        changedByName: "Recruitment Portal",
+        changedByEmail: "system@recruitment-portal.local",
+        comments: outcome.historyComment,
+        actionSource: "HR Interview Status Action",
+      }))]);
+    }
+  } catch (error) {
+    console.warn("[Interview No Show] Unable to append status history:", error);
+  }
+
+  return { slotId: cleanSlotId, applicationId, status: outcome.status2, terminal: outcome.terminal, attempt: outcome.attemptsUsed, maxAttempts: outcome.maxAttempts };
+}
+
+const VOICE_MISS_QUEUE_STATUSES = ["missed", "no show", "retry scheduled"];
+
+/**
+ * Decides what a missed AI voice call means given how many attempts the
+ * candidate has already used. `priorMisses` = queue rows for this application
+ * already in a missed/retry/no-show state. When attempts remain the call is
+ * re-queued for n8n; once exhausted it is a terminal No Show.
+ */
+function voiceNoShowOutcome(priorMisses: number, maxAttempts: number, retryGapHours: number) {
+  const attemptsUsed = Math.max(1, priorMisses + 1);
+  const cappedMax = Math.max(1, Math.round(maxAttempts));
+  const terminal = attemptsUsed >= cappedMax;
+  const nextAttemptAt = new Date(Date.now() + Math.max(1, retryGapHours) * 3600_000).toISOString();
+  return {
+    terminal,
+    attemptsUsed,
+    maxAttempts: cappedMax,
+    nextAttemptAt,
+    slotStatus: terminal ? "No Show" : "Booked",
+    status2: terminal ? "No Show" : "Retry Scheduled",
+    bookingStatus: terminal ? "No Show" : "Retry Scheduled",
+    queueStatus: terminal ? "No Show" : "Retry Scheduled",
+    finalStatus: terminal
+      ? "AI Voice Interview No Show"
+      : `AI Voice Interview Retry Scheduled (Attempt ${attemptsUsed + 1} of ${cappedMax})`,
+    historyAction: "No Show" as const,
+    historyComment: terminal
+      ? `Final AI voice interview no-show after ${cappedMax} attempt${cappedMax === 1 ? "" : "s"}.`
+      : `AI voice interview attempt ${attemptsUsed} of ${cappedMax} missed. The call is re-queued for a further attempt.`,
+  };
 }
 
 function calendarDateKey(value: string, timezone: string) {
@@ -1400,6 +1485,10 @@ export async function syncPastBookedInterviewsNoShow() {
     ]);
     let queueData: { rows: Row[]; rowNumbers: number[] } = { rows: [], rowNumbers: [] };
     try { queueData = await readSheet("Voice_Call_Queue", "X"); } catch { /* Older workbooks may not have this tab. */ }
+    const [voiceMaxAttempts, voiceRetryGapHours] = await Promise.all([
+      getPortalConfigNumber("Voice_Call_Max_Attempts", 3),
+      getPortalConfigNumber("Voice_Call_Retry_Gap_Hours", 24),
+    ]);
 
     const updates: CellUpdate[] = [];
     const historyRows: string[][] = [];
@@ -1502,28 +1591,53 @@ export async function syncPastBookedInterviewsNoShow() {
       // passed is a No Show. Future bookings stay Scheduled/Booked.
       if (!date || date >= todayInTimezone(timezone)) return;
 
+      // A voice retry that n8n has already re-queued must not be counted as a
+      // fresh miss until its next scheduled attempt time has also passed —
+      // otherwise a burst of getBookingContext() calls would exhaust every
+      // attempt in seconds.
+      if (isVoice) {
+        const retryPending = queueData.rows.some((queueRow) =>
+          field(queueRow, "Application_ID", "Application ID").toLowerCase() === applicationId.toLowerCase()
+          && field(queueRow, "Voice_Call_Status").toLowerCase() === "retry scheduled"
+          && Date.parse(field(queueRow, "Voice_Call_Scheduled_At", "Voice Call Scheduled At")) > Date.now());
+        if (retryPending) return;
+      }
+
       const now = new Date().toISOString();
+      const priorMisses = isVoice
+        ? queueData.rows.filter((queueRow) => field(queueRow, "Application_ID", "Application ID").toLowerCase() === applicationId.toLowerCase()
+            && VOICE_MISS_QUEUE_STATUSES.includes(field(queueRow, "Voice_Call_Status").toLowerCase())).length
+        : 0;
+      const outcome = isVoice
+        ? voiceNoShowOutcome(priorMisses, voiceMaxAttempts, voiceRetryGapHours)
+        : { terminal: true, attemptsUsed: 1, maxAttempts: 1, nextAttemptAt: "", slotStatus: "No Show", status2: "No Show", bookingStatus: "No Show", queueStatus: "No Show", finalStatus: "Final Interview No Show", historyAction: "No Show" as const, historyComment: "" };
       updates.push(
-        { tab: "Interview_Slots", row: slotsData.rowNumbers[slotIndex], header: "Status", value: "No Show" },
+        { tab: "Interview_Slots", row: slotsData.rowNumbers[slotIndex], header: "Status", value: outcome.slotStatus },
         { tab: "Interview_Slots", row: slotsData.rowNumbers[slotIndex], header: "Last_Updated", value: now },
       );
       if (applicant && applicantIndex >= 0) {
         const applicantRow = applicantsData.rowNumbers[applicantIndex];
         updates.push(
           { tab: "High_Match_Profile", row: applicantRow, header: "Last_Updated", value: now },
-          { tab: "High_Match_Profile", row: applicantRow, header: isVoice ? "Status 2 (Voice Interview)" : "Status 3 (Final Interview)", value: "No Show" },
-          { tab: "High_Match_Profile", row: applicantRow, header: "Final_Status", value: `${isVoice ? "AI Voice Interview" : "Final Interview"} No Show` },
+          { tab: "High_Match_Profile", row: applicantRow, header: isVoice ? "Status 2 (Voice Interview)" : "Status 3 (Final Interview)", value: outcome.status2 },
+          { tab: "High_Match_Profile", row: applicantRow, header: "Final_Status", value: outcome.finalStatus },
         );
-        if (isVoice) updates.push({ tab: "High_Match_Profile", row: applicantRow, header: "Voice_Interview_Booking_Status", value: "No Show" });
+        if (isVoice) updates.push({ tab: "High_Match_Profile", row: applicantRow, header: "Voice_Interview_Booking_Status", value: outcome.bookingStatus });
       }
       if (isVoice) {
         queueData.rows
           .map((queueRow, queueIndex) => ({ queueRow, rowNumber: queueData.rowNumbers[queueIndex] }))
-          .filter(({ queueRow }) => field(queueRow, "Application_ID", "Application ID").toLowerCase() === applicationId.toLowerCase() && ["scheduled", "queued"].includes(field(queueRow, "Voice_Call_Status").toLowerCase()))
-          .forEach(({ rowNumber }) => updates.push(
-            { tab: "Voice_Call_Queue", row: rowNumber, header: "Voice_Call_Status", value: "No Show" },
-            { tab: "Voice_Call_Queue", row: rowNumber, header: "Last_Updated", value: now },
-          ));
+          .filter(({ queueRow }) => field(queueRow, "Application_ID", "Application ID").toLowerCase() === applicationId.toLowerCase() && ["scheduled", "queued", "retry scheduled"].includes(field(queueRow, "Voice_Call_Status").toLowerCase()))
+          .forEach(({ rowNumber }) => {
+            updates.push(
+              { tab: "Voice_Call_Queue", row: rowNumber, header: "Voice_Call_Status", value: outcome.queueStatus },
+              { tab: "Voice_Call_Queue", row: rowNumber, header: "Voice_Call_Attempts", value: String(outcome.attemptsUsed) },
+              { tab: "Voice_Call_Queue", row: rowNumber, header: "Last_Updated", value: now },
+            );
+            if (!outcome.terminal && outcome.nextAttemptAt) {
+              updates.push({ tab: "Voice_Call_Queue", row: rowNumber, header: "Voice_Call_Scheduled_At", value: outcome.nextAttemptAt });
+            }
+          });
       }
       if (!isVoice && finalTrackingData) {
         finalTrackingData.rows
@@ -1541,12 +1655,14 @@ export async function syncPastBookedInterviewsNoShow() {
           roleId: field(applicant, "Role_ID", "Role ID"),
           changedAt: now,
           previousStatus: field(applicant, "Final_Status") || interviewStatus,
-          newStatus: `${isVoice ? "AI Voice Interview" : "Final Interview"} No Show`,
+          newStatus: outcome.finalStatus,
           stage: isVoice ? "voice" : "final",
           action: "No Show",
           changedByName: "Recruitment Portal",
           changedByEmail: "system@recruitment-portal.local",
-          comments: `Automatically marked No Show because the scheduled ${isVoice ? "voice" : "final"} interview date (${date}) passed without a completed result.`,
+          comments: isVoice && !outcome.terminal
+            ? `AI voice interview attempt ${outcome.attemptsUsed} of ${outcome.maxAttempts} missed on ${date}; the call is re-queued for a further attempt.`
+            : `Automatically marked No Show because the scheduled ${isVoice ? "voice" : "final"} interview date (${date}) passed without a completed result${isVoice ? ` after ${outcome.maxAttempts} attempt${outcome.maxAttempts === 1 ? "" : "s"}` : ""}.`,
           actionSource: "Automatic Interview Status Monitor",
         })));
       }
@@ -1890,6 +2006,12 @@ export async function recordApplicantDecision(applicationId: string, stage: Appl
           set("Final_Interview_Booking_Token_Status", "Pending"),
           set("Final_Interview_Booking_Link", invitation.link),
         );
+        // Snapshot the current role venue so n8n's face-to-face invitation
+        // email has the address without re-reading Role_Requests.
+        const decisionRole = await getRoleRequestById(field(found.row, "Role_ID", "Role ID")).catch(() => null);
+        if (decisionRole?.finalInterviewVenue?.trim()) {
+          updates.push(set("Final_Interview_Venue", decisionRole.finalInterviewVenue.trim()));
+        }
       }
     }
   } else {

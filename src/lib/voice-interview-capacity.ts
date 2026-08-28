@@ -45,7 +45,9 @@ export function voiceInterviewConcurrencyKey(slot: VoiceInterviewCapacitySlot) {
 }
 
 export function isActiveVoiceInterviewStatus(value: unknown) {
-  return ["booked", "scheduled", "queued", "calling", "initiated", "in progress"].includes(text(value).toLowerCase());
+  // "retry scheduled" is a still-live booking awaiting a further AI call
+  // attempt, so it keeps holding one of the concurrent-call slots.
+  return ["booked", "scheduled", "queued", "calling", "initiated", "in progress", "retry scheduled"].includes(text(value).toLowerCase());
 }
 
 export function countActiveVoiceInterviews(rows: VoiceInterviewCapacityRow[], slot: VoiceInterviewCapacitySlot) {

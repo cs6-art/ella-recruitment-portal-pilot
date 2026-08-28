@@ -7,6 +7,7 @@ import { getFinalInterviewCalendarConfig, getRoleRequestById, updateRoleRequestF
 import { invalidateSheetsCache } from "@/lib/sheets-cache";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { evaluationFieldsForSetup, recruitmentSetupSchema } from "@/lib/recruitment-setup-schema";
+import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
 import { getSetupReadiness, setupStatusForAction } from "@/lib/recruitment-setup-readiness";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { getPortalConfig } from "@/lib/portal-config";
@@ -88,6 +89,7 @@ export async function POST(request: Request, context: Context) {
       experienceRequirementStatus: hasField("experienceRequirementStatus") ? parsedSetup.experienceRequirementStatus : role.experienceRequirementStatus || "",
       licenseRequirementStatus: hasField("licenseRequirementStatus") ? parsedSetup.licenseRequirementStatus : role.licenseRequirementStatus || "",
       hodInterviewRequired: hasField("hodInterviewRequired") ? parsedSetup.hodInterviewRequired : role.hodInterviewRequired || "",
+      finalInterviewVenue: hasField("finalInterviewVenue") ? parsedSetup.finalInterviewVenue : role.finalInterviewVenue || "",
     };
     const setupAction = setup.setupAction || "save_draft";
     const isAutosaveDraft = setupAction === "autosave_draft";
@@ -143,13 +145,16 @@ export async function POST(request: Request, context: Context) {
     const appBaseUrl = await resolvePublicAppBaseUrl(request);
     const applicationLink = appBaseUrl ? `${appBaseUrl}/apply/${encodeURIComponent(role.roleId)}` : `/apply/${encodeURIComponent(role.roleId)}`;
     const nextRecruitmentSetupStatus = isAutosaveDraft ? role.recruitmentSetupStatus || "Draft" : setupStatusForAction(setupAction, role.recruitmentSetupStatus || "Draft");
-    const initialInterviewQuestions = [
+    // Canonical numbered list (Q1..Qn, blanks dropped) — the exact string used
+    // in the resolved Vapi prompt and shown to HR, so answers stay tied to the
+    // right question number.
+    const initialInterviewQuestions = buildNumberedInterviewQuestions([
       setup.requiredInterviewQuestion1,
       setup.requiredInterviewQuestion2,
       setup.requiredInterviewQuestion3,
       setup.requiredInterviewQuestion4,
       setup.requiredInterviewQuestion5,
-    ].filter((question) => question.trim());
+    ]);
     const canonicalSetup = {
       ...setup,
       // Keep the nested and legacy top-level status fields in sync. The
@@ -225,6 +230,7 @@ export async function POST(request: Request, context: Context) {
       Experience_Requirement_Status: setup.experienceRequirementStatus,
       License_Requirement_Status: setup.licenseRequirementStatus,
       HOD_Interview_Required: setup.hodInterviewRequired,
+      Final_Interview_Venue: setup.finalInterviewVenue,
       Recruitment_Ready_At: setupAction === "mark_recruitment_ready" ? updatedAt : "",
       Recruitment_Ready_By: setupAction === "mark_recruitment_ready" ? user.name : "",
       Ready_For_Publishing_At: setupAction === "mark_ready_for_publishing" ? updatedAt : "",
@@ -296,6 +302,7 @@ export async function POST(request: Request, context: Context) {
       Experience_Requirement_Status: setup.experienceRequirementStatus,
       License_Requirement_Status: setup.licenseRequirementStatus,
       HOD_Interview_Required: setup.hodInterviewRequired,
+      Final_Interview_Venue: setup.finalInterviewVenue,
       Recruitment_Setup_Updated_At: updatedAt,
       Recruitment_Setup_Updated_By_Name: user.name,
       Recruitment_Setup_Updated_By_Email: performerEmail,

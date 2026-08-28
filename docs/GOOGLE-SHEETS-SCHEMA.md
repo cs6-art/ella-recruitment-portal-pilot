@@ -61,7 +61,26 @@ interview `Required` or `Not required`.
 Recruitment Setup also uses `License_or_Certificate_Required`,
 `Keywords_to_Look_For`, `Minimum_Years_of_Experience`,
 `Transferable_Skills_Accepted`, `Salary_or_Budget_Range`,
-`Earliest_Availability_Rule`, and `Interview_Behavior`.
+`Earliest_Availability_Rule`, `Interview_Behavior`, and `Final_Interview_Venue`.
+
+`Final_Interview_Venue` is the physical face-to-face interview location
+(address, floor/room, arrival instructions, on-site contact). It is required
+before publishing when `HOD_Interview_Required` is `Required`. The portal
+writes it to the booked Google Calendar event's `location` and snapshots it to
+`High_Match_Profile.Final_Interview_Venue` when HR approves the voice interview,
+so the n8n face-to-face invitation email can include it.
+
+The Management-approval step was removed (URS Phase 1). Role status values are
+now `Draft`, `Pending HR Discussion`, `Approved`, `Recruitment Setup`,
+`Job Posted`, plus `Returned for Revision`, `On Hold`, and `Rejected`.
+`Pending Management Approval` no longer occurs; legacy rows carrying it still
+display. `Approved_By` / `Approved_At` now record the HR reviewer.
+
+`Initial_Interview_Questions` is the canonical numbered question list
+(`Q1: …` newline `Q2: …`, blank slots dropped and renumbered). The same string
+is embedded in `VAPI_Resolved_System_Prompt` and shown to HR, so the AI voice
+evaluator can tie each answer to a question by its `Qn` number rather than by
+transcript position.
 
 New writes use only `Status` and `Last_Updated_At`. `Request_Status` and
 `Updated_At` are read-only migration fallbacks and must not be added to new
@@ -119,7 +138,7 @@ The portal reads and writes these candidate fields in `High_Match_Profile`:
 `Final_Interview_Booking_Link`, `Final_Interview_Booking_Token`,
 `Final_Interview_Booking_Token_Hash`, `Final_Interview_Booking_Token_Expires_At`,
 `Final_Interview_Booking_Token_Status`, `Final_Interview_Booking_Token_Used_At`,
-`Last_Updated`.
+`Final_Interview_Venue`, `Last_Updated`.
 
 Final booking tokens are issued when HR approves the voice interview. The
 portal writes a link using the current public app URL and marks the token
@@ -184,10 +203,41 @@ configuration editable from Settings -> Infrastructure: the n8n webhook URLs
 `Resume_Storage_Drive_Folder_ID`, `Bulk_Resume_Drive_URL`,
 `Allowed_Google_Domain`, `Booking_Link_Expiry_Days`,
 `Resume_Screening_Link_Expiry_Days`, `Bulk_Resume_Upload_Concurrency`,
-`Bulk_Resume_Notify_On_Success`, `Ella_Credit_Cost_CV_Analysis`, and
-`Ella_Credit_Cost_Phone_Interview`. A blank value falls back to the matching
+`Bulk_Resume_Notify_On_Success`, `Ella_Credit_Cost_CV_Analysis`,
+`Ella_Credit_Cost_Phone_Interview`, `Ella_Credit_Discount_Threshold`,
+`Ella_Credit_Discount_Percent`, `Voice_Call_Max_Attempts`, and
+`Voice_Call_Retry_Gap_Hours`. A blank value falls back to the matching
 environment variable, then to a built-in default; a non-empty value overrides
 the environment. The portal seeds these rows automatically.
+
+## Voice_Call_Queue
+
+Written by the portal on booking and read by the n8n AI voice-calling
+workflow. Columns used by the portal:
+
+`Application_ID`, `Candidate_Name`, `Candidate_Email`,
+`Voice_Interview_Scheduled_Date`, `Voice_Interview_Scheduled_Time`,
+`Voice_Interview_Timezone`, `Applicant_Country`, `Preferred_Mobile`,
+`Contact_Number`, `Role_ID`, `Voice_Call_Status`, `Voice_Call_Attempts`,
+`Voice_Call_Max_Attempts`, `Voice_Call_Scheduled_At`, `Last_Updated`.
+
+`Voice_Call_Status` lifecycle: `Scheduled` → `Queued` → `Calling` /
+`Initiated` / `In Progress` → `Completed`, or `Retry Scheduled` (a missed call
+with attempts remaining) → eventually `No Show` (terminal) or `Cancelled`
+(rebooked / superseded).
+
+**Attempt 1–N retry lifecycle (URS Phase 1).** The portal sets
+`Voice_Call_Max_Attempts` from Settings (`Voice_Call_Max_Attempts`, default 3)
+when it creates the row. When a call is missed and
+`Voice_Call_Attempts < Voice_Call_Max_Attempts`, the portal (via the manual
+"Mark No Show" action or the automatic past-day sweep) increments
+`Voice_Call_Attempts`, sets `Voice_Call_Status = Retry Scheduled`, and pushes
+`Voice_Call_Scheduled_At` forward by `Voice_Call_Retry_Gap_Hours` (default 24).
+Only when the attempts are exhausted does it become a terminal `No Show`
+(`Interview_Slots.Status = No Show`, `High_Match_Profile` voice status
+`No Show`), at which point the candidate may rebook with the original link.
+The n8n calling workflow must honour `Voice_Call_Max_Attempts > 1` and re-call
+at `Voice_Call_Scheduled_At` for a `Retry Scheduled` row.
 
 ## Ella_Credit_Ledger
 
