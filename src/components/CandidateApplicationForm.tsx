@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import ActionFeedback from "@/components/ActionFeedback";
 import { countryOptions, CountrySelect } from "@/components/CountryOptions";
 import ValidationSummary from "@/components/ValidationSummary";
+import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 
 type RoleOption = {
   roleId: string;
@@ -182,6 +183,9 @@ export default function CandidateApplicationForm({
       const response = await fetch(submitUrl, { method: "POST", body });
       const result = await response.json();
       if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to submit application.");
+
+      const creditsCharged = Number(result.creditsCharged);
+      requestEllaCreditsRefresh(Number.isFinite(creditsCharged) && creditsCharged > 0 ? -creditsCharged : undefined);
 
       setMessage(result.message || `Application submitted. Application ID: ${result.applicationId}`);
       setForm({ candidateName: "", email: "", countryCode: "+63", localContactNumber: "", resumeRoleId: roleId || "" });

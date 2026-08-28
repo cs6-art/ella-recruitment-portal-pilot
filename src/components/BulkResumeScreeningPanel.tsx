@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import EllaCreditsMeter from "@/components/EllaCreditsMeter";
+import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
+
 type RoleOption = { roleId: string; label: string };
 type QueueItem = {
   driveFileId: string;
@@ -59,7 +62,6 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const [error, setError] = useState("");
-  const [creditBalance, setCreditBalance] = useState<number | null>(null);
   // Tracks the resumes submitted in the batch currently in flight, keyed by
   // the same content-hash queue ID the server computes, so the live section
   // below can show real-time progress for exactly this upload rather than
@@ -123,19 +125,6 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
     void refreshStatus();
   }, [refreshStatus]);
 
-  const loadCreditBalance = useCallback(async () => {
-    try {
-      const response = await fetch("/api/ella-credits/balance", { cache: "no-store" });
-      const result = await response.json();
-      if (response.ok && result.success === true) setCreditBalance(Number(result.balance));
-    } catch {
-      // A missing balance chip is not worth surfacing as an error.
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadCreditBalance();
-  }, [loadCreditBalance]);
 
   // Polls automatically, without requiring a manual refresh, while any
   // tracked item (from the active batch, or otherwise) is still Queued or
@@ -225,7 +214,8 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
       setUploadMessage(`${uploadSummary}${failed.length ? `; ${failed.length} failed` : ""}${alreadyScreened ? `; ${alreadyScreened} already screened and skipped` : ""}${alreadyActive ? `; ${alreadyActive} already queued or processing` : ""}.${notificationSummary}`);
       setFiles((current) => current.filter((file) => !fileList.includes(file) || failedFileSet.has(file)));
       await refreshStatus();
-      void loadCreditBalance();
+      const creditsCharged = Number(result.creditsCharged);
+      requestEllaCreditsRefresh(Number.isFinite(creditsCharged) && creditsCharged > 0 ? -creditsCharged : undefined);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to submit the bulk resumes.");
     } finally {
@@ -328,10 +318,11 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
         )}
 
         <div className="bulk-screening-upload-box">
-          <span className="bulk-screening-count">
-            {files.length} file{files.length === 1 ? "" : "s"} ready to submit
-            {creditBalance !== null && ` · ${creditBalance} Ella Credit${creditBalance === 1 ? "" : "s"} left (1 per resume)`}
-          </span>
+          <div className="bulk-screening-count">
+            <span>{files.length} file{files.length === 1 ? "" : "s"} ready to submit</span>
+            <EllaCreditsMeter variant="inline" />
+            <span className="bulk-screening-count-hint">1 Ella Credit per resume</span>
+          </div>
           <button type="button" className="btn btn-primary" disabled={!roleId || files.length === 0 || uploading} onClick={() => void uploadResumes(files)}>{uploading ? "Uploading and screening..." : `Start screening${files.length ? ` (${files.length})` : ""}`}</button>
         </div>
 

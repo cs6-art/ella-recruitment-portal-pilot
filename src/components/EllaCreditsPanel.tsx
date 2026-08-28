@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import ValidationSummary from "@/components/ValidationSummary";
+import { ELLA_CREDITS_REFRESH_EVENT, requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 
 type LedgerEntry = {
   entryId: string;
@@ -65,6 +66,9 @@ export default function EllaCreditsPanel() {
 
   useEffect(() => {
     void load();
+    const onRefresh = () => void load();
+    window.addEventListener(ELLA_CREDITS_REFRESH_EVENT, onRefresh);
+    return () => window.removeEventListener(ELLA_CREDITS_REFRESH_EVENT, onRefresh);
   }, []);
 
   async function submit() {
@@ -87,6 +91,7 @@ export default function EllaCreditsPanel() {
       setAmount("");
       setNote("");
       await load();
+      requestEllaCreditsRefresh();
     } catch (submitError) {
       setSaveError(submitError instanceof Error ? submitError.message : "Unable to update the balance.");
     } finally {

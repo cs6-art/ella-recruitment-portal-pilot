@@ -5129,7 +5129,8 @@ textarea:focus-visible {
 .bulk-screening-dropzone-copy strong { color: var(--navy); font-size: 14px; }
 .bulk-screening-dropzone-copy span { color: var(--muted); font-size: 12.5px; }
 .bulk-screening-upload-box { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px; border: 1px solid #d8e7f3; border-radius: 12px; background: #fbfdff; }
-.bulk-screening-count { color: var(--muted); font-size: 13px; font-weight: 700; }
+.bulk-screening-count { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.bulk-screening-count-hint { color: var(--muted); font-size: 12px; font-weight: 600; }
 .bulk-screening-file-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .bulk-screening-file-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 300px; overflow: hidden; padding: 6px 6px 6px 9px; border-radius: 999px; color: #315779; background: #edf5fb; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .bulk-screening-file-chip button { display: inline-grid; flex: 0 0 auto; width: 18px; height: 18px; place-items: center; border-radius: 50%; color: #315779; background: #dbe9f6; font-size: 13px; line-height: 1; cursor: pointer; }

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import UiIcon from "./UiIcon";
+import EllaCreditsMeter from "./EllaCreditsMeter";
 import { ConfirmationProvider } from "./ConfirmationModal";
 import styles from "./AppShell.module.css";
 
@@ -89,6 +90,8 @@ export default function AppShell({ user, children }: AppShellProps) {
           <button type="button" className={styles.closeButton} onClick={closeSidebar} aria-label="Close navigation"><UiIcon name="close" /></button>
         </div>
 
+        <EllaCreditsMeter variant="sidebar" collapsed={sidebarCollapsed} />
+
         <div className={styles.workspaceLabel}>WORKSPACE</div>
         <nav className={styles.navigation} aria-label="Main navigation">
           <Link href="/dashboard" onClick={closeSidebar} className={`${styles.navLink} ${isDashboard ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="dashboard" /></span><span>Dashboard</span></Link>
@@ -122,7 +125,7 @@ export default function AppShell({ user, children }: AppShellProps) {
       </aside>
 
       <div className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ""}`}>
-        <header className={styles.mobileHeader}><Link href="/dashboard" className={styles.mobileBrand} onClick={closeSidebar}><span className={styles.brandIcon}>M</span><strong>McLink Recruitment Portal</strong></Link><button type="button" className={styles.menuButton} onClick={() => setSidebarOpen(true)} aria-expanded={sidebarOpen} aria-controls="portal-navigation"><UiIcon name="menu" /><span>Menu</span></button></header>
+        <header className={styles.mobileHeader}><Link href="/dashboard" className={styles.mobileBrand} onClick={closeSidebar}><span className={styles.brandIcon}>M</span><strong>McLink Recruitment Portal</strong></Link><div className={styles.mobileHeaderActions}><EllaCreditsMeter variant="mobile" /><button type="button" className={styles.menuButton} onClick={() => setSidebarOpen(true)} aria-expanded={sidebarOpen} aria-controls="portal-navigation"><UiIcon name="menu" /><span>Menu</span></button></div></header>
         {!isDashboard && !isRoleRequestArea && !isApplicantDetail && <div className={styles.pageToolbar}><Link href="/dashboard" className="portal-back-button" aria-label="Back to Dashboard"><UiIcon name="arrow-left" />Back to Dashboard</Link></div>}
         <div className={styles.content}>{children}</div>
       </div>
