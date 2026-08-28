@@ -65,11 +65,11 @@ export default function EllaCreditsPanel() {
     try {
       const response = await fetch("/api/ella-credits", { credentials: "same-origin", cache: "no-store" });
       const body = await response.json();
-      if (!response.ok || body.success !== true) throw new Error(body.error || "Unable to load Ella Credits.");
+      if (!response.ok || body.success !== true) throw new Error(body.error || "Unable to load Credits.");
       setData({ balance: body.balance, totals: body.totals, entries: body.entries || [], pricing: { ...defaultPricing, ...(body.pricing || {}) } });
       setError("");
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load Ella Credits.");
+      setError(loadError instanceof Error ? loadError.message : "Unable to load Credits.");
     } finally {
       setLoading(false);
     }
@@ -118,8 +118,8 @@ export default function EllaCreditsPanel() {
     <section className={`card ${styles.panel}`}>
       <div className={styles.header}>
         <div>
-          <h2>Ella Credits</h2>
-          <p>One shared balance meters AI usage — {pricing ? `${nf.format(pricing.cvAnalysis)} credits per CV analysis, ${nf.format(pricing.phoneInterview)} credits per AI phone interview.` : "Pricing is loaded from the active Ella Credits settings."} AI actions are blocked when the balance runs out.</p>
+          <h2>Credits</h2>
+          <p>One shared credit balance meters AI usage — {pricing ? `${nf.format(pricing.cvAnalysis)} credits per CV analysis, ${nf.format(pricing.phoneInterview)} credits per AI phone interview.` : "Pricing is loaded from the active credit settings."} AI actions are blocked when the balance runs out.</p>
         </div>
         {data && (
           <div className={`${styles.headline} ${headlineTone}`}>
@@ -129,7 +129,7 @@ export default function EllaCreditsPanel() {
         )}
       </div>
 
-      {loading && !data && <div className={styles.loading}>Loading Ella Credits…</div>}
+      {loading && !data && <div className={styles.loading}>Loading Credits…</div>}
       {error && <div className={styles.feedback}><ActionFeedback kind="error">{error}</ActionFeedback></div>}
 
       {data && <>

@@ -112,9 +112,9 @@ export default function EllaCreditsMeter({ variant = "inline", collapsed = false
   return (
     <div
       className={`${styles.meter} ${variantClass} ${tone} ${flash ? styles.changed : ""} ${loading && balance === null ? styles.loading : ""}`}
-      title={pricing ? `Ella Credits — ${formatCredits(pricing.cvAnalysis)} per AI CV analysis, ${formatCredits(pricing.phoneInterview)} per AI phone interview` : "Ella Credits"}
+      title={pricing ? `Credits — ${formatCredits(pricing.cvAnalysis)} per AI CV analysis, ${formatCredits(pricing.phoneInterview)} per AI phone interview` : "Credits"}
       aria-live="polite"
-      aria-label={`Ella Credits remaining: ${balance === null ? "loading" : formatCredits(shown)}`}
+      aria-label={`Credits remaining: ${balance === null ? "loading" : formatCredits(shown)}`}
     >
       <span className={styles.icon} aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -124,7 +124,7 @@ export default function EllaCreditsMeter({ variant = "inline", collapsed = false
       </span>
       {variant === "sidebar"
         ? <span className={styles.sidebarValueWrap}><span className={styles.value}>{balance === null ? "—" : formatCredits(shown)}</span><span className={styles.label}>credits</span></span>
-        : <><span className={styles.value}>{balance === null ? "—" : formatCredits(shown)}</span><span className={styles.label}>Ella Credits</span></>}
+        : <><span className={styles.value}>{balance === null ? "—" : formatCredits(shown)}</span><span className={styles.label}>Credits</span></>}
     </div>
   );
 }
