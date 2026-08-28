@@ -102,7 +102,7 @@ export default function AppShell({ user, children }: AppShellProps) {
             <button type="button" className={styles.collapseButton} onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"} aria-expanded={!sidebarCollapsed}><UiIcon name={sidebarCollapsed ? "chevron-right" : "chevron-left"} /></button>
             {showOperationalTools && <Link href="/bookings" onClick={closeSidebar} className={`${styles.navLink} ${isBookings ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="calendar" /></span><span>Bookings</span></Link>}
           </div>}
-          {user.canEditSettings === true && <Link href="/settings" onClick={closeSidebar} className={`${styles.navLink} ${isSettings ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="settings" /></span><span>Ella Credits</span></Link>}
+          {user.canEditSettings === true && <Link href="/settings" onClick={closeSidebar} className={`${styles.navLink} ${isSettings ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="settings" /></span><span>Settings</span></Link>}
           {(user.canManageUsers === true || user.canEditSettings === true) && <Link href="/user-accounts" onClick={closeSidebar} className={`${styles.navLink} ${isUserAccounts ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="users" /></span><span>User Accounts</span></Link>}
         </nav>
 

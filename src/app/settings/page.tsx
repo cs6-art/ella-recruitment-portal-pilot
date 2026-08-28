@@ -13,7 +13,12 @@ export default async function SettingsPage() {
   if (!user) redirect("/");
   if (user.canEditSettings !== true) redirect("/dashboard");
   return <AppShell user={user}>
-    <GoogleCalendarConnect canManage />
-    <section className="container page settings-page ella-credits-page"><EllaCreditsPanel /></section>
+    <main className="container page settings-page">
+      <header className="hero-row settings-header">
+        <div><span className="eyebrow-dark">PORTAL ADMINISTRATION</span><h1>Settings</h1><p>Manage the shared HR calendar connection and recruitment credits.</p></div>
+      </header>
+      <GoogleCalendarConnect canManage />
+      <EllaCreditsPanel />
+    </main>
   </AppShell>;
 }
