@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getCreditBalance, recordTopUp } from "@/lib/ella-credits";
+import { getCreditBalance, getCreditPricing, recordTopUp } from "@/lib/ella-credits";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -23,12 +23,13 @@ export async function GET() {
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   if (user.canEditSettings !== true) return NextResponse.json({ success: false, error: "Settings permission required." }, { status: 403 });
   try {
-    const { balance, totals, entries } = await getCreditBalance();
+    const [{ balance, totals, entries }, pricing] = await Promise.all([getCreditBalance(), getCreditPricing()]);
     return NextResponse.json({
       success: true,
       balance,
       totals,
       entries: entries.slice(-100).reverse(),
+      pricing,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API Ella Credits] GET failed:", error);

@@ -26,7 +26,15 @@ type LedgerResponse = {
   balance: number;
   totals: { toppedUp: number; consumed: number };
   entries: LedgerEntry[];
+  pricing: {
+    cvAnalysis: number;
+    phoneInterview: number;
+    discountThreshold: number;
+    discountPercent: number;
+  };
 };
+
+const defaultPricing = { cvAnalysis: 1, phoneInterview: 10, discountThreshold: 2000, discountPercent: 10 };
 
 const eventLabels: Record<string, string> = {
   manual_topup: "Manual top-up",
@@ -58,7 +66,7 @@ export default function EllaCreditsPanel() {
       const response = await fetch("/api/ella-credits", { credentials: "same-origin", cache: "no-store" });
       const body = await response.json();
       if (!response.ok || body.success !== true) throw new Error(body.error || "Unable to load Ella Credits.");
-      setData({ balance: body.balance, totals: body.totals, entries: body.entries || [] });
+      setData({ balance: body.balance, totals: body.totals, entries: body.entries || [], pricing: { ...defaultPricing, ...(body.pricing || {}) } });
       setError("");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load Ella Credits.");
@@ -103,6 +111,7 @@ export default function EllaCreditsPanel() {
   }
 
   const balance = data?.balance ?? 0;
+  const pricing = data?.pricing;
   const headlineTone = balance <= 0 ? styles.empty : balance < 50 ? styles.low : "";
 
   return (
@@ -110,7 +119,7 @@ export default function EllaCreditsPanel() {
       <div className={styles.header}>
         <div>
           <h2>Ella Credits</h2>
-          <p>One shared balance meters AI usage — 1 credit per CV analysis, 10 credits per AI phone interview. AI actions are blocked when the balance runs out.</p>
+          <p>One shared balance meters AI usage — {pricing ? `${nf.format(pricing.cvAnalysis)} credits per CV analysis, ${nf.format(pricing.phoneInterview)} credits per AI phone interview.` : "Pricing is loaded from the active Ella Credits settings."} AI actions are blocked when the balance runs out.</p>
         </div>
         {data && (
           <div className={`${styles.headline} ${headlineTone}`}>
@@ -139,7 +148,7 @@ export default function EllaCreditsPanel() {
           <div className={`${styles.field} ${styles.amountField}`}>
             <label htmlFor="ella-credit-amount">Adjust balance</label>
             <input id="ella-credit-amount" type="number" step="1" inputMode="numeric" placeholder="e.g. 2000 or -50" value={amount} onChange={(event) => setAmount(event.target.value)} />
-            <small>Positive adds credits; negative removes them. A single top-up of 2,000+ credits earns a 10% bonus automatically.</small>
+            <small>Positive adds credits; negative removes them. A single top-up of {nf.format(data.pricing.discountThreshold)}+ credits earns a {nf.format(data.pricing.discountPercent)}% bonus automatically.</small>
           </div>
           <div className={`${styles.field} ${styles.noteField}`}>
             <label htmlFor="ella-credit-note">Note</label>

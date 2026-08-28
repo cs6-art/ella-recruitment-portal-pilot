@@ -20,22 +20,14 @@ type Setting = {
   type?: "text" | "url" | "number" | "choice";
 };
 
-type Integration = {
-  key: string;
-  label: string;
-  configured: boolean;
-  note: string;
-};
-
-const categories = ["Portal Settings", "Infrastructure", "Access & Security", "Booking & Interview", "Workflow Rules", "Notifications", "Ella Credits"];
+const categories = ["Access & Security", "Booking & Interview", "Workflow Rules", "Notifications", "Ella Credits"];
+const hiddenSettingKeys = new Set(["Ella_Credit_Cost_CV_Analysis", "Ella_Credit_Cost_Phone_Interview"]);
 const categoryDescriptions: Record<string, string> = {
-  "Portal Settings": "Basic defaults used across the recruitment portal.",
-  Infrastructure: "Spreadsheet-editable connection URLs and IDs. A blank field uses the hosting environment variable; a webhook change takes effect on the next workflow action.",
   "Access & Security": "Who may sign in. Changing these affects authentication immediately.",
   "Booking & Interview": "Defaults for the calendar and candidate booking links.",
   "Workflow Rules": "Approval gates that keep candidate handoffs controlled.",
   Notifications: "How connected automation should notify candidates and HR.",
-  "Ella Credits": "Credit cost of each AI action. The balance is managed in the Ella Credits panel below.",
+  "Ella Credits": "Published pricing is fixed at 1 credit per CV analysis and 10 credits per AI phone interview. The balance is managed in the Ella Credits panel below.",
 };
 
 const sourceLabel: Record<string, string> = {
@@ -56,7 +48,6 @@ function isChoice(setting: Setting) {
 export default function SettingsEditor() {
   const router = useRouter();
   const [settings, setSettings] = useState<Setting[]>([]);
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -68,17 +59,14 @@ export default function SettingsEditor() {
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to load settings.");
-        setSettings(data.settings || []);
-        setIntegrations(data.integrations || []);
+        setSettings((data.settings || []).filter((setting: Setting) => categories.includes(setting.category) && !hiddenSettingKeys.has(setting.key)));
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Unable to load settings."))
       .finally(() => setLoading(false));
   }, []);
 
   const grouped = useMemo(() => {
-    const known = categories.map((category) => ({ category, items: settings.filter((setting) => setting.category === category) }));
-    const extraCategories = [...new Set(settings.map((setting) => setting.category).filter((category) => !categories.includes(category)))];
-    return [...known, ...extraCategories.map((category) => ({ category, items: settings.filter((setting) => setting.category === category) }))];
+    return categories.map((category) => ({ category, items: settings.filter((setting) => setting.category === category) }));
   }, [settings]);
 
   function update(key: string, value: string) {
@@ -118,12 +106,6 @@ export default function SettingsEditor() {
       {saveError && <ValidationSummary error={saveError} title="Save failed" />}
       {message && <ActionFeedback kind="success">{message}</ActionFeedback>}
 
-      {!loading && !error && <section className="card settings-integrations">
-        <div className="settings-section-header"><div><h2>System connections</h2><p>Configuration status only; secrets remain in environment variables and n8n.</p></div></div>
-        <div className="settings-integration-grid">{integrations.map((integration) => <div className="settings-integration" key={integration.key}><div><strong>{integration.label}</strong><span>{integration.note}</span></div><span className={`settings-connection-status ${integration.configured ? "is-connected" : "is-missing"}`}>{integration.configured ? "Configured" : "Needs configuration"}</span></div>)}</div>
-        <p className="settings-empty">Managed only in the hosting environment (not editable here): spreadsheet ID and Google service account, <code>SESSION_SECRET</code>, <code>N8N_WEBHOOK_SECRET</code>, the Google OAuth client ID/secret/redirect URI, the public CORS allowlist, and UAT/demo toggles.</p>
-      </section>}
-
       {!loading && !error && grouped.map(({ category, items }) => <section className="card settings-section" key={category}>
         <div className="settings-section-header"><div><h2>{category}</h2><p>{categoryDescriptions[category] || "Additional portal configuration."}</p></div><span>{items.length} setting{items.length === 1 ? "" : "s"}</span></div>
         <div className="settings-grid">{items.length === 0 ? <p className="settings-empty">No settings in this category.</p> : items.map((setting) => {
@@ -142,7 +124,7 @@ export default function SettingsEditor() {
         })}</div>
       </section>)}
 
-      {!loading && !error && <div className="settings-actions"><span>Changes apply to new workflow actions and availability defaults.</span><button type="button" className="btn btn-primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save Settings"}</button></div>}
+      {!loading && !error && <div className="settings-actions"><span>Only important operational settings are shown here. Changes apply to new workflow actions.</span><button type="button" className="btn btn-primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save Settings"}</button></div>}
     </main>
   );
 }

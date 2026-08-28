@@ -4,7 +4,7 @@ import { google } from "googleapis";
 import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account";
 import { cachedSheetsRead, invalidateSheetsCache, withSheetsBackoff } from "@/lib/sheets-cache";
 import { assertBalanceCovers, CREDIT_COST, type CreditEvent, summarizeLedger } from "@/lib/ella-credit-math";
-import { getPortalConfigNumber } from "@/lib/portal-config";
+import { getPortalConfig } from "@/lib/portal-config";
 
 export { CREDIT_COST, EllaCreditsError } from "@/lib/ella-credit-math";
 export type { CreditEvent } from "@/lib/ella-credit-math";
@@ -150,15 +150,36 @@ export async function getCreditBalance(options: { fresh?: boolean } = {}): Promi
  * `units` of `event`. Call this before doing any paid work. Returns the
  * projected balance after the spend.
  */
-const CREDIT_COST_SETTING: Record<CreditEvent, "Ella_Credit_Cost_CV_Analysis" | "Ella_Credit_Cost_Phone_Interview"> = {
-  cv_analysis: "Ella_Credit_Cost_CV_Analysis",
-  phone_interview: "Ella_Credit_Cost_Phone_Interview",
+export type CreditPricing = {
+  cvAnalysis: number;
+  phoneInterview: number;
+  discountThreshold: number;
+  discountPercent: number;
 };
+
+function configuredWholeNumber(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : fallback;
+}
+
+/** Resolves the published Ella Credits pricing currently in effect. */
+export async function getCreditPricing(): Promise<CreditPricing> {
+  const config = await getPortalConfig();
+  return {
+    // These prices are defined by the published Ella pricing plan. The old
+    // Settings-sheet cost overrides are intentionally ignored so a test or
+    // stale sheet value cannot accidentally charge 100 credits per resume.
+    cvAnalysis: CREDIT_COST.cv_analysis,
+    phoneInterview: CREDIT_COST.phone_interview,
+    discountThreshold: configuredWholeNumber(config.Ella_Credit_Discount_Threshold, 2000),
+    discountPercent: configuredWholeNumber(config.Ella_Credit_Discount_Percent, 10),
+  };
+}
 
 /** Live per-unit credit cost for an event: Settings override, else the default. */
 export async function creditCostFor(event: CreditEvent): Promise<number> {
-  const configured = await getPortalConfigNumber(CREDIT_COST_SETTING[event], CREDIT_COST[event]);
-  return Number.isFinite(configured) && configured >= 0 ? Math.trunc(configured) : CREDIT_COST[event];
+  const pricing = await getCreditPricing();
+  return event === "cv_analysis" ? pricing.cvAnalysis : pricing.phoneInterview;
 }
 
 export async function assertCreditsAvailable(units: number, event: CreditEvent): Promise<number> {
@@ -208,10 +229,7 @@ export async function recordDeduction(input: {
 
 /** Volume-discount bonus for a single positive top-up (0 when it doesn't qualify). */
 export async function volumeDiscountBonus(amount: number): Promise<{ bonus: number; percent: number; threshold: number }> {
-  const [threshold, percent] = await Promise.all([
-    getPortalConfigNumber("Ella_Credit_Discount_Threshold", 2000),
-    getPortalConfigNumber("Ella_Credit_Discount_Percent", 10),
-  ]);
+  const { discountThreshold: threshold, discountPercent: percent } = await getCreditPricing();
   if (amount <= 0 || threshold <= 0 || percent <= 0 || amount < threshold) return { bonus: 0, percent, threshold };
   return { bonus: Math.floor(amount * (percent / 100)), percent, threshold };
 }
