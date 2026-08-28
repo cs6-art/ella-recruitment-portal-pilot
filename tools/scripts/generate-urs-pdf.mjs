@@ -118,6 +118,7 @@ try {
     "--headless=new",
     "--disable-gpu",
     "--no-sandbox",
+    "--no-pdf-header-footer",
     `--user-data-dir=${profilePath}`,
     `--print-to-pdf=${outputPath}`,
     `file://${htmlPath.replaceAll("\\", "/")}`,

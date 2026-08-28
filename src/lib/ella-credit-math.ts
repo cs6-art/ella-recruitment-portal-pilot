@@ -3,8 +3,7 @@
  * is unit-testable in isolation. The stateful ledger lives in ella-credits.ts.
  */
 
-/** Default credits per unit of each metered action. The live cost can be
- * overridden in Settings -> Ella Credits (see ella-credits.ts). */
+/** Published Ella Credits per unit of each metered action. */
 export const CREDIT_COST = {
   cv_analysis: 1,
   phone_interview: 10,

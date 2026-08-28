@@ -74,12 +74,7 @@ export async function GET() {
         }
         return { ...base, source: "stored" as const };
       });
-    const integrations = [
-      { key: "google-sheets", label: "Google Sheets", configured: Boolean(process.env.GOOGLE_SHEETS_SPREADSHEET_ID && process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY), note: "Portal data and permissions" },
-      { key: "google-calendar", label: "Google Calendar", configured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET && process.env.GOOGLE_OAUTH_REDIRECT_URI), note: "HR calendar availability" },
-      { key: "n8n", label: "n8n automation", configured: Boolean(process.env.N8N_WEBHOOK_SECRET && (process.env.N8N_ROLE_WEBHOOK_URL || process.env.N8N_ROLE_REQUEST_WEBHOOK_URL || process.env.N8N_CANDIDATE_APPLICATION_WEBHOOK_URL)), note: "Recruitment workflow handoffs" },
-    ];
-    return NextResponse.json({ success: true, settings, integrations }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ success: true, settings }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API Settings] GET failed:", error);
     return NextResponse.json({ success: false, error: "Unable to load portal settings." }, { status: 500 });

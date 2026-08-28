@@ -13,6 +13,11 @@ type EllaCreditsMeterProps = {
   collapsed?: boolean;
 };
 
+type CreditPricing = {
+  cvAnalysis: number;
+  phoneInterview: number;
+};
+
 const POLL_INTERVAL_MS = 15_000;
 // After a deduction is signalled, the server write may still be in flight and
 // the Sheets cache mid-invalidation. Re-read a few times to settle on truth.
@@ -24,6 +29,7 @@ function formatCredits(value: number) {
 
 export default function EllaCreditsMeter({ variant = "inline", collapsed = false }: EllaCreditsMeterProps) {
   const [balance, setBalance] = useState<number | null>(null);
+  const [pricing, setPricing] = useState<CreditPricing | null>(null);
   const [loading, setLoading] = useState(true);
   const [flash, setFlash] = useState(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -51,6 +57,9 @@ export default function EllaCreditsMeter({ variant = "inline", collapsed = false
       const data = await response.json();
       if (data?.success === true && Number.isFinite(Number(data.balance))) {
         applyBalance(Number(data.balance));
+        if (data.pricing && Number.isFinite(Number(data.pricing.cvAnalysis)) && Number.isFinite(Number(data.pricing.phoneInterview))) {
+          setPricing({ cvAnalysis: Number(data.pricing.cvAnalysis), phoneInterview: Number(data.pricing.phoneInterview) });
+        }
       }
     } catch {
       // The meter is ambient; a transient failure just keeps the last value.
@@ -103,7 +112,7 @@ export default function EllaCreditsMeter({ variant = "inline", collapsed = false
   return (
     <div
       className={`${styles.meter} ${variantClass} ${tone} ${flash ? styles.changed : ""} ${loading && balance === null ? styles.loading : ""}`}
-      title="Ella Credits — 1 per AI CV analysis, 10 per AI phone interview"
+      title={pricing ? `Ella Credits — ${formatCredits(pricing.cvAnalysis)} per AI CV analysis, ${formatCredits(pricing.phoneInterview)} per AI phone interview` : "Ella Credits"}
       aria-live="polite"
       aria-label={`Ella Credits remaining: ${balance === null ? "loading" : formatCredits(shown)}`}
     >

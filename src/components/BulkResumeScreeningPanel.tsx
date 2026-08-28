@@ -321,7 +321,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
           <div className="bulk-screening-count">
             <span>{files.length} file{files.length === 1 ? "" : "s"} ready to submit</span>
             <EllaCreditsMeter variant="inline" />
-            <span className="bulk-screening-count-hint">1 Ella Credit per resume</span>
+            <span className="bulk-screening-count-hint">Current CV screening cost is shown in Settings → Ella Credits.</span>
           </div>
           <button type="button" className="btn btn-primary" disabled={!roleId || files.length === 0 || uploading} onClick={() => void uploadResumes(files)}>{uploading ? "Uploading and screening..." : `Start screening${files.length ? ` (${files.length})` : ""}`}</button>
         </div>

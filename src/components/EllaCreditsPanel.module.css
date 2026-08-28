@@ -46,9 +46,9 @@
 .stat span { color: var(--muted, #5e6b78); font-size: 11px; font-weight: 700; }
 
 .form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) minmax(280px, 1fr) auto;
+  align-items: start;
   gap: 14px;
   padding: 4px 22px 18px;
 }
@@ -64,9 +64,8 @@
   font: inherit;
 }
 .field small { color: var(--muted, #5e6b78); font-size: 11px; line-height: 1.4; }
-.amountField { width: 170px; }
-.noteField { flex: 1; min-width: 220px; }
-.form button { white-space: nowrap; }
+.amountField, .noteField { width: auto; }
+.form button { align-self: end; min-height: 42px; margin-bottom: 20px; white-space: nowrap; }
 
 .feedback { padding: 0 22px 8px; }
 
@@ -104,5 +103,7 @@
 
 @media (max-width: 700px) {
   .stats { grid-template-columns: 1fr; }
-  .amountField, .noteField { width: 100%; flex: 1 1 100%; }
+  .form { grid-template-columns: 1fr; }
+  .amountField, .noteField { width: 100%; }
+  .form button { align-self: start; margin-bottom: 0; }
 }
