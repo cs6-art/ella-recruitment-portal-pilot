@@ -6,6 +6,7 @@ import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account"
 import { demoRoleSummaries } from "@/lib/demo-data";
 import { isDemoMode, isDemoWindowRecord } from "@/lib/demo-mode";
 import { normalizeDateOnly } from "@/lib/date-only";
+import { PORTAL_CONFIG_CATALOG } from "@/lib/portal-config-catalog";
 
 const spreadsheetId =
   process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
@@ -254,6 +255,17 @@ export const defaultPortalSettings: PortalSetting[] = [
   { key: "Require_Resume_HR_Approval", value: "Yes", category: "Workflow Rules", description: "HR approval is required before the voice booking link is created.", updatedAt: "", updatedBy: "" },
   { key: "Require_Voice_HR_Approval", value: "Yes", category: "Workflow Rules", description: "HR approval is required before the HR interview booking link is created.", updatedAt: "", updatedBy: "" },
   { key: "Booking_Invitation_Auto_Send", value: "Yes", category: "Notifications", description: "Allow the connected automation to send candidate booking invitations.", updatedAt: "", updatedBy: "" },
+  // Operational configuration that can also be supplied as an environment
+  // variable. A blank value here means "use the env var / built-in default";
+  // see portal-config.ts for the resolution order.
+  ...PORTAL_CONFIG_CATALOG.map((entry): PortalSetting => ({
+    key: entry.key,
+    value: "",
+    category: entry.category,
+    description: entry.description,
+    updatedAt: "",
+    updatedBy: "",
+  })),
 ];
 
 function toBoolean(value: unknown): boolean {

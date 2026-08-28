@@ -3,13 +3,45 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { defaultPortalSettings, getPortalSettings, upsertPortalSettings } from "@/lib/google-sheets";
+import { PORTAL_CONFIG_CATALOG, resolvePortalConfigValue } from "@/lib/portal-config";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const runtimeSettingKeys = new Set(["Voice_Interview_Duration_Minutes", "Final_Interview_Calendar_Email", "Final_Interview_Calendar_ID"]);
+const configByKey = new Map(PORTAL_CONFIG_CATALOG.map((entry) => [entry.key, entry]));
+const runtimeSettingKeys = new Set([
+  "Voice_Interview_Duration_Minutes",
+  "Final_Interview_Calendar_Email",
+  "Final_Interview_Calendar_ID",
+  ...PORTAL_CONFIG_CATALOG.map((entry) => entry.key),
+]);
+
+function validateConfigValue(key: string, rawValue: string): string | null {
+  const entry = configByKey.get(key);
+  if (!entry) return null;
+  const value = rawValue.trim();
+  if (!value) return null; // blank clears the override
+  if (entry.type === "url") {
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return `${entry.key} must be an http(s) URL.`;
+    } catch {
+      return `${entry.key} must be a valid URL.`;
+    }
+  }
+  if (entry.type === "number") {
+    const numeric = Number(value);
+    if (!Number.isInteger(numeric)) return `${entry.key} must be a whole number.`;
+    if (entry.min !== undefined && numeric < entry.min) return `${entry.key} must be at least ${entry.min}.`;
+    if (entry.max !== undefined && numeric > entry.max) return `${entry.key} must be at most ${entry.max}.`;
+  }
+  if (entry.type === "choice" && !["Yes", "No"].includes(value)) {
+    return `${entry.key} must be Yes or No.`;
+  }
+  return null;
+}
 
 const settingSchema = z.object({ key: z.string().trim().min(1).max(200), value: z.string().max(10000), category: z.string().trim().max(100), description: z.string().max(1000), updatedAt: z.string().optional(), updatedBy: z.string().optional() });
 const settingsSchema = z.object({ settings: z.array(settingSchema).max(500) });
@@ -28,7 +60,20 @@ export async function GET() {
     const storedByKey = new Map(stored.map((setting) => [setting.key, setting]));
     const settings = [...defaultPortalSettings.map((setting) => storedByKey.get(setting.key) || setting), ...stored.filter((setting) => !defaultPortalSettings.some((defaultSetting) => defaultSetting.key === setting.key))]
       .filter((setting) => !secretKey(setting.key))
-      .map((setting) => ({ ...setting, connectionStatus: runtimeSettingKeys.has(setting.key) ? "active" : "stored" }));
+      .map((setting) => {
+        const base = { ...setting, connectionStatus: runtimeSettingKeys.has(setting.key) ? "active" : "stored" };
+        // Config keys keep their raw sheet value (blank = not overridden) so a
+        // save never accidentally freezes the env value into the sheet. The
+        // resolved value is exposed separately for display, with `source`
+        // driving the UI badge.
+        const entry = configByKey.get(setting.key);
+        if (entry) {
+          const rawValue = storedByKey.get(setting.key)?.value?.trim() || "";
+          const resolved = resolvePortalConfigValue(setting.key, stored);
+          return { ...base, value: rawValue, effectiveValue: resolved.value, source: resolved.source, type: entry.type };
+        }
+        return { ...base, source: "stored" as const };
+      });
     const integrations = [
       { key: "google-sheets", label: "Google Sheets", configured: Boolean(process.env.GOOGLE_SHEETS_SPREADSHEET_ID && process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY), note: "Portal data and permissions" },
       { key: "google-calendar", label: "Google Calendar", configured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET && process.env.GOOGLE_OAUTH_REDIRECT_URI), note: "HR calendar availability" },
@@ -56,6 +101,8 @@ export async function PUT(request: Request) {
       if (setting.key === "Final_Interview_Calendar_ID" && !/^[A-Za-z0-9._@-]+$/.test(setting.value.trim())) {
         return NextResponse.json({ success: false, error: "HR interview calendar ID contains invalid characters." }, { status: 400 });
       }
+      const configError = validateConfigValue(setting.key, setting.value);
+      if (configError) return NextResponse.json({ success: false, error: configError }, { status: 400 });
     }
     const existing = await getPortalSettings();
     const submitted = new Map(input.settings.map((setting) => [setting.key, setting]));

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { google } from "googleapis";
 
 import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account";
+import { getPortalConfigNumber } from "@/lib/portal-config";
 
 // Application invitations live alongside the other candidate-facing sheets
 // so a single spreadsheet holds the whole applicant lifecycle.
@@ -133,7 +134,7 @@ export async function createResumeScreeningInvitation(input: {
 }) {
   await ensureTab();
   const token = crypto.randomBytes(32).toString("hex");
-  const configuredDays = Number(process.env.RESUME_SCREENING_LINK_EXPIRY_DAYS || 7);
+  const configuredDays = await getPortalConfigNumber("Resume_Screening_Link_Expiry_Days", 7);
   const expiryDays = Number.isFinite(configuredDays) ? Math.min(Math.max(configuredDays, 1), 30) : 7;
   const now = new Date();
   const expiresAt = new Date(now.getTime() + expiryDays * 24 * 60 * 60 * 1000).toISOString();

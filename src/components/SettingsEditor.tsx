@@ -14,6 +14,10 @@ type Setting = {
   updatedAt: string;
   updatedBy: string;
   connectionStatus?: "active" | "stored";
+  /** For env/default-backed config keys: the value actually in effect. */
+  effectiveValue?: string;
+  source?: "sheet" | "env" | "default" | "stored";
+  type?: "text" | "url" | "number" | "choice";
 };
 
 type Integration = {
@@ -23,12 +27,21 @@ type Integration = {
   note: string;
 };
 
-const categories = ["Portal Settings", "Booking & Interview", "Workflow Rules", "Notifications"];
+const categories = ["Portal Settings", "Infrastructure", "Access & Security", "Booking & Interview", "Workflow Rules", "Notifications", "Ella Credits"];
 const categoryDescriptions: Record<string, string> = {
   "Portal Settings": "Basic defaults used across the recruitment portal.",
+  Infrastructure: "Spreadsheet-editable connection URLs and IDs. A blank field uses the hosting environment variable; a webhook change takes effect on the next workflow action.",
+  "Access & Security": "Who may sign in. Changing these affects authentication immediately.",
   "Booking & Interview": "Defaults for the calendar and candidate booking links.",
   "Workflow Rules": "Approval gates that keep candidate handoffs controlled.",
   Notifications: "How connected automation should notify candidates and HR.",
+  "Ella Credits": "Credit cost of each AI action. The balance is managed in the Ella Credits panel below.",
+};
+
+const sourceLabel: Record<string, string> = {
+  env: "From environment",
+  default: "Default",
+  sheet: "Overridden here",
 };
 
 function labelFor(key: string) {
@@ -36,6 +49,7 @@ function labelFor(key: string) {
 }
 
 function isChoice(setting: Setting) {
+  if (setting.type) return setting.type === "choice";
   return setting.value === "Yes" || setting.value === "No";
 }
 
@@ -107,15 +121,25 @@ export default function SettingsEditor() {
       {!loading && !error && <section className="card settings-integrations">
         <div className="settings-section-header"><div><h2>System connections</h2><p>Configuration status only; secrets remain in environment variables and n8n.</p></div></div>
         <div className="settings-integration-grid">{integrations.map((integration) => <div className="settings-integration" key={integration.key}><div><strong>{integration.label}</strong><span>{integration.note}</span></div><span className={`settings-connection-status ${integration.configured ? "is-connected" : "is-missing"}`}>{integration.configured ? "Configured" : "Needs configuration"}</span></div>)}</div>
+        <p className="settings-empty">Managed only in the hosting environment (not editable here): spreadsheet ID and Google service account, <code>SESSION_SECRET</code>, <code>N8N_WEBHOOK_SECRET</code>, the Google OAuth client ID/secret/redirect URI, the public CORS allowlist, and UAT/demo toggles.</p>
       </section>}
 
       {!loading && !error && grouped.map(({ category, items }) => <section className="card settings-section" key={category}>
         <div className="settings-section-header"><div><h2>{category}</h2><p>{categoryDescriptions[category] || "Additional portal configuration."}</p></div><span>{items.length} setting{items.length === 1 ? "" : "s"}</span></div>
-        <div className="settings-grid">{items.length === 0 ? <p className="settings-empty">No settings in this category.</p> : items.map((setting) => <div className="settings-field" key={setting.key}>
-          <div className="settings-field-heading"><label htmlFor={`setting-${setting.key}`}>{labelFor(setting.key)}</label><span className={`settings-runtime-status ${setting.connectionStatus === "active" ? "is-active" : "is-stored"}`}>{setting.connectionStatus === "active" ? "Active" : "Stored only"}</span></div>
-          {isChoice(setting) ? <select id={`setting-${setting.key}`} value={setting.value} onChange={(event) => update(setting.key, event.target.value)}><option>Yes</option><option>No</option></select> : <input id={`setting-${setting.key}`} value={setting.value} onChange={(event) => update(setting.key, event.target.value)} />}
-          <small>{setting.description || "No description provided."}</small>
-        </div>)}</div>
+        <div className="settings-grid">{items.length === 0 ? <p className="settings-empty">No settings in this category.</p> : items.map((setting) => {
+          const isConfigKey = Boolean(setting.type);
+          const badge = isConfigKey && setting.source && sourceLabel[setting.source]
+            ? sourceLabel[setting.source]
+            : setting.connectionStatus === "active" ? "Active" : "Stored only";
+          const badgeClass = setting.source === "sheet" || setting.connectionStatus === "active" ? "is-active" : "is-stored";
+          return <div className="settings-field" key={setting.key}>
+            <div className="settings-field-heading"><label htmlFor={`setting-${setting.key}`}>{labelFor(setting.key)}</label><span className={`settings-runtime-status ${badgeClass}`}>{badge}</span></div>
+            {isChoice(setting)
+              ? <select id={`setting-${setting.key}`} value={setting.value || setting.effectiveValue || "No"} onChange={(event) => update(setting.key, event.target.value)}><option>Yes</option><option>No</option></select>
+              : <input id={`setting-${setting.key}`} value={setting.value} placeholder={isConfigKey ? (setting.effectiveValue || "Not set") : ""} onChange={(event) => update(setting.key, event.target.value)} />}
+            <small>{setting.description || "No description provided."}{isConfigKey && setting.source !== "sheet" ? " Leave blank to keep using the environment value." : ""}</small>
+          </div>;
+        })}</div>
       </section>)}
 
       {!loading && !error && <div className="settings-actions"><span>Changes apply to new workflow actions and availability defaults.</span><button type="button" className="btn btn-primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save Settings"}</button></div>}

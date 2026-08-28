@@ -5,7 +5,8 @@ import { z } from "zod";
 import { canManagePipeline } from "@/lib/access-control";
 import { sendApplicationInviteEmail } from "@/lib/application-invite-email";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
-import { getPublicAppBaseUrl } from "@/lib/public-url";
+import { getPortalConfig } from "@/lib/portal-config";
+import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { createResumeScreeningInvitation } from "@/lib/resume-screening-invite";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
@@ -52,10 +53,11 @@ export async function POST(request: Request, context: { params: Promise<{ roleId
   // The static candidate page may live on a separate domain. Keep that page
   // URL independent from N8N_BULK_RESUME_PORTAL_BASE_URL, which is also used
   // by n8n to reach this portal for resume extraction.
+  const portalConfig = await getPortalConfig();
   const configuredBaseUrl =
-    process.env.RESUME_SCREENING_INVITE_BASE_URL?.trim().replace(/\/$/, "") ||
-    process.env.N8N_BULK_RESUME_PORTAL_BASE_URL?.trim().replace(/\/$/, "");
-  const baseUrl = configuredBaseUrl || getPublicAppBaseUrl(request);
+    portalConfig.Resume_Screening_Invite_Base_URL.trim().replace(/\/$/, "") ||
+    portalConfig.N8N_Bulk_Resume_Portal_Base_URL.trim().replace(/\/$/, "");
+  const baseUrl = configuredBaseUrl || (await resolvePublicAppBaseUrl(request));
 
   try {
     const invitation = await createResumeScreeningInvitation({

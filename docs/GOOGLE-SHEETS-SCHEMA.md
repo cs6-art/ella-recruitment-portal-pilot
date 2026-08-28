@@ -175,6 +175,35 @@ row is saved with an explicit value.
 `Updated_By`. Never store webhook secrets, service-account private keys, or
 other credentials in this tab.
 
+Beyond the built-in HR defaults, this tab also holds optional operational
+configuration editable from Settings -> Infrastructure: the n8n webhook URLs
+(`N8N_Role_Webhook_URL`, `N8N_Recruitment_Setup_Webhook_URL`,
+`N8N_Role_Description_Parser_Webhook_URL`, `N8N_Candidate_Application_Webhook_URL`,
+`N8N_Application_Invite_Email_Webhook_URL`, `N8N_Bulk_Resume_Upload_Webhook_URL`),
+`App_URL`, `Resume_Screening_Invite_Base_URL`, `N8N_Bulk_Resume_Portal_Base_URL`,
+`Resume_Storage_Drive_Folder_ID`, `Bulk_Resume_Drive_URL`,
+`Allowed_Google_Domain`, `Booking_Link_Expiry_Days`,
+`Resume_Screening_Link_Expiry_Days`, `Bulk_Resume_Upload_Concurrency`,
+`Bulk_Resume_Notify_On_Success`, `Ella_Credit_Cost_CV_Analysis`, and
+`Ella_Credit_Cost_Phone_Interview`. A blank value falls back to the matching
+environment variable, then to a built-in default; a non-empty value overrides
+the environment. The portal seeds these rows automatically.
+
+## Ella_Credit_Ledger
+
+`Entry_ID`, `Timestamp`, `Type`, `Event`, `Units`, `Credits_Delta`,
+`Balance_After`, `Reference`, `Role_ID`, `Actor_Name`, `Actor_Email`, `Note`.
+
+Append-only ledger for the org-wide Ella Credits balance. The portal creates
+this tab automatically on first use, so it does not need to be pre-created;
+the headers above are what it writes. `Type` is `TopUp` or `Deduction`;
+`Event` is `manual_topup`, `manual_adjustment`, `cv_analysis`, or
+`phone_interview`. The usable balance is the signed sum of every
+`Credits_Delta`; `Balance_After` is written for audit convenience only and is
+never trusted on read. AI CV analysis costs 1 credit per resume and an AI
+phone interview costs 10 credits; an action is blocked when the balance cannot
+cover it. Admins adjust the balance from Settings → Ella Credits.
+
 ## Optional Role_AI_Settings
 
 `Role_ID`, `Job_Title`, `Department`, `License_or_Certificate_Required`,

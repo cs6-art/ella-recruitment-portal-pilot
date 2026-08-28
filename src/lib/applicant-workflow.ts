@@ -9,6 +9,8 @@ import { expandHodAvailabilitySlots, parseHodAvailabilitySlots, slotMatchesHodAv
 import { isValidTimezone, scheduledInstant } from "@/lib/interview-time";
 import { bookingLink } from "@/lib/public-url";
 import { isDemoSideEffectAllowed } from "@/lib/demo-mode";
+import { assertCreditsAvailable, EllaCreditsError, recordDeduction } from "@/lib/ella-credits";
+import { getPortalConfigNumber } from "@/lib/portal-config";
 import { cachedSheetsRead, invalidateSheetsCache } from "@/lib/sheets-cache";
 import type { ResumeFileRecord } from "@/lib/resume-files";
 import { generateAutomaticVoiceInterviewSlots, type VoiceInterviewSlot } from "@/lib/voice-interview-availability";
@@ -191,15 +193,14 @@ function tokenFromBookingLink(link: string) {
   }
 }
 
-function finalBookingTokenExpiry(existing: string) {
+function finalBookingTokenExpiry(existing: string, configuredDays: number) {
   const existingTime = Date.parse(existing);
   if (Number.isFinite(existingTime) && existingTime > Date.now()) return existing;
-  const configuredDays = Number(process.env.BOOKING_LINK_EXPIRY_DAYS || 7);
   const expiryDays = Number.isFinite(configuredDays) ? Math.min(Math.max(configuredDays, 1), 30) : 7;
   return new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString();
 }
 
-function finalBookingInvitation(row: Row, baseUrl: string) {
+function finalBookingInvitation(row: Row, baseUrl: string, expiryDays: number) {
   const existingStatus = field(row, "Final_Interview_Booking_Token_Status").toLowerCase();
   const mustIssueNewToken = ["used", "booked", "expired", "revoked"].includes(existingStatus);
   const existingLink = field(row, "Final_Interview_Booking_Link");
@@ -209,7 +210,7 @@ function finalBookingInvitation(row: Row, baseUrl: string) {
   return {
     token,
     tokenHash: hashToken(token),
-    expiresAt: finalBookingTokenExpiry(mustIssueNewToken ? "" : field(row, "Final_Interview_Booking_Token_Expires_At")),
+    expiresAt: finalBookingTokenExpiry(mustIssueNewToken ? "" : field(row, "Final_Interview_Booking_Token_Expires_At"), expiryDays),
     link: bookingLink(baseUrl, "final", token),
   };
 }
@@ -900,6 +901,18 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
   if (!isDemoSideEffectAllowed(context.appliedAt)) {
     throw new Error("This demo booking link is protected because it belongs to historical data.");
   }
+  // A new AI voice interview costs 10 Ella Credits. Rescheduling an existing
+  // booking (context.currentSlot present) is not charged again.
+  if (kind === "voice" && !context.currentSlot) {
+    try {
+      await assertCreditsAvailable(1, "phone_interview");
+    } catch (creditError) {
+      if (creditError instanceof EllaCreditsError) {
+        throw new Error("AI voice interviews are temporarily unavailable. Please contact the recruiter.");
+      }
+      throw creditError;
+    }
+  }
   const role = await getRoleRequestById(context.roleId);
   const finalCalendarEmail = kind === "final" ? (await getFinalInterviewCalendarConfig()).email : "";
   let matchingSlotIndex = slotsData.rows.findIndex((row) => field(row, "Slot_ID", "Slot ID") === cleanSlotId);
@@ -1125,6 +1138,20 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
     }
   }
   if (queueValues) await appendRows("Voice_Call_Queue", [queueValues]);
+
+  // The voice interview is booked and queued for calling: charge 10 credits.
+  // Only a brand-new booking is charged, and a ledger failure only logs so a
+  // successful booking is never rolled back.
+  if (kind === "voice" && oldSlotIndex < 0) {
+    await recordDeduction({
+      event: "phone_interview",
+      units: 1,
+      reference: context.applicationId,
+      roleId: context.roleId,
+      actorEmail: context.email,
+      note: "AI voice interview booked",
+    }).catch((error) => console.error("[Voice Interview Booking] Could not record credit deduction:", error));
+  }
 
   if (kind === "final") {
     // Keep the tracking tab aligned with the booked slot. A final
@@ -1855,7 +1882,7 @@ export async function recordApplicantDecision(applicationId: string, stage: Appl
         // it when HR approves so n8n retries the final-invitation email using
         // the portal-generated link instead of waiting forever.
         updates.push(set("Voice_Approval_Processed", ""));
-        const invitation = finalBookingInvitation(found.row, publicAppBaseUrl);
+        const invitation = finalBookingInvitation(found.row, publicAppBaseUrl, await getPortalConfigNumber("Booking_Link_Expiry_Days", 7));
         updates.push(
           set("Final_Interview_Booking_Token", invitation.token),
           set("Final_Interview_Booking_Token_Hash", invitation.tokenHash),

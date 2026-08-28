@@ -12,6 +12,7 @@ import {
 import { candidateBodyForValidation, readCandidateIntakeRequest } from "@/lib/candidate-intake";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
+import { getPortalConfigValue } from "@/lib/portal-config";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { deleteResumeFile, storeResumeFile } from "@/lib/resume-files";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
       return responseError("The selected role is not available for manual candidate intake.", 409);
     }
 
-    const webhookUrl = process.env.N8N_CANDIDATE_APPLICATION_WEBHOOK_URL;
+    const webhookUrl = await getPortalConfigValue("N8N_Candidate_Application_Webhook_URL");
     const webhookSecret = process.env.N8N_WEBHOOK_SECRET;
     if (!webhookUrl || !webhookSecret) {
       return responseError("The candidate application workflow is not configured.", 503);

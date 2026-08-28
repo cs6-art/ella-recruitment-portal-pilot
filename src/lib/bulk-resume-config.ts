@@ -1,3 +1,5 @@
+import { getPortalConfigValue } from "@/lib/portal-config";
+
 export type BulkResumeEnvironment = "production" | "uat";
 
 function enabled(value: string | undefined) {
@@ -43,7 +45,7 @@ export function requireBulkResumeUatConfig() {
   }
 }
 
-export function bulkResumeWebhookConfig() {
+export async function bulkResumeWebhookConfig() {
   if (isBulkResumeUatMode()) {
     requireBulkResumeUatConfig();
     return {
@@ -51,7 +53,7 @@ export function bulkResumeWebhookConfig() {
       secret: process.env.N8N_BULK_RESUME_UAT_WEBHOOK_SECRET!.trim(),
     };
   }
-  const url = process.env.N8N_BULK_RESUME_UPLOAD_WEBHOOK_URL?.trim();
+  const url = (await getPortalConfigValue("N8N_Bulk_Resume_Upload_Webhook_URL")).trim();
   const secret = process.env.N8N_WEBHOOK_SECRET?.trim();
   if (!url || !secret) throw new Error("The bulk screening workflow is not configured.");
   return { url, secret };

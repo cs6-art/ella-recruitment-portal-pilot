@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 
 import { canManagePipeline } from "@/lib/access-control";
 import { appendBulkResumeQueueEvent, getBulkResumeQueue, getBulkResumeScreeningEvidence, type BulkResumeQueueItem } from "@/lib/candidate-applications";
+import { assertCreditsAvailable, EllaCreditsError, recordDeduction } from "@/lib/ella-credits";
+import { getPortalConfig, isEnabledChoice } from "@/lib/portal-config";
 import { extractResumeContactDetails } from "@/lib/resume-contact-extraction";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { bulkResumeEnvironment, bulkResumeIsUatMarked, bulkResumeWebhookConfig, productionUatBatchId } from "@/lib/bulk-resume-config";
@@ -32,9 +34,9 @@ const STALE_PROCESSING_MS = 30 * 60 * 1000;
 const DEFAULT_CONCURRENCY = 2;
 const MAX_CONCURRENCY = 2;
 const WORKER_START_INTERVAL_MS = 10_000;
-function resolveConcurrency(fileCount: number) {
-  const configured = Number(process.env.BULK_RESUME_UPLOAD_CONCURRENCY);
-  const bounded = Number.isFinite(configured) ? Math.min(Math.max(Math.trunc(configured), 1), MAX_CONCURRENCY) : DEFAULT_CONCURRENCY;
+function resolveConcurrency(fileCount: number, configuredValue: string) {
+  const configured = Number(configuredValue);
+  const bounded = Number.isFinite(configured) && configuredValue.trim() !== "" ? Math.min(Math.max(Math.trunc(configured), 1), MAX_CONCURRENCY) : DEFAULT_CONCURRENCY;
   return Math.max(1, Math.min(bounded, fileCount));
 }
 
@@ -59,6 +61,8 @@ export async function POST(request: Request) {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return responseError("Authentication required.", 401);
   if (!canManagePipeline(user)) return responseError("Only HR reviewers can upload bulk resumes.", 403);
+  const actorName = user.name;
+  const actorEmail = user.email;
 
   const rate = consumeRateLimit(`bulk-resume-upload:${user.email}:${requestClientKey(request)}`, 5, 15 * 60 * 1000);
   if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many bulk uploads. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
@@ -71,7 +75,8 @@ export async function POST(request: Request) {
   const configuredUatBatchId = productionUatBatchId();
 
   try {
-    const { url: webhookUrl, secret: webhookSecret } = bulkResumeWebhookConfig();
+    const portalConfig = await getPortalConfig();
+    const { url: webhookUrl, secret: webhookSecret } = await bulkResumeWebhookConfig();
     const formData = await request.formData();
     const roleId = String(formData.get("roleId") || "").trim();
     const files = formData.getAll("resumes").filter((value): value is File => value instanceof File);
@@ -121,6 +126,25 @@ export async function POST(request: Request) {
       }
       claimedInBatch.add(item.queueId);
       toProcess.push(item);
+    }
+
+    // Each resume that reaches the screening workflow costs 1 Ella Credit.
+    // Pre-check the whole batch so an under-funded upload is refused before any
+    // file is sent downstream; per-file deductions are then recorded as each
+    // screening request is accepted.
+    if (toProcess.length > 0) {
+      try {
+        await assertCreditsAvailable(toProcess.length, "cv_analysis");
+      } catch (creditError) {
+        if (creditError instanceof EllaCreditsError) {
+          return responseError("Not enough Ella Credits to screen this batch. Top up Ella Credits to continue.", 402, {
+            code: creditError.code,
+            required: creditError.required,
+            available: creditError.available,
+          });
+        }
+        throw creditError;
+      }
     }
 
     async function processFile({ file, queueId }: { file: File; sha256: string; queueId: string }) {
@@ -200,6 +224,17 @@ export async function POST(request: Request) {
           cache: "no-store",
         });
         if (!response.ok) throw new Error(`The screening workflow returned HTTP ${response.status}.`);
+        // The screening request was accepted downstream: charge 1 credit. A
+        // ledger failure must not undo an accepted screening, so this only logs.
+        await recordDeduction({
+          event: "cv_analysis",
+          units: 1,
+          reference: resolvedQueueId,
+          roleId,
+          actorName,
+          actorEmail,
+          note: "Bulk resume screening",
+        }).catch((creditError) => console.error("[Bulk Resume Upload] Could not record credit deduction:", creditError));
         const workflowResult = await response.json().catch(() => ({})) as Record<string, unknown>;
         // The active intake webhook uses an immediate acknowledgement. A 2xx
         // response therefore means only that n8n accepted the request; it does
@@ -261,7 +296,7 @@ export async function POST(request: Request) {
     // the two-stage n8n screening chain. This is what raises throughput
     // beyond one-resume-at-a-time; it does not change what each file's
     // pipeline does, only how many run at the same time.
-    const concurrency = resolveConcurrency(toProcess.length);
+    const concurrency = resolveConcurrency(toProcess.length, portalConfig.Bulk_Resume_Upload_Concurrency);
     let cursor = 0;
     let startedWorkers = 0;
     let nextWorkerStartAt = 0;
@@ -290,9 +325,9 @@ export async function POST(request: Request) {
     // Keep the notification contract available for a synchronous/terminal
     // integration, but never emit a completion email for an asynchronous
     // acknowledgement. The queue remains authoritative for that case.
-    const notifyOnSuccess = String(process.env.BULK_RESUME_NOTIFY_ON_SUCCESS || "").trim().toLowerCase() === "true";
+    const notifyOnSuccess = isEnabledChoice(portalConfig.Bulk_Resume_Notify_On_Success);
     let notificationStatus: "sent" | "failed" | "disabled" | "not_requested" = notifyOnSuccess ? "not_requested" : "disabled";
-    const notificationUrl = (process.env.N8N_ROLE_REQUEST_WEBHOOK_URL || process.env.N8N_ROLE_WEBHOOK_URL || "").trim();
+    const notificationUrl = portalConfig.N8N_Role_Webhook_URL.trim();
     const terminalResults = new Set(["screened", "processed", "failed", "skipped"]);
     const allResultsTerminal = results.length > 0 && results.every((result) => terminalResults.has(String(result.status || "").toLowerCase()));
     if (notifyOnSuccess && !isUat && allResultsTerminal && notificationUrl && webhookSecret && files.length > 0) {

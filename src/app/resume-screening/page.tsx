@@ -8,6 +8,7 @@ import ResumeScreeningInviteGenerator from "@/components/ResumeScreeningInviteGe
 import { canManagePipeline } from "@/lib/access-control";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { isBulkResumeUatMode } from "@/lib/bulk-resume-config";
+import { getPortalConfigValue } from "@/lib/portal-config";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export default async function ResumeScreeningPage() {
     // Keep every resume-screening role selector predictable as the published
     // role catalogue grows; IDs remain the option values.
     .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
-  const driveUrl = process.env.GOOGLE_BULK_RESUME_DRIVE_URL?.trim() || "";
+  const driveUrl = (await getPortalConfigValue("Bulk_Resume_Drive_URL")).trim();
 
   return (
     <AppShell user={user}>

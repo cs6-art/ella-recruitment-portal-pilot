@@ -2,6 +2,7 @@ import { OAuth2Client } from "google-auth-library";
 import { NextResponse } from "next/server";
 
 import { findDirectoryUser } from "@/lib/google-sheets";
+import { getPortalConfigValue } from "@/lib/portal-config";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, createSessionToken } from "@/lib/session";
 
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const allowedDomain =
-      process.env.ALLOWED_GOOGLE_DOMAIN || "mclinkgroup.com";
+      (await getPortalConfigValue("Allowed_Google_Domain")) || "mclinkgroup.com";
 
     console.log("[Login] Configuration:", {
       clientIdConfigured: Boolean(clientId),

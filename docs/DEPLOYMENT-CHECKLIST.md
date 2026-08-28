@@ -16,6 +16,10 @@
 - Add malware scanning at the hosting edge or storage layer and verify the 30-day resume retention policy.
 - Confirm active User_Directory rows and permissions for a creator, reviewer,
   approver, and settings editor.
+- Ella Credits: the `Ella_Credit_Ledger` tab is created automatically on first
+  use. After deploy, a settings admin opens Settings -> Ella Credits and adds a
+  starting balance; AI CV analysis and AI phone interviews are blocked at a
+  zero balance.
 - Run `npm.cmd test`, `npx.cmd tsc --noEmit`, and `npm.cmd run build`.
 - Perform the manual smoke test in `TESTING.md` against production n8n and a
   test spreadsheet row.
