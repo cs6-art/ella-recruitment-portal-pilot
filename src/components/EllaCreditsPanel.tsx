@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import ActionFeedback from "@/components/ActionFeedback";
 import ValidationSummary from "@/components/ValidationSummary";
 import { ELLA_CREDITS_REFRESH_EVENT, requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
+import styles from "./EllaCreditsPanel.module.css";
 
 type LedgerEntry = {
   entryId: string;
@@ -34,6 +35,8 @@ const eventLabels: Record<string, string> = {
   phone_interview: "AI phone interview",
 };
 
+const nf = new Intl.NumberFormat("en-US");
+
 function formatWhen(value: string) {
   const time = Date.parse(value);
   return Number.isFinite(time) ? new Date(time).toLocaleString() : value;
@@ -50,7 +53,6 @@ export default function EllaCreditsPanel() {
   const [message, setMessage] = useState("");
 
   async function load() {
-    setLoading(true);
     try {
       const response = await fetch("/api/ella-credits", { credentials: "same-origin", cache: "no-store" });
       const body = await response.json();
@@ -99,59 +101,72 @@ export default function EllaCreditsPanel() {
     }
   }
 
+  const balance = data?.balance ?? 0;
+  const headlineTone = balance <= 0 ? styles.empty : balance < 50 ? styles.low : "";
+
   return (
-    <section className="card settings-section">
-      <div className="settings-section-header">
+    <section className={`card ${styles.panel}`}>
+      <div className={styles.header}>
         <div>
           <h2>Ella Credits</h2>
-          <p>One shared balance meters AI usage: 1 credit per CV analysis, 10 credits per AI phone interview. Actions are blocked when the balance runs out.</p>
+          <p>One shared balance meters AI usage — 1 credit per CV analysis, 10 credits per AI phone interview. AI actions are blocked when the balance runs out.</p>
         </div>
-        {data && <span>{data.balance} credit{data.balance === 1 ? "" : "s"} left</span>}
+        {data && (
+          <div className={`${styles.headline} ${headlineTone}`}>
+            <b>{nf.format(Math.max(0, balance))}</b>
+            <span>credits left</span>
+          </div>
+        )}
       </div>
 
-      {loading && <div className="empty">Loading Ella Credits…</div>}
-      {error && <ActionFeedback kind="error">{error}</ActionFeedback>}
+      {loading && !data && <div className={styles.loading}>Loading Ella Credits…</div>}
+      {error && <div className={styles.feedback}><ActionFeedback kind="error">{error}</ActionFeedback></div>}
 
-      {!loading && !error && data && <>
-        <div className="settings-integration-grid">
-          <div className="settings-integration"><div><strong>{data.balance}</strong><span>Current balance</span></div></div>
-          <div className="settings-integration"><div><strong>{data.totals.toppedUp}</strong><span>Total added</span></div></div>
-          <div className="settings-integration"><div><strong>{data.totals.consumed}</strong><span>Total consumed</span></div></div>
+      {data && <>
+        <div className={styles.stats}>
+          <div className={styles.stat}><b>{nf.format(balance)}</b><span>Current balance</span></div>
+          <div className={styles.stat}><b>{nf.format(data.totals.toppedUp)}</b><span>Total added</span></div>
+          <div className={styles.stat}><b>{nf.format(data.totals.consumed)}</b><span>Total consumed</span></div>
         </div>
 
-        {saveError && <ValidationSummary error={saveError} title="Update failed" />}
-        {message && <ActionFeedback kind="success">{message}</ActionFeedback>}
+        {(saveError || message) && <div className={styles.feedback}>
+          {saveError && <ValidationSummary error={saveError} title="Update failed" />}
+          {message && <ActionFeedback kind="success">{message}</ActionFeedback>}
+        </div>}
 
-        <div className="settings-grid">
-          <div className="settings-field">
-            <div className="settings-field-heading"><label htmlFor="ella-credit-amount">Adjust balance</label></div>
+        <div className={styles.form}>
+          <div className={`${styles.field} ${styles.amountField}`}>
+            <label htmlFor="ella-credit-amount">Adjust balance</label>
             <input id="ella-credit-amount" type="number" step="1" inputMode="numeric" placeholder="e.g. 2000 or -50" value={amount} onChange={(event) => setAmount(event.target.value)} />
             <small>Positive adds credits; negative removes them.</small>
           </div>
-          <div className="settings-field">
-            <div className="settings-field-heading"><label htmlFor="ella-credit-note">Note</label></div>
+          <div className={`${styles.field} ${styles.noteField}`}>
+            <label htmlFor="ella-credit-note">Note</label>
             <input id="ella-credit-note" value={note} maxLength={500} placeholder="Reason for this change" onChange={(event) => setNote(event.target.value)} />
-            <small>Recorded in the ledger for audit.</small>
+            <small>Recorded in the ledger for audit. Takes effect immediately for new AI actions.</small>
           </div>
-        </div>
-
-        <div className="settings-actions">
-          <span>Changes take effect immediately for new AI actions.</span>
           <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void submit()}>{saving ? "Saving…" : "Update Balance"}</button>
         </div>
 
-        <div className="settings-section-header"><div><h2>Recent activity</h2><p>Last {data.entries.length} ledger entr{data.entries.length === 1 ? "y" : "ies"}.</p></div></div>
-        {data.entries.length === 0 ? <p className="settings-empty">No credit activity yet.</p> : <div className="table-wrap"><table>
-          <thead><tr><th>When</th><th>Event</th><th>Change</th><th>Balance</th><th>Reference</th><th>By</th></tr></thead>
-          <tbody>{data.entries.map((entry) => <tr key={entry.entryId}>
-            <td>{formatWhen(entry.timestamp)}</td>
-            <td>{eventLabels[entry.event] || entry.event}{entry.note ? ` — ${entry.note}` : ""}</td>
-            <td>{entry.creditsDelta > 0 ? `+${entry.creditsDelta}` : entry.creditsDelta}</td>
-            <td>{entry.balanceAfter}</td>
-            <td>{entry.reference || entry.roleId || "—"}</td>
-            <td>{entry.actorName || entry.actorEmail || "—"}</td>
-          </tr>)}</tbody>
-        </table></div>}
+        <div className={styles.activity}>
+          <h3>Recent activity</h3>
+          <span>{data.entries.length} entr{data.entries.length === 1 ? "y" : "ies"}</span>
+        </div>
+        {data.entries.length === 0
+          ? <p className={styles.empty}>No credit activity yet. Add a starting balance above to begin.</p>
+          : <div className={styles.tableWrap}><table className={styles.table}>
+            <thead><tr><th>When</th><th>Event</th><th>Change</th><th>Balance</th><th>Reference</th><th>By</th></tr></thead>
+            <tbody>{data.entries.map((entry) => (
+              <tr key={entry.entryId}>
+                <td>{formatWhen(entry.timestamp)}</td>
+                <td>{eventLabels[entry.event] || entry.event}{entry.note ? ` — ${entry.note}` : ""}</td>
+                <td className={`${styles.delta} ${entry.creditsDelta >= 0 ? styles.deltaPlus : styles.deltaMinus}`}>{entry.creditsDelta > 0 ? `+${nf.format(entry.creditsDelta)}` : nf.format(entry.creditsDelta)}</td>
+                <td>{nf.format(entry.balanceAfter)}</td>
+                <td>{entry.reference || entry.roleId || "—"}</td>
+                <td>{entry.actorName || entry.actorEmail || "—"}</td>
+              </tr>
+            ))}</tbody>
+          </table></div>}
       </>}
     </section>
   );
