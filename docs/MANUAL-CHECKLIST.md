@@ -86,12 +86,47 @@ Mark PASS only with an attached artefact.
 
 ---
 
-## Also outstanding (operator, not a test)
+## §D2 — canonical URL configuration  ·  DECIDED 2026-08-31
 
-- **Finding D2:** `NEXT_PUBLIC_APP_URL` / `ella-recruitment.mclinkgroup.com`
-  currently serves a build **without** Phase 3 (returns 404 for the Drive
-  routes). Confirm the canonical pilot URL and align `NEXT_PUBLIC_APP_URL`, the
-  custom domain, and the Google OAuth redirect URI to the Phase-3 deployment.
+**Canonical pilot URL: `https://ella-recruitment-portal-pilot.vercel.app`**
+(the `.vercel.app` URL already runs current code; `ella-recruitment.mclinkgroup.com`
+serves a build predating the Ella Credits meter + Phases 1–3 and is not used).
+
+**Vercel env (pilot project → Environment Variables, Production + Preview):**
+
+| Var | Value |
+| --- | --- |
+| `NEXT_PUBLIC_APP_URL` | `https://ella-recruitment-portal-pilot.vercel.app` |
+| `GOOGLE_OAUTH_REDIRECT_URI` | `…vercel.app/api/auth/google-calendar/callback` |
+| `GOOGLE_DRIVE_OAUTH_REDIRECT_URI` | `…vercel.app/api/auth/google-drive/callback` |
+| `RESUME_SCREENING_INVITE_BASE_URL` | `https://ella-recruitment-portal-pilot.vercel.app` (or the public candidate site if separate) |
+| `N8N_BULK_RESUME_PORTAL_BASE_URL` | `https://ella-recruitment-portal-pilot.vercel.app` |
+
+Leave `MS_*` unset (OneDrive deferred).
+
+**Settings sheet:** `App_URL` = `https://ella-recruitment-portal-pilot.vercel.app`
+(or blank to inherit the env value).
+
+**Google Cloud Console → OAuth 2.0 Web client:**
+- Authorized redirect URIs — add:
+  `https://ella-recruitment-portal-pilot.vercel.app/api/auth/google-calendar/callback`
+  and `…/api/auth/google-drive/callback` (keep the `localhost:3000` pair for dev).
+- Authorized JavaScript origins — add
+  `https://ella-recruitment-portal-pilot.vercel.app` (GIS login needs it).
+
+**n8n (pilot workflows only):** any workflow that emails a portal link or calls
+the portal back uses `https://ella-recruitment-portal-pilot.vercel.app`.
+
+**Vercel Domains:** detach / ignore `ella-recruitment.mclinkgroup.com` from the
+pilot config — do not point anything at it. (If it belongs to a separate live
+project, leave that project alone.)
+
+**After the changes:** redeploy; confirm
+`curl …vercel.app/api/auth/google-drive/status` → 401 (not 404); then HR
+disconnects + reconnects Google Drive on the `.vercel.app` URL (this is also
+step 1 of the E2E below).
+
+No code change — all env / Console / dashboard.
 - **R1 cleanup (optional, non-blocking):** append terminal events for the 10
   stale `Processing` rows, or ship `reconcileBulkResumeQueue` +
   `/api/cron/reconcile-bulk-queue` (see `R1-BULK-QUEUE-PROCESSING-INVESTIGATION.md`).

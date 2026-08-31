@@ -16,7 +16,8 @@ completely separate from the Google OAuth client.
    - **Supported account types**: *Accounts in this organizational directory
      only* (single tenant) — recommended.
    - **Redirect URI**: platform **Web**, value
-     `https://ella-recruitment.mclinkgroup.com/api/auth/microsoft-drive/callback`
+     `https://ella-recruitment-portal-pilot.vercel.app/api/auth/microsoft-drive/callback`
+     (the canonical pilot URL — see `MANUAL-CHECKLIST.md` §D2)
    - **Register**.
 3. For local development add a second Web redirect URI under
    **Authentication** → **Add URI**:
