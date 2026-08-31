@@ -45,29 +45,36 @@ Net ledger effect of the whole test: **0**. Both stores in sync at every step.
 
 ## Findings
 
-### F1 — Files that fail screening are still charged 1 credit  ·  MEDIUM
+### F1 — Files that fail screening were charged 1 credit  ·  MEDIUM  ·  **FIXED**
 
-Both test resumes reached `Failed` (n8n rejected them for missing contact info)
-yet each consumed 1 credit. In `intakeResumeBatch.processItem` the deduction
-(`creditedFiles += 1; recordDeduction(...)`) runs immediately after the webhook
-returns HTTP 2xx, **before** the workflow's `status` field in that same response
-is read. When n8n returns `status: "failed"` synchronously (as here), the credit
-is already gone.
+Both test resumes reached `Failed` (n8n rejected them for a missing
+international mobile number) yet each consumed 1 credit. In
+`intakeResumeBatch.processItem` the deduction ran immediately after the webhook
+returned HTTP 2xx, **before** the workflow's `status` in that same response was
+read.
 
-- Customer-visible effect: "I imported 2 resumes, both failed, I lost 2 credits."
-- Whether this is *correct* depends on whether n8n incurred AI cost before
-  rejecting. If it rejects at the contact-parse step before any LLM call, the
-  charge is unearned. **Needs n8n workflow review to adjudicate**, then either
-  (a) don't charge when the synchronous response says `failed`, or (b) document
-  that a screening attempt is billable regardless of outcome.
+The n8n intake contract (`integrations/n8n/bulk-resume-upload-intake.ts`)
+confirms the workflow **responds synchronously with the terminal status** —
+`Screened` when a scored result was saved, `Failed` when the resume was rejected
+before a result (unreadable, missing contact details), `Skipped` for a
+duplicate.
 
-### F2 — Response reports `submitted: 0` with `creditsCharged: 2`  ·  LOW (UX)
+**Fix (commit — `bulk-resume-intake.ts`):** read the workflow status first;
+skip `recordDeduction` when the synchronous response is `failed` or `skipped`.
+`Screened` / `Processed` / `Queued` (async accept) still charge. One Ella Credit
+now buys a completed CV analysis, not an attempt.
 
-For an all-failed batch the API returns `submitted: 0` but `creditsCharged: 2`.
-The panel's summary would read "No new resumes were submitted; 2 failed" while
-the credits meter drops by 2 — internally consistent with the charge-on-handoff
-model but confusing to the operator. Consider showing charged-vs-failed
-explicitly.
+- Remaining gap (documented in code, not fixed here): a resume accepted for
+  **asynchronous** screening that later fails is not auto-refunded — needs a
+  reconciliation sweep, tracked with the R1 queue-reconcile follow-up.
+- Regression test: `tests/bulk-resume-upload.test.mjs` →
+  *"a resume the workflow rejects synchronously is not billed"*.
+
+### F2 — Response reported `submitted: 0` with `creditsCharged: 2`  ·  LOW  ·  **RESOLVED by F1**
+
+For an all-failed batch the API returned `submitted: 0` but `creditsCharged: 2`.
+With the F1 fix an all-synchronously-failed batch now returns
+`creditsCharged: 0`, so the panel summary and the credits meter agree.
 
 ### F3 — The designated test folder cannot exercise the happy path  ·  BLOCKER for full validation
 
