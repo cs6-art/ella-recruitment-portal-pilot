@@ -1,18 +1,30 @@
 # Release validation status
 
-Generated during the autonomous phase run. Covers Phases 2, 3, 5, 6, 7, 8.
-Phase 4 (docs / AI support bot) and OneDrive live validation are **intentionally
-deferred**, not failed.
+Covers Phases 2, 3, 5, 6, 7, 8. Phase 4 (docs / AI support bot) and OneDrive
+live validation are **intentionally deferred**, not failed.
 
-Automated gate (re-run after the 8-file cap, HEAD includes
-`tests/bulk-batch-cap.test.mjs`):
+## Phase verdicts — current (2026-08-31)
+
+| Phase | Verdict |
+| --- | --- |
+| **1 — Critical QC fixes + core workflow** | ✅ code-complete; formal sign-off = Phase 8 |
+| **2 — Backend + performance** | ✅ **COMPLETE WITH PILOT MITIGATION** — migration + dual-write live-reconciled; n8n mitigated; 2/5/8 perf run passed (`PHASE-2-BACKEND-MIGRATION.md`) |
+| **3 — Google Drive import** | ✅ **COMPLETE** — connect/OAuth/token store, 8-file cap, import→shared pipeline, filename/source metadata, same-batch + cross-batch dedupe (not re-charged), Screened happy path, per-file failure isolation — all live-validated 2026-08-31 (`DRIVE-E2E-VALIDATION-2026-08-31.md`) |
+| **3 — OneDrive import** | 🟳 **DEFERRED** — code complete; external Microsoft Entra configuration pending (`ONEDRIVE-RESUME-IMPORT-SETUP.md`). Does **not** block this release. |
+| **4 — Docs + AI support bot** | 🟳 DEFERRED (operator instruction) |
+| **5 — Hosting / batch-capacity** | ✅ **COMPLETE** — `BATCH-CAPACITY-VALIDATION.md`, empirically confirmed: 2/5/8-file batches all `202`, no timeout; recommended max **8**/batch (direct + Drive), OneDrive not published |
+| **6 — Ella AI-scoring benchmark** | ⏳ **Ella side complete** — ME02, 30 screened, 15-candidate sheet pre-filled (`ella-scoring-benchmark-ME02.csv`); H1–H4 hypotheses documented; **blocked on HR manual scores** |
+| **7 — Full regression** | ✅ **automated PASS** — tsc 0 / eslint 0 / 164 unit / **4/4 browser smoke** / build (fixed a pre-existing `layout.tsx` hydration bug). Live human pass still pending. |
+| **8 — Formal QC retest** | 🟡 #3, #4 automated-PASS · #5 **PASS with pilot mitigation** (perf run) · #1, #2 fix-in-place, live pending · #6 blocked on HR |
+
+Automated gate (HEAD `b928cbe`):
 
 | Check | Result |
 | --- | --- |
 | `tsc --noEmit` | ✅ 0 errors |
 | `eslint src tests` | ✅ 0 errors (8 pre-existing warnings, none from this work) |
-| `node --test tests/*.test.mjs` | ✅ **160 / 160 pass** (+7 batch-cap tests) |
-| `next build` | ✅ exit 0 |
+| `node --test tests/*.test.mjs` | ✅ **164 / 164 pass** |
+| `next build` | ✅ compiled successfully |
 
 **Pre-freeze mitigation applied — temporary 8-file cap.** Local upload and
 Google Drive import now hard-cap at `MAX_FILES_PER_SUBMISSION = 8` (UI + server

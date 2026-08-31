@@ -1,0 +1,16 @@
+candidate,resume_file,synthetic_or_real,ella_score_0_100,ella_recommendation,ella_key_strength,ella_key_gap,hr_score_0_100,hr_recommendation,hr_key_strength,hr_key_gap,score_delta,recommendation_match,material_discrepancy_Y_N,suspected_cause,reviewer_notes
+Sarah Jenkins,Resume_04_Sarah.pdf,synthetic,49,For HR Review,"10 yrs mechanical eng, powertrain design, FEA/ANSYS","no prototyping / GD&T / 2D drawings stated",,,,,,,,,"Ella caps a senior 10-yr mech engineer at 49 — check for over-penalising missing keywords"
+David Ooi,Resume_05_David.pdf,synthetic,49,For HR Review,"BS Mech Eng, CNC optimisation, Lean/5S","no explicit mechanical design / 3D CAD examples",,,,,,,,,
+Bong,Resume_01_Bong.pdf,synthetic,49,For HR Review,"SolidWorks 3D CAD, tolerance analysis, prototype stress testing","< 3 yrs experience (grad 2025)",,,,,,,,,"entry-level, correctly flagged for experience gap"
+Emily Wong,Resume_08_Emily.pdf,synthetic,46,For HR Review,"BS Mech Eng, 8 product launches concept->mass production","no explicit mainstream 3D CAD tool named",,,,,,,,,"strong product-dev match scored only 46 — discrepancy candidate"
+Ahmad Fazli,Resume_07_Ahmad.pdf,synthetic,45,For HR Review,"BS Mech Eng, ~4 yrs Oil & Gas, 3D piping models (PDMS)","no product-design 3D CAD (SolidWorks/Creo)",,,,,,,,,
+Nurul Aisyah,Resume_10_Nurul.pdf,synthetic,45,For HR Review,"BS Mech Eng, automated material handling systems, 10+ yrs","no mainstream 3D CAD evidence, PLC-focused",,,,,,,,,
+Li Hen,Resume_02_Lihen.pdf,synthetic,42,For HR Review,"robotic assembly, 2D drawings, BOMs","< 3 yrs experience; limited manufacturing-process exposure",,,,,,,,,
+Priya Sharma,Resume_06_Priya.pdf,synthetic,42,For HR Review,"BS Mech Eng, aerospace composite structures, wind-tunnel/fatigue","no mainstream product-design 3D CAD named",,,,,,,,,
+(unnamed),Resume_15_Missing_Name.pdf,synthetic,40,For HR Review,"BSc Mech Eng, additive manufacturing R&D (SLA/SLS), CAD/CAM","no injection-molding / concept->mass-production record; name not extracted",,,,,,,,,"name extraction failed — check header parsing"
+James Wilson,Resume_09_James.pdf,synthetic,35,For HR Review,"BSc Mech Eng, CFD/thermal (IcePak, Flotherm)","< 3 yrs; no mainstream 3D CAD",,,,,,,,,
+Marcus Chen,Resume_03_Marcus.pdf,synthetic,32,For HR Review,"BS Mech Eng, HVAC design (commercial)","AutoCAD MEP only, no product 3D CAD; no product development",,,,,,,,,
+Kelvin Wong,Kelvin Wong Resume.pdf,real,22,For HR Review,"7+ yrs, leadership, process improvement","degree is Accountancy; no mechanical design",,,,,,,,,"clear non-match; expect HR to agree low"
+Danelle Montejo,D.Montejo_Resume.pdf,real,20,For HR Review,"5 yrs project & stakeholder coordination","marketing/comms background; no Mech Eng degree; no 3D CAD",,,,,,,,,"clear non-match"
+Francis,Francis Resume.pdf,real,12,For HR Review,"analytical / process improvement (accounting)","BS Accountancy; no mechanical design or product development",,,,,,,,,"clear non-match"
+Elizabeth Ner,Elizabeth Resume.pdf,real,5,For HR Review,"stakeholder management, coordinated technical-trade hiring","BS Psychology; no mechanical engineering background",,,,,,,,,"clear non-match; near-floor score"

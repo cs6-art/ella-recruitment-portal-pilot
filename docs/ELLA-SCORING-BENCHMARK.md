@@ -1,7 +1,38 @@
 # Phase 6 — Ella AI-scoring validation
 
-Status: **manual benchmark BLOCKED — needs HR-provided scores.** Tooling, the
-exact scoring model, and the comparison procedure are ready.
+Status: **Ella side prepared — awaiting HR manual scores.**
+Benchmark role, resumes, Ella scores, and the specific discrepancy hypotheses
+are ready ([ella-scoring-benchmark-ME02.csv](ella-scoring-benchmark-ME02.csv)).
+The only remaining input is HR's manual score column.
+
+## Benchmark role — ME02 (Mechanical Engineer)
+
+Chosen because it now has **30 resumes screened by Ella** (2026-08-31 test run),
+a full score spread (5 → 49), and clean role config.
+
+- **Screening criteria:** "Bachelor's degree in Mechanical Engineering or
+  related field, minimum 3 years of related mechanical design experience,
+  proficiency in mainstream 3D CAD software, knowledge of manufacturing
+  processes including injection molding, sheet metal, CNC machining; strong
+  problem-solving skills and teamwork ability."
+- **Minimum years of experience:** 3
+- **Keywords:** mechanical design, 3D CAD, prototyping, tolerance analysis,
+  DFM/DFA, product development, manufacturing processes, GD&T, cross-functional
+  teamwork
+- **Evaluation fields toggled:** baseline only (`score`, `recommendation`,
+  `strengths`, `concerns`) — **no sub-criteria**, so HR scoring is just an
+  overall 0–100 + recommendation + strengths/concerns per candidate.
+
+## Observations from the 30-candidate Ella run (hypotheses for HR to confirm)
+
+| # | Observation | Hypothesis |
+| --- | --- | --- |
+| H1 | **No candidate scored above 49**, including a 10-yr powertrain engineer with FEA (Sarah, 49) and an 8-launch product-dev manager (Emily Wong, 46). | Ella may **cap / compress the top of the range** — it deducts hard for any missing keyword (GD&T, a named CAD tool) even when the core criteria are clearly met. A human would likely score these 70–85. |
+| H2 | **Every recommendation is "For HR Review"** — never "Proceed" or "Reject". | The n8n workflow may always return "For HR Review" and rely on the score alone. Confirm whether Proceed/Hold/Reject is expected (the portal's `BASELINE_EVALUATION_FIELDS` says "Proceed / hold / reject"). |
+| H3 | Non-mechanical backgrounds (accountancy, psychology, software) correctly score 5–35. | Floor behaviour looks **correct** — expect HR agreement on the clear non-matches. |
+| H4 | `Resume_15_Missing_Name.pdf` screened but **candidate name was not extracted** ("Professional Summary" stored as the name). | Header-parsing gap in contact extraction — cosmetic, not a scoring issue, but note it. |
+
+## The scoring model Ella uses (from `recruitment-setup-schema.ts`)
 
 ## The scoring model Ella actually uses (from `recruitment-setup-schema.ts`)
 
@@ -28,26 +59,28 @@ The scoring inputs come from the role's Recruitment Setup: `screeningCriteria`,
 not the portal — so any rubric tuning is an n8n workflow change (pilot workflow
 only), and the portal side only stores the setup and displays the result.
 
-## Exactly what HR must provide
+## What HR must do now (the only remaining input)
 
-Pick **one published role** and **8–12 candidates** spanning the outcome range
-(2–3 clear Reject, 3–4 borderline/Hold, 3–4 clear Proceed). For each:
+Open [ella-scoring-benchmark-ME02.csv](ella-scoring-benchmark-ME02.csv). It has
+**15 candidates** across the Ella score range with Ella's score / recommendation
+/ key strength / key gap already filled. For each row, review the actual resume
+(in the portal → Applicants → ME02) against the ME02 screening criteria above
+and fill:
 
-1. The exact resume file (PDF/DOC/DOCX).
-2. HR **overall score 0–100** using the same standard the role's screening
-   criteria describe.
-3. HR **recommendation**: Proceed / Hold / Reject.
-4. HR **strengths** and **concerns** (1–3 bullets each — the evidence used).
-5. For **each criterion toggled on for that role**, an HR sub-score on the same
-   0–5 (or 0–100 — state which) scale, plus a one-line reason.
-6. Which criteria are toggled on for the role (so we compare like-for-like).
-7. Confirmation that the role's `screeningCriteria` text **is** the intended
-   standard (if HR would score differently than the written criteria, fix the
-   criteria first — that is a setup bug, not a model error).
+- `hr_score_0_100` — your overall fit score
+- `hr_recommendation` — Proceed / Hold / Reject
+- `hr_key_strength`, `hr_key_gap` — one line each
+- `material_discrepancy_Y_N` — Y if HR and Ella differ by more than 10 points or
+  disagree on advance-vs-reject
+- `suspected_cause` — from the taxonomy below, when Y
 
-Fill one row per candidate in
-[scoring-benchmark-template.csv](scoring-benchmark-template.csv) (blank the
-criterion columns that are not toggled on for the role).
+Also confirm: **is the ME02 screening-criteria text the standard you actually
+want Ella to apply?** If you would score differently from what that text says,
+the criteria text should be fixed first (a setup issue, not a model error).
+
+Leave the score-model / procedure sections below for reference. The generic
+[scoring-benchmark-template.csv](scoring-benchmark-template.csv) is only needed
+if a future role toggles sub-criteria on.
 
 ## Procedure once scores arrive
 
@@ -77,10 +110,15 @@ criterion columns that are not toggled on for the role).
 `rubric-mismatch`, `weighting`, `missing-evidence`, `hallucinated-evidence`,
 `format-sensitivity`, `prompt-ambiguity`, `none`.
 
-## Unblocked now
+## Status
 
-- Scoring path code compiles/lints/builds clean; **no scoring logic changed** in
-  this release.
-- Interview-summary question mapping (a related QC blocker) is covered by the
-  automated suite (canonical numbered-question guard).
-- Template + procedure ready; nothing else can proceed until HR scores land.
+- **Done:** benchmark role selected (ME02), 30 resumes screened by Ella,
+  15-candidate benchmark CSV pre-filled with Ella's output, 4 discrepancy
+  hypotheses (H1–H4) documented for HR to confirm.
+- **Blocked on HR:** the `hr_*` columns in `ella-scoring-benchmark-ME02.csv`.
+- **Then (assistant):** compute the analysis table, classify each discrepancy,
+  and — only if a cause repeats across ≥ 3 candidates — write up the specific
+  n8n prompt/rubric change (pilot workflow only). H1 (top-of-range compression)
+  is the leading candidate for a real tuning need.
+- No scoring logic changed in this release; scoring path compiles/lints/builds
+  clean; interview-summary question mapping covered by the automated suite.

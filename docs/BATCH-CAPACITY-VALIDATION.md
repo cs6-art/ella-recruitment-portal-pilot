@@ -1,8 +1,38 @@
 # Phase 5 — Hosting & batch-capacity validation
 
-Status: **code-derived analysis complete; live empirical measurement blocked**
-(needs a deployed environment + real batches + Vercel runtime metrics, which
-require operator access).
+Status: **COMPLETE** — code-derived analysis + live empirical measurement
+(2026-08-31, deployed pilot). Recommended maximum direct/Drive batch: **8 files**.
+
+## Hosting note — URS says "GoDaddy", the pilot runs on Vercel
+
+The URS Phase 5 text refers to *GoDaddy* upload configuration. The pilot is
+deployed on **Vercel serverless** (`ella-recruitment-portal-pilot.vercel.app`),
+not GoDaddy shared/VPS hosting. All limits and measurements below are for the
+Vercel deployment. If a GoDaddy migration is still planned, the request-body
+size limit, PHP/proxy timeouts, and process memory on that host must be
+re-checked — GoDaddy shared hosting typically caps request bodies far below
+100 MB and kills long requests aggressively, which would make the 8-file cap
+(≈68 s in-request) unsafe there without the async-drain refactor.
+
+## Empirical results (2026-08-31, Vercel pilot, Google Drive import path)
+
+| Batch | Request → `202` | Poll → all terminal | Client-visible timeout | Orphaned `Processing` | Credits charged | Sheet ↔ Neon |
+| --- | --- | --- | --- | --- | --- | --- |
+| **2 files** | **34.7 s** | +7 s | none | 0 | 1 (= Screened count) | ✅ in sync |
+| **5 files** | **60.4 s** | +6 s | none | 0 | 2 (= Screened count) | ✅ in sync |
+| **8 files** | **68.0 s** | +5 s | none | 0 | 1 (= Screened count) | ✅ in sync |
+
+- All three returned HTTP `202`, no gateway/timeout error, **zero orphaned
+  `Processing` rows**, credits == count of newly `Screened` files, ledger
+  reconciled after every batch (11 → 10 → 8 → 7).
+- In-request time is dominated by **full AI screening of the passing files**
+  (~20–30 s each), not the 10 s stagger — the 5→8 step only added ~8 s because
+  the 3 extra files were cross-batch dedupe skips.
+- **Not exercised:** 8 files that *all* pass full screening — projected
+  ~110–130 s. Still under Vercel Fluid Compute's 300 s default, but this is the
+  number to watch before ever raising the cap.
+- Failure isolation confirmed live: a single batch produced 4 `Failed` + 3
+  `Skipped` + 1 `Screened` with no batch abort.
 
 ## Hard limits in the current code
 
@@ -37,22 +67,24 @@ t ≈ (N − 2) × 10 s   +   (download + PDF parse + Drive store + webhook for 
 | 15 | 130 s | ~5 s | **~135–150 s** |
 | 25 | 230 s | ~5 s | **~235–260 s (≈4 min)** |
 
-### Observed failure point (derived)
+### Observed failure point
 
-The batch fails (function times out, client sees a network error, but files
-already handed to n8n keep processing) when the total above exceeds the Vercel
-function timeout:
+**Measured:** 8 files completed in-request at **68 s** with no timeout — so the
+pilot's effective function budget is **≥ 70 s** (consistent with Vercel Fluid
+Compute's 300 s default; no `maxDuration` is set but Fluid Compute does not fall
+back to the old 10 s/15 s Node limits).
 
-| Effective `maxDuration` | Largest batch that completes in-request |
+Derived ceiling for other budgets (if Fluid Compute were disabled or a lower
+`maxDuration` set):
+
+| Effective budget | Largest batch that completes in-request |
 | --- | --- |
-| 10 s (Hobby default, no config) | **2 files** |
-| 15 s (Pro default, no config) | **2 files** |
-| 60 s | **5–6 files** |
-| 300 s (Pro/Fluid max) | **25 files, but with no headroom** |
+| 60 s | **~5 files** (the 5-file run measured 60.4 s — on the edge) |
+| 300 s | **~8 files with headroom; ~12–15 if all screen fully** |
 
-This is the single most important finding: **with no `maxDuration` set, any
-batch larger than ~2 files is at risk of a client-visible timeout**, even though
-the resumes that were already dispatched continue to be screened by n8n.
+**Recommended safe maximum: 8 files** — the enforced cap. It clears the pilot's
+budget with margin in the common case (some fails / dedupe skips) and stays
+under 300 s even in the all-pass worst case.
 
 ## Memory / resource behaviour (derived)
 
@@ -80,16 +112,22 @@ the resumes that were already dispatched continue to be screened by n8n.
 - Same-batch duplicates are collapsed before processing; cross-batch duplicates
   are skipped by SHA-256 + role after `storeResumeFile` reports `reused`.
 
-## Direct upload vs Google Drive import
+## Direct upload vs Google Drive vs OneDrive
 
 | Dimension | Direct / local upload | Google Drive import | OneDrive import |
 | --- | --- | --- | --- |
-| Files/batch cap | 25 | 25 | 25 |
-| Request payload | up to 100 MB (the files) | tiny JSON (`{roleId, fileIds}`) | tiny JSON |
-| Memory peak | **high** (full body buffered) | low (1–2 files at a time) | low |
+| Files/batch cap | **8** | **8** | 25 (deferred) |
+| Request payload | up to 100 MB (the files) | tiny JSON `{roleId, fileIds}` | tiny JSON |
+| Memory peak | **high** — `request.formData()` buffers the whole body | low — 1–2 files at a time | low |
 | Added latency | none | Google `files.get` download per file | Graph `downloadUrl` fetch per file |
-| Time to `202` | stagger + parse | stagger + parse + N downloads | stagger + parse + N downloads |
-| Failure threshold | platform timeout (see table) | platform timeout + download time (slightly worse) | **Deferred / Not validated** |
+| Screening pipeline | **shared `intakeResumeBatch`** — identical dedupe / credits / queue / webhook | same | same |
+| Measured 8-file time | not separately measured; ≈ Drive minus ~1–2 s download, plus the body upload | **68 s (measured)** | **Deferred / Not validated** |
+| Recommended max | **8** | **8** | not published until validated |
+
+The intake pipeline is shared, so the direct-upload path's in-request time is
+within a few seconds of the Drive path for the same file count (it trades N
+Drive downloads for one multipart body upload). The **8-file cap applies to both**
+and the 68 s Drive measurement is the governing number.
 
 ## Mitigation applied
 
@@ -127,14 +165,16 @@ function budget can be added later as defence-in-depth once measured.
 3. Once dispatch is off-request, a live re-measure can justify raising
    `MAX_FILES_PER_SUBMISSION` back toward 25.
 
-## What still needs a live run (operator)
+## Phase 5 conclusions
 
-Record, per batch size (try 2, 5, 8, 12, 20, 25):
+1. **Recommended maximum direct-upload batch: 8 files.** Enforced (`MAX_FILES_PER_SUBMISSION`).
+2. **Recommended maximum Google Drive batch: 8 files.** Same cap, empirically confirmed at 68 s / `202` / no timeout.
+3. **OneDrive: no recommended maximum published** — deferred, not validated. Route still on 25; must be re-measured when Entra config lands.
+4. Do **not** raise the 10 MB / 100 MB / concurrency-2 / 10 s-stagger values to force larger batches — they protect the n8n instance and the Sheets write budget.
+5. The path to a higher cap is the **"202-then-background-drain"** refactor (tracked post-freeze, `PHASE-2-BACKEND-MIGRATION.md` §2). After that, re-measure and raise `MAX_FILES_PER_SUBMISSION` toward 25.
+6. If the deployment ever moves to **GoDaddy**, re-run this validation there first — its request-body and timeout limits are much tighter than Vercel's.
 
-- upload duration (client) and time-to-`202`
-- n8n processing duration to all-terminal
-- whether the function timed out (Vercel dashboard → function logs)
-- peak memory (Vercel dashboard → function metrics)
-- queue rows created vs files sent; any orphaned `Processing` rows
-- behaviour when 1 file in the batch is corrupt (expect: it alone → `Failed`)
-- behaviour re-submitting an identical batch (expect: all `Skipped`)
+### Optional follow-up measurements (not blocking)
+
+- An 8-file batch where every file passes full screening (~110–130 s projected) — confirms the all-pass worst case stays under budget.
+- Peak function memory for a full 8×10 MB **local** upload (the heavy path) via the Vercel metrics dashboard.
