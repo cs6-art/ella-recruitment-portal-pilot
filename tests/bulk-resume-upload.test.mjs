@@ -210,6 +210,30 @@ test("the bulk panel supports drag-and-drop, live auto-refresh, and retrying onl
   assert.match(panel, /updates automatically every minute/);
 });
 
+test("the bulk panel shows auto-dismissing feedback and portal-timezone timestamps", () => {
+  const panel = read("src/components/BulkResumeScreeningPanel.tsx");
+  // success / warning / error notices go through the shared auto-dismiss component
+  assert.match(panel, /import ActionFeedback from "@\/components\/ActionFeedback"/);
+  assert.match(panel, /<ActionFeedback kind="success"[^>]*>\{uploadMessage\}<\/ActionFeedback>/);
+  assert.match(panel, /<ActionFeedback kind="warning"[^>]*>\{warning\}<\/ActionFeedback>/);
+  assert.match(panel, /<ActionFeedback kind="error"[^>]*>\{error\}<\/ActionFeedback>/);
+  assert.doesNotMatch(panel, /<div className="success-box">\{uploadMessage\}<\/div>/);
+  // the over-cap notice is a transient warning, not a sticky error
+  assert.match(panel, /setWarning\(`You can screen up to \$\{MAX_FILES_PER_SUBMISSION\}/);
+  // the queue table renders Asia/Singapore local time, never a raw UTC ISO string
+  assert.match(panel, /import \{ formatPortalDateTime \} from "@\/lib\/portal-time"/);
+  assert.match(panel, /formatPortalDateTime\(ts\)/);
+  assert.doesNotMatch(panel, /<td>\{item\.lastUpdated \|\| item\.processedAt \|\| item\.discoveredAt \|\| "—"\}<\/td>/);
+});
+
+test("ActionFeedback auto-dismisses success and warning but keeps errors", () => {
+  const fb = read("src/components/ActionFeedback.tsx");
+  assert.match(fb, /success: 5000/);
+  assert.match(fb, /warning: 7000/);
+  assert.match(fb, /error: null/);
+  assert.match(fb, /setTimeout\(\(\) => setVisible\(false\), timeout\)/);
+});
+
 test("bulk upload is wired into the live Resume Screening page", () => {
   const screening = read("src/app/resume-screening/page.tsx");
   assert.match(screening, /BulkResumeScreeningPanel/);
