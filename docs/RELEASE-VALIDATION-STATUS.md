@@ -4,14 +4,22 @@ Generated during the autonomous phase run. Covers Phases 2, 3, 5, 6, 7, 8.
 Phase 4 (docs / AI support bot) and OneDrive live validation are **intentionally
 deferred**, not failed.
 
-Automated gate (run on the current `main`, commit `df09341`):
+Automated gate (re-run after the 8-file cap, HEAD includes
+`tests/bulk-batch-cap.test.mjs`):
 
 | Check | Result |
 | --- | --- |
 | `tsc --noEmit` | ✅ 0 errors |
 | `eslint src tests` | ✅ 0 errors (8 pre-existing warnings, none from this work) |
-| `node --test tests/*.test.mjs` | ✅ **153 / 153 pass** |
-| `next build` | ✅ exit 0, 22/22 pages generated |
+| `node --test tests/*.test.mjs` | ✅ **160 / 160 pass** (+7 batch-cap tests) |
+| `next build` | ✅ exit 0 |
+
+**Pre-freeze mitigation applied — temporary 8-file cap.** Local upload and
+Google Drive import now hard-cap at `MAX_FILES_PER_SUBMISSION = 8` (UI + server
+`422`). `MAX_FILES_PER_BATCH = 25` and the worker pool are unchanged — the cap
+is a one-line raise once dispatch moves off-request. OneDrive left at 25
+(deferred). `maxDuration` was deliberately **not** added as the sole fix. See
+`BATCH-CAPACITY-VALIDATION.md`.
 
 ---
 
@@ -72,24 +80,20 @@ test(s), then re-run `tsc` / `eslint` / `build`. Do not refactor beyond the fix.
 
 ---
 
-## Phase 5 — Batch capacity
+## Phase 5 — Batch capacity — MITIGATED
 
-See [BATCH-CAPACITY-VALIDATION.md](BATCH-CAPACITY-VALIDATION.md). Headline:
+See [BATCH-CAPACITY-VALIDATION.md](BATCH-CAPACITY-VALIDATION.md).
 
-- Hard caps: 25 files/batch, 10 MB/file, 100 MB/request, concurrency 2, 10 s
-  per-file stagger.
-- **`maxDuration` is not configured** — the request handler runs the full
-  staggered pool inline, so a batch of *N* files holds the connection for
-  ≈ `(N−2)×10 s`. Anything past ~2 files risks a client-visible timeout on the
-  platform default; ~5–6 at 60 s; 25 only fits under a 300 s budget with no
-  headroom.
-- **Recommended safe direct-upload maximum: 8 files/batch.**
-- **Recommended Google Drive maximum: 8 files/batch.**
-- **OneDrive: Deferred / Not validated.**
-- Do not raise limits to force larger batches. Preferred real fix: dispatch
-  off-request (background drain) — roadmap item, out of scope now.
-- Empirical numbers (upload/processing duration, memory, timeout point) need a
-  live run — procedure documented in that file.
+- Code-derived: the request handler runs the staggered pool inline
+  (≈ `(N−2)×10 s`), so large batches risk a client-visible timeout.
+- **Mitigation shipped:** hard cap of **8 files/submission** for local upload and
+  Google Drive import, UI + server (`422`). `MAX_FILES_PER_BATCH = 25` and the
+  worker pool are untouched. `maxDuration` deliberately not the sole fix.
+- OneDrive: **Deferred / Not validated**, left at 25.
+- Real fix (roadmap): move dispatch off-request, then re-measure and raise the
+  cap.
+- Empirical numbers still need a live run (Worksheet B) — but with an 8-cap the
+  worst case is ~60–75 s in-request, well inside any reasonable budget.
 
 ---
 
@@ -137,8 +141,11 @@ evidence requires the live retest** — status is "fix in place, evidence pendin
 | 2 | F2F interview address | Venue/address field added to F2F interview scheduling | Book an F2F interview, set a venue | Venue persists and appears in invite | fix in place; evidence pending |
 | 3 | Ella summary misattribution | Canonical numbered-question set; summary maps answers by index | Run a voice interview, open the summary | Each answer under its correct question | fix in place; **automated** question-count guard passes |
 | 4 | Candidate no-show handling | 3-attempt lifecycle scaffolding; past booked interviews reconcile to No Show without overwriting completed results | Let a booked slot lapse | Row → No Show; completed results untouched; attempt counter advances | fix in place; **automated** reconciliation test passes |
-| 5 | n8n / system latency | New pilot workflows only; webhook `X-Idempotency-Key`; concurrency 2 + 10 s stagger to protect n8n | Time a batch through n8n | Within processing window; no dup executions | partially — timeout risk on large batches (Phase 5); evidence pending |
+| 5 | n8n / system latency | New pilot workflows only; webhook `X-Idempotency-Key`; concurrency 2 + 10 s stagger; **8-file cap** bounds in-request time to ~60–75 s | Time an ≤8 batch through n8n | Within processing window; no dup executions | timeout risk **mitigated** by the cap; live timing evidence pending |
 | 6 | Ella scoring accuracy | No logic change this release; benchmark tooling prepared | Phase 6 benchmark vs HR scores | Deltas within tolerance | **BLOCKED** on HR scores |
+
+R1 (Bulk_Resume_Queue "stuck Processing") — **closed, non-blocking**. See
+`R1-BULK-QUEUE-PROCESSING-INVESTIGATION.md`.
 
 ---
 
@@ -146,9 +153,32 @@ evidence requires the live retest** — status is "fix in place, evidence pendin
 
 - `CREDITS_BACKEND=dual` (unchanged). **Not switching to `postgres` without
   explicit approval.**
-- Watch strings: `[Credits] Divergence`, `Postgres mirror write failed` — need
-  Vercel log access to observe; none reproducible in local mechanism tests.
-- **Cutover-safe when:** ≥ 24–48 h of `dual` in production with zero divergence
-  lines, Sheet balance == `credit_balance`, and at least one real top-up + one
-  real bulk screening have round-tripped. Report will be updated when log
-  evidence is available.
+- **Read-only check done 2026-08-31** (`LIVE-VALIDATION-RESULTS-2026-08-31.md`):
+  Neon `credit_balance` = 0, ledger sum 0, 4 rows; Sheet `Ella_Credit_Ledger`
+  sum 0, last balance 0; per-entry deltas identical. **Stores are in sync.**
+- Still missing: Vercel-log confirmation of zero `[Credits] Divergence` /
+  `Postgres mirror write failed` over a 24–48 h `dual` window.
+- **Cutover-safe when** that log window is clean AND one real top-up + one real
+  ≤8 bulk screening have round-tripped in production.
+
+---
+
+## Code Freeze readiness
+
+| Gate | State |
+| --- | --- |
+| Assistant-authored code (Phases 1–3, dual-write, 8-file cap) | ✅ tsc / eslint / 160 tests / build all green |
+| R1 (queue Processing) | ✅ closed, non-blocking (investigation doc) |
+| Batch-capacity timeout risk | ✅ mitigated by the 8-file cap (server + UI + tests) |
+| Google Drive connect / OAuth / token store | ✅ verified via `Drive_Connections` |
+| Google Drive import E2E | ⏳ needs 1 live run (Worksheet A) |
+| Dual-write soak | ⏳ needs Vercel log window; stores already reconcile |
+| Deployment/domain mismatch (finding D2) | ⏳ needs operator to confirm canonical pilot URL |
+| Phase 6 scoring | ⛔ blocked on HR scores (not a freeze blocker if scoring is unchanged this release — it is) |
+| Phase 7 manual regression | ⏳ operator checklist |
+| Phase 8 QC evidence | ⏳ operator checklist |
+
+**Recommendation:** the code is freeze-ready. Remaining items are
+operator-executed validation, not code changes. Freeze the branch; run the
+[short manual checklist](MANUAL-CHECKLIST.md); lift to production once Worksheet A
++ the dual-write log window are clean.

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 type DriveFolder = { id: string; name: string };
 type DriveFile = { id: string; name: string; mimeType: string; size: number; modifiedTime: string };
 
-const MAX_SELECTION = 25;
+const DEFAULT_MAX_SELECTION = 25;
 
 function formatSize(bytes: number) {
   if (!bytes) return "";
@@ -23,6 +23,7 @@ export default function DriveFilePicker({
   pageParam = "pageToken",
   providerLabel = "Google Drive",
   rootName = "My Drive",
+  maxSelection = DEFAULT_MAX_SELECTION,
 }: {
   open: boolean;
   onClose: () => void;
@@ -32,7 +33,9 @@ export default function DriveFilePicker({
   pageParam?: string;
   providerLabel?: string;
   rootName?: string;
+  maxSelection?: number;
 }) {
+  const MAX_SELECTION = maxSelection;
   const [folderId, setFolderId] = useState("root");
   const [breadcrumb, setBreadcrumb] = useState<DriveFolder[]>([{ id: "root", name: rootName }]);
   const [folders, setFolders] = useState<DriveFolder[]>([]);
