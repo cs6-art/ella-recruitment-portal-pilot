@@ -17,10 +17,15 @@ Automated gate (run on the current `main`, commit `df09341`):
 
 ## Phase 3 — STEP 1: Google Drive live validation
 
-**Live end-to-end run against the deployed portal requires a browser OAuth
-consent and operator access to Vercel/n8n/Neon — cannot be executed from here.**
-What follows is a **code-path verification** of every checklist item plus the
-exact operator steps for the live run.
+**Update (2026-08-31):** Google Drive live **OAuth is confirmed working** on the
+deployed pilot — account connected, "Choose from Google Drive" available. The
+connection issue is **resolved**. Remaining: the 2-file import E2E + dedupe +
+credit + webhook + dual-write checks — run **Worksheet A** in
+[LIVE-VALIDATION-WORKSHEETS.md](LIVE-VALIDATION-WORKSHEETS.md) and paste results.
+
+**The import E2E still needs an operator** (browser + Vercel/n8n/Neon
+visibility). What follows is a **code-path verification** of every checklist
+item; the operator steps are in Worksheet A.
 
 | Checklist item | Code-path status | Where |
 | --- | --- | --- |
