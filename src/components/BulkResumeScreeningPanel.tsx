@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import ActionFeedback from "@/components/ActionFeedback";
 import DriveFilePicker from "@/components/DriveFilePicker";
 import EllaCreditsMeter from "@/components/EllaCreditsMeter";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
+import { formatPortalDateTime } from "@/lib/portal-time";
 
 type RoleOption = { roleId: string; label: string };
 type QueueItem = {
@@ -66,6 +68,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
+  const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
   // Tracks the resumes submitted in the batch currently in flight, keyed by
   // the same content-hash queue ID the server computes, so the live section
@@ -127,6 +130,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
     batchFiles.current.clear();
     setFiles([]);
     setUploadMessage("");
+    setWarning("");
     setError("");
   }
 
@@ -209,7 +213,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
       }
       // Temporary operator-facing cap; the server rejects anything above it too.
       if (merged.length > MAX_FILES_PER_SUBMISSION) {
-        setError(`You can screen up to ${MAX_FILES_PER_SUBMISSION} resumes per batch for now. Extra files were not added — run another batch after this one.`);
+        setWarning(`You can screen up to ${MAX_FILES_PER_SUBMISSION} resumes per batch for now. Extra files were not added — run another batch after this one.`);
         return merged.slice(0, MAX_FILES_PER_SUBMISSION);
       }
       return merged;
@@ -224,6 +228,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
     if (!roleId || fileList.length === 0 || uploading) return;
     setUploading(true);
     setError("");
+    setWarning("");
     setUploadMessage("");
     try {
       // Pre-compute each file's queue ID client-side (same hash the server
@@ -296,6 +301,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
     const endpoint = provider === "microsoft" ? "/api/resume-screening/onedrive/import" : "/api/resume-screening/drive/import";
     setDriveImporting(true);
     setError("");
+    setWarning("");
     setUploadMessage("");
     setActiveBatch(new Map());
     setBatchResultStatuses(new Map());
@@ -445,7 +451,8 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
           <button type="button" className="btn btn-primary" disabled={!roleId || files.length === 0 || files.length > MAX_FILES_PER_SUBMISSION || uploading} onClick={() => void uploadResumes(files)}>{uploading ? "Uploading and screening..." : `Start screening${files.length ? ` (${files.length})` : ""}`}</button>
         </div>
 
-        {uploadMessage && <div className="success-box">{uploadMessage}</div>}
+        {uploadMessage && <ActionFeedback kind="success" className="bulk-screening-action-feedback">{uploadMessage}</ActionFeedback>}
+        {warning && <ActionFeedback kind="warning" className="bulk-screening-action-feedback">{warning}</ActionFeedback>}
         {failedFiles.length > 0 && !uploading && !batchFinished && (
           <div className="warning-box bulk-screening-retry-box">
             <span>{failedFiles.length} resume{failedFiles.length === 1 ? "" : "s"} failed to process.</span>
@@ -497,7 +504,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
         </div>
 
         {!configured && <div className="warning-box">{error || "Create the Bulk_Resume_Queue tab to view processing status."}</div>}
-        {configured && error && <div className="error-box">{error}</div>}
+        {configured && error && <ActionFeedback kind="error" className="bulk-screening-action-feedback">{error}</ActionFeedback>}
 
         <div className="bulk-screening-counts">
           {statusOrder.map((status) => <div key={status} className="bulk-count-card"><span>{status}</span><strong>{visibleCounts[status] || 0}</strong></div>)}
@@ -515,7 +522,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
                     <td>{item.candidateName || item.candidateEmail || "Pending extraction"}</td>
                     <td><span className={statusClass(label)}>{label}</span></td>
                     <td>{item.errorMessage || result}</td>
-                    <td>{item.lastUpdated || item.processedAt || item.discoveredAt || "—"}</td>
+                    <td>{(() => { const ts = item.lastUpdated || item.processedAt || item.discoveredAt; return ts ? formatPortalDateTime(ts) : "—"; })()}</td>
                   </tr>;
                 })}
               </tbody>

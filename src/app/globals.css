@@ -5161,6 +5161,7 @@ textarea:focus-visible {
 .bulk-screening-file-chip button { display: inline-grid; flex: 0 0 auto; width: 18px; height: 18px; place-items: center; border-radius: 50%; color: #315779; background: #dbe9f6; font-size: 13px; line-height: 1; cursor: pointer; }
 .bulk-screening-file-chip button:hover { color: #fff; background: #a12b22; }
 .bulk-screening-retry-box { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.bulk-screening-action-feedback { margin: 0 0 16px; }
 .bulk-screening-progress { display: grid; gap: 9px; padding: 16px 18px; border: 1px solid #d8e7f3; border-radius: 12px; background: #f5faff; }
 .bulk-screening-progress-header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px; color: var(--navy); }
 .bulk-screening-progress-header strong { font-size: 14px; }
