@@ -1,86 +1,86 @@
 # Phase 6 — Ella AI-scoring validation
 
-Status: **manual benchmark step BLOCKED — needs HR-provided manual scores.**
-Tooling and template below are ready; regression-side checks are done.
+Status: **manual benchmark BLOCKED — needs HR-provided scores.** Tooling, the
+exact scoring model, and the comparison procedure are ready.
 
-## Why this is blocked
+## The scoring model Ella actually uses (from `recruitment-setup-schema.ts`)
 
-Validating Ella's scoring against "the HR scoring standard" requires a set of
-resumes that a human recruiter has already scored using the same rubric. Those
-manual scores do not exist in the repo or the portal and must be supplied by HR.
-Without them there is nothing to compare against, so only the template and the
-tooling can be prepared now.
+Every role scores these **baseline** fields (`BASELINE_EVALUATION_FIELDS`):
 
-## What HR must provide
-
-For **8–12 representative candidates** spanning the outcome range (clear reject →
-borderline → strong hire), for a **single published role**:
-
-| Field | Notes |
+| Field | Meaning |
 | --- | --- |
-| Resume file | the exact PDF/DOC/DOCX that was (or will be) screened |
-| Role ID | must be a published role in the portal |
-| HR overall score | same scale Ella uses (confirm: 0–100 / 1–5 / band) |
-| HR criteria-level scores | one score per rubric criterion (see below) |
-| HR decision | Advance / Hold / Reject |
-| Short rationale | 1–3 sentences per candidate — the evidence HR used |
-| Scorer | who scored it, so we can check inter-rater drift later |
+| `score` | overall numeric fit, normalised to **0–100%** on display (`score-format.ts`) |
+| `recommendation` | **Proceed / Hold / Reject** |
+| `strengths` | free text |
+| `concerns` | free text |
 
-The rubric criteria and weights Ella uses must be confirmed by HR as the
-**intended** standard before comparison — otherwise a "discrepancy" may just be a
-rubric disagreement, not a model error.
+Plus **per-role toggled** criteria (`EVALUATION_FIELD_CATALOG`, HR turns on the
+ones that matter for that role) — each is a sub-assessment:
 
-## Benchmark procedure (once scores are provided)
+`communication_quality`, `culture_fit`, `leadership_potential`,
+`customer_service_orientation`, `technical_depth`, `problem_solving`,
+`attention_to_detail`, `reliability` — **plus up to 3 custom fields** HR defines.
 
-1. Screen each benchmark resume through the normal bulk flow for that role.
-2. Pull Ella's output per candidate: overall score, per-criterion score,
-   extracted evidence, and the decision/recommendation.
-3. Fill in `scoring-benchmark-template.csv` (one row per candidate).
-4. Compute per the "Analysis" section.
-5. Only change the prompt / rubric / weights where the evidence shows a
-   **systematic** cause (same error class across ≥3 candidates). Never tune to
-   force agreement on a single case. Human decision authority is preserved — Ella
-   scores are advisory input, not the gate.
+The scoring inputs come from the role's Recruitment Setup: `screeningCriteria`,
+`keywordsToLookFor`, `minimumYearsOfExperience`, `licenseOrCertificateRequired`,
+`transferableSkillsAccepted`, the job description, and `aiSystemPrompt` /
+`resolvedAiSystemPrompt`. **The actual scoring/prompt execution runs in n8n**,
+not the portal — so any rubric tuning is an n8n workflow change (pilot workflow
+only), and the portal side only stores the setup and displays the result.
 
-## `scoring-benchmark-template.csv`
+## Exactly what HR must provide
 
-Saved alongside this doc as
-[scoring-benchmark-template.csv](scoring-benchmark-template.csv). Columns:
+Pick **one published role** and **8–12 candidates** spanning the outcome range
+(2–3 clear Reject, 3–4 borderline/Hold, 3–4 clear Proceed). For each:
 
-```
-candidate_id,role_id,resume_file,
-hr_overall,ella_overall,overall_delta,
-hr_<criterion>,ella_<criterion>,<criterion>_delta,   (repeat per criterion)
-hr_decision,ella_recommendation,decision_match,
-material_discrepancy(Y/N),suspected_cause,notes
-```
+1. The exact resume file (PDF/DOC/DOCX).
+2. HR **overall score 0–100** using the same standard the role's screening
+   criteria describe.
+3. HR **recommendation**: Proceed / Hold / Reject.
+4. HR **strengths** and **concerns** (1–3 bullets each — the evidence used).
+5. For **each criterion toggled on for that role**, an HR sub-score on the same
+   0–5 (or 0–100 — state which) scale, plus a one-line reason.
+6. Which criteria are toggled on for the role (so we compare like-for-like).
+7. Confirmation that the role's `screeningCriteria` text **is** the intended
+   standard (if HR would score differently than the written criteria, fix the
+   criteria first — that is a setup bug, not a model error).
 
-## Analysis to run on the completed sheet
+Fill one row per candidate in
+[scoring-benchmark-template.csv](scoring-benchmark-template.csv) (blank the
+criterion columns that are not toggled on for the role).
 
-| Metric | Definition | Threshold for concern |
+## Procedure once scores arrive
+
+1. Screen all benchmark resumes through the normal bulk flow for that role.
+2. Record Ella's `score`, `recommendation`, `strengths`, `concerns`, and each
+   criterion sub-score into the CSV next to the HR values.
+3. Run the analysis below.
+4. Tune **only** where a cause repeats across ≥3 candidates. Never tune to force
+   a single case to agree. Ella's score is advisory — the human recommendation
+   is the gate.
+
+## Analysis
+
+| Metric | Definition | Concern threshold |
 | --- | --- | --- |
-| Mean absolute overall delta | avg( \|hr_overall − ella_overall\| ) | > 10 pts (on 0–100) |
-| Overall bias | mean( ella_overall − hr_overall ) | \|bias\| > 5 pts → systematic over/under-scoring |
-| Decision agreement | % rows where decision_match = Y | < 80% |
-| Criteria with largest mean delta | rank criteria by mean \|delta\| | top criterion → inspect its prompt section |
-| Evidence-missing rate | % rows where Ella scored a criterion with no cited evidence | any > 0 worth a prompt note |
-| Rank correlation | Spearman ρ between hr_overall and ella_overall ordering | ρ < 0.7 → weighting problem |
+| Mean absolute score delta | avg \|hr_score − ella_score\| | > 10 (of 100) |
+| Score bias | mean(ella_score − hr_score) | \|bias\| > 5 → systematic over/under-scoring |
+| Recommendation agreement | % rows recommendation_match = Y | < 80% |
+| Adjacent vs opposite mismatch | Hold↔Proceed (adjacent) vs Reject↔Proceed (opposite) | any opposite mismatch = investigate that resume |
+| Worst criterion | criterion with largest mean \|delta\| | inspect that criterion's prompt/rubric section in n8n |
+| Missing-evidence rate | % criteria Ella scored with no cited evidence | any > 0 → prompt note |
+| Hallucinated-evidence count | Ella cited a qualification not in the resume | any > 0 → P1 prompt fix |
+| Rank correlation | Spearman ρ of hr_score vs ella_score ordering | ρ < 0.7 → weighting problem |
 
-## Suspected-cause taxonomy (fill `suspected_cause`)
+## Suspected-cause taxonomy (`suspected_cause` column)
 
-- `rubric-mismatch` — Ella applied a different standard than HR intends
-- `weighting` — criteria scored ok individually, overall weighting off
-- `missing-evidence` — Ella didn't extract a qualification that was in the resume
-- `hallucinated-evidence` — Ella credited something not in the resume
-- `format-sensitivity` — score varies with resume layout, not content
-- `prompt-ambiguity` — instruction is under-specified for this case
-- `none` — within tolerance
+`rubric-mismatch`, `weighting`, `missing-evidence`, `hallucinated-evidence`,
+`format-sensitivity`, `prompt-ambiguity`, `none`.
 
-## Unblocked regression work done now
+## Unblocked now
 
-- Ella interview-summary question mapping uses the canonical numbered-question
-  set (`interview-question-count.ts`, covered by the automated suite —
-  "provider question counts cannot exceed the five-question maximum",
-  "voice interview completion uses one canonical display label").
-- Scoring-path code compiles/lints/builds clean; no scoring logic changed in
+- Scoring path code compiles/lints/builds clean; **no scoring logic changed** in
   this release.
+- Interview-summary question mapping (a related QC blocker) is covered by the
+  automated suite (canonical numbered-question guard).
+- Template + procedure ready; nothing else can proceed until HR scores land.
