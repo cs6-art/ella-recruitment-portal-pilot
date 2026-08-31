@@ -38,6 +38,15 @@ export const MAX_FILES_PER_SUBMISSION = 8;
 export const MAX_BULK_REQUEST_BYTES = 100 * 1024 * 1024;
 const STALE_PROCESSING_MS = 30 * 60 * 1000;
 
+// Bound each per-file screening webhook so one stuck n8n execution fails that
+// single file (batch continues) instead of hanging until the serverless
+// function is killed. Mirrors sendCandidateApplicationWebhook's bound for the
+// single-application path.
+function bulkWebhookTimeoutMs() {
+  const configured = Number(process.env.N8N_BULK_RESUME_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0 ? configured : 60_000;
+}
+
 const DEFAULT_CONCURRENCY = 2;
 const MAX_CONCURRENCY = 2;
 const WORKER_START_INTERVAL_MS = 10_000;
@@ -203,12 +212,26 @@ export async function intakeResumeBatch(input: {
         attemptCount,
         jobId: resolvedQueueId,
       };
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Webhook-Secret": webhookSecret, "X-Idempotency-Key": resolvedQueueId },
-        body: JSON.stringify(payload),
-        cache: "no-store",
-      });
+      const timeoutMs = bulkWebhookTimeoutMs();
+      const abort = new AbortController();
+      const abortTimer = setTimeout(() => abort.abort(), timeoutMs);
+      let response: Response;
+      try {
+        response = await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Webhook-Secret": webhookSecret, "X-Idempotency-Key": resolvedQueueId },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+          signal: abort.signal,
+        });
+      } catch (fetchError) {
+        if (fetchError instanceof DOMException && fetchError.name === "AbortError") {
+          throw new Error(`The screening workflow did not respond within ${Math.round(timeoutMs / 1000)}s.`);
+        }
+        throw fetchError;
+      } finally {
+        clearTimeout(abortTimer);
+      }
       if (!response.ok) throw new Error(`The screening workflow returned HTTP ${response.status}.`);
       // A 2xx can mean n8n accepted the resume for asynchronous screening (the
       // queue poll is then the source of truth), OR that n8n already reached a
