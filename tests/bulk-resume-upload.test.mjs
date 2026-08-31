@@ -90,6 +90,16 @@ test("an accepted asynchronous intake request cannot be presented as completed",
   assert.doesNotMatch(route, /String\(workflowResult\.status \|\| "Screened"\)/);
 });
 
+test("each per-file screening webhook is time-bounded so one stuck n8n call cannot hang the batch", () => {
+  const route = read("src/lib/bulk-resume-intake.ts");
+  assert.match(route, /N8N_BULK_RESUME_TIMEOUT_MS/);
+  assert.match(route, /const abort = new AbortController\(\)/);
+  assert.match(route, /signal: abort\.signal/);
+  assert.match(route, /did not respond within \$\{Math\.round\(timeoutMs \/ 1000\)\}s/);
+  // default 60s, same as the single-application path
+  assert.match(route, /: 60_000;/);
+});
+
 test("a resume the workflow rejects synchronously is not billed", () => {
   const route = read("src/lib/bulk-resume-intake.ts");
   // The workflow status is read BEFORE the deduction, and failed/skipped

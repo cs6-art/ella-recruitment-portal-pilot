@@ -167,14 +167,16 @@ R1 (Bulk_Resume_Queue "stuck Processing") — **closed, non-blocking**. See
 
 | Gate | State |
 | --- | --- |
-| Assistant-authored code (Phases 1–3, dual-write, 8-file cap) | ✅ tsc / eslint / 160 tests / build all green |
+| Assistant-authored code (Phases 1–3, dual-write, 8-file cap, credit F1/F2, webhook timeout) | ✅ tsc / eslint / 164 tests / build all green |
+| **Phase 2 — backend + performance** | 🟡 **PARTIAL** — migration + n8n mitigation done; perf verification (2/5/8 run) pending an expired session token. See `PHASE-2-BACKEND-MIGRATION.md` §7 |
 | R1 (queue Processing) | ✅ closed, non-blocking (investigation doc) |
-| Batch-capacity timeout risk | ✅ mitigated by the 8-file cap (server + UI + tests) |
+| Batch-capacity timeout risk | ✅ mitigated — 8-file cap + 60 s per-file webhook bound (server + UI + tests) |
 | Google Drive connect / OAuth / token store | ✅ verified via `Drive_Connections` |
-| Google Drive import E2E | ⏳ needs 1 live run (Worksheet A) |
-| Dual-write soak | ⏳ needs Vercel log window; stores already reconcile |
-| Deployment/domain mismatch (finding D2) | ⏳ needs operator to confirm canonical pilot URL |
-| Phase 6 scoring | ⛔ blocked on HR scores (not a freeze blocker if scoring is unchanged this release — it is) |
+| Google Drive import E2E | 🟡 partial — cap, import, metadata, dedupe-collapse, unreadable-file all PASS; Screened happy path blocked on n8n contact-info gate |
+| Credit deduction on failed screening (F1/F2) | ✅ fixed + live-validated |
+| Dual-write soak | ⏳ needs Vercel log window; stores reconcile live (11 == 11) |
+| Deployment/domain mismatch (finding D2) | ✅ resolved — canonical URL aligned |
+| Phase 6 scoring | ⛔ blocked on HR scores (not a freeze blocker — scoring unchanged this release) |
 | Phase 7 manual regression | ⏳ operator checklist |
 | Phase 8 QC evidence | ⏳ operator checklist |
 
