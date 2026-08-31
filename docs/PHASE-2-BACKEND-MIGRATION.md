@@ -229,6 +229,35 @@ records in `ME02` and −4 credits (balance 11 → 7). These are legitimate
 screening charges, not scaffold. Leave as-is, or reverse the 4 credits and
 delete the 4 `ME02` applicant rows for a clean slate — operator's call.
 
+## Divergence-log investigation — 2026-08-31 (false positive, detector fixed)
+
+Vercel logs showed `[Credits] Divergence: sheets balance 11 vs postgres 7` at
+16:56:04 (3 concurrent polls), clearing within 5 s — every later read clean.
+
+**Verified: no real divergence.** Fresh row-level comparison of both stores:
+Neon `credit_balance` = 7, Neon ledger sum = 7 (16 rows), Sheet ledger sum = 7
+(16 rows), Sheet last `Balance_After` = 7 — **every Entry_ID present in both,
+1:1**.
+
+**Root cause (detector bug, not data):** `getCreditBalance()` for the
+`/api/ella-credits/balance` poll reads the Sheet through the 20 s module cache,
+but the divergence check compared that cached value against the *always-fresh*
+Postgres balance. Right after a deduction, an instance still holding the old
+cached Sheet value logs a false "divergence" until the cache refreshes.
+
+**Fix (commit — `ella-credits.ts`):** the divergence check now only runs when
+`options.fresh` is set, i.e. fresh-vs-fresh. `assertCreditsAvailable` (before
+every deduction batch) and `recordTopUp` (after every top-up) both read fresh,
+so genuine divergence is still caught at every write; the per-15 s meter poll
+(cached) no longer emits noise. Regression test added.
+
+**Cutover readiness:** the dual-write *mechanism* is proven — 16/16 rows match,
+balance reconciles, no `Postgres mirror write failed` in the logs. Once the
+detector fix deploys, run a **fresh 24–48 h `dual` window** and confirm zero
+`[Credits] Divergence` lines (they should now only appear for a real mismatch).
+Then the `postgres` cutover is safe to recommend. **Still not switching without
+operator approval.**
+
 ## 7. Verdict — COMPLETE WITH PILOT MITIGATION
 
 Updated 2026-08-31 after the performance verification (§3).
