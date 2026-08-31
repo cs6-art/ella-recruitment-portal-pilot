@@ -99,7 +99,17 @@ safe batch ≈ 2 on the platform default.
 
 ## Phase 7 / 8 — NOT RUN (browser + HR + phone participant required)
 
-## Finding R1 — `Bulk_Resume_Queue` terminal-status reliability (HIGH)
+## Finding R1 — `Bulk_Resume_Queue` terminal-status reliability
+
+> **SUPERSEDED — see [R1-BULK-QUEUE-PROCESSING-INVESTIGATION.md](R1-BULK-QUEUE-PROCESSING-INVESTIGATION.md).**
+> The 49% figure below is a measurement artifact: `Bulk_Resume_Queue` is an
+> append-only event log and this counted raw rows. Collapsed to latest-state
+> per resume (1,398 unique files): **87.9% Screened, 10.5% Failed, 0.7% (10)
+> Processing** — of the 10, 8 were actually screened (cosmetic sheet
+> staleness), 1 is a mis-uploaded JD, 1 is collateral of a one-off 2026-08-19
+> webhook-secret incident. **Corrected severity: LOW, not a release blocker.**
+
+### (original, uncorrected) HIGH
 
 `Bulk_Resume_Queue` in the candidate workbook: **3,688 data rows**. Status
 distribution:
