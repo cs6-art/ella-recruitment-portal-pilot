@@ -45,7 +45,28 @@ Net ledger effect of the whole test: **0**. Both stores in sync at every step.
 
 ## Findings
 
-### F1 — Files that fail screening were charged 1 credit  ·  MEDIUM  ·  **FIXED**
+### Live re-validation of the F1 fix — 2026-08-31 (post-deploy, commit `5a61973`)
+
+Re-imported the same two synchronously-failing files (`Jose.pdf`, `Juleane.pdf`)
+into `ME02` after the fix deployed. Operator topped up +2; test consumed 0;
+reversed −2 → ledger back to 0.
+
+| Assertion | Before | After | Result |
+| --- | --- | --- | --- |
+| Both files return `Failed` | — | Jose `Failed`, Juleane `Failed` | ✅ |
+| Response `creditsCharged` | (was 2) | **0** | ✅ |
+| Response `submitted` | — | 0 (consistent) | ✅ |
+| Sheet credit balance | 2 | 2 | ✅ unchanged |
+| Neon `credit_balance` | 2 | 2 | ✅ unchanged |
+| Sheet ledger rows | 10 | 10 | ✅ no new rows |
+| Neon ledger rows | 10 | 10 | ✅ no new rows |
+| `cv_analysis` rows (both stores) | 4 | **4** | ✅ no new deductions |
+| Sheet ↔ Neon sync | OK | OK | ✅ |
+| Queue rows | — | Jose + Juleane `Failed` with *"Candidate name, email, or international mobile number was not found in the resume."* | ✅ correct |
+
+**F1 and F2 are live-validated. Both fully closed.**
+
+### F1 — Files that fail screening were charged 1 credit  ·  MEDIUM  ·  **FIXED + LIVE-VALIDATED**
 
 Both test resumes reached `Failed` (n8n rejected them for a missing
 international mobile number) yet each consumed 1 credit. In
@@ -70,11 +91,12 @@ now buys a completed CV analysis, not an attempt.
 - Regression test: `tests/bulk-resume-upload.test.mjs` →
   *"a resume the workflow rejects synchronously is not billed"*.
 
-### F2 — Response reported `submitted: 0` with `creditsCharged: 2`  ·  LOW  ·  **RESOLVED by F1**
+### F2 — Response reported `submitted: 0` with `creditsCharged: 2`  ·  LOW  ·  **RESOLVED by F1 + LIVE-VALIDATED**
 
 For an all-failed batch the API returned `submitted: 0` but `creditsCharged: 2`.
-With the F1 fix an all-synchronously-failed batch now returns
-`creditsCharged: 0`, so the panel summary and the credits meter agree.
+Post-fix live re-check: an all-synchronously-failed batch returns
+`creditsCharged: 0` and `submitted: 0`, so the panel summary and the credits
+meter agree.
 
 ### F3 — The designated test folder cannot exercise the happy path  ·  BLOCKER for full validation
 
