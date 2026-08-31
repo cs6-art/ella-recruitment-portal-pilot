@@ -8,10 +8,14 @@
     "start": "next start",
     "lint": "eslint src tests",
     "test": "node --test tests/*.test.mjs",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "db:migrate": "node --env-file-if-exists=.env.local src/db/migrate.mjs",
+    "db:backfill:credits": "node --env-file-if-exists=.env.local src/db/backfill-credits.mjs"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.80",
+    "@neondatabase/serverless": "^1.1.0",
+    "drizzle-orm": "^0.45.2",
     "google-auth-library": "^9.15.1",
     "googleapis": "^173.0.0",
     "mammoth": "^1.12.1",

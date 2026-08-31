@@ -418,19 +418,36 @@ export async function sendCandidateApplicationWebhook(webhookUrl: string, webhoo
   // Demo mode accepts new applicants and lets n8n run screening. Candidate
   // contact workflows remain disabled separately, so this handoff does not
   // email, call, or book the applicant.
-  const response = await fetch(webhookUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Webhook-Secret": webhookSecret,
-      "X-Idempotency-Key": payload.applicationId,
-    },
-    body: JSON.stringify(payload),
-    cache: "no-store",
-  });
-
-  const result = await response.json().catch(() => ({}));
-  return { response, result: result as Record<string, unknown> };
+  //
+  // n8n runs synchronous AI CV screening on this request, so it is the slowest
+  // blocking call in the portal. Bound it so a stuck workflow surfaces as a
+  // clear error instead of hanging until the serverless function is killed.
+  const configured = Number(process.env.N8N_CANDIDATE_APPLICATION_TIMEOUT_MS);
+  const timeoutMs = Number.isFinite(configured) && configured > 0 ? configured : 60_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Webhook-Secret": webhookSecret,
+        "X-Idempotency-Key": payload.applicationId,
+      },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const result = await response.json().catch(() => ({}));
+    return { response, result: result as Record<string, unknown> };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`The screening workflow did not respond within ${Math.round(timeoutMs / 1000)}s.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function buildCandidateStatusHistoryEntry(input: {
