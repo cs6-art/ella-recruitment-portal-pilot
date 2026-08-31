@@ -79,29 +79,39 @@ Environment: deployed pilot, `CREDITS_BACKEND=dual`.
 - **Fix implemented:** new **pilot** workflows only; webhook
   `X-Idempotency-Key: <queueId>`; concurrency capped at 2 with a 10 s per-file
   stagger to protect the n8n instance and the Sheets write budget.
-- **Known limitation:** the intake pipeline runs inline in the request with no
-  `maxDuration` set — batches over ~8 files risk a client-visible timeout even
-  though dispatched files still finish (see `BATCH-CAPACITY-VALIDATION.md`).
-- **Test performed:** _(Worksheet B / Phase 7 row 29)_
-- **Expected result:** batches of ≤ 8 complete within the processing window with
-  no duplicate n8n executions; larger batches degrade predictably (timeout on
-  the HTTP response, not data loss).
-- **Actual result:** ___
-- **PASS / FAIL:** ___  (note: PASS is conditional on the ≤ 8 recommendation
-  being adopted or `maxDuration` being set)
-- **Evidence:** ___
+- **Additional mitigation (2026-08-31):** operator-facing **8-file cap**
+  (UI + server) and a **60 s per-file webhook timeout** (`N8N_BULK_RESUME_TIMEOUT_MS`)
+  so one stuck n8n execution fails that file, not the batch.
+- **Test performed:** timed 2/5/8-file Google Drive import batches on the
+  deployed pilot (`BATCH-CAPACITY-VALIDATION.md` / `PHASE-2-BACKEND-MIGRATION.md` §3).
+- **Expected result:** ≤ 8-file batches complete in-request with no
+  client-visible timeout, no duplicate n8n executions, no orphaned `Processing`.
+- **Actual result:** 2 files 34.7 s, 5 files 60.4 s, 8 files 68.0 s — **all
+  HTTP `202`, no timeout, no gateway error, 0 orphaned `Processing` rows,
+  1 webhook call per file (distinct `batchId`), credits == Screened count,
+  Sheet ↔ Neon reconciled after every batch.** 4 resumes completed full AI
+  screening end-to-end.
+- **PASS / FAIL:** **PASS with pilot mitigation** — throughput and idempotency
+  verified for the supported ≤ 8-file range. The async-dispatch refactor
+  ("202-then-background-drain") remains a tracked post-freeze improvement for
+  raising the cap.
+- **Evidence:** `PHASE-2-BACKEND-MIGRATION.md` §3 table; commit `b928cbe`.
 
 ## 6. Ella scoring accuracy
 
 - **Original problem:** doubts about whether Ella's scores match the HR
   standard.
-- **Fix implemented:** no scoring logic changed this release; benchmark tooling
-  and the exact scoring-field model documented (`ELLA-SCORING-BENCHMARK.md`,
-  `scoring-benchmark-template.csv`).
-- **Test performed:** _(BLOCKED — needs 8–12 HR-scored resumes + rubric
-  confirmation)_
+- **Fix implemented:** no scoring logic changed this release. Benchmark now
+  prepared: role **ME02 (Mechanical Engineer)**, **30 resumes screened by Ella**
+  on 2026-08-31, a 15-candidate benchmark sheet pre-filled with Ella's output
+  (`ella-scoring-benchmark-ME02.csv`), and 4 discrepancy hypotheses (H1–H4)
+  documented in `ELLA-SCORING-BENCHMARK.md`.
+- **Test performed:** Ella side done; HR manual-score column outstanding.
+- **Preliminary observation:** Ella did not score any candidate above 49/100,
+  including a 10-yr powertrain engineer and an 8-launch product-dev manager —
+  possible top-of-range compression (hypothesis H1). Recommendation was always
+  "For HR Review" (H2). Clear non-matches scored correctly low (H3).
 - **Expected result:** mean absolute score delta ≤ 10/100, recommendation
   agreement ≥ 80%, no opposite-direction mismatches, no hallucinated evidence.
-- **Actual result:** ___
-- **PASS / FAIL:** ___  (currently **BLOCKED**)
-- **Evidence:** ___
+- **PASS / FAIL:** **BLOCKED** — on HR filling the 15 `hr_*` rows.
+- **Evidence:** `ella-scoring-benchmark-ME02.csv` (Ella side complete).

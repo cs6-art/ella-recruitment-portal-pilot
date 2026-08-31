@@ -1,13 +1,38 @@
-# Phase 7 — manual regression checklist
+# Phase 7 — full regression
 
-Automated suite is green (153/153, `tsc`/`eslint`/`build` clean — see
-`RELEASE-VALIDATION-STATUS.md`). This file is the **human** pass on the deployed
-pilot. Run after all feature work is frozen. Mark each PASS/FAIL with a note +
-evidence link (screenshot, sheet row, log line). Fix only regressions **caused
-by the current release** (Phases 1–3 + dual-write); pre-existing issues get
-logged, not fixed here.
+## Automated portion — PASS (2026-08-31, HEAD after the layout fix)
+
+| Check | Result |
+| --- | --- |
+| `tsc --noEmit` | ✅ 0 errors |
+| `eslint src tests` | ✅ 0 errors (8 pre-existing warnings) |
+| `node --test tests/*.test.mjs` | ✅ **164 / 164** |
+| `npx playwright test` (browser smoke) | ✅ **4 / 4** |
+| `next build` | ✅ compiled successfully |
+
+**Regression fixed during this pass (pre-existing, surfaced by the browser
+smoke run):** `src/app/layout.tsx` rendered an inline `<script>` as a direct
+child of `<html>` — invalid HTML, a Next 16 hydration error, and the resulting
+dev-tools error overlay was intercepting clicks. Moved the sidebar-preference
+script to the top of `<body>`. Browser smoke went 3/4 → 4/4.
+
+Also observed (local-only, not a product defect): `[Resume Cleanup] Scheduled
+cleanup failed — Resume storage Drive folder is not configured` when
+`RESUME_STORAGE_DRIVE_FOLDER_ID` is unset in local `.env.local`. The error is
+caught; the pilot has the var set.
+
+## Live regression — human pass on the deployed pilot
+
+Run after feature work is frozen. Mark each PASS/FAIL with a note + evidence
+link (screenshot, sheet row, log line). Fix only regressions **caused by the
+current release**; pre-existing issues get logged.
 
 Environment: deployed pilot, `CREDITS_BACKEND=dual`.
+
+Already covered by the 2026-08-31 live runs (evidence in
+`DRIVE-E2E-VALIDATION-2026-08-31.md` / `PHASE-2-BACKEND-MIGRATION.md`):
+rows 9–10 (upload + Drive import), 12 (bulk 8-file), 13 (dedupe), 14 (credit
+deduction — 1/CV, 0 on failed), 15 (insufficient-credit 402), 16 (Sheet ↔ Neon).
 
 | # | Area | Test | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- |
