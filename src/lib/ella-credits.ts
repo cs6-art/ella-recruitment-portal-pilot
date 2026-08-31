@@ -56,7 +56,13 @@ export async function getCreditBalance(options: { fresh?: boolean } = {}): Promi
   const backend = creditsBackend();
   if (backend === "postgres") return getPostgresCreditBalance();
   const balance = await getSheetCreditBalance(options);
-  if (backend === "dual") {
+  // Divergence check only on a fresh sheet read. The Postgres balance is always
+  // fresh (O(1) query); comparing it against a *cached* sheet value (20s TTL,
+  // and stale-served on a quota error) produces false "divergence" for up to
+  // the cache window right after any write. `assertCreditsAvailable` and
+  // `recordTopUp` both read fresh, so real divergence is still caught on every
+  // deduction batch and every top-up — fresh-vs-fresh.
+  if (backend === "dual" && options.fresh) {
     void getPostgresCreditBalance()
       .then((pg) => {
         if (pg.balance !== balance.balance) {

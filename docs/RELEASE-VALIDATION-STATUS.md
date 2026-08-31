@@ -165,13 +165,17 @@ R1 (Bulk_Resume_Queue "stuck Processing") — **closed, non-blocking**. See
 
 - `CREDITS_BACKEND=dual` (unchanged). **Not switching to `postgres` without
   explicit approval.**
-- **Read-only check done 2026-08-31** (`LIVE-VALIDATION-RESULTS-2026-08-31.md`):
-  Neon `credit_balance` = 0, ledger sum 0, 4 rows; Sheet `Ella_Credit_Ledger`
-  sum 0, last balance 0; per-entry deltas identical. **Stores are in sync.**
-- Still missing: Vercel-log confirmation of zero `[Credits] Divergence` /
-  `Postgres mirror write failed` over a 24–48 h `dual` window.
-- **Cutover-safe when** that log window is clean AND one real top-up + one real
-  ≤8 bulk screening have round-tripped in production.
+- **2026-08-31:** stores verified in sync at row level — Neon `credit_balance`
+  7 == Neon ledger sum 7 == Sheet ledger sum 7, 16 rows each, every Entry_ID
+  present in both. One real top-up (+11) and 4 real bulk-screening deductions
+  round-tripped in production.
+- **Divergence-log false positive found + fixed:** the `dual` divergence check
+  compared a *cached* Sheet balance against fresh Postgres, so it logged
+  transient false "divergence" after any write. Now runs fresh-vs-fresh only
+  (`ella-credits.ts`, regression test added).
+- **Cutover-safe when:** after the detector fix deploys, a fresh 24–48 h `dual`
+  window shows **zero** `[Credits] Divergence` / `Postgres mirror write failed`.
+  Mechanism is otherwise proven. **Not switching without operator approval.**
 
 ---
 

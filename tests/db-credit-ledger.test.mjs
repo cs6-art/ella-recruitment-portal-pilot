@@ -42,6 +42,16 @@ test("CREDITS_BACKEND defaults to sheets and needs DATABASE_URL for the others",
   assert.match(dispatcher, /appendPostgresLedgerEntry\(entry, \{ guard: false \}\)/);
 });
 
+test("dual-mode divergence check runs fresh-vs-fresh only (no false positives from the sheet cache)", () => {
+  const dispatcher = read("src/lib/ella-credits.ts");
+  // the divergence log is gated on a fresh sheet read
+  assert.match(dispatcher, /if \(backend === "dual" && options\.fresh\) \{/);
+  assert.match(dispatcher, /\[Credits\] Divergence: sheets balance/);
+  // assertCreditsAvailable / recordTopUp still read fresh, so real divergence
+  // is caught on every deduction batch and every top-up
+  assert.match(dispatcher, /getCreditBalance\(\{ fresh: true \}\)/);
+});
+
 test("the public credits API surface is unchanged", () => {
   const dispatcher = read("src/lib/ella-credits.ts");
   for (const name of ["getCreditBalance", "assertCreditsAvailable", "recordDeduction", "recordTopUp", "getCreditPricing", "creditCostFor", "volumeDiscountBonus"]) {
