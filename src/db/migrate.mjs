@@ -16,36 +16,46 @@ if (!url) {
 
 const sql = neon(url);
 
-await sql`CREATE TABLE IF NOT EXISTS "_migrations" (
-  "name" text PRIMARY KEY,
-  "applied_at" timestamptz NOT NULL DEFAULT now()
-)`;
-
-const applied = new Set(
-  (await sql`SELECT "name" FROM "_migrations"`).map((row) => row.name),
-);
-
-const files = (await readdir(migrationsDir))
-  .filter((name) => name.endsWith(".sql"))
-  .sort();
-
-let ran = 0;
-for (const file of files) {
-  if (applied.has(file)) {
-    console.log(`skip  ${file} (already applied)`);
-    continue;
-  }
-  const statements = (await readFile(path.join(migrationsDir, file), "utf8"))
-    .split(/;\s*(?:\r?\n|$)/)
+/** Split a .sql file into individual statements: strip `-- line comments`, then split on `;`. */
+function splitStatements(source) {
+  return source
+    .split(/\r?\n/)
+    .map((line) => line.replace(/--.*$/, ""))
+    .join("\n")
+    .split(";")
     .map((statement) => statement.trim())
-    .filter((statement) => statement && !statement.startsWith("--"));
-
-  console.log(`apply ${file} (${statements.length} statements)`);
-  await sql.transaction([
-    ...statements.map((statement) => sql.query(statement)),
-    sql`INSERT INTO "_migrations" ("name") VALUES (${file})`,
-  ]);
-  ran += 1;
+    .filter(Boolean);
 }
 
-console.log(ran === 0 ? "Nothing to apply — database is up to date." : `Applied ${ran} migration(s).`);
+async function main() {
+  await sql`CREATE TABLE IF NOT EXISTS "_migrations" (
+    "name" text PRIMARY KEY,
+    "applied_at" timestamptz NOT NULL DEFAULT now()
+  )`;
+
+  const applied = new Set((await sql`SELECT "name" FROM "_migrations"`).map((row) => row.name));
+
+  const files = (await readdir(migrationsDir)).filter((name) => name.endsWith(".sql")).sort();
+
+  let ran = 0;
+  for (const file of files) {
+    if (applied.has(file)) {
+      console.log(`skip  ${file} (already applied)`);
+      continue;
+    }
+    const statements = splitStatements(await readFile(path.join(migrationsDir, file), "utf8"));
+    console.log(`apply ${file} (${statements.length} statements)`);
+    await sql.transaction([
+      ...statements.map((statement) => sql.query(statement)),
+      sql`INSERT INTO "_migrations" ("name") VALUES (${file})`,
+    ]);
+    ran += 1;
+  }
+
+  console.log(ran === 0 ? "Nothing to apply — database is up to date." : `Applied ${ran} migration(s).`);
+}
+
+main().catch((error) => {
+  console.error("Migration failed:", error.message || error);
+  process.exitCode = 1;
+});
