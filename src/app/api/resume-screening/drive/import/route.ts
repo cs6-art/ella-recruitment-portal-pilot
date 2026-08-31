@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { canManagePipeline } from "@/lib/access-control";
-import { EllaCreditsError, intakeResumeBatch, MAX_FILES_PER_BATCH } from "@/lib/bulk-resume-intake";
+import { EllaCreditsError, intakeResumeBatch, MAX_FILES_PER_SUBMISSION } from "@/lib/bulk-resume-intake";
 import { getAuthorizedDriveClient } from "@/lib/google-drive";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { MAX_RESUME_FILE_BYTES } from "@/lib/resume-files";
@@ -17,7 +17,7 @@ const RESUME_EXT = /\.(pdf|docx?|doc)$/i;
 
 const bodySchema = z.object({
   roleId: z.string().trim().min(1).max(200),
-  fileIds: z.array(z.string().trim().min(1).max(200)).min(1).max(MAX_FILES_PER_BATCH),
+  fileIds: z.array(z.string().trim().min(1).max(200)).min(1).max(MAX_FILES_PER_SUBMISSION),
 });
 
 function responseError(error: string, status: number, extra: Record<string, unknown> = {}) {
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many imports. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
-  if (!parsed.success) return responseError(`Select 1 to ${MAX_FILES_PER_BATCH} files and a published role.`, 422);
+  if (!parsed.success) return responseError(`Select 1 to ${MAX_FILES_PER_SUBMISSION} files and a published role.`, 422);
   const { roleId } = parsed.data;
   const fileIds = [...new Set(parsed.data.fileIds)];
 

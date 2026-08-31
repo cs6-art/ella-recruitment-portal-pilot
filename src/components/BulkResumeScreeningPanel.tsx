@@ -26,6 +26,10 @@ type QueueItem = {
 
 const statusOrder = ["Queued", "Processing", "Completed", "Failed", "Skipped"];
 const POLL_INTERVAL_MS = 60000;
+// Temporary operator-facing cap, mirrors MAX_FILES_PER_SUBMISSION in
+// src/lib/bulk-resume-intake.ts (kept as a local literal because that module is
+// server-only). The server also enforces it — see bulk/upload and drive/import.
+const MAX_FILES_PER_SUBMISSION = 8;
 const TERMINAL_STATUSES = new Set(["screened", "processed", "failed", "skipped"]);
 
 function statusClass(status: string) {
@@ -202,6 +206,11 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
       for (const file of incoming) {
         const key = `${file.name}:${file.size}`;
         if (!seen.has(key)) { merged.push(file); seen.add(key); }
+      }
+      // Temporary operator-facing cap; the server rejects anything above it too.
+      if (merged.length > MAX_FILES_PER_SUBMISSION) {
+        setError(`You can screen up to ${MAX_FILES_PER_SUBMISSION} resumes per batch for now. Extra files were not added — run another batch after this one.`);
+        return merged.slice(0, MAX_FILES_PER_SUBMISSION);
       }
       return merged;
     });
@@ -412,7 +421,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
           <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple disabled={!roleId || uploading} onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = ""; }} />
           <div className="bulk-screening-dropzone-copy">
             <strong>Drag and drop resumes here, or click to choose files</strong>
-            <span>Up to 25 PDF, DOC, or DOCX files per batch, 10 MB each. {files.length > 0 ? `${files.length} file${files.length === 1 ? "" : "s"} selected.` : "No files selected yet."}</span>
+            <span>Up to {MAX_FILES_PER_SUBMISSION} PDF, DOC, or DOCX files per batch, 10 MB each. {files.length > 0 ? `${files.length} file${files.length === 1 ? "" : "s"} selected.` : "No files selected yet."}</span>
           </div>
         </label>
 
@@ -433,7 +442,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
             <EllaCreditsMeter variant="inline" />
             <span className="bulk-screening-count-hint">Current CV screening cost is shown in Settings → Credits.</span>
           </div>
-          <button type="button" className="btn btn-primary" disabled={!roleId || files.length === 0 || uploading} onClick={() => void uploadResumes(files)}>{uploading ? "Uploading and screening..." : `Start screening${files.length ? ` (${files.length})` : ""}`}</button>
+          <button type="button" className="btn btn-primary" disabled={!roleId || files.length === 0 || files.length > MAX_FILES_PER_SUBMISSION || uploading} onClick={() => void uploadResumes(files)}>{uploading ? "Uploading and screening..." : `Start screening${files.length ? ` (${files.length})` : ""}`}</button>
         </div>
 
         {uploadMessage && <div className="success-box">{uploadMessage}</div>}
@@ -518,6 +527,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
       <DriveFilePicker
         open={cloudPicker === "google" && Boolean(roleId)}
         importing={driveImporting}
+        maxSelection={MAX_FILES_PER_SUBMISSION}
         onClose={() => setCloudPicker(null)}
         onImport={(fileIds) => void importFromCloud("google", fileIds)}
       />

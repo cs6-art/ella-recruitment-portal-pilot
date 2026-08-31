@@ -35,7 +35,7 @@ test("Drive list + import feed the shared intake pipeline", () => {
   assert.match(list, /DRIVE_NOT_CONNECTED/);
   assert.match(importRoute, /intakeResumeBatch/);
   assert.match(importRoute, /sourceLabel: "Portal Drive Import"/);
-  assert.match(importRoute, /\.max\(MAX_FILES_PER_BATCH\)/);
+  assert.match(importRoute, /\.max\(MAX_FILES_PER_SUBMISSION\)/);
   // oversized / non-resume / google-native files rejected before download
   assert.match(importRoute, /export as PDF first/);
   assert.match(importRoute, /MAX_RESUME_FILE_BYTES/);

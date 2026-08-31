@@ -20,7 +20,21 @@ import { deleteResumeFile, MAX_RESUME_FILE_BYTES, storeResumeFile } from "@/lib/
  * credit deduction, concurrency, or the notification changed; only the home.
  */
 
+// Internal architecture limit — the worker pool, dedupe, and per-batch
+// bookkeeping are all built and tested for this many files. Do not lower it;
+// raising the operator-facing cap later is a one-line change to the constant
+// below.
 export const MAX_FILES_PER_BATCH = 25;
+
+// Temporary operator-facing hard cap on files per submission, enforced at both
+// the UI and server validation layers for the local upload and the Google
+// Drive import. It exists only because the intake pipeline currently runs the
+// staggered worker pool inline in the request (~(N-2)x10s), so a larger batch
+// risks a client-visible function timeout on the default platform budget.
+// Raise this back toward MAX_FILES_PER_BATCH once dispatch moves off-request.
+// See docs/BATCH-CAPACITY-VALIDATION.md.
+export const MAX_FILES_PER_SUBMISSION = 8;
+
 export const MAX_BULK_REQUEST_BYTES = 100 * 1024 * 1024;
 const STALE_PROCESSING_MS = 30 * 60 * 1000;
 
