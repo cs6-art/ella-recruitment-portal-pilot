@@ -70,7 +70,8 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
   const [activeBatch, setActiveBatch] = useState<Map<string, string>>(new Map());
   const [batchResultStatuses, setBatchResultStatuses] = useState<Map<string, string>>(new Map());
   const [driveStatus, setDriveStatus] = useState<{ connected: boolean; accountEmail: string } | null>(null);
-  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
+  const [msDriveStatus, setMsDriveStatus] = useState<{ configured: boolean; connected: boolean; accountEmail: string } | null>(null);
+  const [cloudPicker, setCloudPicker] = useState<"google" | "microsoft" | null>(null);
   const [driveImporting, setDriveImporting] = useState(false);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const batchFiles = useRef<Map<string, File>>(new Map());
@@ -139,20 +140,34 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
     }
   }, []);
 
+  const loadMsDriveStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth/microsoft-drive/status", { cache: "no-store" });
+      const data = await response.json();
+      if (data?.success === true) setMsDriveStatus({ configured: Boolean(data.configured), connected: Boolean(data.connected), accountEmail: data.accountEmail || "" });
+    } catch {
+      setMsDriveStatus({ configured: false, connected: false, accountEmail: "" });
+    }
+  }, []);
+
   useEffect(() => {
     void loadDriveStatus();
+    void loadMsDriveStatus();
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const outcome = params.get("drive");
-    if (!outcome) return;
+    const msOutcome = params.get("onedrive");
     if (outcome === "connected") setUploadMessage("Google Drive connected.");
     else if (outcome === "denied") setError("Google Drive access was not granted.");
     else if (outcome === "error") setError(params.get("drive_reason") || "Google Drive connection failed.");
-    params.delete("drive");
-    params.delete("drive_reason");
+    if (msOutcome === "connected") setUploadMessage("OneDrive connected.");
+    else if (msOutcome === "denied") setError(params.get("onedrive_reason") || "OneDrive access was not granted.");
+    else if (msOutcome === "error") setError(params.get("onedrive_reason") || "OneDrive connection failed.");
+    if (!outcome && !msOutcome) return;
+    ["drive", "drive_reason", "onedrive", "onedrive_reason"].forEach((key) => params.delete(key));
     const query = params.toString();
     window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
-  }, [loadDriveStatus]);
+  }, [loadDriveStatus, loadMsDriveStatus]);
 
 
   // Polls automatically, without requiring a manual refresh, while any
@@ -266,8 +281,10 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
     return failedFileSet;
   }
 
-  async function importFromDrive(fileIds: string[]) {
+  async function importFromCloud(provider: "google" | "microsoft", fileIds: string[]) {
     if (!roleId || fileIds.length === 0 || driveImporting) return;
+    const label = provider === "microsoft" ? "OneDrive" : "Google Drive";
+    const endpoint = provider === "microsoft" ? "/api/resume-screening/onedrive/import" : "/api/resume-screening/drive/import";
     setDriveImporting(true);
     setError("");
     setUploadMessage("");
@@ -275,17 +292,17 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
     setBatchResultStatuses(new Map());
     batchFiles.current = new Map();
     try {
-      const response = await fetch("/api/resume-screening/drive/import", {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roleId, fileIds }),
       });
       const result = await response.json();
-      if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to import from Google Drive.");
+      if (!response.ok || result.success !== true) throw new Error(result.error || `Unable to import from ${label}.`);
       applyBatchResult(result, new Map());
-      setDrivePickerOpen(false);
+      setCloudPicker(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to import from Google Drive.");
+      setError(caught instanceof Error ? caught.message : `Unable to import from ${label}.`);
     } finally {
       setDriveImporting(false);
     }
@@ -348,7 +365,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
           </label>
           <div className="bulk-screening-action">
             {driveStatus?.connected
-              ? <button type="button" className="btn btn-secondary" disabled={!roleId || uploading || driveImporting} onClick={() => setDrivePickerOpen(true)}>Choose from Google Drive</button>
+              ? <button type="button" className="btn btn-secondary" disabled={!roleId || uploading || driveImporting} onClick={() => setCloudPicker("google")}>Choose from Google Drive</button>
               : <a className="btn btn-secondary" href="/api/auth/google-drive/connect">Connect Google Drive</a>}
             {driveStatus?.connected && (
               <button
@@ -360,6 +377,21 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
                 }}
               >
                 Disconnect {driveStatus.accountEmail}
+              </button>
+            )}
+            {msDriveStatus?.configured && (msDriveStatus.connected
+              ? <button type="button" className="btn btn-secondary" disabled={!roleId || uploading || driveImporting} onClick={() => setCloudPicker("microsoft")}>Choose from OneDrive</button>
+              : <a className="btn btn-secondary" href="/api/auth/microsoft-drive/connect">Connect OneDrive</a>)}
+            {msDriveStatus?.configured && msDriveStatus.connected && (
+              <button
+                type="button"
+                className="bulk-screening-link-button"
+                onClick={async () => {
+                  await fetch("/api/auth/microsoft-drive/disconnect", { method: "POST" });
+                  setMsDriveStatus({ configured: true, connected: false, accountEmail: "" });
+                }}
+              >
+                Disconnect {msDriveStatus.accountEmail}
               </button>
             )}
             {driveUrl && <a className="bulk-screening-link-button" href={driveUrl} target="_blank" rel="noopener noreferrer">Open the shared Drive folder</a>}
@@ -484,10 +516,20 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
       </div>
 
       <DriveFilePicker
-        open={drivePickerOpen && Boolean(roleId)}
+        open={cloudPicker === "google" && Boolean(roleId)}
         importing={driveImporting}
-        onClose={() => setDrivePickerOpen(false)}
-        onImport={(fileIds) => void importFromDrive(fileIds)}
+        onClose={() => setCloudPicker(null)}
+        onImport={(fileIds) => void importFromCloud("google", fileIds)}
+      />
+      <DriveFilePicker
+        open={cloudPicker === "microsoft" && Boolean(roleId)}
+        importing={driveImporting}
+        listUrl="/api/resume-screening/onedrive/list"
+        pageParam="pageUrl"
+        providerLabel="OneDrive"
+        rootName="OneDrive"
+        onClose={() => setCloudPicker(null)}
+        onImport={(fileIds) => void importFromCloud("microsoft", fileIds)}
       />
     </section>
   );

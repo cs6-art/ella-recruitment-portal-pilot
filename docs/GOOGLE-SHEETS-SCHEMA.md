@@ -250,6 +250,18 @@ tab so Drive and Calendar authorizations stay independent. The portal creates
 this tab automatically on first connect. (Phase 2 will move both connection
 tabs to Postgres.)
 
+## Microsoft_Drive_Connections
+
+`Email`, `Access_Token`, `Refresh_Token`, `Token_Expires_At`, `Scope`,
+`Connected_At`, `Last_Updated`. One row per HR reviewer who connected their
+Microsoft OneDrive for resume import. Identical shape to `Drive_Connections`,
+kept in its own tab so the OneDrive authorization is fully independent of the
+Google Drive and Calendar ones. `Access_Token` / `Refresh_Token` are
+AES-256-GCM encrypted at rest (key derived from `SESSION_SECRET`, label
+`microsoft-drive-token-encryption`). Microsoft Graph scope is the delegated
+read-only `Files.Read` (plus `User.Read` / `offline_access`). The portal
+creates this tab automatically on first connect.
+
 ## Ella_Credit_Ledger
 
 `Entry_ID`, `Timestamp`, `Type`, `Event`, `Units`, `Credits_Delta`,

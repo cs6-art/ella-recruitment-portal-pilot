@@ -30,6 +30,27 @@ to the OAuth consent screen, confirm the Google Drive API is enabled, and add
 Authorized redirect URIs. For an Internal Workspace app no verification is
 needed.
 
+## Import from your OneDrive (portal)
+
+Identical flow for Microsoft OneDrive, using a **separate** Microsoft Entra app
+registration (no Google credential is involved):
+
+1. **Connect OneDrive** — one-time per-user Microsoft consent (delegated
+   read-only `Files.Read`, token stored in `Microsoft_Drive_Connections`,
+   independent of every Google connection).
+2. **Choose from OneDrive** — the same folder browser, up to 25 PDF/DOC/DOCX
+   files, **Import**.
+
+Files are downloaded server-side (via the Graph `@microsoft.graph.downloadUrl`)
+and run through the **same** `intakeResumeBatch` pipeline — dedupe, queue,
+webhook, one credit per accepted file, live status. The button only appears
+when `MS_CLIENT_ID` / `MS_CLIENT_SECRET` are set. Expired or revoked Microsoft
+tokens surface as "reconnect OneDrive"; unavailable or permission-denied files
+fail individually without stopping the rest of the batch.
+
+Microsoft Entra prerequisites (one-time) — see
+[ONEDRIVE-RESUME-IMPORT-SETUP.md](ONEDRIVE-RESUME-IMPORT-SETUP.md).
+
 ## Drive layout
 
 Use this structure:
