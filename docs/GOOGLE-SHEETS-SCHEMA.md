@@ -239,6 +239,17 @@ Only when the attempts are exhausted does it become a terminal `No Show`
 The n8n calling workflow must honour `Voice_Call_Max_Attempts > 1` and re-call
 at `Voice_Call_Scheduled_At` for a `Retry Scheduled` row.
 
+## Drive_Connections
+
+`Email`, `Access_Token`, `Refresh_Token`, `Token_Expires_At`, `Scope`,
+`Connected_At`, `Last_Updated`. One row per HR reviewer who connected their
+Google Drive for resume import. `Access_Token` / `Refresh_Token` are
+AES-256-GCM encrypted at rest (key derived from `SESSION_SECRET`, label
+`drive-token-encryption`). Same shape as `Calendar_Connections` but a separate
+tab so Drive and Calendar authorizations stay independent. The portal creates
+this tab automatically on first connect. (Phase 2 will move both connection
+tabs to Postgres.)
+
 ## Ella_Credit_Ledger
 
 `Entry_ID`, `Timestamp`, `Type`, `Event`, `Units`, `Credits_Delta`,

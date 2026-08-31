@@ -62,6 +62,12 @@ In Google Cloud Console → **APIs & Services → Credentials → the existing O
 
 - **Authorized JavaScript origins**: add `https://<new-url>`
 - **Authorized redirect URIs**: add `https://<new-url>/api/auth/google-calendar/callback`
+  **and** `https://<new-url>/api/auth/google-drive/callback`
+
+For the HR "Connect Google Drive" resume-import feature also: on the **OAuth
+consent screen** add the scope `https://www.googleapis.com/auth/drive.readonly`,
+and confirm the **Google Drive API** is enabled under APIs & Services. For an
+Internal Workspace app no verification review is required.
 
 Same `NEXT_PUBLIC_GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` values as
 production. `ALLOWED_GOOGLE_DOMAIN` stays `mclinkgroup.com`.

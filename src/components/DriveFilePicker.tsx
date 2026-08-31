@@ -1,0 +1,127 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+
+type DriveFolder = { id: string; name: string };
+type DriveFile = { id: string; name: string; mimeType: string; size: number; modifiedTime: string };
+
+const MAX_SELECTION = 25;
+
+function formatSize(bytes: number) {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export default function DriveFilePicker({
+  open,
+  onClose,
+  onImport,
+  importing,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onImport: (fileIds: string[]) => void;
+  importing: boolean;
+}) {
+  const [folderId, setFolderId] = useState("root");
+  const [breadcrumb, setBreadcrumb] = useState<DriveFolder[]>([{ id: "root", name: "My Drive" }]);
+  const [folders, setFolders] = useState<DriveFolder[]>([]);
+  const [files, setFiles] = useState<DriveFile[]>([]);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async (targetFolderId: string, pageToken?: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ folderId: targetFolderId });
+      if (pageToken) params.set("pageToken", pageToken);
+      const response = await fetch(`/api/resume-screening/drive/list?${params}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to read that Drive folder.");
+      setFolderId(data.folderId);
+      setBreadcrumb(data.breadcrumb || [{ id: "root", name: "My Drive" }]);
+      setFolders(data.folders || []);
+      setFiles((current) => (pageToken ? [...current, ...(data.files || [])] : data.files || []));
+      setNextPageToken(data.nextPageToken || null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to read that Drive folder.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setSelected(new Set());
+    void load("root");
+  }, [open, load]);
+
+  if (!open) return null;
+
+  const navigate = (id: string) => { setSelected(new Set()); void load(id); };
+  const toggle = (id: string) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < MAX_SELECTION) next.add(id);
+      return next;
+    });
+  };
+
+  return (
+    <div className="drive-picker-backdrop" role="dialog" aria-modal="true" aria-label="Choose resumes from Google Drive" onClick={onClose}>
+      <div className="drive-picker" onClick={(event) => event.stopPropagation()}>
+        <div className="drive-picker-head">
+          <h3>Choose resumes from Google Drive</h3>
+          <button type="button" className="drive-picker-close" aria-label="Close" onClick={onClose}>×</button>
+        </div>
+
+        <div className="drive-picker-breadcrumb">
+          {breadcrumb.map((crumb, index) => (
+            <span key={crumb.id}>
+              {index > 0 && <span aria-hidden="true"> / </span>}
+              <button type="button" className="drive-picker-crumb" disabled={crumb.id === folderId} onClick={() => navigate(crumb.id)}>{crumb.name}</button>
+            </span>
+          ))}
+        </div>
+
+        {error && <div className="error-box">{error}</div>}
+
+        <div className="drive-picker-list">
+          {folders.map((folder) => (
+            <button type="button" key={folder.id} className="drive-picker-row drive-picker-folder" onClick={() => navigate(folder.id)}>
+              <span aria-hidden="true">📁</span> <span>{folder.name}</span>
+            </button>
+          ))}
+          {files.map((file) => (
+            <label key={file.id} className={`drive-picker-row drive-picker-file${selected.has(file.id) ? " is-selected" : ""}`}>
+              <input type="checkbox" checked={selected.has(file.id)} disabled={importing || (!selected.has(file.id) && selected.size >= MAX_SELECTION)} onChange={() => toggle(file.id)} />
+              <span className="drive-picker-file-name">{file.name}</span>
+              <span className="drive-picker-file-meta">{formatSize(file.size)}</span>
+            </label>
+          ))}
+          {!loading && folders.length === 0 && files.length === 0 && <p className="drive-picker-empty">No folders or PDF/DOC/DOCX files here.</p>}
+          {loading && <p className="drive-picker-empty">Loading…</p>}
+          {nextPageToken && !loading && (
+            <button type="button" className="btn btn-secondary drive-picker-more" onClick={() => void load(folderId, nextPageToken)}>Load more</button>
+          )}
+        </div>
+
+        <div className="drive-picker-foot">
+          <span>{selected.size} selected{selected.size >= MAX_SELECTION ? ` (max ${MAX_SELECTION})` : ""}</span>
+          <div>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={importing}>Cancel</button>
+            <button type="button" className="btn btn-primary" disabled={importing || selected.size === 0} onClick={() => onImport([...selected])}>
+              {importing ? "Importing…" : `Import ${selected.size} file${selected.size === 1 ? "" : "s"}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
