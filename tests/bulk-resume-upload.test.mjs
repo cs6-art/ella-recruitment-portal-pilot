@@ -10,7 +10,9 @@ function read(relativePath) {
 }
 
 test("bulk resume upload processes files with bounded, configurable concurrency instead of one at a time", () => {
-  const route = read("src/app/api/resume-screening/bulk/upload/route.ts");
+  // The batch pipeline is the shared intake helper used by both local upload
+  // and Google Drive import.
+  const route = read("src/lib/bulk-resume-intake.ts");
   // Concurrency comes from portal config (Settings sheet value overrides the
   // BULK_RESUME_UPLOAD_CONCURRENCY env var), still clamped to MAX_CONCURRENCY.
   assert.match(route, /portalConfig\.Bulk_Resume_Upload_Concurrency/);
@@ -36,7 +38,7 @@ test("bulk Sheets reads use a quota-sized exponential backoff window", () => {
 });
 
 test("every bulk file gets a saved queue event before downstream parsing", () => {
-  const route = read("src/app/api/resume-screening/bulk/upload/route.ts");
+  const route = read("src/lib/bulk-resume-intake.ts");
   const queue = read("src/lib/candidate-applications.ts");
   assert.match(route, /appendBulkResumeQueueEvent/);
   assert.match(route, /status: "Processing"/);
@@ -58,7 +60,7 @@ test("application invitations can send email and lock the invited identity", () 
 });
 
 test("same-batch duplicate files are reserved by content hash before any Drive/n8n work starts", () => {
-  const route = read("src/app/api/resume-screening/bulk/upload/route.ts");
+  const route = read("src/lib/bulk-resume-intake.ts");
   assert.match(route, /claimedInBatch/);
   assert.match(route, /Duplicate file selected in this same upload\./);
 });
@@ -68,12 +70,12 @@ test("re-uploading a historical hash reuses the existing Drive object", () => {
   assert.match(files, /properties has \{ key='sha256' and value='/);
   assert.match(files, /existingRecord/);
   assert.match(files, /reused: true/);
-  const upload = read("src/app/api/resume-screening/bulk/upload/route.ts");
+  const upload = read("src/lib/bulk-resume-intake.ts");
   assert.match(upload, /if \(!stored\.reused\) await deleteResumeFile/);
 });
 
 test("bulk completion emails default to disabled but remain configurable", () => {
-  const route = read("src/app/api/resume-screening/bulk/upload/route.ts");
+  const route = read("src/lib/bulk-resume-intake.ts");
   assert.match(route, /BULK_RESUME_NOTIFY_ON_SUCCESS/);
   assert.match(route, /notifyOnSuccess \? "not_requested" : "disabled"/);
   assert.match(route, /notificationResponse\.ok \? "sent" : "failed"/);
@@ -82,7 +84,7 @@ test("bulk completion emails default to disabled but remain configurable", () =>
 });
 
 test("an accepted asynchronous intake request cannot be presented as completed", () => {
-  const route = read("src/app/api/resume-screening/bulk/upload/route.ts");
+  const route = read("src/lib/bulk-resume-intake.ts");
   assert.match(route, /active intake webhook uses an immediate acknowledgement/);
   assert.match(route, /reportedStatus/);
   assert.match(route, /reportedStatus\) \? reportedStatus : "Queued"/);
@@ -161,9 +163,10 @@ test("bulk status reconciliation supports historical identifiers and expires sta
 });
 
 test("bulk retries stale queue states only when no saved applicant evidence exists", () => {
-  const upload = read("src/app/api/resume-screening/bulk/upload/route.ts");
+  const upload = read("src/lib/bulk-resume-intake.ts");
+  const route = read("src/app/api/resume-screening/bulk/upload/route.ts");
   assert.match(upload, /immediateUatRecovery = isUat/);
-  assert.match(upload, /uatRecovery/);
+  assert.match(route, /uatRecovery/); // the route still reads it from the form
   assert.match(upload, /recoveryMayBypassTerminalState = immediateUatRecovery/);
   assert.match(upload, /const savedScreeningEvidence = await getBulkResumeScreeningEvidence\(queue\)/);
   assert.match(upload, /const shouldSkip = previousIsActive && !recoveryMayBypassTerminalState && \(previousHasSavedResult \|\| previousRunIsFresh\)/);
@@ -171,7 +174,7 @@ test("bulk retries stale queue states only when no saved applicant evidence exis
 });
 
 test("uploaded resumes keep a traceable Drive link back to the candidate/application", () => {
-  const route = read("src/app/api/resume-screening/bulk/upload/route.ts");
+  const route = read("src/lib/bulk-resume-intake.ts");
   assert.match(route, /function driveFileUrl/);
   assert.match(route, /drive\.google\.com\/file\/d\//);
 });
@@ -241,7 +244,7 @@ test("invite links can use a separate candidate page origin without breaking por
 test("bulk UAT mode is fail-closed and carries environment correlation metadata", () => {
   const config = read("src/lib/bulk-resume-config.ts");
   const files = read("src/lib/resume-files.ts");
-  const upload = read("src/app/api/resume-screening/bulk/upload/route.ts");
+  const upload = read("src/lib/bulk-resume-intake.ts");
   const queue = read("src/lib/candidate-applications.ts");
   const page = read("src/app/resume-screening/page.tsx");
   assert.match(config, /BULK_RESUME_UAT_DRIVE_FOLDER_ID/);

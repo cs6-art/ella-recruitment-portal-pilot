@@ -114,7 +114,7 @@ test("applicant routes are protected and render populated sheet data", () => {
   // Bulk upload is a first-class portal feature (drag-and-drop, live status),
   // not excluded in favor of the Drive-folder poller as it was previously.
   assert.match(screening, /BulkResumeScreeningPanel/);
-  assert.match(bulkPanel, /Upload from Google Drive/);
+  assert.match(bulkPanel, /Choose from Google Drive|Connect Google Drive/);
   assert.match(screening, /getPortalConfigValue\("Bulk_Resume_Drive_URL"\)/);
   assert.match(screening, /sort\(\(left, right\) => left\.label\.localeCompare\(right\.label/);
   assert.match(detail, /verifySessionToken/);

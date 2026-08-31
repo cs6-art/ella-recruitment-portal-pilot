@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import DriveFilePicker from "@/components/DriveFilePicker";
 import EllaCreditsMeter from "@/components/EllaCreditsMeter";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 
@@ -68,6 +69,9 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
   // the role's entire screening history.
   const [activeBatch, setActiveBatch] = useState<Map<string, string>>(new Map());
   const [batchResultStatuses, setBatchResultStatuses] = useState<Map<string, string>>(new Map());
+  const [driveStatus, setDriveStatus] = useState<{ connected: boolean; accountEmail: string } | null>(null);
+  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
+  const [driveImporting, setDriveImporting] = useState(false);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const batchFiles = useRef<Map<string, File>>(new Map());
   const refreshInFlight = useRef(false);
@@ -124,6 +128,31 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
   useEffect(() => {
     void refreshStatus();
   }, [refreshStatus]);
+
+  const loadDriveStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth/google-drive/status", { cache: "no-store" });
+      const data = await response.json();
+      if (data?.success === true) setDriveStatus({ connected: Boolean(data.connected), accountEmail: data.accountEmail || "" });
+    } catch {
+      setDriveStatus({ connected: false, accountEmail: "" });
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDriveStatus();
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get("drive");
+    if (!outcome) return;
+    if (outcome === "connected") setUploadMessage("Google Drive connected.");
+    else if (outcome === "denied") setError("Google Drive access was not granted.");
+    else if (outcome === "error") setError(params.get("drive_reason") || "Google Drive connection failed.");
+    params.delete("drive");
+    params.delete("drive_reason");
+    const query = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  }, [loadDriveStatus]);
 
 
   // Polls automatically, without requiring a manual refresh, while any
@@ -193,29 +222,8 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
       const response = await fetch("/api/resume-screening/bulk/upload", { method: "POST", body: formData });
       const result = await response.json();
       if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to submit the bulk resumes.");
-      const submitted = Number(result.submitted || 0);
-      const results = (result.results || []) as Array<{ fileName?: string; queueId?: string; status?: string; skipped?: boolean; message?: string }>;
-      setBatchResultStatuses(new Map(results.filter((item) => item.queueId).map((item) => [item.queueId as string, String(item.status || "Queued")])));
-      const notificationStatus = String(result.notificationStatus || "not_requested");
-      const skippedResults = results.filter((item) => item.skipped);
-      const alreadyScreened = skippedResults.filter((item) => item.status?.toLowerCase() === "screened").length;
-      const alreadyActive = skippedResults.length - alreadyScreened;
-      const failed = results.filter((item) => String(item.status || "").toLowerCase() === "failed");
-      const failedQueueIds = new Set(failed.map((item) => item.queueId).filter(Boolean));
-      const failedFileSet = new Set([...failedQueueIds].map((queueId) => fileMap.get(queueId as string)).filter(Boolean));
-      const uploadSummary = submitted ? `${submitted} resume${submitted === 1 ? "" : "s"} submitted for processing` : "No new resumes were submitted";
-      const notificationSummary = notificationStatus === "sent"
-        ? " Internal completion email sent to HR and management."
-        : notificationStatus === "disabled"
-          ? " Success email notifications are currently disabled for bulk processing."
-          : notificationStatus === "failed"
-            ? " The internal completion email failed; resume processing is unaffected."
-            : " No internal completion email was requested.";
-      setUploadMessage(`${uploadSummary}${failed.length ? `; ${failed.length} failed` : ""}${alreadyScreened ? `; ${alreadyScreened} already screened and skipped` : ""}${alreadyActive ? `; ${alreadyActive} already queued or processing` : ""}.${notificationSummary}`);
+      const failedFileSet = applyBatchResult(result, fileMap);
       setFiles((current) => current.filter((file) => !fileList.includes(file) || failedFileSet.has(file)));
-      await refreshStatus();
-      const creditsCharged = Number(result.creditsCharged);
-      requestEllaCreditsRefresh(Number.isFinite(creditsCharged) && creditsCharged > 0 ? -creditsCharged : undefined);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to submit the bulk resumes.");
     } finally {
@@ -223,9 +231,64 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
     }
   }
 
-  function openDriveFolder() {
-    if (!driveUrl || !roleId) return;
-    window.open(driveUrl, "_blank", "noopener,noreferrer");
+  type BatchResult = { fileName?: string; queueId?: string; status?: string; skipped?: boolean; message?: string };
+
+  // Shared post-response handling for both the local upload and the Google
+  // Drive import — same live-batch tracking, summary, status refresh, and
+  // credit-meter update.
+  function applyBatchResult(result: Record<string, unknown>, fileMap: Map<string, File>): Set<File> {
+    const results = (Array.isArray(result.results) ? result.results : []) as BatchResult[];
+    // The upload path pre-seeds activeBatch from client-side hashes; the Drive
+    // path has no local bytes, so seed it from the server's per-file results.
+    if (activeBatch.size === 0 && results.length > 0) {
+      setActiveBatch(new Map(results.filter((item) => item.queueId).map((item) => [item.queueId as string, item.fileName || "Resume"])));
+    }
+    setBatchResultStatuses(new Map(results.filter((item) => item.queueId).map((item) => [item.queueId as string, String(item.status || "Queued")])));
+    const submitted = Number(result.submitted || 0);
+    const notificationStatus = String(result.notificationStatus || "not_requested");
+    const skippedResults = results.filter((item) => item.skipped);
+    const alreadyScreened = skippedResults.filter((item) => item.status?.toLowerCase() === "screened").length;
+    const alreadyActive = skippedResults.length - alreadyScreened;
+    const failed = results.filter((item) => String(item.status || "").toLowerCase() === "failed");
+    const failedFileSet = new Set([...new Set(failed.map((item) => item.queueId).filter(Boolean))].map((queueId) => fileMap.get(queueId as string)).filter((file): file is File => Boolean(file)));
+    const uploadSummary = submitted ? `${submitted} resume${submitted === 1 ? "" : "s"} submitted for processing` : "No new resumes were submitted";
+    const notificationSummary = notificationStatus === "sent"
+      ? " Internal completion email sent to HR and management."
+      : notificationStatus === "disabled"
+        ? " Success email notifications are currently disabled for bulk processing."
+        : notificationStatus === "failed"
+          ? " The internal completion email failed; resume processing is unaffected."
+          : " No internal completion email was requested.";
+    setUploadMessage(`${uploadSummary}${failed.length ? `; ${failed.length} failed` : ""}${alreadyScreened ? `; ${alreadyScreened} already screened and skipped` : ""}${alreadyActive ? `; ${alreadyActive} already queued or processing` : ""}.${notificationSummary}`);
+    void refreshStatus();
+    const creditsCharged = Number(result.creditsCharged);
+    requestEllaCreditsRefresh(Number.isFinite(creditsCharged) && creditsCharged > 0 ? -creditsCharged : undefined);
+    return failedFileSet;
+  }
+
+  async function importFromDrive(fileIds: string[]) {
+    if (!roleId || fileIds.length === 0 || driveImporting) return;
+    setDriveImporting(true);
+    setError("");
+    setUploadMessage("");
+    setActiveBatch(new Map());
+    setBatchResultStatuses(new Map());
+    batchFiles.current = new Map();
+    try {
+      const response = await fetch("/api/resume-screening/drive/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roleId, fileIds }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to import from Google Drive.");
+      applyBatchResult(result, new Map());
+      setDrivePickerOpen(false);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to import from Google Drive.");
+    } finally {
+      setDriveImporting(false);
+    }
   }
 
   const batchTotal = activeBatch.size;
@@ -284,7 +347,22 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
             </select>
           </label>
           <div className="bulk-screening-action">
-            {driveUrl && <button type="button" className="btn btn-secondary" disabled={!roleId} onClick={openDriveFolder}>Upload from Google Drive</button>}
+            {driveStatus?.connected
+              ? <button type="button" className="btn btn-secondary" disabled={!roleId || uploading || driveImporting} onClick={() => setDrivePickerOpen(true)}>Choose from Google Drive</button>
+              : <a className="btn btn-secondary" href="/api/auth/google-drive/connect">Connect Google Drive</a>}
+            {driveStatus?.connected && (
+              <button
+                type="button"
+                className="bulk-screening-link-button"
+                onClick={async () => {
+                  await fetch("/api/auth/google-drive/disconnect", { method: "POST" });
+                  setDriveStatus({ connected: false, accountEmail: "" });
+                }}
+              >
+                Disconnect {driveStatus.accountEmail}
+              </button>
+            )}
+            {driveUrl && <a className="bulk-screening-link-button" href={driveUrl} target="_blank" rel="noopener noreferrer">Open the shared Drive folder</a>}
           </div>
         </div>
 
@@ -404,6 +482,13 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
           </div>
         ) : <p className="bulk-screening-empty">{roleId ? "No bulk resumes have been detected for this role yet." : "Choose a published role to see its bulk screening status."}</p>}
       </div>
+
+      <DriveFilePicker
+        open={drivePickerOpen && Boolean(roleId)}
+        importing={driveImporting}
+        onClose={() => setDrivePickerOpen(false)}
+        onImport={(fileIds) => void importFromDrive(fileIds)}
+      />
     </section>
   );
 }
