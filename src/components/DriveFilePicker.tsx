@@ -19,14 +19,22 @@ export default function DriveFilePicker({
   onClose,
   onImport,
   importing,
+  listUrl = "/api/resume-screening/drive/list",
+  pageParam = "pageToken",
+  providerLabel = "Google Drive",
+  rootName = "My Drive",
 }: {
   open: boolean;
   onClose: () => void;
   onImport: (fileIds: string[]) => void;
   importing: boolean;
+  listUrl?: string;
+  pageParam?: string;
+  providerLabel?: string;
+  rootName?: string;
 }) {
   const [folderId, setFolderId] = useState("root");
-  const [breadcrumb, setBreadcrumb] = useState<DriveFolder[]>([{ id: "root", name: "My Drive" }]);
+  const [breadcrumb, setBreadcrumb] = useState<DriveFolder[]>([{ id: "root", name: rootName }]);
   const [folders, setFolders] = useState<DriveFolder[]>([]);
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
@@ -39,21 +47,21 @@ export default function DriveFilePicker({
     setError("");
     try {
       const params = new URLSearchParams({ folderId: targetFolderId });
-      if (pageToken) params.set("pageToken", pageToken);
-      const response = await fetch(`/api/resume-screening/drive/list?${params}`, { cache: "no-store" });
+      if (pageToken) params.set(pageParam, pageToken);
+      const response = await fetch(`${listUrl}?${params}`, { cache: "no-store" });
       const data = await response.json();
-      if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to read that Drive folder.");
+      if (!response.ok || data.success !== true) throw new Error(data.error || `Unable to read that ${providerLabel} folder.`);
       setFolderId(data.folderId);
-      setBreadcrumb(data.breadcrumb || [{ id: "root", name: "My Drive" }]);
+      setBreadcrumb(data.breadcrumb || [{ id: "root", name: rootName }]);
       setFolders(data.folders || []);
       setFiles((current) => (pageToken ? [...current, ...(data.files || [])] : data.files || []));
       setNextPageToken(data.nextPageToken || null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to read that Drive folder.");
+      setError(caught instanceof Error ? caught.message : `Unable to read that ${providerLabel} folder.`);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [listUrl, pageParam, providerLabel, rootName]);
 
   useEffect(() => {
     if (!open) return;
@@ -74,10 +82,10 @@ export default function DriveFilePicker({
   };
 
   return (
-    <div className="drive-picker-backdrop" role="dialog" aria-modal="true" aria-label="Choose resumes from Google Drive" onClick={onClose}>
+    <div className="drive-picker-backdrop" role="dialog" aria-modal="true" aria-label={`Choose resumes from ${providerLabel}`} onClick={onClose}>
       <div className="drive-picker" onClick={(event) => event.stopPropagation()}>
         <div className="drive-picker-head">
-          <h3>Choose resumes from Google Drive</h3>
+          <h3>Choose resumes from {providerLabel}</h3>
           <button type="button" className="drive-picker-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
 
