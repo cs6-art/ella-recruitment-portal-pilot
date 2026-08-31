@@ -1,0 +1,2 @@
+candidate_id,role_id,resume_file,hr_overall,ella_overall,overall_delta,hr_experience,ella_experience,experience_delta,hr_skills,ella_skills,skills_delta,hr_education,ella_education,education_delta,hr_role_fit,ella_role_fit,role_fit_delta,hr_decision,ella_recommendation,decision_match,material_discrepancy,suspected_cause,notes
+EXAMPLE-01,ROLE-XXXX,jane-doe.pdf,82,74,-8,4,3,-1,4,4,0,5,5,0,4,3,-1,Advance,Hold,N,N,weighting,"replace with real data; criteria columns are placeholders — align to the confirmed rubric"
