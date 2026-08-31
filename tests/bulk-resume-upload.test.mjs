@@ -85,10 +85,24 @@ test("bulk completion emails default to disabled but remain configurable", () =>
 
 test("an accepted asynchronous intake request cannot be presented as completed", () => {
   const route = read("src/lib/bulk-resume-intake.ts");
-  assert.match(route, /active intake webhook uses an immediate acknowledgement/);
   assert.match(route, /reportedStatus/);
   assert.match(route, /reportedStatus\) \? reportedStatus : "Queued"/);
   assert.doesNotMatch(route, /String\(workflowResult\.status \|\| "Screened"\)/);
+});
+
+test("a resume the workflow rejects synchronously is not billed", () => {
+  const route = read("src/lib/bulk-resume-intake.ts");
+  // The workflow status is read BEFORE the deduction, and failed/skipped
+  // synchronous outcomes skip recordDeduction entirely.
+  const statusIdx = route.indexOf("const reportedStatus");
+  const deductionIdx = route.indexOf("recordDeduction({");
+  assert.ok(statusIdx > 0 && deductionIdx > statusIdx, "workflow status must be parsed before the deduction");
+  assert.match(route, /rejectedSynchronously = \/\^\(failed\|skipped\)\$\/i\.test\(terminalStatus\)/);
+  assert.match(route, /if \(!rejectedSynchronously\) \{\s*creditedFiles \+= 1;/);
+  // the deduction call sits inside that guard
+  const guardBlock = route.slice(route.indexOf("if (!rejectedSynchronously)"), route.indexOf("if (!rejectedSynchronously)") + 600);
+  assert.match(guardBlock, /recordDeduction\(\{/);
+  assert.match(guardBlock, /event: "cv_analysis"/);
 });
 
 test("the intake contract records Screened only after the candidate workflow accepts", () => {

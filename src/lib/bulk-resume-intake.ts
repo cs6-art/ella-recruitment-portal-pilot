@@ -210,23 +210,33 @@ export async function intakeResumeBatch(input: {
         cache: "no-store",
       });
       if (!response.ok) throw new Error(`The screening workflow returned HTTP ${response.status}.`);
-      // The active intake webhook uses an immediate acknowledgement, so a 2xx
-      // only means n8n accepted the request — not that extraction, AI
-      // screening, and applicant persistence have finished. The queue poll
-      // stays the source of truth for terminal status.
-      creditedFiles += 1;
-      await recordDeduction({
-        event: "cv_analysis",
-        units: 1,
-        reference: resolvedQueueId,
-        roleId,
-        actorName,
-        actorEmail,
-        note: "Bulk resume screening",
-      }).catch((creditError) => console.error("[Bulk Resume Intake] Could not record credit deduction:", creditError));
+      // A 2xx can mean n8n accepted the resume for asynchronous screening (the
+      // queue poll is then the source of truth), OR that n8n already reached a
+      // terminal state in this same response. Read the status first: a
+      // synchronous "failed"/"skipped" means the resume was rejected before a
+      // screening result was produced (unreadable file, missing candidate
+      // contact details, duplicate) — one Ella Credit buys a completed CV
+      // analysis, so the operator is not billed for these.
       const workflowResult = await response.json().catch(() => ({})) as Record<string, unknown>;
       const reportedStatus = String(workflowResult.status || "").trim();
       const terminalStatus = /^(screened|processed|failed|skipped)$/i.test(reportedStatus) ? reportedStatus : "Queued";
+      const rejectedSynchronously = /^(failed|skipped)$/i.test(terminalStatus);
+
+      // NOTE: a resume accepted here (charged) that later fails during
+      // asynchronous screening is not auto-refunded — that needs a
+      // reconciliation sweep. Tracked with the R1 queue-reconcile follow-up.
+      if (!rejectedSynchronously) {
+        creditedFiles += 1;
+        await recordDeduction({
+          event: "cv_analysis",
+          units: 1,
+          reference: resolvedQueueId,
+          roleId,
+          actorName,
+          actorEmail,
+          note: "Bulk resume screening",
+        }).catch((creditError) => console.error("[Bulk Resume Intake] Could not record credit deduction:", creditError));
+      }
 
       const queueItem: BulkResumeQueueItem = {
         driveFileId: resolvedQueueId,
