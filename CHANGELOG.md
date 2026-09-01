@@ -3,6 +3,23 @@
 All notable changes to the McLink Recruitment Portal are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Ella Help (in-portal FAQ assistant).** A non-intrusive "Ella Help" chat
+  widget (bottom-right, on every signed-in page) answers questions about how to
+  use the portal. Answers are grounded in an approved Markdown knowledge base
+  (`src/lib/help-bot/knowledge.md`) via lightweight keyword retrieval — no vector
+  database. The LLM call runs server-side only (`/api/help-bot`, OpenAI Responses
+  API, `OPENAI_API_KEY`, default model `gpt-4o-mini`), is rate-limited per user,
+  and the bot is instructed to say it does not know rather than invent answers
+  and to refuse prompt-injection / system-prompt / secret / config requests. It
+  has no access to applicant records, resumes, scores, calendars, credit
+  balances, Sheets, or n8n. The widget can deploy before `OPENAI_API_KEY` is
+  set — it stays visible and opens to a "being configured" notice with the
+  input disabled and no API call, then becomes functional once the key is
+  added. `HELP_BOT_ENABLED=false` fully hides it. See `docs/ELLA-HELP-BOT.md`.
+
 ## [1.1.0] - 2026-08-12
 
 ### Added
