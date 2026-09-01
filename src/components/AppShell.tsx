@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import UiIcon from "./UiIcon";
 import EllaCreditsMeter from "./EllaCreditsMeter";
+import HelpBot from "./HelpBot";
 import { ConfirmationProvider } from "./ConfirmationModal";
 import styles from "./AppShell.module.css";
 
@@ -127,6 +128,7 @@ export default function AppShell({ user, children }: AppShellProps) {
         {!isDashboard && !isRoleRequestArea && !isApplicantDetail && <div className={styles.pageToolbar}><Link href="/dashboard" className="portal-back-button" aria-label="Back to Dashboard"><UiIcon name="arrow-left" />Back to Dashboard</Link></div>}
         <div className={styles.content}>{children}</div>
       </div>
+      <HelpBot />
     </div>
     </ConfirmationProvider>
   );

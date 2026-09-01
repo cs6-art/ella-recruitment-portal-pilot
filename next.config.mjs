@@ -17,6 +17,11 @@ const nextConfig = {
   // that PDF.js needs in Node. Keep both packages external so Vercel loads the
   // supported Node modules (and the correct native binary) at runtime.
   serverExternalPackages: ["@napi-rs/canvas", "pdf-parse"],
+  // The Ella Help assistant reads its approved knowledge source from disk at
+  // runtime; make sure the Markdown file ships with the serverless bundle.
+  outputFileTracingIncludes: {
+    "/api/help-bot": ["./src/lib/help-bot/knowledge.md"],
+  },
 };
 
 export default nextConfig;
