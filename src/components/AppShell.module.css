@@ -50,7 +50,8 @@
 .signOutButton { display: flex; width: 100%; align-items: center; justify-content: center; gap: 8px; margin-top: 9px; padding: 10px 12px; border: 1px solid #dfe5ec; border-radius: 9px; color: #0e4471; background: #ffffff; font-size: 13px; font-weight: 700; cursor: pointer; }
 .signOutButton:hover { border-color: #0e4471; background: #edf4f9; }
 .signOutButton:disabled { cursor: wait; opacity: .65; }
-.main { min-width: 0; min-height: 100vh; margin-left: 252px; }
+.main { position: relative; min-width: 0; min-height: 100vh; margin-left: 252px; }
+.topBar { position: absolute; top: 14px; right: clamp(16px, 2.5vw, 36px); z-index: 60; display: flex; justify-content: flex-end; }
 .mainCollapsed { margin-left: 76px; }
 .mobileHeader { display: none; }
 .pageToolbar { width: 100%; max-width: var(--portal-content-max-width, 1680px); box-sizing: border-box; margin: 0 auto; padding: 18px var(--portal-content-padding, clamp(16px, 2.5vw, 36px)) 0; }
@@ -119,6 +120,7 @@
   .mobileHeaderActions { display: inline-flex; align-items: center; gap: 8px; }
   .backdropVisible { position: fixed; z-index: 90; inset: 0; display: block; background: rgba(10, 31, 50, .36); }
   .pageToolbar { padding: 12px 16px 0; }
+  .topBar { position: static; padding: 10px 16px 0; }
 }
 
 /* Shared portal shell refinements */

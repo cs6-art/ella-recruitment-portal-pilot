@@ -37,6 +37,7 @@ async function ApplicantsData({ user }: { user: SessionUser }) {
     }));
   return <ApplicantsList
     applicants={applicants}
+    userEmail={user.email}
     historyMetrics={metrics}
     publishedRoles={publishedRoles}
     canManageApplicants={user.canReviewRole === true}
