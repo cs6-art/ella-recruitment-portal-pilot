@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
-- **Ella Help (in-portal FAQ assistant).** A non-intrusive "Ella Help" chat
+- **Ella (in-portal FAQ help assistant).** A non-intrusive "Ella" chat
   widget (bottom-right, on every signed-in page) answers questions about how to
   use the portal. Answers are grounded in an approved Markdown knowledge base
   (`src/lib/help-bot/knowledge.md`) via lightweight keyword retrieval — no vector

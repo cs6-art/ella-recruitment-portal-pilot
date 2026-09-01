@@ -67,7 +67,7 @@ export async function POST(request: Request) {
   // "being configured" notice and make no OpenAI call.
   if (!isConfigured()) {
     return NextResponse.json(
-      { success: false, code: "NOT_CONFIGURED", error: "Ella Help is currently being configured and will be available soon." },
+      { success: false, code: "NOT_CONFIGURED", error: "Ella is currently being configured and will be available soon." },
       { status: 503 },
     );
   }

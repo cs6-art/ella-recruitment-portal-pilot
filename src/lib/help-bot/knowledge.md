@@ -1,6 +1,6 @@
-# Ella Help — Recruitment Portal FAQ Knowledge Base
+# Ella — Recruitment Portal FAQ Knowledge Base
 
-This is the approved knowledge source for the "Ella Help" in-portal assistant.
+This is the approved knowledge source for the "Ella" in-portal help assistant.
 It is written for portal end users (Creators, HR, Management, HODs, interviewers,
 administrators). It is derived from the McLink Recruitment Portal User Manual, the
 working recruitment workflow notes, and the portal access-control model.
