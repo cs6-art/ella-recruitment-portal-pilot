@@ -10,6 +10,7 @@ import type { ApplicantMetrics, ApplicantSummary } from "@/lib/candidate-applica
 import Pagination from "@/components/Pagination";
 import { formatMatchScore } from "@/lib/score-format";
 import { formatPortalDateTime } from "@/lib/portal-time";
+import { isNewApplicant, readApplicantsLastSeen, writeApplicantsLastSeen } from "@/lib/new-applicants";
 
 type Props = {
   applicants: ApplicantSummary[];
@@ -18,6 +19,8 @@ type Props = {
   topContent?: ReactNode;
   publishedRoles?: { roleId: string; label: string }[];
   canManageApplicants?: boolean;
+  /** Identifies the current user so the "new since your last visit" watermark is per-person. */
+  userEmail?: string;
   /** Historical demo metrics stay visible in the summary while the table is operationally filtered. */
   historyMetrics?: ApplicantMetrics;
 };
@@ -90,7 +93,7 @@ function scoreValue(value: string) {
   return formatMatchScore(value);
 }
 
-export default function ApplicantsList({ applicants, title = "Applicants", description = "Review candidates across every published role.", topContent, publishedRoles, canManageApplicants = false, historyMetrics }: Props) {
+export default function ApplicantsList({ applicants, title = "Applicants", description = "Review candidates across every published role.", topContent, publishedRoles, canManageApplicants = false, userEmail, historyMetrics }: Props) {
   const router = useRouter();
   const { confirm } = useConfirmation();
   const [page, setPage] = useState(1);
@@ -104,6 +107,23 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
   const [actionMessage, setActionMessage] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  // The "new since your last visit" watermark, read once on mount and then
+  // advanced so the next visit starts clean (and the header bell count clears).
+  // Holding it fixed for the visit keeps the row highlight stable even when the
+  // applicants prop is replaced by a router.refresh() (e.g. after a delete).
+  const [seenWatermark, setSeenWatermark] = useState<number | null>(null);
+
+  useEffect(() => {
+    setSeenWatermark(readApplicantsLastSeen(userEmail));
+    writeApplicantsLastSeen(userEmail);
+  }, [userEmail]);
+
+  const newApplicantIds = useMemo(() => {
+    if (seenWatermark === null) return new Set<string>();
+    return new Set(
+      applicants.filter((applicant) => isNewApplicant(applicant, seenWatermark)).map((applicant) => applicant.applicationId),
+    );
+  }, [applicants, seenWatermark]);
 
   const hasPublishedRoleScope = publishedRoles !== undefined;
   const roleOptions = useMemo<RoleOption[]>(() => {
@@ -294,11 +314,11 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
               <thead><tr>{canManageApplicants && <th className="selection-column"><input type="checkbox" aria-label="Select all visible applicants" checked={allVisibleSelected} disabled={selectableVisibleApplicants.length === 0} onChange={toggleAllVisibleApplicants} /></th>}<th>Candidate</th><th>Role</th><th>Applied</th><th>Match</th><th>Current Stage</th><th>Next Action</th><th>Action</th></tr></thead>
               <tbody>
                 {pagedApplicants.map((applicant, index) => (
-                  <tr key={`${applicant.applicationId || "applicant"}-${applicant.roleId || "role"}-${index}`} className={selectedIds.has(applicant.applicationId) ? "is-selected" : undefined}>
+                  <tr key={`${applicant.applicationId || "applicant"}-${applicant.roleId || "role"}-${index}`} className={[selectedIds.has(applicant.applicationId) ? "is-selected" : "", newApplicantIds.has(applicant.applicationId) ? "is-new-applicant" : ""].filter(Boolean).join(" ") || undefined}>
                     {canManageApplicants && <td className="selection-column">{applicant.isHistoricalDemo ? <span className="applicant-readonly-label">Demo</span> : <input type="checkbox" aria-label={`Select ${applicant.candidateName || applicant.applicationId}`} checked={selectedIds.has(applicant.applicationId)} disabled={deletingIds.has(applicant.applicationId)} onChange={() => toggleApplicantSelection(applicant.applicationId)} />}</td>}
                     {/* data-label values let the responsive CSS render each row as a
                         labeled card when the table cannot fit the content column. */}
-                    <td data-label="Candidate"><Link className="applicant-name-link" href={`/applicants/${encodeURIComponent(applicant.applicationId)}`}><strong>{applicant.candidateName || "Unnamed candidate"}</strong><span>{applicant.email || applicant.applicationId}</span></Link></td>
+                    <td data-label="Candidate"><Link className="applicant-name-link" href={`/applicants/${encodeURIComponent(applicant.applicationId)}`}><strong>{applicant.candidateName || "Unnamed candidate"}{newApplicantIds.has(applicant.applicationId) && <span className="applicant-new-badge">NEW</span>}</strong><span>{applicant.email || applicant.applicationId}</span></Link></td>
                     <td data-label="Role"><strong>{applicant.selectedRole || "Role not provided"}</strong><span className="applicant-subtext">{applicant.roleId}</span></td>
                     <td data-label="Applied">{formatDate(applicant.appliedAt)}</td>
                     <td data-label="Match"><strong className="applicant-score">{scoreValue(applicant.matchScore)}</strong>{applicant.recommendation && <span className="applicant-subtext">{applicant.recommendation}</span>}</td>

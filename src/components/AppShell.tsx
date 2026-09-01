@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import UiIcon from "./UiIcon";
 import EllaCreditsMeter from "./EllaCreditsMeter";
 import HelpBot from "./HelpBot";
+import NewApplicantsBell from "./NewApplicantsBell";
 import { ConfirmationProvider } from "./ConfirmationModal";
 import styles from "./AppShell.module.css";
 
@@ -125,6 +126,9 @@ export default function AppShell({ user, children }: AppShellProps) {
 
       <div className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ""}`}>
         <header className={styles.mobileHeader}><Link href="/dashboard" className={styles.mobileBrand} onClick={closeSidebar}><span className={styles.brandIcon}>M</span><strong>McLink Recruitment Portal</strong></Link><div className={styles.mobileHeaderActions}><EllaCreditsMeter variant="mobile" /><button type="button" className={styles.menuButton} onClick={() => setSidebarOpen(true)} aria-expanded={sidebarOpen} aria-controls="portal-navigation"><UiIcon name="menu" /><span>Menu</span></button></div></header>
+        {/* Single instance: absolutely positioned on desktop, a slim right-aligned
+            row on mobile. Rendering it twice would double the poll traffic. */}
+        {showApplicants && <div className={styles.topBar}><NewApplicantsBell userEmail={userEmail} /></div>}
         {!isDashboard && !isRoleRequestArea && !isApplicantDetail && <div className={styles.pageToolbar}><Link href="/dashboard" className="portal-back-button" aria-label="Back to Dashboard"><UiIcon name="arrow-left" />Back to Dashboard</Link></div>}
         <div className={styles.content}>{children}</div>
       </div>

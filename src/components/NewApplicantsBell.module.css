@@ -1,0 +1,82 @@
+.bell { position: relative; display: inline-flex; }
+
+.trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #dbe3ec;
+  border-radius: 999px;
+  background: #fff;
+  color: #1f3a56;
+  box-shadow: 0 2px 8px rgba(14, 68, 113, .08);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.trigger:hover { background: #f1f6fb; border-color: #c3d2e2; }
+.trigger:focus-visible { outline: 2px solid var(--blue, #0070e8); outline-offset: 2px; }
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e0392f;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 80;
+  width: min(340px, calc(100vw - 32px));
+  padding: 6px;
+  border: 1px solid #dfe5ec;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(14, 68, 113, .18);
+}
+
+.panelHeader { display: grid; gap: 2px; padding: 10px 12px 8px; }
+.panelHeader strong { color: var(--navy, #12395f); font-size: 13px; }
+.panelHeader span { color: var(--muted, #6b7c8f); font-size: 11px; }
+
+.empty { margin: 0; padding: 6px 12px 12px; color: var(--muted, #6b7c8f); font-size: 12px; }
+
+.list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; max-height: 320px; overflow-y: auto; }
+.list a {
+  display: grid;
+  gap: 2px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  color: inherit;
+  text-decoration: none;
+}
+.list a:hover { background: #f1f6fb; }
+.list a strong { color: var(--navy, #12395f); font-size: 13px; }
+.list a span { color: var(--muted, #6b7c8f); font-size: 11px; }
+.list a small { color: #93a3b4; font-size: 10px; }
+
+.viewAll {
+  display: block;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-top: 1px solid #eef2f6;
+  color: var(--blue, #0070e8);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+.viewAll:hover { text-decoration: underline; }
