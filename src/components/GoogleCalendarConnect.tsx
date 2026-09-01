@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import GoogleCalendarIcon from "@/components/GoogleCalendarIcon";
 
 type Status = "loading" | "connected" | "mismatch" | "not_connected" | "error";
 type NoticeKind = "success" | "warning" | "error";
@@ -74,12 +75,12 @@ export default function GoogleCalendarConnect({ canManage = false }: { canManage
           <>
             <p>Connected account: <strong>{connectedAccountEmail}</strong></p>
             <p className="calendar-connect-warning">This account is not being used for Face-to-Face interview bookings because it does not match the shared HR calendar configuration.</p>
-            {canManage && <a className="btn btn-primary" href="/api/auth/google-calendar/connect">Reconnect Google Calendar</a>}
+            {canManage && <a className="btn btn-primary btn-with-icon" href="/api/auth/google-calendar/connect"><GoogleCalendarIcon />Reconnect Google Calendar</a>}
           </>
         ) : (
           <>
             <p>The shared HR Google Calendar is not connected yet.</p>
-            {canManage ? <a className="btn btn-primary" href="/api/auth/google-calendar/connect">Connect Google Calendar</a> : <p>A settings administrator must connect it before Face-to-Face interview availability can be checked.</p>}
+            {canManage ? <a className="btn btn-primary btn-with-icon" href="/api/auth/google-calendar/connect"><GoogleCalendarIcon />Connect Google Calendar</a> : <p>A settings administrator must connect it before Face-to-Face interview availability can be checked.</p>}
           </>
         )}
       </div>
