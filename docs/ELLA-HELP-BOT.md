@@ -1,4 +1,4 @@
-# Ella Help — in-portal FAQ / Help assistant
+# Ella — in-portal FAQ / help assistant
 
 A small chat widget that answers end-user questions about **how to use the
 recruitment portal**. It is deliberately narrow: a portal help bot, not a
@@ -104,10 +104,10 @@ model) are always included; up to four scored sections are added.
 
 ## UI
 
-- **Launcher:** fixed bottom-right pill button ("Ella Help", collapses to an icon
+- **Launcher:** fixed bottom-right pill button ("Ella", collapses to an icon
   on mobile), `z-index: 60`.
 - **Panel:** 400×560 popover on desktop; full-width bottom sheet under 520px.
-  Header "Ella Help / Portal guide assistant", greeting message, 8 suggested
+  Header "Ella / Portal guide assistant", greeting message, 8 suggested
   starter questions, message list, animated typing indicator (loading state),
   inline error banner (error state), textarea composer (Enter to send,
   Shift+Enter for newline, 600-char cap), and a persistent disclaimer line.
@@ -146,4 +146,4 @@ Changed:
    functional automatically once the key is present — no code change or rebuild
    of the app logic is required (a redeploy to pick up the new env var is).
 3. (Optional) set `HELP_BOT_MODEL` if you don't want the `gpt-4o-mini` default.
-4. Verify by signing in and opening the bottom-right "Ella Help" button.
+4. Verify by signing in and opening the bottom-right "Ella" button.

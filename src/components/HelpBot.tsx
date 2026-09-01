@@ -9,10 +9,10 @@ import styles from "./HelpBot.module.css";
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
 const GREETING =
-  "Hi, I'm Ella Help. Ask me how to use the recruitment portal — creating role requests, screening, interviews, statuses, access, and more. I answer from the portal guide and can't see your records.";
+  "Hi, I'm Ella. Ask me how to use the recruitment portal — creating role requests, screening, interviews, statuses, access, and more. I answer from the portal guide and can't see your records.";
 
 const NOT_CONFIGURED_MESSAGE =
-  "Ella Help is currently being configured and will be available soon.";
+  "Ella is currently being configured and will be available soon.";
 
 export default function HelpBot() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -91,14 +91,14 @@ export default function HelpBot() {
         onClick={() => setOpen((current) => !current)}
       >
         <UiIcon name={open ? "close" : "help"} size={22} />
-        <span className={styles.launcherLabel}>{open ? "Close help" : "Ella Help"}</span>
+        <span className={styles.launcherLabel}>{open ? "Close" : "Ella"}</span>
       </button>
 
       {open && (
-        <section id="ella-help-panel" className={styles.panel} aria-label="Ella Help assistant">
+        <section id="ella-help-panel" className={styles.panel} aria-label="Ella assistant">
           <header className={styles.header}>
             <div>
-              <strong>Ella Help</strong>
+              <strong>Ella</strong>
               <span>Portal guide assistant</span>
             </div>
             <button type="button" className={styles.iconButton} onClick={() => setOpen(false)} aria-label="Close">
@@ -160,7 +160,7 @@ export default function HelpBot() {
                   send(input);
                 }
               }}
-              placeholder={configured ? "Ask about the portal…" : "Ella Help is being configured…"}
+              placeholder={configured ? "Ask about the portal…" : "Ella is being configured…"}
               rows={1}
               maxLength={600}
               aria-label="Your question"
@@ -171,7 +171,7 @@ export default function HelpBot() {
             </button>
           </form>
           <p className={styles.disclaimer}>
-            Answers come from the portal guide and may be incomplete. Ella Help can't see your records or make changes.
+            Answers come from the portal guide and may be incomplete. Ella can't see your records or make changes.
           </p>
         </section>
       )}

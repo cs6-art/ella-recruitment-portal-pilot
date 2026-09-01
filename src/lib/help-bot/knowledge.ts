@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * Ella Help knowledge base.
+ * Ella help-assistant knowledge base.
  *
  * The approved knowledge source is a single Markdown file
  * (`knowledge.md`, next to this module). It is small enough — a few thousand
