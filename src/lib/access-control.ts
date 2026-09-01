@@ -92,10 +92,12 @@ export function canDeleteApplicant(user: Pick<SessionUser, "canReviewRole">): bo
 }
 
 // Approving, rejecting, or returning an applicant at any pipeline stage
-// (resume, voice, final) is a decision, available to both the operational
-// HR tier and the decision-making Management tier.
-export function canDecideApplicant(user: Pick<SessionUser, "canReviewRole" | "canApproveRole">): boolean {
-  return user.canReviewRole === true || user.canApproveRole === true;
+// (resume, voice, final) is a company-wide pipeline decision reserved for the
+// HR tier. Management (canApproveRole) is view-only everywhere in the
+// pipeline — the Management-approval step was removed and Management holds no
+// applicant hiring-decision rights.
+export function canDecideApplicant(user: Pick<SessionUser, "canReviewRole">): boolean {
+  return user.canReviewRole === true;
 }
 
 export function canViewApplicant(user: SessionUser, applicant: { department: string }): boolean {

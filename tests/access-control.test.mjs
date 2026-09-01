@@ -55,15 +55,17 @@ test("isDepartmentReviewer only classifies the HOD tier, not HR/Management", () 
   assert.equal(isDepartmentReviewer(management), false);
 });
 
-test("Management is decision-only: no recruitment setup, applicant edit/delete, or role-request edit rights", () => {
+test("Management is view-only: no recruitment setup, pipeline management, applicant decisions, or edit/delete rights", () => {
   assert.equal(canEditRecruitmentSetup(management), false);
   assert.equal(canManagePipeline(management), false);
   assert.equal(canEditApplicant(management), false);
   assert.equal(canDeleteApplicant(management), false);
   assert.equal(canEditRoleRequest(management, roleInDept), false);
-  // But they still see everything company-wide and can decide outcomes.
+  // Management holds no applicant hiring-decision rights — that is the HR tier.
+  assert.equal(canDecideApplicant(management), false);
+  // They retain company-wide read visibility.
   assert.equal(canViewRole(management, roleOutsideDept), true);
-  assert.equal(canDecideApplicant(management), true);
+  assert.equal(canViewApplicant(management, { department: "Finance" }), true);
 });
 
 test("HR retains full company-wide pipeline management", () => {
@@ -72,6 +74,7 @@ test("HR retains full company-wide pipeline management", () => {
   assert.equal(canDeleteApplicant(hr), true);
   assert.equal(canEditRoleRequest(hr, roleOutsideDept), true);
   assert.equal(canViewRole(hr, roleOutsideDept), true);
+  assert.equal(canDecideApplicant(hr), true);
 });
 
 test("a plain requester cannot view roles outside their own", () => {

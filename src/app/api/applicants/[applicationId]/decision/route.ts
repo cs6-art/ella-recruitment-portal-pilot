@@ -8,6 +8,7 @@ import {
   type ApplicantDecision,
   type ApplicantDecisionStage,
 } from "@/lib/applicant-workflow";
+import { canDecideApplicant } from "@/lib/access-control";
 import { getPublicAppBaseUrl } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
@@ -22,7 +23,7 @@ const decisionSchema = z.object({
 
 export async function POST(request: Request, { params }: { params: Promise<{ applicationId: string }> }) {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
-  if (!user || (user.canReviewRole !== true && user.canApproveRole !== true)) {
+  if (!user || !canDecideApplicant(user)) {
     return NextResponse.json({ error: "You are not authorized to review applicants." }, { status: 403 });
   }
   const rate = consumeRateLimit(`applicant-decision:${user.email}:${requestClientKey(request)}`, 60, 15 * 60 * 1000);
