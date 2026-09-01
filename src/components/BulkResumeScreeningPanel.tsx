@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ActionFeedback from "@/components/ActionFeedback";
 import DriveFilePicker from "@/components/DriveFilePicker";
 import EllaCreditsMeter from "@/components/EllaCreditsMeter";
+import GoogleDriveIcon from "@/components/GoogleDriveIcon";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
@@ -380,8 +381,8 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
           </label>
           <div className="bulk-screening-action">
             {driveStatus?.connected
-              ? <button type="button" className="btn btn-secondary" disabled={!roleId || uploading || driveImporting} onClick={() => setCloudPicker("google")}>Choose from Google Drive</button>
-              : <a className="btn btn-secondary" href="/api/auth/google-drive/connect">Connect Google Drive</a>}
+              ? <button type="button" className="btn btn-secondary btn-with-icon" disabled={!roleId || uploading || driveImporting} onClick={() => setCloudPicker("google")}><GoogleDriveIcon />Choose from Google Drive</button>
+              : <a className="btn btn-secondary btn-with-icon" href="/api/auth/google-drive/connect"><GoogleDriveIcon />Connect Google Drive</a>}
             {driveStatus?.connected && (
               <button
                 type="button"

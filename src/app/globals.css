@@ -5122,6 +5122,7 @@ textarea:focus-visible {
 .bulk-screening-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 18px; }
 .bulk-screening-controls select { min-height: 44px; }
 .bulk-screening-action { display: grid; gap: 7px; justify-items: end; }
+.btn-with-icon svg { flex: 0 0 auto; }
 .bulk-screening-action small { max-width: 250px; color: var(--muted); text-align: right; line-height: 1.4; }
 .bulk-screening-link-button { padding: 0; border: 0; background: transparent; color: #0071f7; font: inherit; font-size: 12px; font-weight: 700; text-decoration: none; cursor: pointer; }
 .bulk-screening-link-button:hover { text-decoration: underline; }
