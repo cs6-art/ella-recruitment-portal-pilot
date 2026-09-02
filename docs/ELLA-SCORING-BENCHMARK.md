@@ -82,6 +82,37 @@ Leave the score-model / procedure sections below for reference. The generic
 [scoring-benchmark-template.csv](scoring-benchmark-template.csv) is only needed
 if a future role toggles sub-criteria on.
 
+## Sample size
+
+The CSV carries 15 candidates. HR only needs to score a representative
+**8–12** of them for a valid benchmark — pick a mix across the Ella range:
+~3 that look strong on the criteria, ~3–4 average/borderline, ~3 clearly weak.
+Scoring all 15 is welcome but not required.
+
+## Voice-interview scoring comparison (when applicable)
+
+ME02 has **no completed voice interviews** for the benchmark candidates (the
+2026-08-31 test resumes failed the contact-info gate before reaching the voice
+stage), so this section is **prepared but not yet actionable for ME02**. Use it
+for the first role that has ≥ 5 completed voice interviews.
+
+For each completed voice interview, HR scores from the transcript and Ella's
+summary side by side:
+
+| Field | Scale | Notes |
+| --- | --- | --- |
+| `hr_communication_quality` / `ella_communication_quality` | 1–5 | clarity, structure, listening |
+| `hr_answer_completeness` / `ella_answer_completeness` | 1–5 | did answers actually address each question |
+| `hr_<role_eval_field>` / `ella_<role_eval_field>` | 1–5 | one pair per interview evaluation field configured on the role |
+| `hr_voice_overall_0_100` / `ella_voice_overall_0_100` | 0–100 | overall voice score |
+| `hr_voice_recommendation` / `ella_voice_recommendation` | Proceed / Hold / Reject | |
+| `answer_question_mapping_ok_Y_N` | Y/N | each transcript answer shown under the correct question |
+| `score_validity_ok_Y_N` | Y/N | Ella returned a score only when the call actually completed |
+| `notable_mismatch`, `reviewer_notes` | free text | |
+
+Template: `voice-scoring-benchmark-template.csv` (same shape, one row per
+completed interview).
+
 ## Procedure once scores arrive
 
 1. Screen all benchmark resumes through the normal bulk flow for that role.

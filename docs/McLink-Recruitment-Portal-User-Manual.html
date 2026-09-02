@@ -111,7 +111,7 @@
         <div class="cover-band"><strong>Who is this for?</strong>People who request new staff, HR teams, department heads, managers, recruiters, interviewers, and administrators.</div>
       </div>
     </div>
-    <div class="cover-footer"><span>McLink Group</span><span>Version 1.0 · 25 August 2026</span></div>
+    <div class="cover-footer"><span>McLink Group</span><span>Version 1.1 · 2 September 2026 · Pilot</span></div>
   </section>
 
   <section class="page">
@@ -121,14 +121,15 @@
     <div class="toc">
       <div class="toc-item"><span class="toc-num">1</span><span><strong>Sign in and find your way around</strong><span>Dashboard, menu, profile, and access</span></span></div>
       <div class="toc-item"><span class="toc-num">2</span><span><strong>Request a new role</strong><span>Staff addition or replacement</span></span></div>
-      <div class="toc-item"><span class="toc-num">3</span><span><strong>Review and approve requests</strong><span>HR, department, and management steps</span></span></div>
+      <div class="toc-item"><span class="toc-num">3</span><span><strong>Review and approve requests</strong><span>HR discusses and decides; management and department heads view only</span></span></div>
       <div class="toc-item"><span class="toc-num">4</span><span><strong>Prepare a role for hiring</strong><span>Screening and interview setup</span></span></div>
       <div class="toc-item"><span class="toc-num">5</span><span><strong>Screen and manage applicants</strong><span>Resumes, reviews, decisions, and notes</span></span></div>
       <div class="toc-item"><span class="toc-num">6</span><span><strong>Arrange interviews</strong><span>Available times, bookings, and attendance</span></span></div>
       <div class="toc-item"><span class="toc-num">7</span><span><strong>For candidates</strong><span>Apply and choose interview times</span></span></div>
       <div class="toc-item"><span class="toc-num">8</span><span><strong>Help and good practice</strong><span>Common problems and safe handling</span></span></div>
     </div>
-    <div class="callout success"><span class="callout-title">The short version</span>Request the role → HR checks the details → management decides → HR prepares the hiring details → candidates are screened and interviewed.</div>
+    <div class="callout success"><span class="callout-title">The short version</span>Request the role → HR reviews the details and decides → HR prepares the hiring details → candidates are screened and interviewed.</div>
+    <div class="callout"><span class="callout-title">About this pilot version</span>In the current pilot: HR has a company-wide view and makes all role and applicant decisions. Management has a company-wide <strong>view-only</strong> role — they can see everything but cannot approve, reject, send to manual review, change a role's status, edit recruitment setup, bulk screen, create invites or interview slots, or edit or delete applicants. Department Heads see only their own department's records, read-only. A role requester who has no reviewer access sees only their own requests and no applicant information. The bulk resume upload accepts up to <strong>8</strong> files per batch. Google Drive resume import is available; OneDrive import is not yet available. New-applicant notifications and the "Ella" in-portal help assistant are included (see sections 5 and 8).</div>
   </section>
 
   <section class="page">
@@ -164,8 +165,8 @@
     <div class="grid-2">
       <div class="card role-card"><h3>Requester</h3><p>Creates a staffing request and follows the requests they submitted.</p><p class="small">Usually sees: Dashboard, Role Requests, Profile.</p></div>
       <div class="card role-card"><h3>HR or Recruiter</h3><p>Reviews role details, prepares hiring information, screens candidates, arranges interviews, and manages the hiring list.</p><p class="small">Usually sees: Role Requests, Resume Screening, Applicants, Bookings.</p></div>
-      <div class="card role-card"><h3>Department Head</h3><p>Checks requests for their own department. They may have a view-only role request list unless HR has given more access.</p><p class="small">Usually sees: Department Role Requests and relevant records.</p></div>
-      <div class="card role-card"><h3>Management approver</h3><p>Reviews the business need and approves, returns, holds, or rejects a role request.</p><p class="small">Usually sees: Role Requests and Applicants, but not HR operating tools unless separately authorised.</p></div>
+      <div class="card role-card"><h3>Department Head</h3><p>Views requests and applicants for their own department only. Read-only — no approvals, edits, deletions, or applicant decisions.</p><p class="small">Usually sees: their department's role requests and applicant records.</p></div>
+      <div class="card role-card"><h3>Management</h3><p>Company-wide <strong>view-only</strong> access. Can open every role request and applicant record and read screening and interview information, but cannot approve, reject, send to manual review, change a role's status, edit recruitment setup, bulk screen, create invites or slots, or edit or delete applicants.</p><p class="small">Usually sees: Role Requests, Applicants, Bookings — all read-only.</p></div>
       <div class="card role-card"><h3>Interviewer</h3><p>Reviews the information needed for interviews. Interview times and candidate links are provided by the portal.</p><p class="small">Access may be limited to the information needed for the interview.</p></div>
       <div class="card role-card"><h3>Administrator</h3><p>Manages user access and, where authorised, shared settings and the interview calendar connection.</p><p class="small">Give administrator access only to people who need it.</p></div>
     </div>
@@ -200,7 +201,7 @@
   <section class="page">
     <div class="eyebrow">3 · Decisions</div>
     <h2>Review and approve a role request</h2>
-    <p class="section-intro">Open a request from the Role Requests list to read the details, comments, history, and available actions.</p>
+    <p class="section-intro">Open a request from the Role Requests list to read the details, comments, history, and available actions. In the pilot, an HR reviewer both discusses and decides a role request directly from the HR discussion stage — there is no separate management-approval step. Management and Department Heads can open and read requests but cannot act on them.</p>
     <h3>Finding a request</h3>
     <ul>
       <li>Use the <strong>Status</strong> filter to see requests at a particular step.</li>
@@ -213,8 +214,7 @@
       <thead><tr><th>Status</th><th>Plain meaning</th><th>Typical next step</th></tr></thead>
       <tbody>
         <tr><td><span class="pill">Draft</span></td><td>Still being prepared.</td><td>Complete and submit it.</td></tr>
-        <tr><td><span class="pill amber">Pending HR Discussion</span></td><td>HR needs to review the request.</td><td>HR checks the details and discusses any changes.</td></tr>
-        <tr><td><span class="pill amber">Pending Management Approval</span></td><td>Management needs to decide.</td><td>Approve, return, hold, or reject.</td></tr>
+        <tr><td><span class="pill amber">Pending HR Discussion</span></td><td>HR needs to review and decide the request.</td><td>HR checks the details, discusses any changes, then approves, returns for revision, places on hold, or rejects.</td></tr>
         <tr><td><span class="pill">Returned for Revision</span></td><td>More information or changes are needed.</td><td>Requester or HR updates the request.</td></tr>
         <tr><td><span class="pill">On Hold</span></td><td>The request is paused.</td><td>Resume it when the business is ready.</td></tr>
         <tr><td><span class="pill green">Approved</span></td><td>The role has approval to move forward.</td><td>HR completes the hiring setup.</td></tr>
@@ -224,7 +224,7 @@
       </tbody>
     </table>
     <h3>Making a decision</h3>
-    <p>Choose the action that matches the decision, add a clear comment when useful, and confirm. If the request has changed since you opened it, refresh the page and review it again before trying the action.</p>
+    <p>An HR reviewer chooses the action that matches the decision, adds a clear comment when useful, and confirms. If the request has changed since you opened it, refresh the page and review it again before trying the action. If you are a Management or Department Head user, the decision actions are not shown — your view is read-only.</p>
     <div class="callout warning"><span class="callout-title">Remember</span>Approval of a role is not the same as publishing a job. HR still needs to complete the recruitment setup and publish the role.</div>
   </section>
 
@@ -270,6 +270,9 @@
     <h2>Screen and manage applicants</h2>
     <h3>Open the applicant list</h3>
     <p>Choose <span class="nav-path">Applicants</span> to see the candidate list. Use the search box to find a candidate, role, email, or application number. Use the role and stage filters to narrow the list. Choose 10, 25, or 50 rows per page.</p>
+    <h3>New-applicant notifications</h3>
+    <p>A bell in the top bar shows how many applicants have applied since you last opened the Applicants page. HR sees new applicants company-wide; a Department Head sees only their own department's; Management sees the notifications but, like the rest of their access, cannot act on the records; a plain requester has no bell. Opening the bell lists the new candidates and links straight to each record. Opening the Applicants page clears the count; a candidate who applies after that appears as new again.</p>
+    <p class="small">Pilot limitation: the "last seen" mark is stored in your browser, so the new/seen state is per browser and per device and does not follow you between devices.</p>
     <h3>Understand the summary cards</h3>
     <div class="grid-2">
       <div class="card"><h3>Applications</h3><p>Total applications in the available history.</p></div>
@@ -314,13 +317,13 @@
     <h3>Upload from your computer</h3>
     <div class="steps">
       <div class="step"><div class="step-body"><strong>Choose the published role.</strong><span>Pick the role that matches every resume in this batch.</span></div></div>
-      <div class="step"><div class="step-body"><strong>Add the files.</strong><span>Drag them into the box or click the box to choose them. PDF, DOC, and DOCX files are accepted. You can add up to 25 files at a time, with a 10 MB limit per file.</span></div></div>
+      <div class="step"><div class="step-body"><strong>Add the files.</strong><span>Drag them into the box or click the box to choose them. PDF, DOC, and DOCX files are accepted. You can add up to 8 files per batch in the pilot, with a 10 MB limit per file. Each resume that screens successfully uses one Ella Credit; files that are skipped as duplicates or that fail are not charged.</span></div></div>
       <div class="step"><div class="step-body"><strong>Select “Start screening”.</strong><span>The portal sends the resumes for processing and shows each one in the queue.</span></div></div>
       <div class="step"><div class="step-body"><strong>Watch the progress.</strong><span>The list updates automatically. You can also choose “Refresh status”.</span></div></div>
       <div class="step"><div class="step-body"><strong>Review the applicants.</strong><span>When processing is complete, choose “View Processed Applicants” to begin the human review.</span></div></div>
     </div>
-    <h3>Upload from the shared Drive folder</h3>
-    <p>If your team uses the shared Google Drive folder, choose the role first and then select <strong>Upload from Google Drive</strong>. Put each resume inside the correct role and month folder. Do not put resumes directly in the role’s top-level folder.</p>
+    <h3>Import from Google Drive</h3>
+    <p>Choose the published role first. The first time you use this, select <strong>Connect Google Drive</strong> and sign in with your McLink Group Google account (HR only). After that, select <strong>Choose from Google Drive</strong>, browse to the folder holding the resumes, tick the files you want (PDF, DOC, or DOCX; up to 8 per import), and confirm. Imported resumes go through exactly the same screening pipeline, duplicate check, and one-credit-per-successful-file rule as a computer upload. A resume already screened for this role is skipped and not charged. OneDrive import is not available in the pilot.</p>
     <h3>Queue messages</h3>
     <table>
       <thead><tr><th>Message</th><th>What to do</th></tr></thead>
@@ -353,6 +356,10 @@
     <h3>If a candidate does not attend</h3>
     <p>Open the date details, find the scheduled appointment, and choose <strong>Mark No Show</strong> after the interview time has started. Confirm the action. This keeps the attendance record clear and allows the team to decide whether to offer another time.</p>
     <div class="callout success"><span class="callout-title">Calendar connection</span>Interview availability comes from the shared HR calendar. If it is not connected, ask the person who manages Settings to reconnect or check the calendar.</div>
+    <h3>Phone (voice) interview</h3>
+    <p>When HR approves a candidate at the resume stage, the candidate is invited to book a phone interview and is called automatically at the booked time. The result and a transcript return to the applicant record, with each answer shown under the question it belongs to. Calls that come back as No Answer, Busy, or Wrong Person, and no-shows, are handled through the retry and no-show lifecycle rather than counting as a completed interview.</p>
+    <h3>Face-to-face interview</h3>
+    <p>After HR approves a candidate at the phone-interview stage, the candidate books a face-to-face interview against the shared HR calendar, which blocks times that conflict with existing calendar events. The candidate is added as an attendee on the calendar event, and the <strong>venue or address</strong> HR enters is included in the invitation and shown on the completed booking in the portal.</p>
   </section>
 
   <section class="page">
@@ -379,7 +386,9 @@
     <h3>“I cannot see a role or applicant.”</h3>
     <p>Your access may limit you to your own requests or your department. Ask HR to confirm that you have the right access.</p>
     <h3>“My request is not moving.”</h3>
-    <p>Check the status and latest comment on the request. It may be waiting for HR or management, returned for more information, or on hold.</p>
+    <p>Check the status and latest comment on the request. It may be waiting for HR to review, returned for more information, or on hold.</p>
+    <h3>Ask Ella (in-portal help)</h3>
+    <p>The portal includes a help assistant called <strong>Ella</strong> for common questions about how the portal works. Open it from the help button and type your question. It only explains features and steps — it does not make hiring decisions or change any records — and you should not enter candidate personal data or passwords into it. During the pilot the assistant may still be in setup and reply that it "is currently being configured"; until then, contact HR or the portal administrator for help.</p>
     <h3>“The role was approved but candidates cannot apply.”</h3>
     <p>Approval is only one step. HR must complete the Recruitment Setup checklist and publish the role.</p>
     <h3>“A resume failed.”</h3>
