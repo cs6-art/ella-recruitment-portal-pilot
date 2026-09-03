@@ -37,7 +37,17 @@ function creditsBackend(): CreditsBackend {
   return "sheets";
 }
 
-function newSourceEntryId(): string {
+/**
+ * The idempotency handle for a ledger write.
+ * - No `idempotencyKey`: a fresh random `LDG-<uuid>` (never collides — the
+ *   historical behaviour; a *caller-level* retry would double-charge).
+ * - With an `idempotencyKey`: a deterministic `LDG-<sha256(key)>`. A retry of
+ *   the same logical operation (same key) is then a no-op on the unique
+ *   `source_entry_id` in Postgres, and is skipped by the Sheets append too.
+ */
+function newSourceEntryId(idempotencyKey?: string): string {
+  const key = idempotencyKey?.trim();
+  if (key) return `LDG-${crypto.createHash("sha256").update(key).digest("hex")}`;
   return `LDG-${crypto.randomUUID()}`;
 }
 
@@ -140,6 +150,13 @@ export async function recordDeduction(input: {
   actorName?: string;
   actorEmail?: string;
   note?: string;
+  /**
+   * Stable caller-level idempotency key. When set, retrying the same logical
+   * charge (same key) does not create a second billing identity — the write
+   * dedupes on `source_entry_id`. Recommended: the queueId / applicationId /
+   * bookingId the charge is "for".
+   */
+  idempotencyKey?: string;
 }): Promise<void> {
   const units = Math.max(1, Math.trunc(input.units));
   const cost = await creditCostFor(input.event);
@@ -154,7 +171,7 @@ export async function recordDeduction(input: {
       actorName: input.actorName,
       actorEmail: input.actorEmail,
       note: input.note,
-      sourceEntryId: newSourceEntryId(),
+      sourceEntryId: newSourceEntryId(input.idempotencyKey),
     },
     // Only postgres mode enforces the guard; sheets/dual keep the Sheets
     // "append and only log on failure" posture.
@@ -167,20 +184,31 @@ export async function recordTopUp(input: {
   actorName: string;
   actorEmail: string;
   note: string;
+  /** Event tag override (default manual_topup / manual_adjustment). e.g. "purchase". */
+  event?: string;
+  reference?: string;
+  /**
+   * Stable idempotency key. When set (e.g. a payment reference), replaying the
+   * same top-up does not add credits twice. The volume-discount bonus row, if
+   * any, is keyed deterministically off the same key.
+   */
+  idempotencyKey?: string;
 }): Promise<CreditBalance & { bonus: number }> {
   const amount = Math.trunc(input.amount);
   if (!Number.isFinite(amount) || amount === 0) throw new Error("Top-up amount must be a non-zero whole number.");
 
+  const primaryEvent = input.event?.trim() || (amount > 0 ? "manual_topup" : "manual_adjustment");
   await append(
     {
       type: "TopUp",
-      event: amount > 0 ? "manual_topup" : "manual_adjustment",
+      event: primaryEvent,
       units: Math.abs(amount),
       creditsDelta: amount,
+      reference: input.reference,
       actorName: input.actorName,
       actorEmail: input.actorEmail,
       note: input.note,
-      sourceEntryId: newSourceEntryId(),
+      sourceEntryId: newSourceEntryId(input.idempotencyKey),
     },
     { guard: false },
   );
@@ -193,10 +221,11 @@ export async function recordTopUp(input: {
         event: "volume_discount",
         units: bonus,
         creditsDelta: bonus,
+        reference: input.reference,
         actorName: input.actorName,
         actorEmail: input.actorEmail,
         note: `${percent}% volume discount on a ${amount}-credit top-up`,
-        sourceEntryId: newSourceEntryId(),
+        sourceEntryId: newSourceEntryId(input.idempotencyKey ? `${input.idempotencyKey}:bonus` : undefined),
       },
       { guard: false },
     );

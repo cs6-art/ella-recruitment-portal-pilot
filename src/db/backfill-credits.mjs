@@ -6,14 +6,19 @@ import { google } from "googleapis";
 import { neon } from "@neondatabase/serverless";
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
-const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
+// Explicit credits workbook; falls back to the main recruitment workbook.
+const spreadsheetId = (process.env.GOOGLE_CREDITS_SPREADSHEET_ID || process.env.GOOGLE_SHEETS_SPREADSHEET_ID || "").trim();
 const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
 const privateKey = (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "")
   .replace(/^"(.*)"$/s, "$1")
   .replace(/\\n/g, "\n")
   .trim();
 
-for (const [name, value] of Object.entries({ DATABASE_URL: databaseUrl, GOOGLE_SHEETS_SPREADSHEET_ID: spreadsheetId, GOOGLE_SERVICE_ACCOUNT_EMAIL: serviceAccountEmail, GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: privateKey })) {
+if (!spreadsheetId) {
+  console.error("Neither GOOGLE_CREDITS_SPREADSHEET_ID nor GOOGLE_SHEETS_SPREADSHEET_ID is set — cannot locate the Ella_Credit_Ledger tab.");
+  process.exit(1);
+}
+for (const [name, value] of Object.entries({ DATABASE_URL: databaseUrl, GOOGLE_SERVICE_ACCOUNT_EMAIL: serviceAccountEmail, GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: privateKey })) {
   if (!value) { console.error(`${name} is not set (put it in .env.local).`); process.exit(1); }
 }
 

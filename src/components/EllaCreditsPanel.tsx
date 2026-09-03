@@ -88,7 +88,7 @@ export default function EllaCreditsPanel() {
     setMessage("");
     try {
       const parsedAmount = Number(amount);
-      if (!Number.isInteger(parsedAmount) || parsedAmount === 0) throw new Error("Enter a non-zero whole number of credits (negative to deduct).");
+      if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) throw new Error("Enter a positive whole number of credits.");
       if (note.trim().length < 1) throw new Error("Add a short note explaining this change.");
       const response = await fetch("/api/ella-credits", {
         method: "POST",
@@ -147,8 +147,8 @@ export default function EllaCreditsPanel() {
         <div className={styles.form}>
           <div className={`${styles.field} ${styles.amountField}`}>
             <label htmlFor="ella-credit-amount">Adjust balance</label>
-            <input id="ella-credit-amount" type="number" step="1" inputMode="numeric" placeholder="e.g. 2000 or -50" value={amount} onChange={(event) => setAmount(event.target.value)} />
-            <small>Positive adds credits; negative removes them. A single top-up of {nf.format(data.pricing.discountThreshold)}+ credits earns a {nf.format(data.pricing.discountPercent)}% bonus automatically.</small>
+            <input id="ella-credit-amount" type="number" min="1" step="1" inputMode="numeric" placeholder="e.g. 2000" value={amount} onChange={(event) => setAmount(event.target.value)} />
+            <small>Adds credits only. A single top-up of {nf.format(data.pricing.discountThreshold)}+ credits earns a {nf.format(data.pricing.discountPercent)}% bonus automatically.</small>
           </div>
           <div className={`${styles.field} ${styles.noteField}`}>
             <label htmlFor="ella-credit-note">Note</label>

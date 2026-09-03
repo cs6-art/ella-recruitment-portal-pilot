@@ -1170,6 +1170,9 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
       event: "phone_interview",
       units: 1,
       reference: context.applicationId,
+      // One AI voice interview per application → charge exactly once even if
+      // the booking is processed more than once.
+      idempotencyKey: `phone:${context.applicationId}`,
       roleId: context.roleId,
       actorEmail: context.email,
       note: "AI voice interview booked",
