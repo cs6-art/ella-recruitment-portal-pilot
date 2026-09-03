@@ -107,6 +107,7 @@ export async function POST(request: Request) {
       event: "cv_analysis",
       units: 1,
       reference: applicationId,
+      idempotencyKey: `cv:${applicationId}`,
       roleId,
       actorName: user.name,
       actorEmail: user.email,

@@ -154,6 +154,7 @@ export async function POST(request: Request) {
       event: "cv_analysis",
       units: 1,
       reference: applicationId,
+      idempotencyKey: `cv:${applicationId}`,
       roleId,
       actorEmail: invitation?.candidateEmail || "",
       note: "HR invite application screening",

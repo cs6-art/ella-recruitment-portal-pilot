@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account";
 import { cachedSheetsRead, invalidateSheetsCache, withSheetsBackoff } from "@/lib/sheets-cache";
 import { summarizeLedger } from "@/lib/ella-credit-math";
+import { CREDIT_LEDGER_HEADERS, CREDIT_LEDGER_TAB, creditsSpreadsheetId } from "@/lib/ella-credits-config";
 import type { CreditBalance, LedgerAppend, LedgerEntry } from "@/lib/ella-credits-store";
 
 /**
@@ -12,12 +13,14 @@ import type { CreditBalance, LedgerAppend, LedgerEntry } from "@/lib/ella-credit
  * overspend (documented limitation; the Postgres store fixes it).
  */
 
-const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+const spreadsheetId = creditsSpreadsheetId();
 const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 const privateKey = getGoogleServiceAccountPrivateKey();
 
 if (!spreadsheetId || !serviceAccountEmail || !privateKey) {
-  throw new Error("Ella Credits ledger access is not configured.");
+  throw new Error(
+    "Ella Credits ledger access is not configured (need GOOGLE_CREDITS_SPREADSHEET_ID or GOOGLE_SHEETS_SPREADSHEET_ID, plus the Google service account).",
+  );
 }
 
 const auth = new google.auth.JWT({
@@ -28,21 +31,8 @@ const auth = new google.auth.JWT({
 
 const sheets = google.sheets({ version: "v4", auth });
 
-const TAB = "Ella_Credit_Ledger";
-const HEADERS = [
-  "Entry_ID",
-  "Timestamp",
-  "Type",
-  "Event",
-  "Units",
-  "Credits_Delta",
-  "Balance_After",
-  "Reference",
-  "Role_ID",
-  "Actor_Name",
-  "Actor_Email",
-  "Note",
-];
+const TAB = CREDIT_LEDGER_TAB;
+const HEADERS = [...CREDIT_LEDGER_HEADERS];
 const CACHE_KEY = `${TAB}:L:${spreadsheetId}`;
 
 function text(value: unknown) {
@@ -117,9 +107,20 @@ export async function getSheetCreditBalance(options: { fresh?: boolean } = {}): 
  * `Balance_After = previous + delta`. `guard` is ignored — the Sheets store
  * never blocks a spend.
  */
-export async function appendSheetLedgerEntry(entry: LedgerAppend): Promise<{ balanceAfter: number; applied: true }> {
+export async function appendSheetLedgerEntry(entry: LedgerAppend): Promise<{ balanceAfter: number; applied: boolean }> {
   await ensureTab();
-  const { balance } = await getSheetCreditBalance({ fresh: true });
+  const existing = await withSheetsBackoff(readSheetLedgerEntries);
+  // Idempotency: a repeated sourceEntryId (deterministic caller key, or a
+  // replayed mirror) must not append a second row. Random `LDG-<uuid>` keys
+  // never collide, so the historical path is unchanged.
+  const prior = entry.sourceEntryId
+    ? existing.find((row) => row.entryId === entry.sourceEntryId)
+    : undefined;
+  if (prior) {
+    const { balance } = summarizeLedger(existing);
+    return { balanceAfter: balance, applied: false };
+  }
+  const { balance } = summarizeLedger(existing);
   const balanceAfter = balance + entry.creditsDelta;
   await withSheetsBackoff(() => sheets.spreadsheets.values.append({
     spreadsheetId,

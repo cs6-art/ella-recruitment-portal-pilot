@@ -254,6 +254,9 @@ export async function intakeResumeBatch(input: {
           event: "cv_analysis",
           units: 1,
           reference: resolvedQueueId,
+          // Stable per (role, resume) key — a retry of this file's screening
+          // never mints a second charge (dedupes on source_entry_id).
+          idempotencyKey: `cv:${resolvedQueueId}`,
           roleId,
           actorName,
           actorEmail,

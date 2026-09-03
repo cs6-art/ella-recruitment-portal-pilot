@@ -10,7 +10,10 @@
     "test": "node --test tests/*.test.mjs",
     "test:browser": "playwright test",
     "db:migrate": "node --env-file-if-exists=.env.local src/db/migrate.mjs",
-    "db:backfill:credits": "node --env-file-if-exists=.env.local src/db/backfill-credits.mjs"
+    "db:backfill:credits": "node --env-file-if-exists=.env.local src/db/backfill-credits.mjs",
+    "db:check:credits": "node --env-file-if-exists=.env.local src/db/check-credit-parity.mjs",
+    "db:backfill:recruitment": "node --env-file-if-exists=.env.local src/db/backfill-recruitment.mjs",
+    "db:check:recruitment": "node --env-file-if-exists=.env.local src/db/check-recruitment-parity.mjs"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.80",

@@ -108,7 +108,18 @@ risk R-P2-4).
 Idempotency = `credit_ledger.source_entry_id` UNIQUE (`LDG-<uuid>` for new
 writes; original `Entry_ID` or a deterministic `SHEET-<i>-<sha1…>` on backfill).
 Migration runner `src/db/migrate.mjs` (forward-only, naive `;`-split, no
-advisory lock); backfill `src/db/backfill-credits.mjs` (idempotent, exits
+advisory lock) requires an explicit target whenever pending migrations exist:
+
+```text
+npm run db:migrate -- --target=0002_payments.sql
+npm run db:migrate -- --target=0003_recruitment_core.sql
+```
+
+The runner applies only the named file, requires earlier migrations to already
+be recorded in `_migrations`, and refuses an un-targeted run. Never use a
+generic migration command to advance the pilot past its current gate.
+
+Backfill `src/db/backfill-credits.mjs` (idempotent, exits
 non-zero on sum mismatch — the template for future parity scripts).
 
 ## 3. Google Sheets dependency inventory

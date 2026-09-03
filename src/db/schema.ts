@@ -1,4 +1,4 @@
-import { integer, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 /**
  * Phase 2 backend migration — first pilot table.
@@ -43,3 +43,73 @@ export const creditBalance = pgTable("credit_balance", {
 
 export type CreditLedgerRow = typeof creditLedger.$inferSelect;
 export type NewCreditLedgerRow = typeof creditLedger.$inferInsert;
+
+/**
+ * Credit purchases via HitPay (sandbox for the pilot).
+ *
+ * `payments` is the authoritative record of a purchase. Money never lives in
+ * Google Sheets. A purchase only adds credits once its webhook is verified and
+ * the `credit_ledger` grant succeeds — a frontend redirect alone changes
+ * nothing here. `credit_ledger_source_id` is the deterministic idempotency key
+ * used for the grant, so a duplicate webhook cannot double-credit.
+ */
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // Our stable reference, generated before contacting the provider and sent
+    // to HitPay as `reference_number`. Unique — the anchor for idempotency.
+    reference: text("reference").notNull().unique(),
+    provider: text("provider").notNull().default("hitpay"),
+    // HitPay payment-request id (from the create call).
+    providerPaymentId: text("provider_payment_id"),
+    // HitPay's own payment id from the webhook / status pull.
+    providerReference: text("provider_reference").notNull().default(""),
+    status: text("status").notNull().default("pending"), // pending | paid | failed | expired | canceled | refunded
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("SGD"),
+    credits: integer("credits").notNull(), // credits granted on success
+    packId: text("pack_id").notNull().default(""),
+    actorEmail: text("actor_email").notNull().default(""),
+    actorName: text("actor_name").notNull().default(""),
+    // Deterministic `LDG-…` id used for the credit grant. Set once credited.
+    creditLedgerSourceId: text("credit_ledger_source_id"),
+    creditedAt: timestamp("credited_at", { withTimezone: true }),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    // Optional caller idempotency key (e.g. from an Idempotency-Key header).
+    idempotencyKey: text("idempotency_key").unique(),
+    lastEvent: jsonb("last_event"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("payments_status_idx").on(table.status),
+    index("payments_provider_payment_id_idx").on(table.providerPaymentId),
+    index("payments_actor_email_idx").on(table.actorEmail),
+    index("payments_created_at_idx").on(table.createdAt),
+  ],
+);
+
+/** Append-only audit of every provider callback / status change on a payment. */
+export const paymentEvents = pgTable(
+  "payment_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    paymentId: uuid("payment_id")
+      .notNull()
+      .references(() => payments.id),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    source: text("source").notNull().default("webhook"), // webhook | reconcile | create
+    event: text("event").notNull().default(""),
+    status: text("status").notNull().default(""),
+    signatureValid: boolean("signature_valid").notNull().default(false),
+    // A provider-supplied de-dupe handle (payment id + status), UNIQUE so a
+    // replayed webhook is a no-op insert.
+    dedupeKey: text("dedupe_key").unique(),
+    detail: jsonb("detail"),
+  },
+  (table) => [index("payment_events_payment_id_idx").on(table.paymentId)],
+);
+
+export type PaymentRow = typeof payments.$inferSelect;
+export type NewPaymentRow = typeof payments.$inferInsert;
