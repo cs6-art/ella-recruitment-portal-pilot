@@ -47,6 +47,15 @@ test("target API exposes the write contracts needed to keep portal operations ou
   for (const source of [roles, applications, bulk, slots, tokens]) assert.doesNotMatch(source, /google-sheets|googleapis|DATABASE_URL/);
 });
 
+test("HR decision queue honors the requested stage", () => {
+  const route = read("src/app/api/internal/recruitment/hr-decisions/queue/route.ts");
+  const queries = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(route, /searchParams\.get\("stage"\)/);
+  assert.match(route, /invalid_stage/);
+  assert.match(queries, /stage === "voice"/);
+  assert.match(queries, /voice_review_pending/);
+});
+
 test("target write primitives are transactional, idempotent, and concurrency-safe", () => {
   const source = read("src/lib/internal-recruitment-queries.ts");
   assert.ok((source.match(/db\.transaction\(/g) || []).length >= 5);

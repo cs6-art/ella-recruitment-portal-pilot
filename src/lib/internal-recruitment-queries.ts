@@ -284,9 +284,10 @@ export async function createVoiceCallLog(input: { applicationExternalId: string;
   return { log: log ?? null, created: Boolean(log), error: null };
 }
 
-export async function hrDecisionQueue() {
+export async function hrDecisionQueue(stage?: "resume" | "voice" | "final") {
   const db = getDb();
-  return db.select({ externalId: applications.externalId, roleId: applications.roleId, candidateName: applications.candidateName, email: applications.email, currentStage: applications.currentStage, resumeHrDecision: applications.resumeHrDecision, voiceHrDecision: applications.voiceHrDecision, finalHrDecision: applications.finalHrDecision, updatedAt: applications.updatedAt }).from(applications).where(and(eq(applications.withdrawn, false), inArray(applications.currentStage, ["resume_review", "voice_review_pending", "final_decision_pending"]))).orderBy(desc(applications.updatedAt)).limit(LIMIT);
+  const stageFilter = stage === "resume" ? ["resume_review"] : stage === "voice" ? ["voice_review_pending"] : stage === "final" ? ["final_decision_pending"] : ["resume_review", "voice_review_pending", "final_decision_pending"];
+  return db.select({ externalId: applications.externalId, roleId: applications.roleId, candidateName: applications.candidateName, email: applications.email, currentStage: applications.currentStage, resumeHrDecision: applications.resumeHrDecision, voiceHrDecision: applications.voiceHrDecision, finalHrDecision: applications.finalHrDecision, updatedAt: applications.updatedAt }).from(applications).where(and(eq(applications.withdrawn, false), inArray(applications.currentStage, stageFilter))).orderBy(desc(applications.updatedAt)).limit(LIMIT);
 }
 
 export async function applyHrDecision(input: { applicationExternalId: string; stage: "resume" | "voice" | "final"; decision: string; comments?: string; actorEmail: string; actorName?: string; actionRequestId: string }) {
