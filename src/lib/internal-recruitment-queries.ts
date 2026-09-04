@@ -1,6 +1,8 @@
 import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
+import { appendPostgresLedgerEntryOnExecutor } from "@/lib/ella-credits-postgres";
+import type { LedgerAppend } from "@/lib/ella-credits-store";
 import {
   applicants,
   applications,
@@ -471,6 +473,112 @@ export async function claimBulkQueue(limit = 10) {
   const safeLimit = Math.max(1, Math.min(LIMIT, Math.trunc(limit)));
   const result = await db.execute(sql`WITH claimed AS (SELECT id FROM bulk_screening_queue_items WHERE status = 'queued' ORDER BY discovered_at, id FOR UPDATE SKIP LOCKED LIMIT ${safeLimit}) UPDATE bulk_screening_queue_items q SET status = 'processing', processing_started_at = now(), attempt_count = q.attempt_count + 1, updated_at = now() FROM claimed c WHERE q.id = c.id RETURNING q.id, q.dedupe_key AS "dedupeKey", q.batch_id AS "batchId", q.status, q.attempt_count AS "attemptCount"`);
   return rowsOf<Record<string, unknown>>(result);
+}
+
+/** Claim one known queue item without allowing a concurrent second claim. */
+export async function claimBulkQueueItem(dedupeKey: string) {
+  const db = getDb();
+  const result = await db.execute(sql`WITH claimed AS (
+    SELECT id FROM bulk_screening_queue_items
+    WHERE dedupe_key = ${dedupeKey.trim()} AND status IN ('queued', 'failed')
+    FOR UPDATE SKIP LOCKED
+  )
+  UPDATE bulk_screening_queue_items q
+  SET status = 'processing', processing_started_at = now(), attempt_count = q.attempt_count + 1, updated_at = now()
+  FROM claimed c WHERE q.id = c.id
+  RETURNING q.id, q.dedupe_key AS "dedupeKey", q.status, q.attempt_count AS "attemptCount"`);
+  return rowsOf<Record<string, unknown>>(result)[0] ?? null;
+}
+
+export async function getBulkScreeningContext(dedupeKey: string) {
+  const db = getDb();
+  const [row] = await db.select({
+    item: bulkScreeningQueueItems,
+    role: roles,
+    application: applications,
+    resumeFile: resumeFiles,
+  })
+    .from(bulkScreeningQueueItems)
+    .innerJoin(roles, eq(roles.id, bulkScreeningQueueItems.roleId))
+    .leftJoin(applications, eq(applications.id, bulkScreeningQueueItems.applicationId))
+    .leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId))
+    .where(eq(bulkScreeningQueueItems.dedupeKey, dedupeKey.trim()))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Persist a validated screening result, status history, queue completion, and
+ * its one-time credit deduction in one Postgres transaction. A failed credit
+ * guard rolls back the result and queue update, so failed screening is free.
+ */
+export async function finalizeBulkScreening(input: {
+  dedupeKey: string;
+  screening: {
+    matchScore: number;
+    recommendation: string;
+    summary: string;
+    strengths: string;
+    gaps: string;
+    interviewQuestions: string;
+    evaluationScores: unknown;
+    raw?: unknown;
+  };
+  ledger: LedgerAppend;
+  actorEmail?: string;
+  actorName?: string;
+}) {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const [queue] = await tx.select().from(bulkScreeningQueueItems)
+      .where(eq(bulkScreeningQueueItems.dedupeKey, input.dedupeKey.trim()))
+      .for("update").limit(1);
+    if (!queue) return { processed: false, duplicate: false, error: "unknown_queue" as const };
+    if (queue.status === "screened") return { processed: false, duplicate: true, error: null };
+    if (queue.status !== "processing") return { processed: false, duplicate: false, error: "queue_not_claimed" as const };
+    if (!queue.applicationId) return { processed: false, duplicate: false, error: "missing_application" as const };
+
+    const [application] = await tx.select().from(applications)
+      .where(eq(applications.id, queue.applicationId)).for("update").limit(1);
+    if (!application) return { processed: false, duplicate: false, error: "missing_application" as const };
+
+    const [existing] = await tx.select({ id: screeningResults.id }).from(screeningResults)
+      .where(eq(screeningResults.applicationId, application.id)).limit(1);
+    if (existing) return { processed: false, duplicate: true, error: null };
+
+    const [result] = await tx.insert(screeningResults).values({
+      applicationId: application.id,
+      matchScore: input.screening.matchScore,
+      recommendation: input.screening.recommendation,
+      summary: input.screening.summary,
+      strengths: input.screening.strengths,
+      gaps: input.screening.gaps,
+      interviewQuestions: input.screening.interviewQuestions,
+      evaluationScores: input.screening.evaluationScores as object,
+      screenedAt: new Date(),
+      raw: (input.screening.raw ?? null) as object | null,
+    }).onConflictDoNothing({ target: screeningResults.applicationId }).returning();
+    if (!result) return { processed: false, duplicate: true, error: null };
+
+    const credit = await appendPostgresLedgerEntryOnExecutor(tx, input.ledger, { guard: true });
+    const actionRequestId = `screening:${input.dedupeKey.trim()}`;
+    await tx.insert(applicationStatusHistory).values({
+      applicationId: application.id,
+      stage: "resume_review",
+      previousStage: application.currentStage,
+      newStage: application.currentStage,
+      decision: "pending",
+      actorName: input.actorName || "",
+      actorEmail: input.actorEmail || "",
+      comments: "Automated screening completed; awaiting HR review.",
+      source: "target:bulk_screening",
+      actionRequestId,
+    }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
+    await tx.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, application.id));
+    await tx.update(bulkScreeningQueueItems).set({ status: "screened", errorMessage: "", processedAt: new Date(), updatedAt: new Date() })
+      .where(eq(bulkScreeningQueueItems.id, queue.id));
+    return { processed: true, duplicate: false, error: null, result, credit };
+  });
 }
 
 export async function updateBulkQueueStatus(input: { dedupeKey: string; status: string; applicationId?: string; errorMessage?: string }) {

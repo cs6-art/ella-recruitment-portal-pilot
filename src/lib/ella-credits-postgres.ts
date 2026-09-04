@@ -1,4 +1,4 @@
-import { desc, sql } from "drizzle-orm";
+import { desc, sql, type SQL } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { creditBalance, creditLedger } from "@/db/schema";
@@ -70,16 +70,23 @@ export async function getPostgresCreditBalance(): Promise<CreditBalance> {
  * - `guard: false` → unconditional (mirror mode: Sheets already decided).
  * A repeated `sourceEntryId` is a no-op that returns the current balance.
  */
-export async function appendPostgresLedgerEntry(
+type SqlExecutor = { execute(query: SQL<unknown>): Promise<unknown> };
+
+/**
+ * Shared implementation used by both the standalone credit path and a
+ * recruitment transaction. Keeping the ledger CTE on the caller's executor
+ * makes a successful screening result and its charge atomic.
+ */
+export async function appendPostgresLedgerEntryOnExecutor(
+  executor: SqlExecutor,
   entry: LedgerAppend,
   options: { guard: boolean } = { guard: true },
 ): Promise<{ balanceAfter: number; applied: boolean }> {
-  const db = getDb();
   const delta = Math.trunc(entry.creditsDelta);
   const units = Math.trunc(entry.units);
   const guardClause = options.guard ? sql` and "credit_balance"."balance" + ${delta} >= 0` : sql``;
 
-  const result = await db.execute(sql`
+  const result = await executor.execute(sql`
     with existed as (
       select exists(select 1 from "credit_ledger" where "source_entry_id" = ${entry.sourceEntryId}) as v
     ),
@@ -118,8 +125,14 @@ export async function appendPostgresLedgerEntry(
   if (insertedCount > 0) return { balanceAfter: balanceAfter ?? 0, applied: true };
   if (existed) return { balanceAfter: balanceAfter ?? 0, applied: false }; // idempotent no-op
   if (options.guard) {
-    const current = await getPostgresCreditBalance();
-    throw new EllaCreditsError(Math.abs(delta), current.balance);
+    throw new EllaCreditsError(Math.abs(delta), balanceAfter ?? 0);
   }
   throw new Error("credit_balance row (id = 1) is missing; run `npm run db:migrate`.");
+}
+
+export async function appendPostgresLedgerEntry(
+  entry: LedgerAppend,
+  options: { guard: boolean } = { guard: true },
+): Promise<{ balanceAfter: number; applied: boolean }> {
+  return appendPostgresLedgerEntryOnExecutor(getDb(), entry, options);
 }

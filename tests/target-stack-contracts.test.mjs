@@ -9,7 +9,7 @@ const routeFiles = [
   "screening/route.ts", "screening/invitations/route.ts", "hr-decisions/route.ts", "hr-decisions/queue/route.ts",
   "voice/queue/route.ts", "voice/queue/claim/route.ts", "voice/attempts/status/route.ts", "voice/results/route.ts", "voice/logs/route.ts",
   "bookings/route.ts", "bookings/slots/route.ts", "bookings/tokens/route.ts", "bulk/queue/route.ts", "bulk/queue/claim/route.ts", "bulk/queue/status/route.ts",
-  "status-history/route.ts", "notifications/route.ts",
+  "status-history/route.ts", "notifications/route.ts", "bulk/process/route.ts",
 ];
 
 test("target API has a route for every operational recruitment domain", () => {

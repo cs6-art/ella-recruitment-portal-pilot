@@ -306,6 +306,13 @@ export async function readResumeFile(record: ResumeFileRecord) {
   return Buffer.from(response.data as ArrayBuffer);
 }
 
+/** Read and validate a stored resume for the Postgres screening worker. */
+export async function extractStoredResumeText(record: ResumeFileRecord) {
+  const buffer = await readResumeFile(record);
+  assertSignature(buffer, record.kind);
+  return extractText(buffer, record.kind);
+}
+
 export async function deleteResumeFile(record: ResumeFileRecord) {
   await drive().files.delete({ fileId: record.fileId, supportsAllDrives: true }).catch((error) => {
     // Already gone (e.g. a concurrent cleanup) is not a failure worth surfacing.
