@@ -62,7 +62,9 @@ test("the public credits API surface is unchanged", () => {
 
 test("db client is lazy — no connection at import", () => {
   const client = read("src/db/client.ts");
-  assert.match(client, /let cached: NeonHttpDatabase<typeof schema> \| null = null/);
+  assert.match(client, /let cached: NeonDatabase<typeof schema> \| null = null/);
+  assert.match(client, /drizzle-orm\/neon-serverless/);
+  assert.doesNotMatch(client, /drizzle-orm\/neon-http/);
   assert.match(client, /export function getDb\(\)/);
   assert.doesNotMatch(client, /^const db = drizzle/m);
 });

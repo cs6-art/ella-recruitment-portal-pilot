@@ -144,8 +144,12 @@ export async function upsertApplicant(input: { email: string; fullName?: string;
 export async function listApplications(stage?: string, roleExternalId?: string) {
   const db = getDb();
   const stageWhere = stage ? eq(applications.currentStage, stage) : undefined;
-  if (!roleExternalId) return db.select().from(applications).where(stageWhere).orderBy(desc(applications.updatedAt)).limit(LIMIT);
-  return db.select({ application: applications, roleExternalId: roles.externalId }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).where(and(stageWhere, eq(roles.externalId, roleExternalId))).orderBy(desc(applications.updatedAt)).limit(LIMIT);
+  const query = db.select({ application: applications, roleExternalId: roles.externalId, applicantEmail: applicants.primaryEmail })
+    .from(applications)
+    .innerJoin(roles, eq(roles.id, applications.roleId))
+    .innerJoin(applicants, eq(applicants.id, applications.applicantId));
+  return (roleExternalId ? query.where(and(stageWhere, eq(roles.externalId, roleExternalId))) : query.where(stageWhere))
+    .orderBy(desc(applications.updatedAt)).limit(LIMIT);
 }
 
 export async function createApplication(input: { externalId: string; applicantEmail: string; applicantName?: string; phone?: string; preferredMobile?: string; applicantCountry?: string; roleExternalId: string; source?: string; sourceDetail?: string; consentAt?: string }) {
