@@ -13,6 +13,8 @@ import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { getPortalConfig } from "@/lib/portal-config";
 import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { createConfiguredVoiceInterviewSlots } from "@/lib/applicant-workflow";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 import { serializeVoiceInterviewSlots } from "@/lib/voice-interview-availability";
 
 export const runtime = "nodejs";
@@ -303,10 +305,63 @@ export async function POST(request: Request, context: Context) {
       License_Requirement_Status: setup.licenseRequirementStatus,
       HOD_Interview_Required: setup.hodInterviewRequired,
       Final_Interview_Venue: setup.finalInterviewVenue,
+      ...(isPostgresRecruitmentTarget()
+        ? {
+            Status: setupAction === "publish_role"
+              ? "job_posted"
+              : role.status.toLowerCase().replace(/[\s-]+/g, "_") === "approved"
+                ? "recruitment_setup"
+                : role.status,
+            HOD_Email: role.hodEmail || "",
+            Posting_Confirmed: setupAction === "publish_role" ? "TRUE" : "FALSE",
+            Posted_At: setupAction === "publish_role" ? updatedAt : "",
+            Posted_By: setupAction === "publish_role" ? user.name : "",
+            Action_Request_ID: actionRequestId,
+            Action: setupAction === "save_draft" ? "recruitment_setup_draft_saved" : setupAction === "mark_recruitment_ready" ? "recruitment_setup_marked_ready" : setupAction === "mark_ready_for_publishing" ? "recruitment_setup_ready_for_publishing" : "role_job_posted",
+            Comments: setup.comments,
+            Latest_Comments: setup.comments,
+          }
+        : {}),
       Recruitment_Setup_Updated_At: updatedAt,
       Recruitment_Setup_Updated_By_Name: user.name,
-      Recruitment_Setup_Updated_By_Email: performerEmail,
-    });
+       Recruitment_Setup_Updated_By_Email: performerEmail,
+     });
+    if (isPostgresRecruitmentTarget()) {
+      let voiceSlotWarning = "";
+      let voiceSlotsGeneratedAt = setup.voiceInterviewSlotsGeneratedAt || "";
+      if (!isAutosaveDraft && setup.voiceInterviewAvailabilityMode !== "none") {
+        try {
+          const voiceSlots = await createConfiguredVoiceInterviewSlots({
+            roleId: role.roleId,
+            mode: setup.voiceInterviewAvailabilityMode,
+            manualSlots: setup.voiceInterviewSlots,
+            autoStartDate: setup.voiceInterviewAutoStartDate,
+            autoEndDate: setup.voiceInterviewAutoEndDate,
+            timezone: setup.voiceInterviewTimezone,
+            targetHiringDate: role.targetHiringDate,
+          });
+          voiceSlotsGeneratedAt = voiceSlots.created > 0 || voiceSlots.skipped > 0 ? updatedAt : voiceSlotsGeneratedAt;
+          await targetUpdateRoleFields(role.roleId, { Voice_Interview_Slots_Generated_At: voiceSlotsGeneratedAt, Last_Updated_By_Email: performerEmail });
+        } catch (voiceSlotError) {
+          voiceSlotWarning = voiceSlotError instanceof Error ? `Recruitment setup saved, but AI Voice Interview slots could not be generated: ${voiceSlotError.message}` : "Recruitment setup saved, but AI Voice Interview slots could not be generated.";
+          console.error("[API Recruitment Setup] Target voice slot generation failed:", voiceSlotError);
+        }
+      }
+      return NextResponse.json({
+        success: true,
+        roleId: role.roleId,
+        status: setupAction === "publish_role" ? "Job Posted" : role.status,
+        action: "recruitment_setup_updated",
+        recruitmentSetupStatus: nextRecruitmentSetupStatus,
+        updatedAt,
+        actionRequestId,
+        notificationStatus: "not_configured",
+        notificationError: "",
+        message: voiceSlotWarning || "Recruitment setup saved successfully.",
+        voiceSlotWarning,
+        voiceSlotsGeneratedAt,
+      });
+    }
     let result: Record<string, unknown> = {};
     let workflowWarning = "";
     if (workflowConfigured && !isAutosaveDraft) {

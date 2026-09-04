@@ -10,6 +10,8 @@ import {
   type RoleRequestDetails,
 } from "@/lib/google-sheets";
 import { canDeleteRoleRequest, canEditRoleRequest, canViewRole } from "@/lib/access-control";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { targetArchiveRole } from "@/lib/recruitment-target-portal";
 import { roleRequestSchema } from "@/lib/role-schema";
 import {
   COOKIE_NAME,
@@ -286,7 +288,12 @@ export async function DELETE(_request: Request, context: RouteContext) {
       return NextResponse.json({ success: false, error: "You do not have permission to delete this role request." }, { status: 403 });
     }
 
-    await deleteRoleRequest(access.role.roleId);
+    if (isPostgresRecruitmentTarget()) {
+      const result = await targetArchiveRole(access.role.roleId, { email: access.user.email, name: access.user.name });
+      if (!result) return NextResponse.json({ success: false, error: "Role request not found." }, { status: 404 });
+    } else {
+      await deleteRoleRequest(access.role.roleId);
+    }
     return NextResponse.json({ success: true, roleId: access.role.roleId, message: "Role request deleted successfully." });
   } catch (error) {
     console.error("[API Role Details] DELETE failed:", error);

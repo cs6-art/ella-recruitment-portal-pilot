@@ -22,6 +22,7 @@ import {
   listRoles,
   registerResumeFile,
   updateRoleDetails,
+  archiveRole,
 } from "@/lib/internal-recruitment-queries";
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 
@@ -291,7 +292,7 @@ export async function targetUpdateRoleFields(roleId: string, fields: Record<stri
   try { if (fields.Interview_Availability_Rules) availabilityRules = JSON.parse(fields.Interview_Availability_Rules); } catch { availabilityRules = []; }
   return updateRoleDetails({
     externalId: roleId,
-    status: fields.Status || (["true", "1", "yes"].includes(text(fields.Posting_Confirmed).toLowerCase()) ? "job_posted" : undefined),
+    status: normalizeTargetRoleStatus(fields.Status) || (["true", "1", "yes"].includes(text(fields.Posting_Confirmed).toLowerCase()) ? "job_posted" : undefined),
     title: fields.Job_Title,
     departmentSnapshot: fields.Department,
     requestType: fields.Request_Type,
@@ -308,8 +309,32 @@ export async function targetUpdateRoleFields(roleId: string, fields: Record<stri
     postingConfirmed: fields.Posting_Confirmed ? ["true", "1", "yes"].includes(fields.Posting_Confirmed.toLowerCase()) : undefined,
     approvedBy: fields.Approved_By,
     approvedAt: fields.Approved_At || undefined,
+    latestComments: fields.Comments || fields.Latest_Comments,
+    actionRequestId: fields.Action_Request_ID || undefined,
+    actorName: fields.Last_Updated_By_Name || fields.Changed_By_Name,
+    action: fields.Action || "role_updated",
     actorEmail: fields.Last_Updated_By_Email || fields.Requester_Email || "",
   });
+}
+
+function normalizeTargetRoleStatus(value?: string) {
+  const key = text(value).toLowerCase().replace(/[\s-]+/g, "_");
+  const statuses: Record<string, string> = {
+    draft: "draft",
+    pending_hr_discussion: "pending_hr_discussion",
+    approved: "approved",
+    recruitment_setup: "recruitment_setup",
+    job_posted: "job_posted",
+    returned_for_revision: "returned_for_revision",
+    on_hold: "on_hold",
+    rejected: "rejected",
+    archived: "archived",
+  };
+  return statuses[key] || "";
+}
+
+export async function targetArchiveRole(roleId: string, actor: { email: string; name?: string }) {
+  return archiveRole({ externalId: roleId, actorEmail: actor.email, actorName: actor.name, actionRequestId: `archive:${roleId}` });
 }
 
 export async function targetApplicantSummaries() {

@@ -114,6 +114,10 @@ export async function updateRoleDetails(input: {
   postingConfirmed?: boolean;
   approvedBy?: string;
   approvedAt?: string | null;
+  latestComments?: string;
+  actionRequestId?: string;
+  actorName?: string;
+  action?: string;
   actorEmail: string;
 }) {
   const db = getDb();
@@ -137,12 +141,41 @@ export async function updateRoleDetails(input: {
     ...(input.postingConfirmed === undefined ? {} : { postingConfirmed: input.postingConfirmed }),
     ...(input.approvedBy === undefined ? {} : { approvedBy: input.approvedBy }),
     ...(input.approvedAt === undefined ? {} : { approvedAt: isoOrNull(input.approvedAt) }),
+    ...(input.latestComments === undefined ? {} : { latestComments: input.latestComments }),
     updatedByEmail: input.actorEmail,
     updatedAt: new Date(),
   };
   return db.transaction(async (tx) => {
-    const [role] = await tx.update(roles).set(patch).where(eq(roles.externalId, input.externalId.trim())).returning();
+    const [current] = await tx.select({ id: roles.id, status: roles.status }).from(roles).where(eq(roles.externalId, input.externalId.trim())).limit(1);
+    if (!current) return null;
+    const [role] = await tx.update(roles).set(patch).where(eq(roles.id, current.id)).returning();
+    if (role && input.status && current.status !== input.status && input.actionRequestId) {
+      await tx.insert(roleStatusHistory).values({
+        roleId: current.id,
+        previousStatus: current.status,
+        newStatus: input.status,
+        comments: input.latestComments || "",
+        action: input.action || "role_updated",
+        actionSource: "portal_postgres_target",
+        actionRequestId: input.actionRequestId,
+        changedByEmail: input.actorEmail,
+        changedByName: input.actorName || "",
+      }).onConflictDoNothing({ target: roleStatusHistory.actionRequestId });
+    }
     return role ?? null;
+  });
+}
+
+/** Target-mode role deletion is a reversible archive, never a hard delete. */
+export async function archiveRole(input: { externalId: string; actorEmail: string; actorName?: string; actionRequestId: string }) {
+  return updateRoleDetails({
+    externalId: input.externalId,
+    status: "archived",
+    latestComments: "Role archived by portal operator",
+    actionRequestId: input.actionRequestId,
+    actorEmail: input.actorEmail,
+    actorName: input.actorName,
+    action: "role_archived",
   });
 }
 
