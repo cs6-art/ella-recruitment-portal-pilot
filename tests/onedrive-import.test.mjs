@@ -39,7 +39,9 @@ test("OneDrive list + import feed the shared intake pipeline, not a new one", ()
   assert.match(list, /ONEDRIVE_NOT_CONNECTED/);
   assert.match(importRoute, /intakeResumeBatch/);
   assert.match(importRoute, /sourceLabel: "Portal OneDrive Import"/);
-  assert.match(importRoute, /\.max\(MAX_FILES_PER_BATCH\)/);
+  // OneDrive import obeys the same 8-file-per-submission cap as Google Drive
+  // import and local upload (URS parity).
+  assert.match(importRoute, /\.max\(MAX_FILES_PER_SUBMISSION\)/);
   assert.match(importRoute, /MAX_RESUME_FILE_BYTES/);
   // 402 on insufficient credits, same as local upload
   assert.match(importRoute, /error instanceof EllaCreditsError/);

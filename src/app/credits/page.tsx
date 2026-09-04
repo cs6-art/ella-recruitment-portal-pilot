@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import AppShell from "@/components/AppShell";
 import EllaCreditsPanel from "@/components/EllaCreditsPanel";
+import EllaCreditsPurchase from "@/components/EllaCreditsPurchase";
 import { canManageCredits } from "@/lib/access-control";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function CreditsPage() {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
-  if (!canManageCredits(user)) redirect("/dashboard");
+  const canManage = canManageCredits(user);
 
   return (
     <AppShell user={user}>
@@ -20,10 +21,11 @@ export default async function CreditsPage() {
           <div>
             <span className="eyebrow-dark">ELLA CREDITS</span>
             <h1>Credits</h1>
-            <p>View the shared credit balance and manage authorized manual top-ups.</p>
+            <p>Purchase credits securely, or manage authorized manual top-ups.</p>
           </div>
         </header>
-        <EllaCreditsPanel />
+        <EllaCreditsPurchase />
+        {canManage && <EllaCreditsPanel />}
       </main>
     </AppShell>
   );

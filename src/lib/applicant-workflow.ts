@@ -262,7 +262,10 @@ async function readSheet(tab: string, endColumn: string, options: { fresh?: bool
   // cache turns those into one real API read plus cache hits, instead of
   // burning three read-quota units for identical data.
   const fetchValues = async () => {
-    const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${tab.replace(/'/g, "''")}'!A1:${endColumn}` });
+    // Use whole-column A1 notation. A range such as A1:X is rejected by the
+    // Sheets API because the end row is omitted; this reader is used by the
+    // maintenance poller as well as interactive booking paths.
+    const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${tab.replace(/'/g, "''")}'!A:${endColumn}` });
     return response.data.values ?? [];
   };
   // The decision API and the detail page may run on different serverless
