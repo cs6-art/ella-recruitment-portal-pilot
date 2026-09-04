@@ -6,6 +6,8 @@ import { getPortalConfig, isEnabledChoice } from "@/lib/portal-config";
 import { extractResumeContactDetails } from "@/lib/resume-contact-extraction";
 import { bulkResumeEnvironment, bulkResumeIsUatMarked, bulkResumeWebhookConfig, productionUatBatchId } from "@/lib/bulk-resume-config";
 import { deleteResumeFile, MAX_RESUME_FILE_BYTES, storeResumeFile } from "@/lib/resume-files";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { intakeTargetResumeBatch } from "@/lib/recruitment-target-bulk";
 
 /**
  * Shared bulk-resume intake pipeline. Both the local multi-file upload
@@ -101,6 +103,7 @@ export async function intakeResumeBatch(input: {
   /** The Production-UAT recovery batch id, when the operator supplied it. */
   uatRecoveryToken?: string;
 }): Promise<IntakeResult> {
+  if (isPostgresRecruitmentTarget()) return intakeTargetResumeBatch(input);
   const { roleId, actorName, actorEmail } = input;
   const environment = bulkResumeEnvironment();
   const isUat = bulkResumeIsUatMarked();

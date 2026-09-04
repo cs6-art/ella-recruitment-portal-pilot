@@ -33,6 +33,23 @@ test("portal target adapter is server-only and routes through authenticated inte
   assert.doesNotMatch(source, /DATABASE_URL|google-sheets|spreadsheets\.values/);
 });
 
+test("portal Postgres routing is explicit and dormant by default", () => {
+  const mode = read("src/lib/recruitment-target-mode.ts");
+  const envExample = read(".env.example");
+  assert.match(mode, /RECRUITMENT_BACKEND\?\.trim\(\)\.toLowerCase\(\) === "postgres"/);
+  assert.match(envExample, /RECRUITMENT_BACKEND=postgres/);
+  assert.match(envExample, /dormant by default/i);
+});
+
+test("portal operational helpers have a Postgres target branch", () => {
+  const sheets = read("src/lib/google-sheets.ts");
+  const candidates = read("src/lib/candidate-applications.ts");
+  const workflow = read("src/lib/applicant-workflow.ts");
+  for (const source of [sheets, candidates, workflow]) assert.match(source, /isPostgresRecruitmentTarget\(\)/);
+  assert.match(candidates, /targetBulkResumeQueue/);
+  assert.match(workflow, /targetReserveBooking/);
+});
+
 test("target API exposes the write contracts needed to keep portal operations out of Sheets", () => {
   const roles = read("src/app/api/internal/recruitment/roles/route.ts");
   const applications = read("src/app/api/internal/recruitment/applications/route.ts");

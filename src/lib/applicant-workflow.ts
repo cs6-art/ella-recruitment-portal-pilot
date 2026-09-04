@@ -16,6 +16,9 @@ import type { ResumeFileRecord } from "@/lib/resume-files";
 import { generateAutomaticVoiceInterviewSlots, type VoiceInterviewSlot } from "@/lib/voice-interview-availability";
 import { countActiveVoiceInterviews, isActiveVoiceInterviewStatus, MAX_CONCURRENT_VOICE_INTERVIEWS, voiceCapacitySlotId, voiceInterviewConcurrencyKey } from "@/lib/voice-interview-capacity";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isCurrentCalendarMonth, isStandardFinalInterviewSlot, isStandardVoiceInterviewSlot, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { targetBookingContext, targetCreateInterviewSlot, targetRecordApplicantDecision, targetReserveBooking, targetUpdateApplicantProfile } from "@/lib/recruitment-target-portal";
+import { listApplicationHistory } from "@/lib/internal-recruitment-queries";
 
 export type BookingKind = "voice" | "final";
 export type ApplicantDecisionStage = "resume" | "voice" | "final";
@@ -504,6 +507,14 @@ function candidateHistoryValues(entry: CandidateStatusHistoryEntry): string[] {
 }
 
 export async function getCandidateStatusHistory(applicationId: string): Promise<CandidateStatusHistoryEntry[]> {
+  if (isPostgresRecruitmentTarget()) {
+    const rows = await listApplicationHistory(applicationId);
+    return rows.map(({ history, externalId }) => ({
+      historyId: history.id, applicationId: externalId, roleId: "", changedAt: text(history.changedAt), previousStatus: text(history.previousStage),
+      newStatus: text(history.newStage), stage: (text(history.stage) || "resume") as CandidateStatusHistoryEntry["stage"], action: (text(history.decision) || "Completed") as ApplicantHistoryAction,
+      changedByName: text(history.actorName), changedByEmail: text(history.actorEmail), comments: text(history.comments), rejectionReason: "", actionSource: text(history.source),
+    }));
+  }
   try {
     const { rows } = await readSheet("Candidate_Status_History", "M", { fresh: true });
     const normalizedApplicationId = text(applicationId).toLowerCase();
@@ -532,6 +543,7 @@ export async function getCandidateStatusHistory(applicationId: string): Promise<
 }
 
 export async function getBookingContext(kind: BookingKind, token: string): Promise<BookingContext | null> {
+  if (isPostgresRecruitmentTarget()) return targetBookingContext(kind, hashToken(token)) as Promise<BookingContext | null>;
   await syncPastBookedInterviewsNoShow();
   await syncPastAvailableInterviewSlots();
   const [applicantData, slotsData] = await Promise.all([readSheet("High_Match_Profile", "CZ"), readSheet("Interview_Slots", "X")]);
@@ -752,6 +764,11 @@ export type ApplicantProfileUpdate = {
 };
 
 export async function updateApplicantProfile(applicationId: string, input: ApplicantProfileUpdate) {
+  if (isPostgresRecruitmentTarget()) {
+    const result = await targetUpdateApplicantProfile({ applicationId, ...input });
+    if (!result.application) throw new Error(result.error || "Applicant not found.");
+    return { applicationId, candidateName: input.candidateName.trim(), email: input.email.trim().toLowerCase(), preferredMobile: normalizePreferredMobile(input.preferredMobile) };
+  }
   const applicantData = await readSheet("High_Match_Profile", "CZ");
   const found = findApplicant(applicantData, applicationId);
   if (!found) throw new Error("Applicant not found.");
@@ -909,7 +926,21 @@ async function withReservationLock<T>(key: string, operation: () => Promise<T>) 
 // shared database or distributed lock before running more than one app worker.
 export async function reserveBooking(kind: BookingKind, token: string, slotId: string, preferredMobile: string) {
   const lockKey = kind === "voice" ? "voice-capacity" : `${kind}:${text(slotId)}`;
+  if (isPostgresRecruitmentTarget()) return reserveTargetBooking(kind, token, slotId, preferredMobile);
   return withReservationLock(lockKey, () => reserveBookingInternal(kind, token, slotId, preferredMobile));
+}
+
+async function reserveTargetBooking(kind: BookingKind, token: string, slotId: string, preferredMobile: string) {
+  const confirmedMobile = kind === "voice" ? normalizePreferredMobile(preferredMobile) : "";
+  if (kind === "voice" && !isPreferredMobileValid(confirmedMobile)) throw new Error("Confirm a valid preferred mobile number in international format.");
+  const context = await targetBookingContext(kind, hashToken(token));
+  if (!context) throw new Error("This booking link is invalid or expired.");
+  if (kind === "voice" && !context.currentSlot) await assertCreditsAvailable(1, "phone_interview");
+  if (kind === "voice" && confirmedMobile) await targetUpdateApplicantProfile({ applicationId: context.applicationId, candidateName: context.candidateName, email: context.email, preferredMobile: confirmedMobile, applicantCountry: "" });
+  const result = await targetReserveBooking(kind, hashToken(token), slotId, "public-booking");
+  if (!result.booked) throw new Error(result.error || "The selected interview slot is no longer available.");
+  if (kind === "voice" && !context.currentSlot) await recordDeduction({ event: "phone_interview", units: 1, reference: context.applicationId, idempotencyKey: `voice:${context.applicationId}`, actorEmail: context.email, note: "Postgres target voice interview booking" });
+  return result;
 }
 
 async function reserveBookingInternal(kind: BookingKind, token: string, slotId: string, preferredMobile: string) {
@@ -1739,6 +1770,10 @@ export async function createInterviewSlot(input: CreateInterviewSlotInput) {
   if (input.interviewType !== "AI Voice Interview" && input.interviewType !== "Final Interview") throw new Error("Choose a valid interview type.");
   if (Number.isNaN(Date.parse(`${date}T${startTime}:00`)) || Number.isNaN(Date.parse(`${date}T${endTime}:00`)) || startTime >= endTime) throw new Error("Choose a valid interview time range.");
   if (!isValidTimezone(timezone)) throw new Error("Choose a valid interview timezone.");
+  if (isPostgresRecruitmentTarget()) {
+    if (input.interviewType === "Final Interview") throw new Error("HR interview availability is managed automatically through the connected HR Google Calendar.");
+    return targetCreateInterviewSlot({ ...input, roleId });
+  }
   if (scheduledInstant(date, startTime, timezone).getTime() <= Date.now()) throw new Error("Interview slots must start in the future. Choose a later date or time.");
   const role = input.interviewType === "Final Interview" ? await getRoleRequestById(roleId) : null;
   if (input.interviewType === "Final Interview" && !role) throw new Error("Role request not found.");
@@ -1789,6 +1824,16 @@ export async function createConfiguredVoiceInterviewSlots({ roleId, mode, manual
     .filter((slot) => isCurrentCalendarMonth(slot.date, slot.timezone))
     .filter((slot) => scheduledInstant(slot.date, slot.startTime, slot.timezone).getTime() > Date.now());
   if (slots.length === 0) throw new Error("No AI Voice Interview slots match the current month, target hiring date, and future-time rules.");
+
+  if (isPostgresRecruitmentTarget()) {
+    const createdSlots: VoiceInterviewSlot[] = [];
+    let skipped = 0;
+    for (const slot of slots) {
+      const result = await targetCreateInterviewSlot({ roleId, interviewType: "AI Voice Interview", ...slot });
+      if (result.created) createdSlots.push(slot); else skipped += 1;
+    }
+    return { created: createdSlots.length, skipped: skipped + (configuredSlots.length - slots.length), slots: createdSlots };
+  }
 
   const data = await readSheet("Interview_Slots", "X");
   const existing = new Set(data.rows.map((row) => `${field(row, "Interview_Type", "Interview Type").toLowerCase()}|${field(row, "Role_ID", "Role ID").toLowerCase()}|${field(row, "Date")}|${field(row, "Start_Time", "Start Time")}`));
@@ -1993,6 +2038,10 @@ export async function synchronizeFinalInterviewSlots({ roleId, hodEmail, availab
  * portal still records that outcome itself.
  */
 export async function recordApplicantDecision(applicationId: string, stage: ApplicantDecisionStage, decision: ApplicantDecision, reviewer: { name: string; email: string }, comments: string, publicAppBaseUrl = "") {
+  if (isPostgresRecruitmentTarget()) {
+    if (decision === "No Show") throw new Error("No-show decisions are recorded by the voice retry workflow.");
+    return targetRecordApplicantDecision({ applicationId, stage, decision, comments, reviewer });
+  }
   const data = await readSheet("High_Match_Profile", "CZ");
   const found = findApplicant(data, applicationId);
   if (!found) throw new Error("Applicant not found.");

@@ -1,0 +1,115 @@
+import crypto from "node:crypto";
+
+import { assertCreditsAvailable, creditCostFor, EllaCreditsError, recordDeduction } from "@/lib/ella-credits";
+import { extractResumeContactDetails } from "@/lib/resume-contact-extraction";
+import { bulkResumeEnvironment, bulkResumeIsUatMarked, productionUatBatchId } from "@/lib/bulk-resume-config";
+import { deleteResumeFile, MAX_RESUME_FILE_BYTES, storeResumeFile } from "@/lib/resume-files";
+import { createApplication, enqueueBulkScreening, updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
+import type { IntakeResult, IntakeSource } from "@/lib/bulk-resume-intake";
+
+function queueIdForHash(roleId: string, sha256: string) {
+  const roleKey = roleId.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "-");
+  return `BULK-${roleKey}-${sha256}`;
+}
+
+function driveFileUrl(fileId: string) {
+  return fileId ? `https://drive.google.com/file/d/${fileId}/view` : "";
+}
+
+/**
+ * Postgres target intake. This deliberately stops at a durable queued state;
+ * the inactive target screening worker owns AI evaluation. No operational
+ * queue or status is written to Google Sheets here.
+ */
+export async function intakeTargetResumeBatch(input: {
+  roleId: string;
+  roleTitle: string;
+  actorName: string;
+  actorEmail: string;
+  submittedByEmail: string;
+  sources: IntakeSource[];
+  sourceLabel: string;
+  uatRecoveryToken?: string;
+}): Promise<IntakeResult> {
+  const environment = bulkResumeEnvironment();
+  const isUat = bulkResumeIsUatMarked();
+  const batchId = productionUatBatchId() || `${isUat ? "UAT-BATCH" : "BATCH"}-${crypto.randomUUID()}`;
+  const results: Array<Record<string, unknown>> = [];
+  let creditsCharged = 0;
+  let submitted = 0;
+
+  for (const source of input.sources) {
+    let stored: Awaited<ReturnType<typeof storeResumeFile>> | null = null;
+    try {
+      const bytes = await source.getBytes();
+      if (bytes.length > MAX_RESUME_FILE_BYTES) throw new Error("Resume files must be 10 MB or smaller.");
+      const file = new File([new Uint8Array(bytes)], source.name || "resume", { type: source.mimeType || "application/octet-stream" });
+      stored = await storeResumeFile(file, { environment });
+      const queueId = queueIdForHash(input.roleId, stored.record.sha256);
+      const contact = extractResumeContactDetails(stored.extractedText);
+      if (!contact.candidateEmail) throw new Error("The resume must contain a readable candidate email address.");
+      const queued = await enqueueBulkScreening({
+        roleExternalId: input.roleId,
+        batchId,
+        dedupeKey: queueId,
+        resumeSha256: stored.record.sha256,
+        driveFileId: source.driveFileId || stored.record.fileId,
+        filename: stored.record.fileName,
+        fileUrl: driveFileUrl(stored.record.fileId),
+        mimeType: stored.record.mimeType,
+        candidateName: contact.candidateName,
+        candidateEmail: contact.candidateEmail,
+        preferredMobile: contact.preferredMobile,
+        applicantCountry: contact.applicantCountry,
+        source: input.sourceLabel.toLowerCase().includes("drive") ? "drive" : "upload",
+        environment,
+        isUat,
+        jobId: queueId,
+      });
+      if (!queued.item) throw new Error(queued.error || "Unable to enqueue the resume.");
+      if (!queued.created) {
+        if (!stored.reused) await deleteResumeFile(stored.record).catch(() => undefined);
+        results.push({ fileName: source.name, queueId, status: "Skipped", skipped: true, message: "This resume is already queued or processed for this role." });
+        continue;
+      }
+
+      await assertCreditsAvailable(1, "cv_analysis");
+      const applicationId = `APP-${crypto.createHash("sha256").update(`${input.roleId}:${stored.record.sha256}`).digest("hex").slice(0, 24)}`;
+      const application = await createApplication({
+        externalId: applicationId,
+        applicantEmail: contact.candidateEmail,
+        applicantName: contact.candidateName || source.name.replace(/\.[^.]+$/, ""),
+        phone: contact.preferredMobile,
+        preferredMobile: contact.preferredMobile,
+        applicantCountry: contact.applicantCountry,
+        roleExternalId: input.roleId,
+        source: input.sourceLabel.toLowerCase().includes("drive") ? "drive_import" : "bulk_upload",
+        sourceDetail: `${source.driveFileId || stored.record.fileId}|${stored.record.sha256}`,
+      });
+      if (!application.application) {
+        await updateBulkQueueStatus({ dedupeKey: queueId, status: "failed", errorMessage: application.error || "Unable to create the application." });
+        throw new Error(application.error || "Unable to create the application.");
+      }
+      await updateBulkQueueStatus({ dedupeKey: queueId, status: "processing", applicationId: application.application.id });
+      await recordDeduction({
+        event: "cv_analysis",
+        units: 1,
+        reference: queueId,
+        roleId: input.roleId,
+        actorName: input.actorName,
+        actorEmail: input.actorEmail,
+        note: "Postgres target bulk resume screening",
+        idempotencyKey: `cv:${queueId}`,
+      });
+      submitted += 1;
+      creditsCharged += await creditCostFor("cv_analysis");
+      results.push({ fileName: stored.record.fileName, queueId, applicationId, status: "Processing", driveFileUrl: driveFileUrl(stored.record.fileId) });
+    } catch (error) {
+      if (stored && !stored.reused) await deleteResumeFile(stored.record).catch(() => undefined);
+      const message = error instanceof EllaCreditsError ? "Insufficient credits for screening." : error instanceof Error ? error.message : "Unable to queue the resume.";
+      results.push({ fileName: source.name, status: "Failed", error: message });
+    }
+  }
+
+  return { results, batchId, environment, isUat, notificationStatus: "disabled", concurrency: 1, submitted, creditsCharged };
+}

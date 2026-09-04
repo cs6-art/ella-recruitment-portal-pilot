@@ -18,6 +18,8 @@ import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate
 import { deleteResumeFile, storeResumeFile } from "@/lib/resume-files";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { invalidateSheetsCache } from "@/lib/sheets-cache";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { targetCreateApplication } from "@/lib/recruitment-target-portal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,6 +55,20 @@ export async function POST(request: Request) {
     const role = await getRoleRequestById(roleId);
     if (!role || !isPublishedRoleForIntake(role)) {
       return responseError("The selected role is not available for manual candidate intake.", 409);
+    }
+
+    if (isPostgresRecruitmentTarget()) {
+      try {
+        await assertCreditsAvailable(1, "cv_analysis");
+      } catch (creditError) {
+        if (creditError instanceof EllaCreditsError) return responseError("Not enough Ella Credits to screen this candidate.", 402, { code: creditError.code, required: creditError.required, available: creditError.available });
+        throw creditError;
+      }
+      const applicationId = `APP-${crypto.randomUUID()}`;
+      if (intake.resumeFile) storedResume = await storeResumeFile(intake.resumeFile);
+      await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: "direct", sourceDetail: "hr_manual", consentAt: new Date().toISOString(), resume: storedResume ? { ...storedResume.record } : undefined });
+      await recordDeduction({ event: "cv_analysis", units: 1, reference: applicationId, idempotencyKey: `cv:${applicationId}`, roleId, actorName: user.name, actorEmail: user.email, note: "Postgres target HR manual intake screening" });
+      return NextResponse.json({ success: true, applicationId, roleId, message: "Candidate added successfully.", creditsCharged: await creditCostFor("cv_analysis") }, { status: 201 });
     }
 
     const webhookUrl = await getPortalConfigValue("N8N_Candidate_Application_Webhook_URL");

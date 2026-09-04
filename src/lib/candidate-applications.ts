@@ -7,6 +7,8 @@ import { isDemoMode, isDemoWindowRecord } from "@/lib/demo-mode";
 import { getRoleRequestById, type RoleRequestDetails } from "@/lib/google-sheets";
 import { evaluationFieldsForSetup, type EvaluationField } from "@/lib/recruitment-setup-schema";
 import { buildNumberedInterviewQuestions, normalizeInterviewQuestionCount } from "@/lib/interview-question-count";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { targetActiveBookingLinkRoleIds, targetApplicantDetails, targetApplicantMetrics, targetApplicantSummaries, targetBookings, targetBulkResumeQueue, targetAppendBulkResumeQueue } from "@/lib/recruitment-target-portal";
 
 export {
   getCandidateStatusHistory,
@@ -176,6 +178,7 @@ export type BulkResumeQueueEvent = Partial<BulkResumeQueueItem> & {
   driveFileMimeType?: string;
   roleId: string;
   status: string;
+  resumeSha256?: string;
 };
 
 type SheetRow = Record<string, string>;
@@ -591,6 +594,7 @@ export async function demoActionBlockReason(targetApplicationId: string): Promis
 }
 
 export async function getApplicants(): Promise<ApplicantSummary[]> {
+  if (isPostgresRecruitmentTarget()) return targetApplicantSummaries();
   // No-show maintenance runs in the background. Keep the Applicants page
   // focused on reading the data it needs to render.
   // Same cross-instance staleness this codebase already works around for the
@@ -611,6 +615,7 @@ export async function getApplicants(): Promise<ApplicantSummary[]> {
 }
 
 export async function getApplicantMetrics(): Promise<ApplicantMetrics> {
+  if (isPostgresRecruitmentTarget()) return targetApplicantMetrics() as Promise<ApplicantMetrics>;
   // The scheduled interview maintenance handles past no-show updates. Keep
   // dashboard metrics read-only so the dashboard does not wait on that work.
   const rows = withDemoHistory((await readTab("High_Match_Profile", "CZ")).rows);
@@ -618,6 +623,7 @@ export async function getApplicantMetrics(): Promise<ApplicantMetrics> {
 }
 
 export async function getInterviewBookings(): Promise<InterviewBooking[]> {
+  if (isPostgresRecruitmentTarget()) return targetBookings();
   // Maintenance runs from the server background task. Keep this read-only so
   // the Bookings page is not blocked by several reconciliation sheet reads
   // and writes before it can render.
@@ -666,6 +672,7 @@ function hasActiveBookingLink(record: SheetRow, kind: "voice" | "final") {
  * completed appointments remain visible even when a link has expired.
  */
 export async function getActiveBookingLinkRoleIds() {
+  if (isPostgresRecruitmentTarget()) return targetActiveBookingLinkRoleIds();
   const { rows } = await readTab("High_Match_Profile", "CZ");
   const voice = new Set<string>();
   const final = new Set<string>();
@@ -697,6 +704,7 @@ export async function getActiveBookingLinkRoleIds() {
 }
 
 export async function getBulkResumeQueue(roleId = "", options: { fresh?: boolean } = {}): Promise<BulkResumeQueueItem[]> {
+  if (isPostgresRecruitmentTarget()) return targetBulkResumeQueue(roleId);
   const { rows } = await readTab("Bulk_Resume_Queue", "U", { ...options, spreadsheetId: bulkResumeSpreadsheetId() });
   const normalizedRoleId = roleId.trim().toLowerCase();
   const latestByFile = new Map<string, BulkResumeQueueItem>();
@@ -779,6 +787,9 @@ async function withBulkQueueEventLock<T>(key: string, operation: () => Promise<T
  * fails before the downstream process can write its own result.
  */
 export async function appendBulkResumeQueueEvent(event: BulkResumeQueueEvent) {
+  if (isPostgresRecruitmentTarget()) {
+    return targetAppendBulkResumeQueue(event);
+  }
   const targetSpreadsheetId = bulkResumeSpreadsheetId();
   return withBulkQueueEventLock(`bulk-resume-queue:${targetSpreadsheetId}`, async () => {
     // Headers are structural metadata, not live queue state. Reuse the short
@@ -824,6 +835,14 @@ export async function appendBulkResumeQueueEvent(event: BulkResumeQueueEvent) {
 
 /** Count every saved queue event for the selected role, including retries. */
 export async function getBulkResumeQueueTotals(roleId = "", options: { fresh?: boolean } = {}) {
+  if (isPostgresRecruitmentTarget()) {
+    const items = await targetBulkResumeQueue(roleId);
+    return items.reduce<Record<string, number>>((counts, item) => {
+      const status = ["Screened", "Failed", "Skipped", "Processing", "Queued"].includes(item.status) ? item.status : "Queued";
+      counts[status] = (counts[status] || 0) + 1;
+      return counts;
+    }, {});
+  }
   const { rows } = await readTab("Bulk_Resume_Queue", "U", { ...options, spreadsheetId: bulkResumeSpreadsheetId() });
   const normalizedRoleId = roleId.trim().toLowerCase();
   const events = rows.map((record) => {
@@ -893,6 +912,14 @@ function applicantRoleMatches(item: BulkResumeQueueItem, record: SheetRow) {
  */
 export async function getBulkResumeScreeningEvidence(queueItems: BulkResumeQueueItem[]): Promise<Set<string>> {
   if (queueItems.length === 0) return new Set();
+  if (isPostgresRecruitmentTarget()) {
+    const applicationIds = queueItems.map((item) => item.applicationId).filter(Boolean);
+    const { listScreening } = await import("@/lib/internal-recruitment-queries");
+    const rows = await Promise.all(applicationIds.map((applicationId) => listScreening(applicationId)));
+    const evidence = new Set<string>();
+    rows.forEach((results, index) => { if (results.length > 0) evidence.add(bulkQueueKey(queueItems[index])); });
+    return evidence;
+  }
   const { rows } = await readTab("High_Match_Profile", "CZ", { fresh: true, spreadsheetId: bulkResumeSpreadsheetId() });
   const evidenceRows = rows.filter(applicantHasScreeningEvidence);
   const index = (valueFor: (record: SheetRow) => string) => {
@@ -942,6 +969,7 @@ export async function getBulkResumeScreeningEvidence(queueItems: BulkResumeQueue
 }
 
 export async function getApplicantById(id: string): Promise<ApplicantDetails | null> {
+  if (isPostgresRecruitmentTarget()) return targetApplicantDetails(id) as Promise<ApplicantDetails | null>;
   const [{ rows: applicantRows }, { rows: voiceResults }, { rows: callLogs }, { rows: finalInterviews }, { rows: slots }] = await Promise.all([
     readTab("High_Match_Profile", "CZ", { fresh: true }),
     readTab("Voice_Interview_Results", "AF"),

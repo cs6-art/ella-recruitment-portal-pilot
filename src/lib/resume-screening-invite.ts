@@ -3,6 +3,8 @@ import { google } from "googleapis";
 
 import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account";
 import { getPortalConfigNumber } from "@/lib/portal-config";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { targetCreateScreeningInvitation, targetGetScreeningInvitation, targetUseScreeningInvitation } from "@/lib/recruitment-target-portal";
 
 // Application invitations live alongside the other candidate-facing sheets
 // so a single spreadsheet holds the whole applicant lifecycle.
@@ -132,6 +134,12 @@ export async function createResumeScreeningInvitation(input: {
   createdByEmail: string;
   baseUrl: string;
 }) {
+  if (isPostgresRecruitmentTarget()) {
+    const configuredDays = await getPortalConfigNumber("Resume_Screening_Link_Expiry_Days", 7);
+    const expiryDays = Number.isFinite(configuredDays) ? Math.min(Math.max(configuredDays, 1), 30) : 7;
+    const target = await targetCreateScreeningInvitation({ roleId: input.roleId, candidateEmail: input.candidateEmail, createdBy: input.createdByEmail, expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString() });
+    return { ...target, link: applicationInviteLink(input.baseUrl, target.token) };
+  }
   await ensureTab();
   const token = crypto.randomBytes(32).toString("hex");
   const configuredDays = await getPortalConfigNumber("Resume_Screening_Link_Expiry_Days", 7);
@@ -169,6 +177,7 @@ export async function createResumeScreeningInvitation(input: {
 export async function getResumeScreeningInvitationByToken(token: string): Promise<ResumeScreeningInvitation | null> {
   const cleanToken = text(token);
   if (!cleanToken) return null;
+  if (isPostgresRecruitmentTarget()) return targetGetScreeningInvitation(cleanToken);
   const tokenHash = hashToken(cleanToken);
   const rows = await readRows();
   const match = rows.find((row) => row.record.Token === cleanToken || row.record.Token_Hash === tokenHash);
@@ -206,6 +215,10 @@ export async function getResumeScreeningInvitationByToken(token: string): Promis
 // link usable for a retry instead of permanently burning it.
 export async function markResumeScreeningInvitationUsed(token: string, applicationId: string): Promise<void> {
   const cleanToken = text(token);
+  if (isPostgresRecruitmentTarget()) {
+    await targetUseScreeningInvitation(cleanToken, applicationId);
+    return;
+  }
   const tokenHash = hashToken(cleanToken);
   await ensureTab();
   const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${TAB}'!A:N` });

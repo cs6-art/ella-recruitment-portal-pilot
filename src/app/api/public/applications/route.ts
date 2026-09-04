@@ -18,6 +18,8 @@ import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate
 import { deleteResumeFile, MAX_RESUME_REQUEST_BYTES, storeResumeFile } from "@/lib/resume-files";
 import { getResumeScreeningInvitationByToken, markResumeScreeningInvitationUsed } from "@/lib/resume-screening-invite";
 import { invalidateSheetsCache } from "@/lib/sheets-cache";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { targetCreateApplication } from "@/lib/recruitment-target-portal";
 
 export const runtime = "nodejs";
 
@@ -68,7 +70,8 @@ export async function POST(request: Request) {
       // The invitation identifies the intended candidate. The page displays
       // these values as a convenience, but the server must remain the source
       // of truth if somebody edits the form before submitting it.
-      intake.body.candidateName = invitation.candidateName;
+      if (invitation.candidateName) intake.body.candidateName = invitation.candidateName;
+      if (invitation.candidateEmail) intake.body.email = invitation.candidateEmail;
       intake.body.candidateEmail = invitation.candidateEmail;
       intake.body.applicationSource = "HR Invitation";
     }
@@ -91,6 +94,21 @@ export async function POST(request: Request) {
     const role = roleId ? await getRoleRequestById(roleId) : null;
     if (!role || !isPublishedRoleForIntake(role)) {
       return responseError(request, "This role is not accepting applications.", 404);
+    }
+
+    if (isPostgresRecruitmentTarget()) {
+      try {
+        await assertCreditsAvailable(1, "cv_analysis");
+      } catch (creditError) {
+        if (creditError instanceof EllaCreditsError) return responseError(request, "Applications are temporarily paused. Please contact the recruiter who invited you.", 402, { code: creditError.code });
+        throw creditError;
+      }
+      const applicationId = `APP-${crypto.randomUUID()}`;
+      if (intake.resumeFile) storedResume = await storeResumeFile(intake.resumeFile);
+      await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: invitation ? "hr_invitation" : "direct", sourceDetail: invitation?.invitationId || "public", consentAt: new Date().toISOString(), resume: storedResume ? { ...storedResume.record } : undefined });
+      if (inviteToken) await markResumeScreeningInvitationUsed(inviteToken, applicationId);
+      await recordDeduction({ event: "cv_analysis", units: 1, reference: applicationId, idempotencyKey: `cv:${applicationId}`, roleId, actorEmail: parsed.data.email, note: "Postgres target application screening" });
+      return withPublicCors(request, NextResponse.json({ success: true, applicationId, roleId, status: "Pending HR Review", message: "Application submitted successfully." }, { status: 201 }));
     }
 
     const webhookUrl = await getPortalConfigValue("N8N_Candidate_Application_Webhook_URL");

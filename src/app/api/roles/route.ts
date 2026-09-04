@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 
 import { appendRoleRequestDraft, getFinalInterviewCalendarConfig, getRoleRequestById, getRoleRequests, updateRoleRequestFields } from "@/lib/google-sheets";
 import { invalidateSheetsCache } from "@/lib/sheets-cache";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { createRole, updateRoleDetails } from "@/lib/internal-recruitment-queries";
 import { filterVisibleRoles } from "@/lib/access-control";
 import { roleRequestSchema } from "@/lib/role-schema";
 import { generateRoleId } from "@/lib/role-id";
@@ -253,6 +255,24 @@ export async function POST(request: Request) {
         ? clientInput.replacementEmployee
         : "",
     });
+
+    if (isPostgresRecruitmentTarget()) {
+      const submissionId = crypto.randomUUID();
+      const roleId = generateRoleId(input.jobTitle, (await getRoleRequests()).map((role) => role.roleId));
+      const created = await createRole({
+        externalId: roleId, title: input.jobTitle, departmentSnapshot: input.department, requestType: input.requestType,
+        vacancies: input.numberOfVacancies, reason: input.reasonForRequest, targetHiringDate: input.targetHiringDate,
+        status: "pending_hr_discussion", source: "portal", requesterEmail: sessionEmail, requesterName: user.name,
+        actionRequestId: submissionId, actorEmail: sessionEmail, actorName: user.name,
+      });
+      if (!created.role) return NextResponse.json({ success: false, error: "The role request could not be saved." }, { status: 502 });
+      await updateRoleDetails({
+        externalId: roleId,
+        setup: { jobDescription: input.jobDescription, screeningCriteria: input.recruitmentSetupDraft?.screeningCriteria || "", requiredInterviewQuestion1: input.recruitmentSetupDraft?.requiredInterviewQuestion1 || "", requiredInterviewQuestion2: input.recruitmentSetupDraft?.requiredInterviewQuestion2 || "", requiredInterviewQuestion3: input.recruitmentSetupDraft?.requiredInterviewQuestion3 || "", requiredInterviewQuestion4: input.recruitmentSetupDraft?.requiredInterviewQuestion4 || "", requiredInterviewQuestion5: input.recruitmentSetupDraft?.requiredInterviewQuestion5 || "", postingChannels: input.recruitmentSetupDraft?.postingChannels || [] },
+        evaluationFields: input.recruitmentSetupDraft?.customEvaluationFields || [], actorEmail: sessionEmail,
+      });
+      return NextResponse.json({ success: true, roleId, status: "Pending HR Discussion", message: "Role request submitted successfully." }, { status: 201 });
+    }
 
     const webhookUrl = await getPortalConfigValue("N8N_Role_Webhook_URL");
 
