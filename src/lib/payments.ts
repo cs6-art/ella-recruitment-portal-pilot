@@ -101,7 +101,7 @@ export async function createCreditPurchase(input: CreatePurchaseInput): Promise<
       email: input.actorEmail,
       name: input.actorName,
       purpose: `Ella Credits — ${pack.credits} credits`,
-      redirectUrl: `${origin}/settings?tab=ella-credits&payment=return&ref=${encodeURIComponent(reference)}`,
+      redirectUrl: `${origin}/credits?payment=return&ref=${encodeURIComponent(reference)}`,
       webhookUrl: `${origin}/api/webhooks/hitpay`,
     });
   } catch (error) {

@@ -542,6 +542,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
       <DriveFilePicker
         open={cloudPicker === "microsoft" && Boolean(roleId)}
         importing={driveImporting}
+        maxSelection={MAX_FILES_PER_SUBMISSION}
         listUrl="/api/resume-screening/onedrive/list"
         pageParam="pageUrl"
         providerLabel="OneDrive"

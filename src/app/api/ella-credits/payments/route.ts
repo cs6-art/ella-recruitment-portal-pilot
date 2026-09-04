@@ -25,12 +25,11 @@ function appOrigin(request: Request): string {
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageCredits(user)) return NextResponse.json({ success: false, error: "Ella Credits permission required." }, { status: 403 });
 
   const configured = isPaymentsConfigured();
   const packs = creditPacks().map((pack) => ({ id: pack.id, label: pack.label, credits: pack.credits, amountCents: pack.amountCents, currency: pack.currency }));
   let recent: Array<Record<string, unknown>> = [];
-  if (configured) {
+  if (configured && canManageCredits(user)) {
     try {
       recent = (await listRecentPayments(50)).map((row) => ({
         reference: row.reference,
@@ -53,7 +52,6 @@ export async function GET() {
 export async function POST(request: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageCredits(user)) return NextResponse.json({ success: false, error: "Ella Credits permission required." }, { status: 403 });
 
   if (!isPaymentsConfigured()) {
     return NextResponse.json(

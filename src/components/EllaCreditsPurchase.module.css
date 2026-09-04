@@ -1,0 +1,18 @@
+.panel { display: grid; gap: 0; margin-bottom: 18px; }
+.header { padding: 20px 22px 14px; border-bottom: 1px solid var(--line, #dfe5ec); }
+.eyebrow { color: #4d6d86; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.header h2 { margin: 5px 0 0; color: var(--navy, #17324d); font-size: 18px; }
+.header p { margin: 5px 0 0; max-width: 65ch; color: var(--muted, #5e6b78); font-size: 12px; line-height: 1.5; }
+.feedback { padding: 14px 22px 0; }
+.reference, .unavailable, .loading { margin: 14px 22px 0; color: var(--muted, #5e6b78); font-size: 12px; }
+.reference code { color: var(--navy, #17324d); }
+.packGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 18px 22px 22px; }
+.pack { display: grid; gap: 8px; padding: 16px; border: 1px solid #dfe8f0; border-radius: 10px; background: #fbfdff; }
+.pack h3 { margin: 0; color: var(--navy, #17324d); font-size: 14px; }
+.packCredits { margin: 0; color: #0e4471; font-size: 19px; font-weight: 800; }
+.packPrice { margin: 0 0 5px; color: var(--muted, #5e6b78); font-size: 13px; }
+.pack button { min-height: 40px; }
+
+@media (max-width: 700px) {
+  .packGrid { grid-template-columns: 1fr; }
+}

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { canManageCredits } from "@/lib/access-control";
 import UiIcon from "./UiIcon";
 import EllaCreditsMeter from "./EllaCreditsMeter";
 import HelpBot from "./HelpBot";
@@ -66,11 +65,6 @@ export default function AppShell({ user, children }: AppShellProps) {
   const isCredits = pathname === "/credits";
   const isUserAccounts = pathname === "/user-accounts";
   const isRoleRequestArea = pathname === "/roles" || (pathname.startsWith("/roles/") && pathname !== "/roles/new");
-  const canManageEllaCredits = canManageCredits({
-    accessRole: user.accessRole || "",
-    canEditSettings: user.canEditSettings === true,
-    canReviewRole: user.canReviewRole === true,
-  });
   const closeSidebar = () => setSidebarOpen(false);
 
   useEffect(() => {
@@ -112,7 +106,7 @@ export default function AppShell({ user, children }: AppShellProps) {
             {showOperationalTools && <Link href="/bookings" onClick={closeSidebar} className={`${styles.navLink} ${isBookings ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="calendar" /></span><span>Bookings</span></Link>}
           </div>}
           {user.canEditSettings === true && <Link href="/settings" onClick={closeSidebar} className={`${styles.navLink} ${isSettings ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="settings" /></span><span>Settings</span></Link>}
-          {canManageEllaCredits && <Link href="/credits" onClick={closeSidebar} className={`${styles.navLink} ${isCredits ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="plus" /></span><span>Credits</span></Link>}
+          <Link href="/credits" onClick={closeSidebar} className={`${styles.navLink} ${isCredits ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="plus" /></span><span>Credits</span></Link>
           {(user.canManageUsers === true || user.canEditSettings === true) && <Link href="/user-accounts" onClick={closeSidebar} className={`${styles.navLink} ${isUserAccounts ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="users" /></span><span>User Accounts</span></Link>}
         </nav>
 

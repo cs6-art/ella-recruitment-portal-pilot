@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { canManageCredits } from "@/lib/access-control";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { getPaymentByReference, isPaymentsConfigured, reconcilePayment } from "@/lib/payments";
+import { getPaymentByReference, getPaymentForActor, isPaymentsConfigured, reconcilePayment } from "@/lib/payments";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -11,6 +11,12 @@ export const dynamic = "force-dynamic";
 
 async function currentUser() {
   return verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+}
+
+async function paymentVisibleToUser(reference: string, user: NonNullable<Awaited<ReturnType<typeof currentUser>>>) {
+  return canManageCredits(user)
+    ? getPaymentByReference(reference)
+    : getPaymentForActor(reference, user.email);
 }
 
 function view(row: NonNullable<Awaited<ReturnType<typeof getPaymentByReference>>>) {
@@ -31,11 +37,10 @@ function view(row: NonNullable<Awaited<ReturnType<typeof getPaymentByReference>>
 export async function GET(_request: Request, { params }: { params: Promise<{ reference: string }> }) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageCredits(user)) return NextResponse.json({ success: false, error: "Ella Credits permission required." }, { status: 403 });
   if (!isPaymentsConfigured()) return NextResponse.json({ success: false, code: "NOT_CONFIGURED", error: "Payments are not configured." }, { status: 503 });
 
   const { reference } = await params;
-  const row = await getPaymentByReference(reference);
+  const row = await paymentVisibleToUser(reference, user);
   if (!row) return NextResponse.json({ success: false, error: "Payment not found." }, { status: 404 });
   return NextResponse.json({ success: true, payment: view(row) }, { headers: { "Cache-Control": "no-store" } });
 }
@@ -45,7 +50,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ref
 export async function POST(request: Request, { params }: { params: Promise<{ reference: string }> }) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageCredits(user)) return NextResponse.json({ success: false, error: "Ella Credits permission required." }, { status: 403 });
   if (!isPaymentsConfigured()) return NextResponse.json({ success: false, code: "NOT_CONFIGURED", error: "Payments are not configured." }, { status: 503 });
 
   const rate = consumeRateLimit(`payment-reconcile:${user.email}:${requestClientKey(request)}`, 20, 15 * 60 * 1000);
@@ -53,8 +57,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ ref
 
   const { reference } = await params;
   try {
+    const visiblePayment = await paymentVisibleToUser(reference, user);
+    if (!visiblePayment) return NextResponse.json({ success: false, error: "Payment not found." }, { status: 404 });
     const result = await reconcilePayment(reference);
-    const row = await getPaymentByReference(reference);
+    const row = await paymentVisibleToUser(reference, user);
     return NextResponse.json({ success: result.ok, outcome: result.outcome, payment: row ? view(row) : null });
   } catch (error) {
     console.error("[API Payments] reconcile failed:", error);

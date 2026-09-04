@@ -39,21 +39,21 @@ model) are always included; up to four scored sections are added.
 
 | Variable           | Required        | Default       | Notes |
 | ------------------ | --------------- | ------------- | ----- |
-| `OPENAI_API_KEY`   | For answers     | —             | Server-only. Read only in `src/app/api/help-bot/route.ts`; never exposed to the browser and **not** a `NEXT_PUBLIC_` var. When unset the widget still deploys and opens but shows a "being configured" notice, the input is disabled, and no API call is made. Add the key later — the same deployment becomes functional with no code change. |
+| `OPENAI_API_KEY`   | For answers     | —             | Server-only. Read only in `src/app/api/help-bot/route.ts`; never exposed to the browser and **not** a `NEXT_PUBLIC_` var. When unset the widget remains hidden and no API call is made. |
 | `HELP_BOT_MODEL`   | No              | `gpt-4o-mini` | Low-cost model, sufficient for grounded FAQ answers. Override (e.g. `gpt-4.1-mini`) if desired. |
-| `HELP_BOT_ENABLED` | No              | `true`        | Hard kill switch. `false` fully hides and disables the widget regardless of the key. |
+| `HELP_BOT_ENABLED` | No              | `true`        | Explicit kill switch. The widget is also hidden automatically when `OPENAI_API_KEY` is missing. |
 
 ### Enabled vs configured
 
 `GET /api/help-bot` returns `{ enabled, configured }`:
 
-- `enabled` — `HELP_BOT_ENABLED !== "false"`. Controls whether the launcher renders at all.
+- `enabled` — `HELP_BOT_ENABLED !== "false" && Boolean(OPENAI_API_KEY)`. Controls whether the launcher renders at all; missing provider configuration keeps it hidden.
 - `configured` — `enabled && Boolean(OPENAI_API_KEY)`. Controls whether questions can be sent.
 
 | `HELP_BOT_ENABLED` | `OPENAI_API_KEY` | Launcher | Panel | Input | `POST` |
 | --- | --- | --- | --- | --- | --- |
 | `false` | any | hidden | — | — | 503 "not available" |
-| unset / `true` | unset | visible | opens, shows "being configured" notice | disabled | 503 `NOT_CONFIGURED` (no OpenAI call) |
+| unset / `true` | unset | hidden | — | — | 503, no OpenAI call |
 | unset / `true` | set | visible | opens normally | enabled | grounded answer |
 
 ## Knowledge source
@@ -139,8 +139,7 @@ Changed:
 
 ## Manual setup required
 
-1. The widget can ship first: with no `OPENAI_API_KEY` it deploys visible and
-   opens to a "being configured" notice (input disabled, no API call).
+1. With no `OPENAI_API_KEY`, the widget stays hidden and cannot submit questions.
 2. Create an OpenAI API key and set `OPENAI_API_KEY` in the deployment
    environment (and `.env.local` for local dev). The same deployment becomes
    functional automatically once the key is present — no code change or rebuild

@@ -20,11 +20,11 @@ const MAX_HISTORY_CHARS = 1200;
 
 type ClientMessage = { role: "user" | "assistant"; content: string };
 
-// The feature and its provider config are tracked separately so the widget can
-// ship (visible, openable) before OPENAI_API_KEY is set. HELP_BOT_ENABLED is the
-// hard kill switch; isConfigured() gates the actual model call.
+// The widget is available only when explicitly enabled and its provider key is
+// present. This prevents a deployment with missing OpenAI configuration from
+// presenting an apparently operational assistant.
 function isEnabled() {
-  return process.env.HELP_BOT_ENABLED !== "false";
+  return process.env.HELP_BOT_ENABLED !== "false" && Boolean(process.env.OPENAI_API_KEY);
 }
 
 function isConfigured() {
@@ -63,8 +63,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // Deployed but not yet provisioned with a provider key: answer with the
-  // "being configured" notice and make no OpenAI call.
+  // Direct callers still receive a safe not-configured response if the key is
+  // removed after the initial enabled check; no OpenAI call is made.
   if (!isConfigured()) {
     return NextResponse.json(
       { success: false, code: "NOT_CONFIGURED", error: "Ella is currently being configured and will be available soon." },

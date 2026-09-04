@@ -69,12 +69,22 @@ test("the HitPay API base contract includes /v1", () => {
   assert.match(read(".env.example"), /HITPAY_API_URL=https:\/\/api\.sandbox\.hit-pay\.com\/v1/);
 });
 
-test("payment routes are RBAC-gated to the credits-manage tier and fail safe when unconfigured", () => {
+test("authenticated users may purchase while manual credit management remains RBAC-gated", () => {
   const createRoute = read("src/app/api/ella-credits/payments/route.ts");
-  assert.match(createRoute, /canManageCredits\(user\)/);
+  assert.doesNotMatch(createRoute, /if \(!canManageCredits\(user\)\)/);
+  assert.match(createRoute, /if \(configured && canManageCredits\(user\)\)/);
   assert.match(createRoute, /isPaymentsConfigured\(\)/);
   assert.match(createRoute, /code: "NOT_CONFIGURED"/);
   assert.match(createRoute, /status: 503/);
+  const manualRoute = read("src/app/api/ella-credits/route.ts");
+  assert.match(manualRoute, /if \(!canManageCredits\(user\)\)/);
+});
+
+test("non-manager payment status is limited to the purchaser", () => {
+  const statusRoute = read("src/app/api/ella-credits/payments/[reference]/route.ts");
+  assert.match(statusRoute, /getPaymentForActor/);
+  assert.match(statusRoute, /paymentVisibleToUser/);
+  assert.match(statusRoute, /canManageCredits\(user\)/);
 });
 
 test("reconcile re-runs the same idempotent transition (missed-webhook recovery)", () => {

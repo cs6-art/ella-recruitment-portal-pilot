@@ -40,10 +40,11 @@ test("the Google Drive import route enforces the 8-file cap server-side", () => 
   assert.doesNotMatch(route, /MAX_FILES_PER_BATCH\b/);
 });
 
-test("OneDrive import is left on the 25-file limit (deferred, not part of this cap)", () => {
+test("OneDrive import enforces the same 8-file cap as Google Drive (URS parity)", () => {
   const route = read("src/app/api/resume-screening/onedrive/import/route.ts");
-  assert.match(route, /\.max\(MAX_FILES_PER_BATCH\)/);
-  assert.doesNotMatch(route, /MAX_FILES_PER_SUBMISSION/);
+  assert.match(route, /fileIds: z\.array\([\s\S]*?\)\.min\(1\)\.max\(MAX_FILES_PER_SUBMISSION\)/);
+  assert.match(route, /Select 1 to \$\{MAX_FILES_PER_SUBMISSION\} files/);
+  assert.doesNotMatch(route, /MAX_FILES_PER_BATCH\b/);
 });
 
 test("the bulk panel enforces the 8-file cap in the UI", () => {
@@ -62,12 +63,11 @@ test("the bulk panel enforces the 8-file cap in the UI", () => {
 test("the Google Drive picker caps selection at 8 via the shared component", () => {
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
   const picker = read("src/components/DriveFilePicker.tsx");
-  // shared picker takes a maxSelection prop (default preserves 25 for OneDrive)
+  // shared picker takes a maxSelection prop
   assert.match(picker, /maxSelection = DEFAULT_MAX_SELECTION/);
-  assert.match(picker, /const DEFAULT_MAX_SELECTION = 25;/);
   assert.match(picker, /const MAX_SELECTION = maxSelection;/);
-  // the Google Drive instance passes the 8 cap; the OneDrive instance does not
+  // both the Google Drive and OneDrive instances pass the 8-file cap
   assert.match(panel, /cloudPicker === "google"[\s\S]*?maxSelection=\{MAX_FILES_PER_SUBMISSION\}/);
   const oneDriveBlock = panel.slice(panel.indexOf('cloudPicker === "microsoft"'));
-  assert.doesNotMatch(oneDriveBlock.slice(0, 400), /maxSelection/);
+  assert.match(oneDriveBlock.slice(0, 400), /maxSelection=\{MAX_FILES_PER_SUBMISSION\}/);
 });
