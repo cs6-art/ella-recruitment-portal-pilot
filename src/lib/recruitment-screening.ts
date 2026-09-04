@@ -1,4 +1,3 @@
-import OpenAI from "openai";
 import { z } from "zod";
 
 const screeningResultSchema = z.object({
@@ -49,30 +48,6 @@ export function buildScreeningPrompt(input: {
     `CANDIDATE EMAIL: ${text(input.candidateEmail)}`,
     `RESUME TEXT:\n${text(input.resumeText)}`,
   ].join("\n\n");
-}
-
-/**
- * The model is the only external boundary. The caller validates the result
- * before it reaches the queue or credit transaction.
- */
-export async function screenResume(input: Parameters<typeof buildScreeningPrompt>[0]): Promise<ValidatedScreeningResult> {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) throw new Error("screening_provider_not_configured");
-  const client = new OpenAI({ apiKey });
-  const response = await client.chat.completions.create({
-    model: process.env.RECRUITMENT_SCREENING_MODEL || "gpt-5-mini",
-    messages: [
-      {
-        role: "system",
-        content: "You are a strict, role-grounded recruitment screening assistant. Follow the requested JSON contract exactly and never make the HR decision.",
-      },
-      { role: "user", content: buildScreeningPrompt(input) },
-    ],
-    response_format: { type: "json_object" },
-  });
-  const content = response.choices[0]?.message?.content;
-  if (!content) throw new Error("screening_provider_empty_result");
-  return parseScreeningResult(content);
 }
 
 export function screeningDbValues(result: ValidatedScreeningResult) {

@@ -18,10 +18,32 @@ test("target screening executor has a dedicated authenticated process route", ()
   const route = read("src/app/api/internal/recruitment/bulk/process/route.ts");
   const executor = read("src/lib/recruitment-target-screening.ts");
   assert.match(route, /withInternalAuth\("bulk_queue"/);
-  assert.match(route, /dedupeKey_required/);
+  assert.match(route, /export const GET/);
+  assert.match(route, /export const POST/);
+  assert.match(route, /screening !== undefined/);
   assert.match(executor, /claimBulkQueueItem/);
-  assert.match(executor, /screenResume/);
+  assert.match(executor, /parseScreeningResult/);
+  assert.doesNotMatch(executor, /screenResume|OPENAI_API_KEY|from ["']openai/);
   assert.match(executor, /finalizeBulkScreening/);
+});
+
+test("bulk screening context is supplied to n8n and persistence accepts only a worker result", () => {
+  const route = read("src/app/api/internal/recruitment/bulk/process/route.ts");
+  const executor = read("src/lib/recruitment-target-screening.ts");
+  assert.match(route, /extractStoredResumeText/);
+  assert.match(route, /jobDescription/);
+  assert.match(route, /resumeText/);
+  assert.match(executor, /parseScreeningResult/);
+  assert.match(read("src/lib/recruitment-screening.ts"), /export function parseScreeningResult/);
+});
+
+test("recruitment screening inference is not owned by the Pilot Vercel app", () => {
+  const screening = read("src/lib/recruitment-screening.ts");
+  const target = read("src/lib/recruitment-target-screening.ts");
+  const route = read("src/app/api/internal/recruitment/bulk/process/route.ts");
+  assert.doesNotMatch(screening, /from ["']openai|new OpenAI|OPENAI_API_KEY/);
+  assert.doesNotMatch(target, /from ["']openai|new OpenAI|OPENAI_API_KEY/);
+  assert.doesNotMatch(route, /from ["']openai|new OpenAI|OPENAI_API_KEY/);
 });
 
 test("screening output is strict and cannot make an HR decision", () => {

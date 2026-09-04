@@ -20,6 +20,10 @@
   use. After deploy, a settings admin opens Settings -> Ella Credits and adds a
   starting balance; AI CV analysis and AI phone interviews are blocked at a
   zero balance.
+- Pilot recruitment screening does not require `OPENAI_API_KEY`: inference is
+  owned by the approved n8n screening credential. Configure this variable only
+  if the optional in-portal HelpBot is intentionally enabled; when absent,
+  HelpBot must remain hidden and unavailable.
 - Run `npm.cmd test`, `npx.cmd tsc --noEmit`, and `npm.cmd run build`.
 - Perform the manual smoke test in `TESTING.md` against production n8n and a
   test spreadsheet row.
