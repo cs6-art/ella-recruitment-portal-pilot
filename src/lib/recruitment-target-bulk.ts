@@ -4,7 +4,7 @@ import { assertCreditsAvailable, creditCostFor, EllaCreditsError, recordDeductio
 import { extractResumeContactDetails } from "@/lib/resume-contact-extraction";
 import { bulkResumeEnvironment, bulkResumeIsUatMarked, productionUatBatchId } from "@/lib/bulk-resume-config";
 import { deleteResumeFile, MAX_RESUME_FILE_BYTES, storeResumeFile } from "@/lib/resume-files";
-import { createApplication, enqueueBulkScreening, updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
+import { createApplication, enqueueBulkScreening, registerResumeFile, updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
 import type { IntakeResult, IntakeSource } from "@/lib/bulk-resume-intake";
 
 function queueIdForHash(roleId: string, sha256: string) {
@@ -40,12 +40,15 @@ export async function intakeTargetResumeBatch(input: {
 
   for (const source of input.sources) {
     let stored: Awaited<ReturnType<typeof storeResumeFile>> | null = null;
+    let queueKey = "";
+    let durableQueue = false;
     try {
       const bytes = await source.getBytes();
       if (bytes.length > MAX_RESUME_FILE_BYTES) throw new Error("Resume files must be 10 MB or smaller.");
       const file = new File([new Uint8Array(bytes)], source.name || "resume", { type: source.mimeType || "application/octet-stream" });
       stored = await storeResumeFile(file, { environment });
       const queueId = queueIdForHash(input.roleId, stored.record.sha256);
+      queueKey = queueId;
       const contact = extractResumeContactDetails(stored.extractedText);
       if (!contact.candidateEmail) throw new Error("The resume must contain a readable candidate email address.");
       const queued = await enqueueBulkScreening({
@@ -72,9 +75,19 @@ export async function intakeTargetResumeBatch(input: {
         results.push({ fileName: source.name, queueId, status: "Skipped", skipped: true, message: "This resume is already queued or processed for this role." });
         continue;
       }
+      durableQueue = true;
 
       await assertCreditsAvailable(1, "cv_analysis");
       const applicationId = `APP-${crypto.createHash("sha256").update(`${input.roleId}:${stored.record.sha256}`).digest("hex").slice(0, 24)}`;
+      const resumeFileId = await registerResumeFile({
+        storageRef: stored.record.fileId,
+        sha256: stored.record.sha256,
+        filename: stored.record.fileName,
+        mimeType: stored.record.mimeType,
+        size: stored.record.size,
+        kind: stored.record.kind,
+        expiresAt: stored.record.expiresAt,
+      });
       const application = await createApplication({
         externalId: applicationId,
         applicantEmail: contact.candidateEmail,
@@ -85,6 +98,7 @@ export async function intakeTargetResumeBatch(input: {
         roleExternalId: input.roleId,
         source: input.sourceLabel.toLowerCase().includes("drive") ? "drive_import" : "bulk_upload",
         sourceDetail: `${source.driveFileId || stored.record.fileId}|${stored.record.sha256}`,
+        resumeFileId: resumeFileId || undefined,
       });
       if (!application.application) {
         await updateBulkQueueStatus({ dedupeKey: queueId, status: "failed", errorMessage: application.error || "Unable to create the application." });
@@ -105,7 +119,11 @@ export async function intakeTargetResumeBatch(input: {
       creditsCharged += await creditCostFor("cv_analysis");
       results.push({ fileName: stored.record.fileName, queueId, applicationId, status: "Processing", driveFileUrl: driveFileUrl(stored.record.fileId) });
     } catch (error) {
-      if (stored && !stored.reused) await deleteResumeFile(stored.record).catch(() => undefined);
+      if (durableQueue && queueKey) {
+        await updateBulkQueueStatus({ dedupeKey: queueKey, status: "failed", errorMessage: error instanceof Error ? error.message : "Unable to process the resume." }).catch(() => undefined);
+      } else if (stored && !stored.reused) {
+        await deleteResumeFile(stored.record).catch(() => undefined);
+      }
       const message = error instanceof EllaCreditsError ? "Insufficient credits for screening." : error instanceof Error ? error.message : "Unable to queue the resume.";
       results.push({ fileName: source.name, status: "Failed", error: message });
     }
