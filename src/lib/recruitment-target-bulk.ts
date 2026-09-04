@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 
-import { assertCreditsAvailable, creditCostFor, EllaCreditsError, recordDeduction } from "@/lib/ella-credits";
 import { extractResumeContactDetails } from "@/lib/resume-contact-extraction";
 import { bulkResumeEnvironment, bulkResumeIsUatMarked, productionUatBatchId } from "@/lib/bulk-resume-config";
 import { deleteResumeFile, MAX_RESUME_FILE_BYTES, storeResumeFile } from "@/lib/resume-files";
@@ -17,9 +16,9 @@ function driveFileUrl(fileId: string) {
 }
 
 /**
- * Postgres target intake. This deliberately stops at a durable queued state;
- * the inactive target screening worker owns AI evaluation. No operational
- * queue or status is written to Google Sheets here.
+ * Postgres target intake. Importing a resume creates a durable queued item and
+ * application only. Screening owns the credit boundary: failed or unprocessed
+ * resumes never consume credits.
  */
 export async function intakeTargetResumeBatch(input: {
   roleId: string;
@@ -35,7 +34,7 @@ export async function intakeTargetResumeBatch(input: {
   const isUat = bulkResumeIsUatMarked();
   const batchId = productionUatBatchId() || `${isUat ? "UAT-BATCH" : "BATCH"}-${crypto.randomUUID()}`;
   const results: Array<Record<string, unknown>> = [];
-  let creditsCharged = 0;
+  const creditsCharged = 0;
   let submitted = 0;
 
   for (const source of input.sources) {
@@ -77,7 +76,6 @@ export async function intakeTargetResumeBatch(input: {
       }
       durableQueue = true;
 
-      await assertCreditsAvailable(1, "cv_analysis");
       const applicationId = `APP-${crypto.createHash("sha256").update(`${input.roleId}:${stored.record.sha256}`).digest("hex").slice(0, 24)}`;
       const resumeFileId = await registerResumeFile({
         storageRef: stored.record.fileId,
@@ -104,27 +102,16 @@ export async function intakeTargetResumeBatch(input: {
         await updateBulkQueueStatus({ dedupeKey: queueId, status: "failed", errorMessage: application.error || "Unable to create the application." });
         throw new Error(application.error || "Unable to create the application.");
       }
-      await updateBulkQueueStatus({ dedupeKey: queueId, status: "processing", applicationId: application.application.id });
-      await recordDeduction({
-        event: "cv_analysis",
-        units: 1,
-        reference: queueId,
-        roleId: input.roleId,
-        actorName: input.actorName,
-        actorEmail: input.actorEmail,
-        note: "Postgres target bulk resume screening",
-        idempotencyKey: `cv:${queueId}`,
-      });
+      await updateBulkQueueStatus({ dedupeKey: queueId, status: "queued", applicationId: application.application.id });
       submitted += 1;
-      creditsCharged += await creditCostFor("cv_analysis");
-      results.push({ fileName: stored.record.fileName, queueId, applicationId, status: "Processing", driveFileUrl: driveFileUrl(stored.record.fileId) });
+      results.push({ fileName: stored.record.fileName, queueId, applicationId, status: "Queued", driveFileUrl: driveFileUrl(stored.record.fileId) });
     } catch (error) {
       if (durableQueue && queueKey) {
         await updateBulkQueueStatus({ dedupeKey: queueKey, status: "failed", errorMessage: error instanceof Error ? error.message : "Unable to process the resume." }).catch(() => undefined);
       } else if (stored && !stored.reused) {
         await deleteResumeFile(stored.record).catch(() => undefined);
       }
-      const message = error instanceof EllaCreditsError ? "Insufficient credits for screening." : error instanceof Error ? error.message : "Unable to queue the resume.";
+      const message = error instanceof Error ? error.message : "Unable to queue the resume.";
       results.push({ fileName: source.name, status: "Failed", error: message });
     }
   }
