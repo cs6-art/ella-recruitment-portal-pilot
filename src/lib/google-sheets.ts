@@ -1361,6 +1361,12 @@ export async function appendRoleRequestDraft(fields: Record<string, string>): Pr
 }
 
 export async function deleteRoleRequest(roleId: string): Promise<void> {
+  if (isPostgresRecruitmentTarget()) {
+    const { targetArchiveRole } = await import("@/lib/recruitment-target-portal");
+    const result = await targetArchiveRole(roleId, { email: "portal-target", name: "Portal target" });
+    if (!result) throw new Error("Role request not found.");
+    return;
+  }
   const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Role_Requests!A1:ZZ" });
   const rows = response.data.values ?? [];
   if (rows.length < 2) throw new Error("Role_Requests sheet has no data rows.");
