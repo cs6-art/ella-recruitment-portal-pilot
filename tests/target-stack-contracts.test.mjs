@@ -64,6 +64,12 @@ test("target API exposes the write contracts needed to keep portal operations ou
   for (const source of [roles, applications, bulk, slots, tokens]) assert.doesNotMatch(source, /google-sheets|googleapis|DATABASE_URL/);
 });
 
+test("target role API normalizes human-facing request type labels before Postgres constraints", () => {
+  const source = read("src/app/api/internal/recruitment/roles/route.ts");
+  assert.match(source, /normalizeRequestType/);
+  assert.match(source, /invalid_request_type/);
+});
+
 test("HR decision queue honors the requested stage", () => {
   const route = read("src/app/api/internal/recruitment/hr-decisions/queue/route.ts");
   const queries = read("src/lib/internal-recruitment-queries.ts");

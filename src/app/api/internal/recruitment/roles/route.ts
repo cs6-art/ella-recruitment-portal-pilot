@@ -1,5 +1,5 @@
 import { internalJson, readInternalJson, withInternalAuth } from "@/lib/internal-api-http";
-import { record, requiredString } from "@/lib/internal-recruitment-http";
+import { normalizeRequestType, record, requiredString } from "@/lib/internal-recruitment-http";
 import { createRole, getRole, listRoles, updateRoleDetails } from "@/lib/internal-recruitment-queries";
 
 export const runtime = "nodejs";
@@ -22,9 +22,11 @@ export const POST = withInternalAuth("roles", async (request) => {
     return Boolean(item && requiredString(item.externalId) && requiredString(item.title));
   });
   if (!body) return internalJson({ ok: false, error: "externalId_and_title_required" }, 422);
+  const requestType = normalizeRequestType(body.requestType);
+  if (requestType === null) return internalJson({ ok: false, error: "invalid_request_type" }, 422);
   const result = await createRole({
     externalId: String(body.externalId), title: String(body.title), code: typeof body.code === "string" ? body.code : undefined,
-    departmentSnapshot: typeof body.departmentSnapshot === "string" ? body.departmentSnapshot : undefined, requestType: typeof body.requestType === "string" ? body.requestType : undefined,
+    departmentSnapshot: typeof body.departmentSnapshot === "string" ? body.departmentSnapshot : undefined, requestType,
     vacancies: typeof body.vacancies === "number" ? body.vacancies : undefined, reason: typeof body.reason === "string" ? body.reason : undefined,
     targetHiringDate: typeof body.targetHiringDate === "string" ? body.targetHiringDate : undefined, status: typeof body.status === "string" ? body.status : undefined,
     source: typeof body.source === "string" ? body.source : undefined, requesterEmail: typeof body.requesterEmail === "string" ? body.requesterEmail : undefined,
