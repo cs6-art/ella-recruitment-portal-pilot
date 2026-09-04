@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { randomUUID } from "node:crypto";
 
 import { cachedSheetsRead, freshSheetsRead, invalidateSheetsCache } from "@/lib/sheets-cache";
 import { BASELINE_EVALUATION_FIELDS, EVALUATION_FIELD_CATALOG } from "@/lib/recruitment-setup-schema";
@@ -7,6 +8,8 @@ import { demoRoleSummaries } from "@/lib/demo-data";
 import { isDemoMode, isDemoWindowRecord } from "@/lib/demo-mode";
 import { normalizeDateOnly } from "@/lib/date-only";
 import { PORTAL_CONFIG_CATALOG } from "@/lib/portal-config-catalog";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { targetRoleDetails, targetRoleStatusHistory, targetRoleSummaries, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 
 const spreadsheetId =
   process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
@@ -963,6 +966,9 @@ export async function updateDirectoryUser(originalEmail: string, user: Directory
 export async function getRoleRequests(options: { liveOnly?: boolean } = {}): Promise<
   RoleRequestSummary[]
 > {
+  if (isPostgresRecruitmentTarget()) {
+    return targetRoleSummaries(options);
+  }
   const records =
     await getRoleRequestRecords();
 
@@ -1043,6 +1049,9 @@ export async function getRoleRequestById(
   roleId: string,
   options: { fresh?: boolean } = {},
 ): Promise<RoleRequestDetails | null> {
+  if (isPostgresRecruitmentTarget()) {
+    return targetRoleDetails(roleId);
+  }
   const normalizedRoleId = decodeURIComponent(
     roleId,
   )
@@ -1084,6 +1093,9 @@ export async function getRoleRequestById(
 export async function getRoleStatusHistory(
   roleId: string,
 ): Promise<RoleStatusHistoryEntry[]> {
+  if (isPostgresRecruitmentTarget()) {
+    return targetRoleStatusHistory(roleId);
+  }
   const normalizedRoleId = decodeURIComponent(roleId)
     .trim()
     .toLowerCase();
@@ -1220,6 +1232,11 @@ export async function upsertRecruitmentTemplate(template: RecruitmentTemplateRec
  * setup columns durable even before an imported workflow has been redeployed.
  */
 export async function updateRoleRequestFields(roleId: string, fields: Record<string, string>): Promise<void> {
+  if (isPostgresRecruitmentTarget()) {
+    const updated = await targetUpdateRoleFields(roleId, fields);
+    if (!updated) throw new Error("Role request row not found.");
+    return;
+  }
   const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Role_Requests!A1:ZZ" });
   const rows = response.data.values ?? [];
   if (rows.length < 2) throw new Error("Role_Requests sheet has no data rows.");
@@ -1278,6 +1295,28 @@ export async function updateRoleRequestFields(roleId: string, fields: Record<str
  * management, and the original requester can reopen the same record later.
  */
 export async function appendRoleRequestDraft(fields: Record<string, string>): Promise<void> {
+  if (isPostgresRecruitmentTarget()) {
+    const roleId = fields.Role_ID || fields.Submission_ID || `ROLE-${randomUUID()}`;
+    const result = await targetUpdateRoleFields(roleId, { ...fields, Role_ID: roleId });
+    if (result) return;
+    const { createRole } = await import("@/lib/internal-recruitment-queries");
+    await createRole({
+      externalId: roleId,
+      title: fields.Job_Title || fields.Title || "Untitled role",
+      departmentSnapshot: fields.Department,
+      requestType: fields.Request_Type,
+      vacancies: Number(fields.Number_Of_Vacancies) || 1,
+      reason: fields.Reason_For_Request,
+      targetHiringDate: fields.Target_Hiring_Date || undefined,
+      status: fields.Status || "draft",
+      source: "portal",
+      requesterEmail: fields.Requester_Email,
+      requesterName: fields.Requester_Name,
+      actionRequestId: `draft:${roleId}`,
+      actorEmail: fields.Requester_Email,
+    });
+    return;
+  }
   const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Role_Requests!A1:ZZ" });
   const rows = response.data.values ?? [];
   if (rows.length === 0 || !(rows[0] || []).length) throw new Error("Role_Requests sheet has no header row.");

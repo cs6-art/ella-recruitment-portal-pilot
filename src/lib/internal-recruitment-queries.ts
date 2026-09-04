@@ -10,6 +10,7 @@ import {
   interviewSlots,
   roleStatusHistory,
   roles,
+  resumeFiles,
   screeningInvitations,
   screeningResults,
   voiceCallAttempts,
@@ -94,6 +95,7 @@ export async function updateRoleStatus(input: { externalId: string; newStatus: s
 
 export async function updateRoleDetails(input: {
   externalId: string;
+  status?: string;
   title?: string;
   code?: string | null;
   departmentSnapshot?: string;
@@ -105,11 +107,19 @@ export async function updateRoleDetails(input: {
   setup?: unknown;
   evaluationFields?: unknown;
   availabilityRules?: unknown;
+  hrCalendarEmail?: string;
+  applicationLink?: string;
+  postedAt?: string | null;
+  postedBy?: string;
+  postingConfirmed?: boolean;
+  approvedBy?: string;
+  approvedAt?: string | null;
   actorEmail: string;
 }) {
   const db = getDb();
   const patch = {
     ...(input.title === undefined ? {} : { title: input.title.trim() }),
+    ...(input.status === undefined ? {} : { status: input.status }),
     ...(input.code === undefined ? {} : { code: input.code?.trim() || null }),
     ...(input.departmentSnapshot === undefined ? {} : { departmentSnapshot: input.departmentSnapshot }),
     ...(input.requestType === undefined ? {} : { requestType: input.requestType }),
@@ -120,6 +130,13 @@ export async function updateRoleDetails(input: {
     ...(input.setup === undefined ? {} : { setup: input.setup as object }),
     ...(input.evaluationFields === undefined ? {} : { evaluationFields: input.evaluationFields as object }),
     ...(input.availabilityRules === undefined ? {} : { availabilityRules: input.availabilityRules as object }),
+    ...(input.hrCalendarEmail === undefined ? {} : { hrCalendarEmail: input.hrCalendarEmail }),
+    ...(input.applicationLink === undefined ? {} : { applicationLink: input.applicationLink }),
+    ...(input.postedAt === undefined ? {} : { postedAt: isoOrNull(input.postedAt) }),
+    ...(input.postedBy === undefined ? {} : { postedBy: input.postedBy }),
+    ...(input.postingConfirmed === undefined ? {} : { postingConfirmed: input.postingConfirmed }),
+    ...(input.approvedBy === undefined ? {} : { approvedBy: input.approvedBy }),
+    ...(input.approvedAt === undefined ? {} : { approvedAt: isoOrNull(input.approvedAt) }),
     updatedByEmail: input.actorEmail,
     updatedAt: new Date(),
   };
@@ -144,7 +161,7 @@ export async function upsertApplicant(input: { email: string; fullName?: string;
 export async function listApplications(stage?: string, roleExternalId?: string) {
   const db = getDb();
   const stageWhere = stage ? eq(applications.currentStage, stage) : undefined;
-  const query = db.select({ application: applications, roleExternalId: roles.externalId, applicantEmail: applicants.primaryEmail })
+  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail })
     .from(applications)
     .innerJoin(roles, eq(roles.id, applications.roleId))
     .innerJoin(applicants, eq(applicants.id, applications.applicantId));
@@ -152,14 +169,24 @@ export async function listApplications(stage?: string, roleExternalId?: string) 
     .orderBy(desc(applications.updatedAt)).limit(LIMIT);
 }
 
-export async function createApplication(input: { externalId: string; applicantEmail: string; applicantName?: string; phone?: string; preferredMobile?: string; applicantCountry?: string; roleExternalId: string; source?: string; sourceDetail?: string; consentAt?: string }) {
+export async function listRoleStatusHistory(externalId: string) {
+  const db = getDb();
+  return db.select({ history: roleStatusHistory, roleExternalId: roles.externalId })
+    .from(roleStatusHistory)
+    .innerJoin(roles, eq(roles.id, roleStatusHistory.roleId))
+    .where(eq(roles.externalId, externalId.trim()))
+    .orderBy(desc(roleStatusHistory.changedAt))
+    .limit(LIMIT);
+}
+
+export async function createApplication(input: { externalId: string; applicantEmail: string; applicantName?: string; phone?: string; preferredMobile?: string; applicantCountry?: string; roleExternalId: string; source?: string; sourceDetail?: string; consentAt?: string; resumeFileId?: string }) {
   const db = getDb();
   return db.transaction(async (tx) => {
     const [role] = await tx.select({ id: roles.id, departmentSnapshot: roles.departmentSnapshot }).from(roles).where(eq(roles.externalId, input.roleExternalId)).limit(1);
     if (!role) return { application: null, created: false, error: "unknown_role" as const };
     const email = input.applicantEmail.trim().toLowerCase();
     const [applicant] = await tx.insert(applicants).values({ primaryEmail: email, fullName: input.applicantName || "", phoneE164: input.phone || "", country: input.applicantCountry || "" }).onConflictDoUpdate({ target: applicants.primaryEmail, set: { fullName: input.applicantName || "", phoneE164: input.phone || "", country: input.applicantCountry || "", updatedAt: new Date() } }).returning();
-    const [application] = await tx.insert(applications).values({ externalId: input.externalId.trim(), applicantId: applicant.id, roleId: role.id, source: input.source || "direct", sourceDetail: input.sourceDetail || "", consentAt: isoOrNull(input.consentAt), departmentSnapshot: role.departmentSnapshot, candidateName: input.applicantName || applicant.fullName, email, phone: input.phone || "", preferredMobile: input.preferredMobile || "", applicantCountry: input.applicantCountry || "" }).onConflictDoNothing({ target: applications.externalId }).returning();
+    const [application] = await tx.insert(applications).values({ externalId: input.externalId.trim(), applicantId: applicant.id, roleId: role.id, source: input.source || "direct", sourceDetail: input.sourceDetail || "", consentAt: isoOrNull(input.consentAt), departmentSnapshot: role.departmentSnapshot, candidateName: input.applicantName || applicant.fullName, email, phone: input.phone || "", preferredMobile: input.preferredMobile || "", applicantCountry: input.applicantCountry || "", resumeFileId: input.resumeFileId || null }).onConflictDoNothing({ target: applications.externalId }).returning();
     if (!application) {
       const [existing] = await tx.select().from(applications).where(eq(applications.externalId, input.externalId.trim())).limit(1);
       return { application: existing ?? null, created: false, error: null };
@@ -168,9 +195,17 @@ export async function createApplication(input: { externalId: string; applicantEm
   });
 }
 
+export async function registerResumeFile(input: { storageRef: string; sha256: string; filename: string; mimeType: string; size: number; kind: string; expiresAt?: string }) {
+  const db = getDb();
+  const [row] = await db.insert(resumeFiles).values({ storageRef: input.storageRef, sha256: input.sha256, filename: input.filename, mimeType: input.mimeType, size: input.size, kind: input.kind, textExtracted: false, expiresAt: isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: resumeFiles.storageRef }).returning({ id: resumeFiles.id });
+  if (row) return row.id;
+  const [existing] = await db.select({ id: resumeFiles.id }).from(resumeFiles).where(eq(resumeFiles.storageRef, input.storageRef)).limit(1);
+  return existing?.id || null;
+}
+
 export async function getApplication(externalId: string) {
   const db = getDb();
-  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, applicantEmail: applicants.primaryEmail }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).where(eq(applications.externalId, externalId)).limit(1);
+  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).where(eq(applications.externalId, externalId)).limit(1);
   return row ?? null;
 }
 
@@ -231,6 +266,22 @@ export async function createScreeningInvitation(input: { roleExternalId: string;
   if (!role) return { invitation: null, created: false, error: "unknown_role" as const };
   const [invitation] = await db.insert(screeningInvitations).values({ roleId: role.id, tokenHash: input.tokenHash, email: input.email.trim().toLowerCase(), createdBy: input.createdBy, expiresAt: isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: screeningInvitations.tokenHash }).returning();
   return { invitation: invitation ?? null, created: Boolean(invitation), error: null };
+}
+
+export async function getScreeningInvitation(tokenHash: string) {
+  const db = getDb();
+  const [row] = await db.select({ invitation: screeningInvitations, roleExternalId: roles.externalId, roleTitle: roles.title })
+    .from(screeningInvitations).innerJoin(roles, eq(roles.id, screeningInvitations.roleId))
+    .where(eq(screeningInvitations.tokenHash, tokenHash.trim())).limit(1);
+  return row ?? null;
+}
+
+export async function markScreeningInvitationUsed(tokenHash: string, applicationExternalId: string) {
+  const db = getDb();
+  const [application] = await db.select({ id: applications.id }).from(applications).where(eq(applications.externalId, applicationExternalId.trim())).limit(1);
+  if (!application) return { updated: false, error: "unknown_application" as const };
+  const [row] = await db.update(screeningInvitations).set({ status: "used", usedAt: new Date(), applicationId: application.id }).where(and(eq(screeningInvitations.tokenHash, tokenHash.trim()), eq(screeningInvitations.status, "active"))).returning({ id: screeningInvitations.id });
+  return { updated: Boolean(row), error: null };
 }
 
 /** Claim due voice rows atomically; concurrent workers receive disjoint rows. */
@@ -334,6 +385,19 @@ export async function bulkScreeningQueue(statuses: string[] = ["queued", "proces
   return db.select().from(bulkScreeningQueueItems).where(inArray(bulkScreeningQueueItems.status, statuses)).orderBy(asc(bulkScreeningQueueItems.discoveredAt)).limit(LIMIT);
 }
 
+export async function listBulkQueueForPortal(statuses: string[] = ["queued", "processing", "screened", "failed", "skipped"], roleExternalId?: string) {
+  const db = getDb();
+  const conditions = [inArray(bulkScreeningQueueItems.status, statuses)];
+  if (roleExternalId) conditions.push(eq(roles.externalId, roleExternalId.trim()));
+  return db.select({ item: bulkScreeningQueueItems, roleExternalId: roles.externalId, applicationExternalId: applications.externalId })
+    .from(bulkScreeningQueueItems)
+    .innerJoin(roles, eq(roles.id, bulkScreeningQueueItems.roleId))
+    .leftJoin(applications, eq(applications.id, bulkScreeningQueueItems.applicationId))
+    .where(and(...conditions))
+    .orderBy(desc(bulkScreeningQueueItems.updatedAt))
+    .limit(LIMIT);
+}
+
 export async function enqueueBulkScreening(input: {
   roleExternalId: string;
   batchId?: string;
@@ -392,6 +456,19 @@ export async function listBookingSlots(kind?: string, roleExternalId?: string) {
   return db.select({ slot: interviewSlots, roleExternalId: roles.externalId }).from(interviewSlots).leftJoin(roles, eq(roles.id, interviewSlots.roleId)).where(and(...conditions, eq(roles.externalId, roleExternalId))).orderBy(asc(interviewSlots.startsAt)).limit(LIMIT);
 }
 
+export async function listApplicationSlots(applicationExternalId: string, kind?: string) {
+  const db = getDb();
+  const conditions = [eq(applications.externalId, applicationExternalId.trim())];
+  if (kind) conditions.push(eq(interviewSlots.interviewType, kind));
+  return db.select({ slot: interviewSlots, roleExternalId: roles.externalId })
+    .from(interviewSlots)
+    .innerJoin(applications, eq(applications.id, interviewSlots.applicationId))
+    .leftJoin(roles, eq(roles.id, interviewSlots.roleId))
+    .where(and(...conditions))
+    .orderBy(desc(interviewSlots.updatedAt))
+    .limit(LIMIT);
+}
+
 export async function createInterviewSlot(input: {
   slotCode?: string;
   interviewType: "voice" | "final";
@@ -443,6 +520,22 @@ export async function getBookingToken(tokenHash: string) {
   const db = getDb();
   const [token] = await db.select({ token: bookingTokens, applicationExternalId: applications.externalId }).from(bookingTokens).innerJoin(applications, eq(applications.id, bookingTokens.applicationId)).where(eq(bookingTokens.tokenHash, tokenHash.trim())).limit(1);
   return token ?? null;
+}
+
+export async function markBookingTokenUsed(tokenHash: string) {
+  const db = getDb();
+  const [token] = await db.update(bookingTokens).set({ status: "used", usedAt: new Date() }).where(and(eq(bookingTokens.tokenHash, tokenHash.trim()), inArray(bookingTokens.status, ["pending", "active"]))).returning({ id: bookingTokens.id });
+  return { updated: Boolean(token) };
+}
+
+export async function listActiveBookingRoleIds() {
+  const db = getDb();
+  return db.select({ roleExternalId: roles.externalId, kind: bookingTokens.kind })
+    .from(bookingTokens)
+    .innerJoin(applications, eq(applications.id, bookingTokens.applicationId))
+    .innerJoin(roles, eq(roles.id, applications.roleId))
+    .where(and(inArray(bookingTokens.status, ["pending", "active"]), or(isNull(bookingTokens.expiresAt), sql`${bookingTokens.expiresAt} >= now()`)))
+    .limit(LIMIT);
 }
 
 export async function notificationQueue() {

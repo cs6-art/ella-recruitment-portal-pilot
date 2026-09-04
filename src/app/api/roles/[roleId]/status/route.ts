@@ -18,6 +18,8 @@ import {
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { resolvePublicAppBaseUrl } from "@/lib/public-url";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { updateRoleStatus } from "@/lib/internal-recruitment-queries";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -199,7 +201,7 @@ export async function POST(
     // Draft status, rename it to the same readable, sequential Role_ID scheme
     // used for roles created directly (e.g. CSE02), so the "DRAFT-..." id
     // never surfaces once HR, management, or the public posting sees it.
-    if (action === "submit_draft_for_hr" && role.roleId.startsWith("DRAFT-")) {
+    if (!isPostgresRecruitmentTarget() && action === "submit_draft_for_hr" && role.roleId.startsWith("DRAFT-")) {
       try {
         const existingRoles = await getRoleRequests();
         const renamedRoleId = generateRoleId(role.jobTitle, existingRoles.map((existingRole) => existingRole.roleId));
@@ -231,7 +233,9 @@ export async function POST(
       });
     }
 
-    if (!transition.source.some((source) => source === role.status)) {
+    if (!transition.source.some((source) => source === role.status) && !(
+      isPostgresRecruitmentTarget() && transition.source.some((source) => source.toLowerCase().replace(/\s+/g, "_") === role.status.toLowerCase().replace(/\s+/g, "_"))
+    )) {
       return jsonError(
         "The role status has changed since the page was loaded.",
         409,
@@ -241,6 +245,16 @@ export async function POST(
 
     // All holds and revision returns now resume to HR discussion — there is no
     // separate management-approval hold target to disambiguate.
+
+    if (isPostgresRecruitmentTarget()) {
+      const normalizedCurrent = role.status.toLowerCase().replace(/\s+/g, "_");
+      const normalizedSource = transition.source.map((source) => source.toLowerCase().replace(/\s+/g, "_"));
+      if (!normalizedSource.includes(normalizedCurrent)) return jsonError("The role status has changed since the page was loaded.", 409, { code: "STATUS_CONFLICT", currentStatus: role.status });
+      const targetStatus = transition.target.toLowerCase().replace(/\s+/g, "_");
+      const result = await updateRoleStatus({ externalId: role.roleId, newStatus: targetStatus, actorEmail: user.email, actorName: user.name, comments, actionRequestId });
+      if (!result.updated && !("duplicate" in result && result.duplicate)) return jsonError(result.error === "invalid_transition" ? "The role status has changed since the page was loaded." : "The role status could not be updated.", result.error === "unknown_role" ? 404 : 409, { code: result.error });
+      return NextResponse.json({ success: true, roleId: role.roleId, previousStatus: role.status, status: transition.target, action, notificationStatus: "not_configured", actionRequestId, idempotentReplay: "duplicate" in result && result.duplicate === true });
+    }
 
     // Status transitions use the canonical role webhook. Prefer this over the
     // legacy request-only alias so a deployment cannot silently send status
