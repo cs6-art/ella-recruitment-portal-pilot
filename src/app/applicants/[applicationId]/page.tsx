@@ -18,6 +18,7 @@ import type { RoleRequestDetails } from "@/lib/google-sheets";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { formatMatchScore } from "@/lib/score-format";
 import { formatPortalDateTime } from "@/lib/portal-time";
+import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +91,7 @@ function FinalInterviewCard({ applicant, role }: { applicant: ApplicantDetails; 
       : "Awaiting Face-to-Face Interview Scheduling";
   const displayedStatus = isScheduled && /(awaiting schedule|not started|pending)/i.test(statusLower)
     ? "Interview Scheduled"
-    : status;
+    : applicantStageLabel(status);
   const calendarStatus = recordValue(slot, "Google_Calendar_Event_Status");
   const calendarError = recordValue(slot, "Google_Calendar_Event_Error");
 
@@ -120,7 +121,7 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
       <div className="applicant-evidence-subsection">
         <div className="applicant-evidence-subsection-heading"><UiIcon name="document" size={16} /><h3>AI CV Analysis</h3></div>
         <div className="applicant-detail-inline-fields">
-          <DetailField label="CV Analysis Status" value={applicant.resumeStatus} />
+          <DetailField label="CV Analysis Status" value={applicantStageLabel(applicant.resumeStatus)} />
           <DetailField label="CV Recommendation" value={applicant.cvRecommendation || "Not Provided"} />
           <DetailField label="HR Decision" value={applicant.resumeDecision} />
           <DetailField label="Reviewed By" value={applicant.resumeReviewer} />
@@ -132,7 +133,7 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
       <div className="applicant-evidence-subsection">
         <div className="applicant-evidence-subsection-heading"><UiIcon name="microphone" size={16} /><h3>Voice Interview Review</h3></div>
         <div className="applicant-detail-inline-fields">
-          <DetailField label="Status" value={applicant.voiceStatus || "Not Started"} />
+          <DetailField label="Status" value={applicantStageLabel(applicant.voiceStatus) || "Not Started"} />
           <DetailField label="Booking Status" value={applicant.voiceBookingStatus || "Not Booked"} />
           <DetailField label="Scheduled" value={[applicant.voiceScheduledDate, applicant.voiceScheduledTime].filter(Boolean).join(" ") || "Not scheduled"} />
           <DetailField label="Timezone" value={recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || "Not provided"} />
@@ -168,7 +169,7 @@ function HistoryTimeline({ history }: { history: CandidateStatusHistoryEntry[] }
     return <section className="card applicant-detail-card history-card"><div className="card-header applicant-section-header"><div className="applicant-section-heading"><span className="applicant-section-icon"><UiIcon name="clock" size={17} /></span><div><h2>Candidate Status History</h2><p>Review the candidate audit trail.</p></div></div></div><div className="empty">No candidate status history is available.</div></section>;
   }
 
-  return <section className="card applicant-detail-card history-card"><div className="card-header applicant-section-header"><div className="applicant-section-heading"><span className="applicant-section-icon"><UiIcon name="clock" size={17} /></span><div><h2>Candidate Status History</h2><p>Review the candidate audit trail.</p></div></div></div><div className="history-timeline">{history.map((entry, index) => <article className="timeline-entry" key={`${entry.historyId || entry.changedAt}-${index}`}><span className="timeline-marker" aria-hidden="true" /><div className="timeline-content"><div className="timeline-top"><div><h3>{entry.previousStatus ? `${entry.previousStatus} → ${entry.newStatus}` : entry.newStatus || entry.action}</h3><span className="timeline-action">{entry.stage} · {entry.action}</span></div><time dateTime={entry.changedAt}>{dateValue(entry.changedAt)}</time></div><div className="timeline-performer"><strong>{entry.changedByName}</strong><span>{entry.changedByEmail}</span></div><div className="timeline-meta">{[entry.roleId, entry.actionSource].filter(Boolean).join(" · ")}</div>{entry.comments && <p className="timeline-comments">{entry.comments}</p>}{entry.rejectionReason && <div className="history-entry-comments"><span>Rejection reason</span><p>{entry.rejectionReason}</p></div>}</div></article>)}</div></section>;
+  return <section className="card applicant-detail-card history-card"><div className="card-header applicant-section-header"><div className="applicant-section-heading"><span className="applicant-section-icon"><UiIcon name="clock" size={17} /></span><div><h2>Candidate Status History</h2><p>Review the candidate audit trail.</p></div></div></div><div className="history-timeline">{history.map((entry, index) => <article className="timeline-entry" key={`${entry.historyId || entry.changedAt}-${index}`}><span className="timeline-marker" aria-hidden="true" /><div className="timeline-content"><div className="timeline-top"><div><h3>{entry.previousStatus ? `${applicantStageLabel(entry.previousStatus)} → ${applicantStageLabel(entry.newStatus)}` : applicantStageLabel(entry.newStatus) || entry.action}</h3><span className="timeline-action">{applicantStageLabel(entry.stage)} · {entry.action}</span></div><time dateTime={entry.changedAt}>{dateValue(entry.changedAt)}</time></div><div className="timeline-performer"><strong>{entry.changedByName}</strong><span>{entry.changedByEmail}</span></div><div className="timeline-meta">{[entry.roleId, entry.actionSource].filter(Boolean).join(" · ")}</div>{entry.comments && <p className="timeline-comments">{entry.comments}</p>}{entry.rejectionReason && <div className="history-entry-comments"><span>Rejection reason</span><p>{entry.rejectionReason}</p></div>}</div></article>)}</div></section>;
 }
 
 export default async function ApplicantDetailsPage({ params }: { params: Promise<{ applicationId: string }> }) {
@@ -188,7 +189,7 @@ export default async function ApplicantDetailsPage({ params }: { params: Promise
   const finalComments = applicant.finalComments || latestDecisionComment(history, "final");
 
   return <AppShell user={user}><main className="container page applicant-details-page">
-    <header className="applicant-detail-header"><Link href="/applicants" className="portal-back-link applicant-back-link"><UiIcon name="arrow-left" size={15} />Back to Applicants</Link><div className="applicant-detail-title-row"><div><span className="eyebrow-dark">APPLICANT PROFILE</span><h1>{applicant.candidateName || "Unnamed Candidate"}</h1><p>{applicant.applicationId} · {applicant.email || "No Email Provided"}</p></div><span className={applicantStageClass(applicant.currentStage)}>{applicant.currentStage}</span></div><div className="applicant-detail-actions"><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}`}><UiIcon name="briefcase" size={15} />View Role</Link><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}/applicants`}><UiIcon name="applicants" size={15} />Role Applicants</Link><ApplicantDetailActions applicationId={applicant.applicationId} candidateName={applicant.candidateName} canManage={canEditApplicant(user)} /></div></header>
+    <header className="applicant-detail-header"><Link href="/applicants" className="portal-back-link applicant-back-link"><UiIcon name="arrow-left" size={15} />Back to Applicants</Link><div className="applicant-detail-title-row"><div><span className="eyebrow-dark">APPLICANT PROFILE</span><h1>{applicant.candidateName || "Unnamed Candidate"}</h1><p>{applicant.applicationId} · {applicant.email || "No Email Provided"}</p></div><span className={applicantStageClass(applicant.currentStage)}>{applicantStageLabel(applicant.currentStage)}</span></div><div className="applicant-detail-actions"><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}`}><UiIcon name="briefcase" size={15} />View Role</Link><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}/applicants`}><UiIcon name="applicants" size={15} />Role Applicants</Link><ApplicantDetailActions applicationId={applicant.applicationId} candidateName={applicant.candidateName} canManage={canEditApplicant(user)} /></div></header>
     <div className="applicant-detail-summary"><DetailField label="Selected Role" value={applicant.selectedRole} /><DetailField label="Department" value={applicant.department} /><DetailField label="Applied" value={dateValue(applicant.appliedAt)} /><DetailField label="Match Score" value={formatMatchScore(applicant.matchScore)} /><DetailField label="Recommendation" value={applicant.recommendation} /><DetailField label="Next Action" value={applicant.nextAction} /></div>
     <div className="applicant-detail-grid"><div className="applicant-detail-main">
       <CombinedScreeningEvidence applicant={applicant} />
@@ -198,7 +199,7 @@ export default async function ApplicantDetailsPage({ params }: { params: Promise
       <HistoryTimeline history={history} />
     </div><aside className="applicant-detail-side">
       {applicant.voiceDecision.toLowerCase() === "approve" && <FinalInterviewCard applicant={applicant} role={role} />}
-      <section className="card applicant-detail-card"><DetailCardHeader icon="clock" title="Status Tracking" description="Current progress through the candidate workflow." /><div className="applicant-timeline"><div><strong>1. AI CV Analysis</strong><span>{applicant.resumeStatus || "Not Started"}</span></div><div><strong>2. Voice Interview</strong><span>{applicant.voiceStatus || "Not Started"}</span></div><div><strong>3. Voice HR Review</strong><span>{applicant.voiceDecision || "Pending"}</span></div><div><strong>4. Face-to-Face Interview</strong><span>{applicant.finalInterviewStatus || "Not Started"}</span></div><div><strong>Last Updated</strong><span>{dateValue(applicant.lastUpdated)}</span></div></div></section>
+      <section className="card applicant-detail-card"><DetailCardHeader icon="clock" title="Status Tracking" description="Current progress through the candidate workflow." /><div className="applicant-timeline"><div><strong>1. AI CV Analysis</strong><span>{applicantStageLabel(applicant.resumeStatus) || "Not Started"}</span></div><div><strong>2. Voice Interview</strong><span>{applicantStageLabel(applicant.voiceStatus) || "Not Started"}</span></div><div><strong>3. Voice HR Review</strong><span>{applicantStageLabel(applicant.voiceDecision) || "Pending"}</span></div><div><strong>4. Face-to-Face Interview</strong><span>{applicantStageLabel(applicant.finalInterviewStatus) || "Not Started"}</span></div><div><strong>Last Updated</strong><span>{dateValue(applicant.lastUpdated)}</span></div></div></section>
     </aside></div>
   </main></AppShell>;
 }

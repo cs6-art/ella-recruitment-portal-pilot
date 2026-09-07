@@ -8,6 +8,7 @@ import { getRoleRequestById, type RoleRequestDetails } from "@/lib/google-sheets
 import { evaluationFieldsForSetup, type EvaluationField } from "@/lib/recruitment-setup-schema";
 import { buildNumberedInterviewQuestions, normalizeInterviewQuestionCount } from "@/lib/interview-question-count";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { targetActiveBookingLinkRoleIds, targetApplicantDetails, targetApplicantMetrics, targetApplicantSummaries, targetBookings, targetBulkResumeQueue, targetAppendBulkResumeQueue } from "@/lib/recruitment-target-portal";
 
 export {
@@ -356,16 +357,16 @@ function hasFinalInterviewOutcome(record: SheetRow) {
 }
 
 const applicantStageDefinitions: Omit<ApplicantStageCount, "value">[] = [
-  { key: "resume_review", label: "Resume HR Review", tone: "blue" },
-  { key: "resume_approved", label: "Resume Approved", tone: "blue" },
-  { key: "voice_booking_pending", label: "Voice Booking Pending", tone: "purple" },
-  { key: "voice_scheduled", label: "Voice Interview Scheduled", tone: "purple" },
-  { key: "voice_review_pending", label: "Voice HR Review", tone: "green" },
-  { key: "approved_for_final", label: "Approved for Face-to-Face Interview", tone: "teal" },
-  { key: "final_scheduled", label: "Face-to-Face Interview Scheduled", tone: "orange" },
-  { key: "final_decision_pending", label: "Face-to-Face Decision Pending", tone: "orange" },
-  { key: "passed_final", label: "Passed Face-to-Face Interview", tone: "green" },
-  { key: "rejected", label: "Rejected", tone: "red" },
+  { key: "resume_review", label: applicantStageLabel("resume_review"), tone: "blue" },
+  { key: "resume_approved", label: applicantStageLabel("resume_approved"), tone: "blue" },
+  { key: "voice_booking_pending", label: applicantStageLabel("voice_booking_pending"), tone: "purple" },
+  { key: "voice_scheduled", label: applicantStageLabel("voice_scheduled"), tone: "purple" },
+  { key: "voice_review_pending", label: applicantStageLabel("voice_review_pending"), tone: "green" },
+  { key: "approved_for_final", label: applicantStageLabel("approved_for_final"), tone: "teal" },
+  { key: "final_scheduled", label: applicantStageLabel("final_scheduled"), tone: "orange" },
+  { key: "final_decision_pending", label: applicantStageLabel("final_decision_pending"), tone: "orange" },
+  { key: "passed_final", label: applicantStageLabel("passed_final"), tone: "green" },
+  { key: "rejected", label: applicantStageLabel("rejected"), tone: "red" },
 ];
 
 function currentApplicantStage(record: SheetRow) {
