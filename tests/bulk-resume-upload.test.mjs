@@ -208,7 +208,7 @@ test("uploaded resumes keep a traceable Drive link back to the candidate/applica
 test("the bulk panel supports drag-and-drop, live auto-refresh, and retrying only failed files", () => {
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
   assert.match(panel, /onDrop=/);
-  assert.match(panel, /setInterval\(\(\) => \{ void refreshStatus\(\); \}, POLL_INTERVAL_MS\)/);
+  assert.match(panel, /setInterval\(\(\) => \{\s*if \(typeof document === "undefined" \|\| document\.visibilityState === "visible"\) void refreshStatus\(\);\s*\}, POLL_INTERVAL_MS\)/);
   assert.match(panel, /Retry failed/);
   assert.match(panel, /failedFiles/);
   assert.match(panel, /Bulk Resume Processing/);

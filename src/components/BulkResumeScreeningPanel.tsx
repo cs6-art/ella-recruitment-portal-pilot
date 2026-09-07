@@ -201,8 +201,18 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveR
   useEffect(() => {
     if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
     if (!roleId || !anyPending) return;
-    pollTimer.current = setInterval(() => { void refreshStatus(); }, POLL_INTERVAL_MS);
-    return () => { if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; } };
+    // Poll only while a batch is actually processing AND the tab is visible; a
+    // backgrounded screening page should not keep hitting the queue API.
+    pollTimer.current = setInterval(() => {
+      if (typeof document === "undefined" || document.visibilityState === "visible") void refreshStatus();
+    }, POLL_INTERVAL_MS);
+    // Catch up immediately when the user returns to a tab with a batch running.
+    const onVisible = () => { if (document.visibilityState === "visible") void refreshStatus(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [roleId, anyPending, refreshStatus]);
 
   function addFiles(nextFiles: FileList | File[]) {

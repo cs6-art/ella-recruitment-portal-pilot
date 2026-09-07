@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import UiIcon from "./UiIcon";
 import styles from "./NewApplicantsBell.module.css";
+import { useSharedPoll } from "@/lib/client-poll";
 import { formatPortalDateTime } from "@/lib/portal-time";
 import {
   applicantAppliedTime,
@@ -15,48 +16,33 @@ import {
   type RecentApplicant,
 } from "@/lib/new-applicants";
 
+const POLL_KEY = "applicants-recent";
 const POLL_INTERVAL_MS = 60_000;
+
+async function fetchRecentApplicants(): Promise<RecentApplicant[] | null> {
+  const response = await fetch("/api/applicants/recent", { credentials: "same-origin" });
+  if (!response.ok) return null;
+  const data = await response.json().catch(() => null);
+  return data?.success && Array.isArray(data.applicants) ? (data.applicants as RecentApplicant[]) : null;
+}
 
 /**
  * Header bell that surfaces applicants submitted since the current user last
  * opened the Applicants page. The watermark is written by ApplicantsList; this
  * component only reads it, re-reading whenever the route changes so the count
  * clears right after a visit.
+ *
+ * Both callers (the sidebar nav badge and the header bell) share ONE poll of
+ * the recent-applicants endpoint via `useSharedPoll`, which is visibility-aware
+ * and pauses when no caller is mounted.
  */
 export function useNewApplicantFeed(userEmail?: string, enabled = true) {
   const pathname = usePathname();
-  const [recent, setRecent] = useState<RecentApplicant[]>([]);
   const [lastSeen, setLastSeen] = useState<number>(() => readApplicantsLastSeen(userEmail));
 
-  const load = useCallback(async () => {
-    if (!enabled) {
-      setRecent([]);
-      return;
-    }
-    try {
-      const response = await fetch("/api/applicants/recent", { credentials: "same-origin" });
-      if (!response.ok) return;
-      const data = await response.json().catch(() => null);
-      if (data?.success && Array.isArray(data.applicants)) setRecent(data.applicants);
-    } catch {
-      // Transient network failure — keep the last known list.
-    }
-  }, [enabled]);
-
-  useEffect(() => {
-    void load();
-    // Skip the interval fetch while the tab is hidden; the focus listener
-    // refreshes as soon as the user returns.
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void load();
-    }, POLL_INTERVAL_MS);
-    const onFocus = () => void load();
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [load]);
+  const { data, refresh } = useSharedPoll<RecentApplicant[]>(POLL_KEY, fetchRecentApplicants, POLL_INTERVAL_MS, enabled);
+  const recent = useMemo(() => (enabled ? data ?? [] : []), [enabled, data]);
+  const load = useCallback(() => { void refresh(); }, [refresh]);
 
   // Re-read the watermark on navigation (and shortly after, so a visit to
   // /applicants that writes it on mount is picked up) and on storage events
