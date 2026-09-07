@@ -29,10 +29,24 @@ export function selectedCloudFileIds(selections: CloudImportSelection[]) {
   return ids;
 }
 
+export function selectedCloudFiles(selections: CloudImportSelection[]) {
+  const ids = selectedCloudFileIds(selections);
+  const allowed = new Set(ids);
+  return selections
+    .filter((selection) => allowed.has(selection.id.trim()))
+    .map((selection) => ({
+      id: selection.id.trim(),
+      name: selection.name.trim(),
+      mimeType: (selection.mimeType || "").trim(),
+    }))
+    .filter((selection, index, all) => all.findIndex((candidate) => candidate.id === selection.id) === index);
+}
+
 /** Build the browser request for a selected cloud-file import. */
 export function buildCloudImportRequest(provider: CloudImportProvider, roleId: string, selections: CloudImportSelection[]) {
   const normalizedRoleId = roleId.trim();
-  const normalizedFileIds = selectedCloudFileIds(selections);
+  const normalizedFiles = selectedCloudFiles(selections);
+  const normalizedFileIds = normalizedFiles.map((file) => file.id);
   if (!normalizedRoleId || normalizedFileIds.length === 0) return null;
 
   return {
@@ -40,7 +54,7 @@ export function buildCloudImportRequest(provider: CloudImportProvider, roleId: s
     init: {
       method: "POST" as const,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roleId: normalizedRoleId, fileIds: normalizedFileIds }),
+      body: JSON.stringify({ roleId: normalizedRoleId, fileIds: normalizedFileIds, files: normalizedFiles }),
     },
   };
 }

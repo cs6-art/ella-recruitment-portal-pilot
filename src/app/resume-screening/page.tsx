@@ -9,6 +9,7 @@ import { canManagePipeline } from "@/lib/access-control";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { isBulkResumeUatMode } from "@/lib/bulk-resume-config";
 import { getPortalConfigValue } from "@/lib/portal-config";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ export default async function ResumeScreeningPage() {
     // role catalogue grows; IDs remain the option values.
     .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
   const driveUrl = (await getPortalConfigValue("Bulk_Resume_Drive_URL")).trim();
+  const driveRootFolderId = isPostgresRecruitmentTarget() ? (process.env.RESUME_STORAGE_DRIVE_FOLDER_ID || "").trim() : "";
 
   return (
     <AppShell user={user}>
@@ -40,7 +42,7 @@ export default async function ResumeScreeningPage() {
           </div>
         </header>
         {isBulkResumeUatMode() ? <div className="uat-mode-banner">UAT MODE · Bulk resume data is routed to the configured UAT destinations.</div> : null}
-        <BulkResumeScreeningPanel roleOptions={roleOptions} driveUrl={driveUrl} />
+        <BulkResumeScreeningPanel roleOptions={roleOptions} driveUrl={driveUrl} driveRootFolderId={driveRootFolderId} />
         <ResumeScreeningInviteGenerator roleOptions={roleOptions} />
         <CandidateApplicationForm
           submitUrl="/api/applicants"

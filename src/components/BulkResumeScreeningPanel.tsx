@@ -60,7 +60,7 @@ async function fileQueueId(roleId: string, file: File) {
   return `BULK-${roleKey}-${sha256}`;
 }
 
-export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { roleOptions: RoleOption[]; driveUrl: string }) {
+export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveRootFolderId = "" }: { roleOptions: RoleOption[]; driveUrl: string; driveRootFolderId?: string }) {
   const [roleId, setRoleId] = useState("");
   const [items, setItems] = useState<QueueItem[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -537,6 +537,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
         open={cloudPicker === "google" && Boolean(roleId)}
         importing={driveImporting}
         maxSelection={MAX_FILES_PER_SUBMISSION}
+        initialFolderId={driveRootFolderId || "root"}
         onClose={() => setCloudPicker(null)}
         onImport={(selections) => void importFromCloud("google", selections)}
       />
