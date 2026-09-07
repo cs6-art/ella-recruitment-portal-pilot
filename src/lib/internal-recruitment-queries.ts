@@ -50,7 +50,13 @@ function isoOrNull(value?: string | null): Date | null {
   return date;
 }
 
-function rowsOf<T>(value: unknown): T[] { return Array.isArray(value) ? value as T[] : []; }
+function rowsOf<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value && typeof value === "object" && Array.isArray((value as { rows?: unknown }).rows)) {
+    return (value as { rows: T[] }).rows;
+  }
+  return [];
+}
 export function isValidStage(value: string): value is (typeof STAGES)[number] { return (STAGES as readonly string[]).includes(value); }
 export function isValidDecision(value: string): value is (typeof DECISIONS)[number] { return (DECISIONS as readonly string[]).includes(value); }
 export function isValidTransition(from: string, to: string): boolean { return STAGE_TRANSITIONS[from]?.includes(to) ?? false; }
