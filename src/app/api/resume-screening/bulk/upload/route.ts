@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { canManagePipeline } from "@/lib/access-control";
 import { EllaCreditsError } from "@/lib/ella-credits";
 import { intakeResumeBatch, MAX_BULK_REQUEST_BYTES, MAX_FILES_PER_SUBMISSION } from "@/lib/bulk-resume-intake";
-import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
+import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -34,8 +34,8 @@ export async function POST(request: Request) {
     if (!files.length) return responseError("Choose at least one PDF, DOC, or DOCX resume.", 422);
     if (files.length > MAX_FILES_PER_SUBMISSION) return responseError(`Upload up to ${MAX_FILES_PER_SUBMISSION} resumes per batch.`, 422);
 
-    const role = await getRoleRequestById(roleId);
-    if (!role || !isPublishedRoleForIntake(role)) return responseError("The selected role is not available for bulk screening.", 409);
+    const role = await resolvePublishedRecruitmentRole(roleId);
+    if (!role) return responseError("The selected role is not available for bulk screening.", 409);
 
     const intake = await intakeResumeBatch({
       roleId,

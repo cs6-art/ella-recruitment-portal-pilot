@@ -55,8 +55,9 @@ test("demo mode keeps history out of the default list but exposes read-only stag
 });
 
 test("candidate intake exposes only roles with durable publication evidence", () => {
+  const roleEligibilitySource = fs.readFileSync("src/lib/recruitment-role-eligibility.ts", "utf8");
   assert.match(roleSheetSource, /export function isPublishedRoleForIntake/);
-  assert.match(roleSheetSource, /postingConfirmed === "true" \|\| toText\(role\.postedAt\) !== ""/);
+  assert.match(roleEligibilitySource, /postingConfirmed === "true" \|\| text\(role\.postedAt\) !== ""/);
   assert.match(roleSheetSource, /"Posting_Confirmed"/);
   assert.match(roleSheetSource, /"Posted_At"/);
 });

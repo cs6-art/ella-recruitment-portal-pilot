@@ -8,6 +8,7 @@ import { demoRoleSummaries } from "@/lib/demo-data";
 import { isDemoMode, isDemoWindowRecord } from "@/lib/demo-mode";
 import { normalizeDateOnly } from "@/lib/date-only";
 import { PORTAL_CONFIG_CATALOG } from "@/lib/portal-config-catalog";
+import { isPublishedRoleForIntake as isPublishedRoleForIntakeShared } from "@/lib/recruitment-role-eligibility";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleDetails, targetRoleStatusHistory, targetRoleSummaries, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 
@@ -201,12 +202,7 @@ type PublishedRoleState = {
  * though posting was never confirmed, so those two labels alone are not enough.
  */
 export function isPublishedRoleForIntake(role: PublishedRoleState): boolean {
-  const status = toText(role.status).toLowerCase();
-  const setupStatus = toText(role.recruitmentSetupStatus).toLowerCase();
-  const postingConfirmed = toText(role.postingConfirmed).toLowerCase();
-  return status === "job posted"
-    && setupStatus === "published"
-    && (postingConfirmed === "true" || toText(role.postedAt) !== "");
+  return isPublishedRoleForIntakeShared(role);
 }
 
 export type RoleStatusHistoryEntry = {
