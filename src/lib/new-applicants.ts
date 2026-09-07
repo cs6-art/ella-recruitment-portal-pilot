@@ -71,3 +71,15 @@ export function isNewApplicant(
   if (applicant.isHistoricalDemo) return false;
   return applicantAppliedTime(applicant.appliedAt, applicant.applicationId) > lastSeenMs;
 }
+
+/**
+ * Keep the sidebar and header notification badges visually consistent with
+ * the original portal: counts above nine are intentionally compacted.
+ */
+export function applicantNotificationBadge(count: number): string {
+  return count > 9 ? "9+" : String(Math.max(0, Math.floor(count)));
+}
+
+export function hasApplicantNotifications(count: number): boolean {
+  return count > 0;
+}

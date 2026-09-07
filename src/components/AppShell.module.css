@@ -33,7 +33,8 @@
 .navLink:hover { color: #0e4471; background: #edf4f9; transform: translateX(2px); }
 .navLinkActive { color: #0e4471; background: #e7f0f7; box-shadow: inset 3px 0 0 #0071f7; }
 .navIcon { display: grid; width: 26px; height: 26px; flex: 0 0 26px; place-items: center; border-radius: 7px; color: #6e8294; background: #f1f5f8; font-size: 16px; }
-.navLink > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.navLink > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.navBadge { margin-left: auto; display: grid; min-width: 18px; height: 18px; flex: 0 0 auto; place-items: center; padding: 0 5px; border-radius: 999px; color: #ffffff; background: #d64545; font-size: 11px; font-weight: 800; line-height: 1; }
 .navLinkActive .navIcon { color: #ffffff; background: #0e4471; }
 .sidebarSpacer { flex: 1; }
 .accountSection { padding-top: 14px; border-top: 1px solid #edf1f5; }
@@ -76,6 +77,8 @@
 .sidebarCollapsed .brand > span:last-child,
 .sidebarCollapsed .workspaceLabel,
 .sidebarCollapsed .navLink > span:last-child,
+.sidebarCollapsed .navLink > span:nth-child(2),
+.sidebarCollapsed .navBadge,
 .sidebarCollapsed .profileDetails,
 .sidebarCollapsed .profileArrow,
 .sidebarCollapsed .signOutText { display: none; }
