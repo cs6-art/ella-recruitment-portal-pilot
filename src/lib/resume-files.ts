@@ -64,7 +64,10 @@ function drive() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const key = getGoogleServiceAccountPrivateKey();
   if (!email || !key) throw new Error("GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY is not configured.");
-  const auth = new google.auth.JWT({ email, key, scopes: ["https://www.googleapis.com/auth/drive.file"] });
+  // drive.file alone can read app-created PDFs while returning 404 for an
+  // existing Shared Drive root. Read-only metadata access lets us verify the
+  // approved destination without granting unrestricted Drive write access.
+  const auth = new google.auth.JWT({ email, key, scopes: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive.readonly"] });
   driveClient = google.drive({ version: "v3", auth });
   return driveClient;
 }
@@ -264,6 +267,20 @@ export async function storeResumeFile(file: File, options: { environment?: BulkR
   // non-expired Drive object when it is already present, so re-submitting a
   // resume after a lost historical queue write does not create another file.
   const folderId = await resumeFolderId(options.environment);
+  console.info("[Resume Storage] destination", { folderId, fileName, authentication: "service_account" });
+  // Source retrieval uses the user's OAuth connection; destination storage
+  // uses the service account. Report these failures separately.
+  await drive().files.get({
+    fileId: folderId,
+    fields: "id,mimeType,capabilities(canAddChildren)",
+    supportsAllDrives: true,
+  }).then(({ data }) => {
+    if (data.mimeType !== "application/vnd.google-apps.folder" || data.capabilities?.canAddChildren === false) {
+      throw new Error("Resume storage destination must be a writable folder for the service account.");
+    }
+  }).catch(() => {
+    throw new Error(`Resume storage destination unavailable to the service account (${folderId}). Verify RESUME_STORAGE_DRIVE_FOLDER_ID and Shared Drive access.`);
+  });
   const existing = await drive().files.list({
     q: `'${folderId}' in parents and trashed = false and properties has { key='sha256' and value='${sha256}' }`,
     fields: "files(id, name, mimeType, size, createdTime, properties)",

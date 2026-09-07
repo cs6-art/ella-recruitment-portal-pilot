@@ -41,15 +41,19 @@ export async function intakeTargetResumeBatch(input: {
     let stored: Awaited<ReturnType<typeof storeResumeFile>> | null = null;
     let queueKey = "";
     let durableQueue = false;
+    let stage = "source_download";
     try {
       const bytes = await source.getBytes();
       if (bytes.length > MAX_RESUME_FILE_BYTES) throw new Error("Resume files must be 10 MB or smaller.");
       const file = new File([new Uint8Array(bytes)], source.name || "resume", { type: source.mimeType || "application/octet-stream" });
+      stage = "destination_storage";
       stored = await storeResumeFile(file, { environment });
+      stage = "contact_extraction";
       const queueId = queueIdForHash(input.roleId, stored.record.sha256);
       queueKey = queueId;
       const contact = extractResumeContactDetails(stored.extractedText);
       if (!contact.candidateEmail) throw new Error("The resume must contain a readable candidate email address.");
+      stage = "queue_persistence";
       const queued = await enqueueBulkScreening({
         roleExternalId: input.roleId,
         batchId,
@@ -75,6 +79,7 @@ export async function intakeTargetResumeBatch(input: {
         continue;
       }
       durableQueue = true;
+      stage = "application_persistence";
 
       const applicationId = `APP-${crypto.createHash("sha256").update(`${input.roleId}:${stored.record.sha256}`).digest("hex").slice(0, 24)}`;
       const resumeFileId = await registerResumeFile({
@@ -112,7 +117,8 @@ export async function intakeTargetResumeBatch(input: {
         await deleteResumeFile(stored.record).catch(() => undefined);
       }
       const message = error instanceof Error ? error.message : "Unable to queue the resume.";
-      results.push({ fileName: source.name, status: "Failed", error: message });
+      console.warn("[Target Intake] failed", { batchId, stage, fileName: source.name, sourceFileId: source.driveFileId || "" });
+      results.push({ fileName: source.name, status: "Failed", stage, error: message });
     }
   }
 
