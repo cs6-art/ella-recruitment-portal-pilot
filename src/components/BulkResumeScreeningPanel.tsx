@@ -7,6 +7,7 @@ import DriveFilePicker from "@/components/DriveFilePicker";
 import EllaCreditsMeter from "@/components/EllaCreditsMeter";
 import GoogleDriveIcon from "@/components/GoogleDriveIcon";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
+import { buildCloudImportRequest } from "@/lib/cloud-import-request";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
 type RoleOption = { roleId: string; label: string };
@@ -297,9 +298,13 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
   }
 
   async function importFromCloud(provider: "google" | "microsoft", fileIds: string[]) {
-    if (!roleId || fileIds.length === 0 || driveImporting) return;
+    if (driveImporting) return;
     const label = provider === "microsoft" ? "OneDrive" : "Google Drive";
-    const endpoint = provider === "microsoft" ? "/api/resume-screening/onedrive/import" : "/api/resume-screening/drive/import";
+    const request = buildCloudImportRequest(provider, roleId, fileIds);
+    if (!request) {
+      setError(`Select a published role and at least one file from ${label}.`);
+      return;
+    }
     setDriveImporting(true);
     setError("");
     setWarning("");
@@ -308,11 +313,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
     setBatchResultStatuses(new Map());
     batchFiles.current = new Map();
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roleId, fileIds }),
-      });
+      const response = await fetch(request.endpoint, request.init);
       const result = await response.json();
       if (!response.ok || result.success !== true) throw new Error(result.error || `Unable to import from ${label}.`);
       applyBatchResult(result, new Map());

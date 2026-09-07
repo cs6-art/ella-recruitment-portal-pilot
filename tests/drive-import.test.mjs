@@ -62,10 +62,23 @@ test("both intake sources use one shared helper with unchanged behaviour", () =>
 
 test("the panel offers connect / choose-from-Drive and imports into the same batch view", () => {
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
+  const request = read("src/lib/cloud-import-request.ts");
   assert.match(panel, /\/api\/auth\/google-drive\/status/);
   assert.match(panel, /Connect Google Drive/);
   assert.match(panel, /Choose from Google Drive/);
-  assert.match(panel, /\/api\/resume-screening\/drive\/import/);
+  assert.match(panel, /buildCloudImportRequest\(provider, roleId, fileIds\)/);
+  assert.match(request, /\/api\/resume-screening\/drive\/import/);
   assert.match(panel, /applyBatchResult/);
   assert.match(panel, /DriveFilePicker/);
+});
+
+test("Drive picker selection builds the authenticated import request with the active role", () => {
+  const picker = read("src/components/DriveFilePicker.tsx");
+  const panel = read("src/components/BulkResumeScreeningPanel.tsx");
+  const request = read("src/lib/cloud-import-request.ts");
+  assert.match(picker, /onClick=\{\(\) => onImport\(\[\.\.\.selected\]\)\}/);
+  assert.match(panel, /buildCloudImportRequest\(provider, roleId, fileIds\)/);
+  assert.match(panel, /fetch\(request\.endpoint, request\.init\)/);
+  assert.match(request, /\/api\/resume-screening\/drive\/import/);
+  assert.match(request, /JSON\.stringify\(\{ roleId: normalizedRoleId, fileIds: normalizedFileIds \}\)/);
 });
