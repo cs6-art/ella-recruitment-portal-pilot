@@ -79,3 +79,10 @@ test("duplicate queue processing is a no-op", () => {
   assert.match(queries, /duplicate: true/);
   assert.match(queries, /onConflictDoNothing\(\{ target: screeningResults\.applicationId \}\)/);
 });
+
+test("Neon execute results preserve rows returned by atomic queue claims", () => {
+  const queries = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(queries, /if \(Array\.isArray\(value\)\)/);
+  assert.match(queries, /Array\.isArray\(\(value as \{ rows\?: unknown \}\)\.rows\)/);
+  assert.match(queries, /return \(value as \{ rows: T\[\]\s*}\)\.rows/);
+});
