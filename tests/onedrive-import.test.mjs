@@ -62,10 +62,12 @@ test("OneDrive import handles expired/revoked tokens, missing files and permissi
 
 test("the panel offers Connect / Choose from OneDrive and reuses the shared batch view", () => {
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
+  const request = read("src/lib/cloud-import-request.ts");
   assert.match(panel, /\/api\/auth\/microsoft-drive\/status/);
   assert.match(panel, /Connect OneDrive/);
   assert.match(panel, /Choose from OneDrive/);
-  assert.match(panel, /\/api\/resume-screening\/onedrive\/import/);
+  assert.match(panel, /buildCloudImportRequest\(provider, roleId, fileIds\)/);
+  assert.match(request, /\/api\/resume-screening\/onedrive\/import/);
   assert.match(panel, /applyBatchResult/);
   // one shared picker component, parameterised per provider
   assert.match(panel, /listUrl="\/api\/resume-screening\/onedrive\/list"/);
