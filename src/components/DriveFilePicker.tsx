@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import type { CloudImportSelection } from "@/lib/cloud-import-request";
+
 type DriveFolder = { id: string; name: string };
-type DriveFile = { id: string; name: string; mimeType: string; size: number; modifiedTime: string };
+type DriveFile = CloudImportSelection & { size: number; modifiedTime: string };
 
 const DEFAULT_MAX_SELECTION = 25;
 
@@ -27,7 +29,7 @@ export default function DriveFilePicker({
 }: {
   open: boolean;
   onClose: () => void;
-  onImport: (fileIds: string[]) => void;
+  onImport: (files: DriveFile[]) => void;
   importing: boolean;
   listUrl?: string;
   pageParam?: string;
@@ -57,7 +59,16 @@ export default function DriveFilePicker({
       setFolderId(data.folderId);
       setBreadcrumb(data.breadcrumb || [{ id: "root", name: rootName }]);
       setFolders(data.folders || []);
-      setFiles((current) => (pageToken ? [...current, ...(data.files || [])] : data.files || []));
+      const returnedFolders = new Set<string>((data.folders || []).map((folder: DriveFolder) => folder.id).filter(Boolean));
+      const selectableFiles = (data.files || []).filter((file: DriveFile) => (
+        Boolean(file.id && file.name)
+        && file.id !== "root"
+        && !returnedFolders.has(file.id)
+        && file.isFolder !== true
+        && file.mimeType !== "application/vnd.google-apps.folder"
+        && /\.(pdf|docx?|doc)$/i.test(file.name)
+      ));
+      setFiles((current) => (pageToken ? [...current, ...selectableFiles] : selectableFiles));
       setNextPageToken(data.nextPageToken || null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : `Unable to read that ${providerLabel} folder.`);
@@ -127,7 +138,19 @@ export default function DriveFilePicker({
           <span>{selected.size} selected{selected.size >= MAX_SELECTION ? ` (max ${MAX_SELECTION})` : ""}</span>
           <div>
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={importing}>Cancel</button>
-            <button type="button" className="btn btn-primary" disabled={importing || selected.size === 0} onClick={() => onImport([...selected])}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={importing || selected.size === 0}
+              onClick={() => {
+                const selectedFiles = files.filter((file) => selected.has(file.id));
+                if (selectedFiles.length !== selected.size) {
+                  setError("One selected Drive file is no longer available. Refresh the folder and select it again.");
+                  return;
+                }
+                onImport(selectedFiles);
+              }}
+            >
               {importing ? "Importing…" : `Import ${selected.size} file${selected.size === 1 ? "" : "s"}`}
             </button>
           </div>

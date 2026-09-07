@@ -51,10 +51,15 @@ export async function POST(request: Request) {
     await Promise.all(fileIds.map(async (fileId) => {
       try {
         const meta = await drive.files.get({ fileId, fields: "id, name, mimeType, size", supportsAllDrives: true });
+        const resolvedId = String(meta.data.id || "").trim();
         const name = meta.data.name || "file";
         const mimeType = meta.data.mimeType || "";
         const size = Number(meta.data.size || 0);
-        if (mimeType.startsWith("application/vnd.google-apps.")) {
+        if (!resolvedId || resolvedId !== fileId) {
+          rejected.push({ fileName: name, status: "Failed", error: "The selected Drive item could not be verified as a file." });
+        } else if (mimeType === "application/vnd.google-apps.folder") {
+          rejected.push({ fileName: name, status: "Failed", error: "Select a resume file, not a Drive folder." });
+        } else if (mimeType.startsWith("application/vnd.google-apps.")) {
           rejected.push({ fileName: name, status: "Failed", error: "Google Docs cannot be screened — export as PDF first." });
         } else if (!RESUME_EXT.test(name)) {
           rejected.push({ fileName: name, status: "Failed", error: "Only PDF, DOC, and DOCX resumes are supported." });
