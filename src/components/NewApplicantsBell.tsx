@@ -9,6 +9,8 @@ import styles from "./NewApplicantsBell.module.css";
 import { formatPortalDateTime } from "@/lib/portal-time";
 import {
   applicantAppliedTime,
+  applicantNotificationBadge,
+  hasApplicantNotifications,
   readApplicantsLastSeen,
   type RecentApplicant,
 } from "@/lib/new-applicants";
@@ -21,14 +23,16 @@ const POLL_INTERVAL_MS = 60_000;
  * component only reads it, re-reading whenever the route changes so the count
  * clears right after a visit.
  */
-export default function NewApplicantsBell({ userEmail }: { userEmail?: string }) {
+export function useNewApplicantFeed(userEmail?: string, enabled = true) {
   const pathname = usePathname();
   const [recent, setRecent] = useState<RecentApplicant[]>([]);
   const [lastSeen, setLastSeen] = useState<number>(() => readApplicantsLastSeen(userEmail));
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
+    if (!enabled) {
+      setRecent([]);
+      return;
+    }
     try {
       const response = await fetch("/api/applicants/recent", { credentials: "same-origin" });
       if (!response.ok) return;
@@ -37,7 +41,7 @@ export default function NewApplicantsBell({ userEmail }: { userEmail?: string })
     } catch {
       // Transient network failure — keep the last known list.
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     void load();
@@ -68,6 +72,25 @@ export default function NewApplicantsBell({ userEmail }: { userEmail?: string })
     };
   }, [pathname, userEmail]);
 
+  const newApplicants = useMemo(
+    () => recent.filter((applicant) => applicantAppliedTime(applicant.appliedAt, applicant.applicationId) > lastSeen),
+    [recent, lastSeen],
+  );
+  return {
+    recent,
+    newApplicants,
+    count: newApplicants.length,
+    badge: applicantNotificationBadge(newApplicants.length),
+    hasNotifications: hasApplicantNotifications(newApplicants.length),
+    reload: load,
+  };
+}
+
+export default function NewApplicantsBell({ userEmail }: { userEmail?: string }) {
+  const { newApplicants, count, badge } = useNewApplicantFeed(userEmail);
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!open) return;
     const onClick = (event: MouseEvent) => {
@@ -84,12 +107,6 @@ export default function NewApplicantsBell({ userEmail }: { userEmail?: string })
     };
   }, [open]);
 
-  const newApplicants = useMemo(
-    () => recent.filter((applicant) => applicantAppliedTime(applicant.appliedAt, applicant.applicationId) > lastSeen),
-    [recent, lastSeen],
-  );
-  const count = newApplicants.length;
-
   return (
     <div className={styles.bell} ref={containerRef}>
       <button
@@ -100,7 +117,7 @@ export default function NewApplicantsBell({ userEmail }: { userEmail?: string })
         onClick={() => setOpen((current) => !current)}
       >
         <UiIcon name="bell" size={20} />
-        {count > 0 && <span className={styles.badge}>{count > 99 ? "99+" : count}</span>}
+        {count > 0 && <span className={styles.badge}>{badge}</span>}
       </button>
 
       {open && (
