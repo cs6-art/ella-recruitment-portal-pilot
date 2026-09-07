@@ -54,6 +54,8 @@ test("application invitations can send email and lock the invited identity", () 
   assert.match(inviteRoute, /sendEmail/);
   assert.match(inviteRoute, /sendApplicationInviteEmail/);
   assert.match(emailSender, /getPortalConfigValue\("N8N_Application_Invite_Email_Webhook_URL"\)/);
+  assert.match(emailSender, /N8N_APPLICATION_INVITE_EMAIL_TARGET_WEBHOOK_URL/);
+  assert.match(emailSender, /N8N_Application_Invite_Email_Target_Webhook_URL/);
   assert.match(emailSender, /application_invite_email_requested/);
   assert.match(candidatePage, /candidateNameField\.readOnly = true/);
   assert.match(candidatePage, /candidateEmailField\.readOnly = true/);

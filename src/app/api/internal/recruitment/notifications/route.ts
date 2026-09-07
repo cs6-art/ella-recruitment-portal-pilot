@@ -17,6 +17,6 @@ export const POST = withInternalAuth("notifications", async (request) => {
   });
   if (!body) return internalJson({ ok: false, error: "historyId_and_status_required" }, 422);
   if (!["sent", "pending", "failed", "not_configured"].includes(String(body.status))) return internalJson({ ok: false, error: "invalid_notification_status" }, 422);
-  const result = await markNotification({ historyId: String(body.historyId), status: String(body.status) as "sent" | "pending" | "failed" | "not_configured", error: typeof body.error === "string" ? body.error : undefined });
+  const result = await markNotification({ historyId: String(body.historyId), status: String(body.status) as "sent" | "pending" | "failed" | "not_configured", error: typeof body.error === "string" ? body.error : undefined, providerMessageId: typeof body.providerMessageId === "string" ? body.providerMessageId : undefined, recipient: typeof body.recipient === "string" ? body.recipient : undefined });
   return internalJson({ ok: true, migrated: true, updated: result.updated });
 });

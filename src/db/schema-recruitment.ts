@@ -429,6 +429,12 @@ export const applicationStatusHistory = pgTable(
     actionRequestId: text("action_request_id").unique(),
     notificationStatus: text("notification_status").notNull().default(""),
     notificationError: text("notification_error").notNull().default(""),
+    notificationEventType: text("notification_event_type").notNull().default(""),
+    notificationAttemptedAt: ts("notification_attempted_at"),
+    notificationSentAt: ts("notification_sent_at"),
+    notificationProviderId: text("notification_provider_id").notNull().default(""),
+    notificationRecipient: text("notification_recipient").notNull().default(""),
+    notificationIntendedRecipient: text("notification_intended_recipient").notNull().default(""),
   },
   (t) => [index("application_status_history_application_id_changed_at_idx").on(t.applicationId, t.changedAt)],
 );
