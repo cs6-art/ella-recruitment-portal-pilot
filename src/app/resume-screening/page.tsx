@@ -28,8 +28,14 @@ export default async function ResumeScreeningPage() {
     // Keep every resume-screening role selector predictable as the published
     // role catalogue grows; IDs remain the option values.
     .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
-  const driveUrl = (await getPortalConfigValue("Bulk_Resume_Drive_URL")).trim();
-  const driveRootFolderId = isPostgresRecruitmentTarget() ? (process.env.RESUME_STORAGE_DRIVE_FOLDER_ID || "").trim() : "";
+  const targetRecruitment = isPostgresRecruitmentTarget();
+  const driveRootFolderId = targetRecruitment ? (process.env.RESUME_STORAGE_DRIVE_FOLDER_ID || "").trim() : "";
+  // Target mode must not inherit a stale operational Drive URL from the
+  // legacy Sheets configuration. The folder ID is navigation-only; the
+  // picker submits the exact selected file object's ID.
+  const driveUrl = targetRecruitment && driveRootFolderId
+    ? `https://drive.google.com/drive/folders/${encodeURIComponent(driveRootFolderId)}`
+    : (await getPortalConfigValue("Bulk_Resume_Drive_URL")).trim();
 
   return (
     <AppShell user={user}>
