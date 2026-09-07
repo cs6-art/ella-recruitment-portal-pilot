@@ -19,7 +19,7 @@ import { deleteResumeFile, storeResumeFile } from "@/lib/resume-files";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { invalidateSheetsCache } from "@/lib/sheets-cache";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { targetCreateApplication } from "@/lib/recruitment-target-portal";
+import { targetCreateApplication, targetRoleDetails } from "@/lib/recruitment-target-portal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     }
 
     const roleId = parsed.data.roleId.trim();
-    const role = await getRoleRequestById(roleId);
+    const role = isPostgresRecruitmentTarget() ? await targetRoleDetails(roleId) : await getRoleRequestById(roleId);
     if (!role || !isPublishedRoleForIntake(role)) {
       return responseError("The selected role is not available for manual candidate intake.", 409);
     }

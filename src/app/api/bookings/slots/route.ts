@@ -6,6 +6,7 @@ import { createInterviewSlot } from "@/lib/applicant-workflow";
 import { getRoleRequestById } from "@/lib/google-sheets";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 
 export async function POST(request: Request) {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
@@ -15,8 +16,8 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const roleId = String(body.roleId ?? "").trim();
-    const role = await getRoleRequestById(roleId);
-    if (!role || !canManageInterviewAvailability(role.status)) throw new Error("Interview availability can only be added for approved or active recruitment roles.");
+    const role = isPostgresRecruitmentTarget() ? null : await getRoleRequestById(roleId);
+    if (!isPostgresRecruitmentTarget() && (!role || !canManageInterviewAvailability(role.status))) throw new Error("Interview availability can only be added for approved or active recruitment roles.");
     if (body.interviewType === "Final Interview") throw new Error("HR interview availability is managed automatically through the connected HR Google Calendar.");
     const slot = await createInterviewSlot({ interviewType: body.interviewType, roleId, date: body.date, startTime: body.startTime, endTime: body.endTime, timezone: body.timezone });
     return NextResponse.json({ success: true, slot }, { status: 201 });

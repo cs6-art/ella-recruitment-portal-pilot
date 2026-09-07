@@ -11,7 +11,7 @@ import {
 } from "@/lib/google-sheets";
 import { canDeleteRoleRequest, canEditRoleRequest, canViewRole } from "@/lib/access-control";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { targetArchiveRole } from "@/lib/recruitment-target-portal";
+import { targetArchiveRole, targetRoleDetails, targetRoleStatusHistory, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 import { roleRequestSchema } from "@/lib/role-schema";
 import {
   COOKIE_NAME,
@@ -107,8 +107,9 @@ export async function GET(
 
     const { roleId } = await context.params;
 
-    const role =
-      await getRoleRequestById(roleId, { fresh: true });
+    const role = isPostgresRecruitmentTarget()
+      ? await targetRoleDetails(roleId)
+      : await getRoleRequestById(roleId, { fresh: true });
 
     if (!role) {
       return NextResponse.json(
@@ -127,9 +128,9 @@ export async function GET(
       );
     }
 
-    const history = await getRoleStatusHistory(
-      role.roleId,
-    );
+    const history = isPostgresRecruitmentTarget()
+      ? await targetRoleStatusHistory(role.roleId)
+      : await getRoleStatusHistory(role.roleId);
 
     console.log(
       "[API Role Details] Returning role:",
@@ -175,7 +176,9 @@ async function getRoleAndUser(roleId: string) {
 
   // Mutations must observe a draft or role written by a preceding request,
   // even when the requests are handled by different app instances.
-  const role = await getRoleRequestById(roleId, { fresh: true });
+  const role = isPostgresRecruitmentTarget()
+    ? await targetRoleDetails(roleId)
+    : await getRoleRequestById(roleId, { fresh: true });
   if (!role) return { user, role: null, error: NextResponse.json({ success: false, error: "Role request not found." }, { status: 404 }) };
   if (!canViewRole(user, role)) return { user, role: null, error: NextResponse.json({ success: false, error: "You do not have permission to manage this role request." }, { status: 403 }) };
   return { user, role, error: null };
@@ -198,6 +201,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (body.draft === true) {
       const now = new Date().toISOString();
       const fields = roleDraftFieldsForPatch(body, access.role, access.user, finalInterviewCalendar.email, now);
+      if (isPostgresRecruitmentTarget()) {
+        await targetUpdateRoleFields(access.role.roleId, fields);
+        return NextResponse.json({ success: true, draft: true, roleId: access.role.roleId, status: access.role.status, message: "Draft saved." });
+      }
       await updateRoleRequestFields(access.role.roleId, fields);
       return NextResponse.json({ success: true, draft: true, roleId: access.role.roleId, status: access.role.status, message: "Draft saved." });
     }

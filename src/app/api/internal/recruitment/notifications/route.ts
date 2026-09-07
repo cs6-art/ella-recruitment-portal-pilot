@@ -5,8 +5,9 @@ import { markNotification, notificationQueue } from "@/lib/internal-recruitment-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const GET = withInternalAuth("notifications", async () => {
-  return internalJson({ ok: true, migrated: true, items: await notificationQueue() });
+export const GET = withInternalAuth("notifications", async (request) => {
+  const stage = new URL(request.url).searchParams.get("stage") || undefined;
+  return internalJson({ ok: true, migrated: true, items: await notificationQueue(stage) });
 });
 
 export const POST = withInternalAuth("notifications", async (request) => {
