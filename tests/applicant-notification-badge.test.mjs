@@ -36,3 +36,12 @@ test("Applicants sidebar badge has the red numeric presentation", () => {
   assert.match(css, /\.navBadge[\s\S]*background: #d64545/);
   assert.match(css, /\.sidebarCollapsed \.navBadge/);
 });
+
+test("the notification bell reserves layout space instead of overlaying page controls", () => {
+  const css = read("src/components/AppShell.module.css");
+  const shell = read("src/components/AppShell.tsx");
+  assert.match(css, /\.topBar[\s\S]*position: sticky/);
+  assert.match(css, /\.topBar[\s\S]*min-height: 50px/);
+  assert.doesNotMatch(css, /\.topBar\s*\{[^}]*position:\s*absolute/);
+  assert.match(shell, /styles\.topBar[\s\S]*styles\.pageToolbar/);
+});
