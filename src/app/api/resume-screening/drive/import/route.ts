@@ -5,9 +5,9 @@ import { z } from "zod";
 import { canManagePipeline } from "@/lib/access-control";
 import { EllaCreditsError, intakeResumeBatch, MAX_FILES_PER_SUBMISSION } from "@/lib/bulk-resume-intake";
 import { getAuthorizedDriveClient } from "@/lib/google-drive";
-import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { MAX_RESUME_FILE_BYTES } from "@/lib/resume-files";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
+import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -37,8 +37,8 @@ export async function POST(request: Request) {
   const { roleId } = parsed.data;
   const fileIds = [...new Set(parsed.data.fileIds)];
 
-  const role = await getRoleRequestById(roleId);
-  if (!role || !isPublishedRoleForIntake(role)) return responseError("The selected role is not available for bulk screening.", 409);
+  const role = await resolvePublishedRecruitmentRole(roleId);
+  if (!role) return responseError("The selected role is not available for bulk screening.", 409);
 
   const drive = await getAuthorizedDriveClient(user.email);
   if (!drive) return responseError("Connect Google Drive first.", 409, { code: "DRIVE_NOT_CONNECTED" });
