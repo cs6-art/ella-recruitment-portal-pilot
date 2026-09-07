@@ -14,7 +14,7 @@ export const POST = withInternalAuth("booking", async (request) => {
   if (body.kind !== "voice" && body.kind !== "final") return internalJson({ ok: false, error: "invalid_booking_kind" }, 422);
   const result = await createBookingToken({ applicationExternalId: String(body.applicationExternalId), kind: body.kind, tokenHash: String(body.tokenHash), link: typeof body.link === "string" ? body.link : undefined, expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : undefined });
   if (result.error) return internalJson({ ok: false, error: result.error }, 404);
-  return internalJson({ ok: true, migrated: true, created: result.created, token: result.token }, result.created ? 201 : 200);
+  return internalJson({ ok: true, migrated: true, created: result.created, token: result.token, notificationHistoryId: result.notificationHistoryId }, result.created ? 201 : 200);
 });
 
 export const GET = withInternalAuth("booking", async (request) => {

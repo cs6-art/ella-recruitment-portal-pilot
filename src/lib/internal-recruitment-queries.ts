@@ -338,6 +338,32 @@ export async function pendingVoiceCalls() {
   return db.select({ id: voiceCallAttempts.id, applicationId: voiceCallAttempts.applicationId, externalId: applications.externalId, candidateName: applications.candidateName, email: applications.email, preferredMobile: voiceCallAttempts.preferredMobile, contactNumber: voiceCallAttempts.contactNumber, applicantCountry: voiceCallAttempts.applicantCountry, attemptNumber: voiceCallAttempts.attemptNumber, maxAttempts: voiceCallAttempts.maxAttempts, scheduledAt: voiceCallAttempts.scheduledAt, status: voiceCallAttempts.status }).from(voiceCallAttempts).innerJoin(applications, eq(applications.id, voiceCallAttempts.applicationId)).where(and(inArray(voiceCallAttempts.status, ["scheduled", "queued", "retry_scheduled"]), or(isNull(voiceCallAttempts.scheduledAt), lte(voiceCallAttempts.scheduledAt, sql`now()`)))).orderBy(asc(voiceCallAttempts.scheduledAt)).limit(LIMIT);
 }
 
+export async function dispatchVoiceAttemptDryRun(input: { attemptId: string; providerCallId: string }) {
+  const db = getDb();
+  const result = await db.execute(sql`UPDATE voice_call_attempts SET status = 'initiated', provider_call_id = ${input.providerCallId}, updated_at = now() WHERE id = ${input.attemptId} AND status = 'calling' RETURNING id, application_id AS "applicationId", provider_call_id AS "providerCallId", status`);
+  return rowsOf<Record<string, unknown>>(result)[0] || null;
+}
+
+export async function voiceAttemptContext(attemptId: string) {
+  const db = getDb();
+  const [row] = await db.select({
+    attempt: voiceCallAttempts,
+    applicationExternalId: applications.externalId,
+    candidateName: applications.candidateName,
+    candidateEmail: applications.email,
+    phone: applications.phone,
+    preferredMobile: applications.preferredMobile,
+    applicantCountry: applications.applicantCountry,
+    roleExternalId: roles.externalId,
+    roleTitle: roles.title,
+  }).from(voiceCallAttempts)
+    .innerJoin(applications, eq(applications.id, voiceCallAttempts.applicationId))
+    .leftJoin(roles, eq(roles.id, voiceCallAttempts.roleId))
+    .where(eq(voiceCallAttempts.id, attemptId.trim()))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function updateVoiceAttemptStatus(input: { attemptId: string; status: string; outcome?: string; providerCallId?: string; retryAfter?: string }) {
   if (!Object.prototype.hasOwnProperty.call(VOICE_STATUS_TRANSITIONS, input.status)) return { updated: false, error: "invalid_status" as const };
   const db = getDb();
@@ -345,6 +371,35 @@ export async function updateVoiceAttemptStatus(input: { attemptId: string; statu
   const allowedWhere = previousStatuses.length > 0 ? sql`status IN (${sql.join(previousStatuses.map((status) => sql`${status}`), sql`, `)})` : sql`false`;
   const result = await db.execute(sql`UPDATE voice_call_attempts SET status = ${input.status}, outcome = ${input.outcome || null}, provider_call_id = COALESCE(NULLIF(${input.providerCallId || ""}, ''), provider_call_id), retry_after = ${isoOrNull(input.retryAfter)}, updated_at = now() WHERE id = ${input.attemptId} AND (status = ${input.status} OR ${allowedWhere}) RETURNING id`);
   return { updated: rowsOf(result).length > 0, error: null };
+}
+
+export async function scheduleVoiceRetry(input: { attemptId: string; retryAfter: string }) {
+  const db = getDb();
+  const retryAt = isoOrNull(input.retryAfter);
+  if (!retryAt) return { scheduled: false, duplicate: false, terminal: false, error: "retryAfter_required" as const };
+  return db.transaction(async (tx) => {
+    const [current] = await tx.select().from(voiceCallAttempts).where(eq(voiceCallAttempts.id, input.attemptId.trim())).for("update").limit(1);
+    if (!current) return { scheduled: false, duplicate: false, terminal: false, error: "attempt_not_found" as const };
+    if (current.status === "retry_scheduled") return { scheduled: false, duplicate: true, terminal: false, error: null };
+    if (current.status !== "no_show") return { scheduled: false, duplicate: false, terminal: false, error: "invalid_retry_transition" as const };
+    if (current.attemptNumber >= current.maxAttempts) return { scheduled: false, duplicate: false, terminal: true, error: null };
+    const nextAttemptNumber = current.attemptNumber + 1;
+    const [existing] = await tx.select({ id: voiceCallAttempts.id, status: voiceCallAttempts.status }).from(voiceCallAttempts).where(and(eq(voiceCallAttempts.applicationId, current.applicationId), eq(voiceCallAttempts.attemptNumber, nextAttemptNumber))).limit(1);
+    if (existing) return { scheduled: false, duplicate: true, terminal: false, error: null };
+    const [next] = await tx.insert(voiceCallAttempts).values({
+      applicationId: current.applicationId,
+      roleId: current.roleId,
+      attemptNumber: nextAttemptNumber,
+      maxAttempts: current.maxAttempts,
+      scheduledAt: retryAt,
+      retryAfter: retryAt,
+      status: "retry_scheduled",
+      preferredMobile: current.preferredMobile,
+      contactNumber: current.contactNumber,
+      applicantCountry: current.applicantCountry,
+    }).returning({ id: voiceCallAttempts.id, attemptNumber: voiceCallAttempts.attemptNumber, status: voiceCallAttempts.status, scheduledAt: voiceCallAttempts.scheduledAt });
+    return { scheduled: Boolean(next), duplicate: false, terminal: false, error: null, next };
+  });
 }
 
 export async function ingestVoiceResult(input: { applicationExternalId: string; attemptId?: string; score?: number | null; recommendation?: string; strengths?: string; concerns?: string; summary?: string; transcript?: string; callStatus?: string; callFinalStatus?: string; providerEventType?: string; callCompletedAt?: string; raw?: unknown; sourceEventKey?: string }) {
@@ -661,16 +716,37 @@ export async function bookInterviewSlot(input: { slotId: string; applicationExte
     const previousStage = slot.interviewType === "voice" ? "voice_booking_pending" : "approved_for_final";
     await tx.update(applications).set({ currentStage: nextStage, updatedAt: new Date() }).where(eq(applications.id, application.id));
     await tx.insert(applicationStatusHistory).values({ applicationId: application.id, stage: slot.interviewType, previousStage, newStage: nextStage, actorEmail: input.actorEmail, source: "internal_api:booking", actionRequestId: input.actionRequestId });
+    if (slot.interviewType === "voice") {
+      const existing = await tx.select({ id: voiceCallAttempts.id }).from(voiceCallAttempts).where(and(eq(voiceCallAttempts.applicationId, application.id), inArray(voiceCallAttempts.status, ["scheduled", "queued", "calling", "initiated", "in_progress"]))).limit(1);
+      if (existing.length === 0) {
+        await tx.insert(voiceCallAttempts).values({ applicationId: application.id, roleId: slot.roleId, attemptNumber: 1, maxAttempts: 3, scheduledAt: slot.startsAt, status: "scheduled", preferredMobile: "", contactNumber: "" });
+      }
+    }
     return { booked: true, slot, error: null };
   });
 }
 
 export async function createBookingToken(input: { applicationExternalId: string; kind: "voice" | "final"; tokenHash: string; link?: string; expiresAt?: string }) {
   const db = getDb();
-  const [application] = await db.select({ id: applications.id }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
-  if (!application) return { token: null, created: false, error: "unknown_application" as const };
-  const [token] = await db.insert(bookingTokens).values({ applicationId: application.id, kind: input.kind, tokenHash: input.tokenHash, link: input.link || "", expiresAt: isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: bookingTokens.tokenHash }).returning();
-  return { token: token ?? null, created: Boolean(token), error: null };
+  return db.transaction(async (tx) => {
+    const [application] = await tx.select({ id: applications.id, currentStage: applications.currentStage }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
+    if (!application) return { token: null, created: false, notificationHistoryId: null, error: "unknown_application" as const };
+    const [token] = await tx.insert(bookingTokens).values({ applicationId: application.id, kind: input.kind, tokenHash: input.tokenHash, link: input.link || "", expiresAt: isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: bookingTokens.tokenHash }).returning();
+    if (!token) {
+      const [existing] = await tx.select().from(bookingTokens).where(eq(bookingTokens.tokenHash, input.tokenHash)).limit(1);
+      return { token: existing ?? null, created: false, notificationHistoryId: null, error: null };
+    }
+    const [history] = await tx.insert(applicationStatusHistory).values({
+      applicationId: application.id,
+      stage: input.kind,
+      previousStage: application.currentStage,
+      newStage: application.currentStage,
+      source: `internal_api:${input.kind}_booking_invitation`,
+      actionRequestId: `booking-invitation:${input.kind}:${input.applicationExternalId}`,
+      notificationStatus: "pending",
+    }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId }).returning({ id: applicationStatusHistory.id });
+    return { token, created: true, notificationHistoryId: history?.id || null, error: null };
+  });
 }
 
 export async function getBookingToken(tokenHash: string) {
@@ -695,9 +771,24 @@ export async function listActiveBookingRoleIds() {
     .limit(LIMIT);
 }
 
-export async function notificationQueue() {
+export async function notificationQueue(stage?: string) {
   const db = getDb();
-  return db.select().from(applicationStatusHistory).where(inArray(applicationStatusHistory.notificationStatus, ["", "pending", "failed"])).orderBy(asc(applicationStatusHistory.changedAt)).limit(LIMIT);
+  const rows = await db.select({
+    history: applicationStatusHistory,
+    applicationExternalId: applications.externalId,
+    candidateName: applications.candidateName,
+    candidateEmail: applications.email,
+    roleExternalId: roles.externalId,
+    roleTitle: roles.title,
+  }).from(applicationStatusHistory)
+    .innerJoin(applications, eq(applications.id, applicationStatusHistory.applicationId))
+    .leftJoin(roles, eq(roles.id, applications.roleId))
+    .where(and(
+      inArray(applicationStatusHistory.notificationStatus, ["", "pending", "failed"]),
+      stage?.trim() ? eq(applicationStatusHistory.newStage, stage.trim()) : undefined,
+    ))
+    .orderBy(asc(applicationStatusHistory.changedAt)).limit(LIMIT);
+  return rows.map(({ history, ...context }) => ({ ...history, ...context }));
 }
 
 export async function markNotification(input: { historyId: string; status: "sent" | "pending" | "failed" | "not_configured"; error?: string }) {

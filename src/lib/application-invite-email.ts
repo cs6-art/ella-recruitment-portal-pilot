@@ -1,4 +1,5 @@
 import { getPortalConfigValue } from "@/lib/portal-config";
+import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
 
 export type ApplicationInviteEmailStatus = "sent" | "failed" | "not_configured";
 
@@ -18,6 +19,7 @@ export async function sendApplicationInviteEmail(input: {
   if (!url || !secret) return { status: "not_configured" };
 
   try {
+    const recipient = pilotEmailRecipient(input.candidateEmail);
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -30,7 +32,11 @@ export async function sendApplicationInviteEmail(input: {
         invitationId: input.invitationId,
         roleId: input.roleId,
         roleTitle: input.roleTitle,
-        candidate: { name: input.candidateName, email: input.candidateEmail },
+        // The downstream Pilot mail workflow sends candidate.email. Replace it
+        // at the boundary in target mode so a test can never reach a real
+        // candidate mailbox; intendedTo remains available for audit/reporting.
+        candidate: { name: input.candidateName, email: recipient.to, intendedEmail: recipient.intendedTo },
+        delivery: { to: recipient.to, intendedTo: recipient.intendedTo, redirected: recipient.redirected, testMailbox: "cs6@mclinkgroup.com" },
         applicationLink: input.link,
         expiresAt: input.expiresAt,
         createdBy: { name: input.createdByName, email: input.createdByEmail },

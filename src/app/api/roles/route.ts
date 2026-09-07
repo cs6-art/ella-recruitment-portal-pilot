@@ -5,7 +5,8 @@ import { NextResponse } from "next/server";
 import { appendRoleRequestDraft, getFinalInterviewCalendarConfig, getRoleRequestById, getRoleRequests, updateRoleRequestFields } from "@/lib/google-sheets";
 import { invalidateSheetsCache } from "@/lib/sheets-cache";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { createRole, updateRoleDetails } from "@/lib/internal-recruitment-queries";
+import { createRole, listRoles, updateRoleDetails } from "@/lib/internal-recruitment-queries";
+import { targetRoleSummaries } from "@/lib/recruitment-target-portal";
 import { filterVisibleRoles } from "@/lib/access-control";
 import { roleRequestSchema } from "@/lib/role-schema";
 import { generateRoleId } from "@/lib/role-id";
@@ -134,7 +135,8 @@ export async function GET(request: Request) {
     const requester = query.get("requester")?.trim().toLowerCase() || "";
     const search = query.get("search")?.trim().toLowerCase() || "";
     const sort = query.get("sort") || "newest";
-    let roles = filterVisibleRoles(await getRoleRequests(), user).filter((role) =>
+    const sourceRoles = isPostgresRecruitmentTarget() ? await targetRoleSummaries() : await getRoleRequests();
+    let roles = filterVisibleRoles(sourceRoles, user).filter((role) =>
       (!status || role.status === status) &&
       (!department || role.department.toLowerCase().includes(department)) &&
       (!requester || `${role.requesterName} ${role.requesterEmail}`.toLowerCase().includes(requester)) &&
@@ -258,7 +260,7 @@ export async function POST(request: Request) {
 
     if (isPostgresRecruitmentTarget()) {
       const submissionId = crypto.randomUUID();
-      const roleId = generateRoleId(input.jobTitle, (await getRoleRequests()).map((role) => role.roleId));
+      const roleId = generateRoleId(input.jobTitle, (await listRoles()).map((role) => String(role.externalId)));
       const created = await createRole({
         externalId: roleId, title: input.jobTitle, departmentSnapshot: input.department, requestType: input.requestType,
         vacancies: input.numberOfVacancies, reason: input.reasonForRequest, targetHiringDate: input.targetHiringDate,

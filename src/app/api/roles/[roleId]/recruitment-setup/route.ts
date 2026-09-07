@@ -14,7 +14,7 @@ import { getPortalConfig } from "@/lib/portal-config";
 import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { createConfiguredVoiceInterviewSlots } from "@/lib/applicant-workflow";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
+import { targetRoleDetails, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 import { serializeVoiceInterviewSlots } from "@/lib/voice-interview-availability";
 
 export const runtime = "nodejs";
@@ -32,7 +32,7 @@ export async function POST(request: Request, context: Context) {
 
   const { roleId: encodedRoleId } = await context.params;
   const roleId = decodeURIComponent(encodedRoleId);
-  const role = await getRoleRequestById(roleId);
+  const role = isPostgresRecruitmentTarget() ? await targetRoleDetails(roleId) : await getRoleRequestById(roleId);
   if (!role || !canViewRole(user, role)) return NextResponse.json({ success: false, error: "Role request not found." }, { status: 404 });
 
   try {
