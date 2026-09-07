@@ -22,6 +22,7 @@ import {
 
 /** Postgres-only target helpers. New entities stay inactive until explicitly enabled. */
 const LIMIT = 100;
+const PILOT_EMAIL_RECIPIENT = "cs6@mclinkgroup.com";
 const STAGES = ["resume_review", "resume_approved", "voice_booking_pending", "voice_scheduled", "voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final", "rejected", "withdrawn"] as const;
 const DECISIONS = ["", "approve", "reject", "manual_review", "pending"] as const;
 const STAGE_TRANSITIONS: Record<string, readonly string[]> = {
@@ -232,6 +233,18 @@ export async function createApplication(input: { externalId: string; applicantEm
       const [existing] = await tx.select().from(applications).where(eq(applications.externalId, input.externalId.trim())).limit(1);
       return { application: existing ?? null, created: false, error: null };
     }
+    await tx.insert(applicationStatusHistory).values({
+      applicationId: application.id,
+      stage: "application_received",
+      previousStage: "",
+      newStage: application.currentStage,
+      source: "target:application",
+      actionRequestId: `email:application_acknowledgment:${application.externalId}`,
+      notificationStatus: "pending",
+      notificationEventType: "application_acknowledgment",
+      notificationRecipient: PILOT_EMAIL_RECIPIENT,
+      notificationIntendedRecipient: email,
+    }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     return { application, created: true, error: null };
   });
 }
@@ -287,10 +300,24 @@ export async function updateApplicationProfile(input: {
 export async function upsertScreeningResult(input: { applicationExternalId: string; matchScore?: number | null; recommendation?: string; summary?: string; strengths?: string; gaps?: string; interviewQuestions?: string; evaluationScores?: unknown; screenedAt?: string; raw?: unknown }) {
   const db = getDb();
   return db.transaction(async (tx) => {
-    const [application] = await tx.select({ id: applications.id }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
+    const [application] = await tx.select({ id: applications.id, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
     if (!application) return { result: null, error: "unknown_application" as const };
     const resultValues = { matchScore: input.matchScore ?? null, recommendation: input.recommendation || "", summary: input.summary || "", strengths: input.strengths || "", gaps: input.gaps || "", interviewQuestions: input.interviewQuestions || "", evaluationScores: (input.evaluationScores ?? []) as object, screenedAt: isoOrNull(input.screenedAt), raw: (input.raw ?? null) as object | null };
     const [result] = await tx.insert(screeningResults).values({ applicationId: application.id, ...resultValues }).onConflictDoUpdate({ target: screeningResults.applicationId, set: resultValues }).returning();
+    await tx.insert(applicationStatusHistory).values({
+      applicationId: application.id,
+      stage: "resume_review",
+      previousStage: "",
+      newStage: "resume_review",
+      decision: input.recommendation || "pending",
+      comments: input.summary || "Screening result persisted; awaiting HR review.",
+      source: "internal_api:screening",
+      actionRequestId: `email:screening_next_step:${input.applicationExternalId}`,
+      notificationStatus: "pending",
+      notificationEventType: "screening_next_step",
+      notificationRecipient: PILOT_EMAIL_RECIPIENT,
+      notificationIntendedRecipient: application.email,
+    }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     return { result, error: null };
   });
 }
@@ -382,6 +409,20 @@ export async function scheduleVoiceRetry(input: { attemptId: string; retryAfter:
     if (!current) return { scheduled: false, duplicate: false, terminal: false, error: "attempt_not_found" as const };
     if (current.status === "retry_scheduled") return { scheduled: false, duplicate: true, terminal: false, error: null };
     if (current.status !== "no_show") return { scheduled: false, duplicate: false, terminal: false, error: "invalid_retry_transition" as const };
+    const [application] = await tx.select({ id: applications.id, email: applications.email }).from(applications).where(eq(applications.id, current.applicationId)).limit(1);
+    if (!application) return { scheduled: false, duplicate: false, terminal: false, error: "application_not_found" as const };
+    await tx.insert(applicationStatusHistory).values({
+      applicationId: current.applicationId,
+      stage: "voice_no_show",
+      previousStage: "voice_scheduled",
+      newStage: "voice_no_show",
+      source: "internal_api:voice_retry",
+      actionRequestId: `email:voice_no_show:${current.id}`,
+      notificationStatus: "pending",
+      notificationEventType: "voice_no_show",
+      notificationRecipient: PILOT_EMAIL_RECIPIENT,
+      notificationIntendedRecipient: application.email,
+    }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     if (current.attemptNumber >= current.maxAttempts) return { scheduled: false, duplicate: false, terminal: true, error: null };
     const nextAttemptNumber = current.attemptNumber + 1;
     const [existing] = await tx.select({ id: voiceCallAttempts.id, status: voiceCallAttempts.status }).from(voiceCallAttempts).where(and(eq(voiceCallAttempts.applicationId, current.applicationId), eq(voiceCallAttempts.attemptNumber, nextAttemptNumber))).limit(1);
@@ -398,6 +439,20 @@ export async function scheduleVoiceRetry(input: { attemptId: string; retryAfter:
       contactNumber: current.contactNumber,
       applicantCountry: current.applicantCountry,
     }).returning({ id: voiceCallAttempts.id, attemptNumber: voiceCallAttempts.attemptNumber, status: voiceCallAttempts.status, scheduledAt: voiceCallAttempts.scheduledAt });
+    if (next) {
+      await tx.insert(applicationStatusHistory).values({
+        applicationId: current.applicationId,
+        stage: "voice_retry",
+        previousStage: "voice_no_show",
+        newStage: "voice_retry",
+        source: "internal_api:voice_retry",
+        actionRequestId: `email:voice_retry:${next.id}`,
+        notificationStatus: "pending",
+        notificationEventType: "voice_retry",
+        notificationRecipient: PILOT_EMAIL_RECIPIENT,
+        notificationIntendedRecipient: application.email,
+      }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
+    }
     return { scheduled: Boolean(next), duplicate: false, terminal: false, error: null, next };
   });
 }
@@ -405,14 +460,14 @@ export async function scheduleVoiceRetry(input: { attemptId: string; retryAfter:
 export async function ingestVoiceResult(input: { applicationExternalId: string; attemptId?: string; score?: number | null; recommendation?: string; strengths?: string; concerns?: string; summary?: string; transcript?: string; callStatus?: string; callFinalStatus?: string; providerEventType?: string; callCompletedAt?: string; raw?: unknown; sourceEventKey?: string }) {
   const db = getDb();
   return db.transaction(async (tx) => {
-    const [application] = await tx.select({ id: applications.id }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
+    const [application] = await tx.select({ id: applications.id, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
     if (!application) return { inserted: false, applicationId: null, error: "unknown_application" as const };
     const completedAt = isoOrNull(input.callCompletedAt);
     const existing = await tx.select({ id: voiceInterviewResults.id }).from(voiceInterviewResults).where(and(eq(voiceInterviewResults.applicationId, application.id), eq(voiceInterviewResults.providerEventType, input.providerEventType || ""), completedAt ? eq(voiceInterviewResults.callCompletedAt, completedAt) : isNull(voiceInterviewResults.callCompletedAt))).limit(1);
     if (existing.length > 0) return { inserted: false, applicationId: application.id, error: null };
     const [result] = await tx.insert(voiceInterviewResults).values({ applicationId: application.id, attemptId: input.attemptId || null, score: input.score ?? null, recommendation: input.recommendation || "", strengths: input.strengths || "", concerns: input.concerns || "", summary: input.summary || "", transcript: input.transcript || "", callStatus: input.callStatus || "", callFinalStatus: input.callFinalStatus || "", providerEventType: input.providerEventType || "", callCompletedAt: completedAt, resultReceivedAt: new Date(), raw: (input.raw ?? null) as object | null }).returning();
     await tx.update(applications).set({ currentStage: "voice_review_pending", updatedAt: new Date() }).where(and(eq(applications.id, application.id), eq(applications.currentStage, "voice_scheduled")));
-    await tx.insert(applicationStatusHistory).values({ applicationId: application.id, stage: "voice_review_pending", previousStage: "voice_scheduled", newStage: "voice_review_pending", decision: input.recommendation || "", source: "internal_api:voice_result", comments: input.summary || "", actionRequestId: input.sourceEventKey || null }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
+    await tx.insert(applicationStatusHistory).values({ applicationId: application.id, stage: "voice_review_pending", previousStage: "voice_scheduled", newStage: "voice_review_pending", decision: input.recommendation || "", source: "internal_api:voice_result", comments: input.summary || "", actionRequestId: input.sourceEventKey || null, notificationStatus: "pending", notificationEventType: "voice_result_next_step", notificationRecipient: PILOT_EMAIL_RECIPIENT, notificationIntendedRecipient: application.email }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     return { inserted: Boolean(result), applicationId: application.id, error: null };
   });
 }
@@ -450,7 +505,8 @@ export async function applyHrDecision(input: { applicationExternalId: string; st
     if (history) return { updated: false, duplicate: true, error: null };
     const patch = input.stage === "resume" ? { resumeHrDecision: input.decision, resumeHrDecisionAt: new Date(), resumeHrReviewer: input.actorEmail, resumeHrComments: input.comments || "" } : input.stage === "voice" ? { voiceHrDecision: input.decision, voiceHrComments: input.comments || "" } : { finalHrDecision: input.decision, finalInterviewComments: input.comments || "" };
     await tx.update(applications).set({ ...patch, currentStage: targetStage, updatedAt: new Date() }).where(eq(applications.id, current.id));
-    await tx.insert(applicationStatusHistory).values({ applicationId: current.id, stage: input.stage, previousStage: current.currentStage, newStage: targetStage, decision: input.decision, actorEmail: input.actorEmail, actorName: input.actorName || "", comments: input.comments || "", source: "internal_api:hr_decision", actionRequestId: input.actionRequestId });
+    const notificationEventType = input.stage === "voice" && input.decision === "reject" ? "voice_rejection" : input.stage === "final" && input.decision === "approve" ? "final_decision_pass" : input.stage === "final" && input.decision === "reject" ? "final_decision_reject" : "";
+    await tx.insert(applicationStatusHistory).values({ applicationId: current.id, stage: input.stage, previousStage: current.currentStage, newStage: targetStage, decision: input.decision, actorEmail: input.actorEmail, actorName: input.actorName || "", comments: input.comments || "", source: "internal_api:hr_decision", actionRequestId: input.actionRequestId, notificationStatus: notificationEventType ? "pending" : "", notificationEventType, notificationRecipient: notificationEventType ? PILOT_EMAIL_RECIPIENT : "", notificationIntendedRecipient: notificationEventType ? current.email : "" });
     return { updated: true, duplicate: false, error: null };
   });
 }
@@ -644,6 +700,10 @@ export async function finalizeBulkScreening(input: {
       comments: "Automated screening completed; awaiting HR review.",
       source: "target:bulk_screening",
       actionRequestId,
+      notificationStatus: "pending",
+      notificationEventType: "screening_next_step",
+      notificationRecipient: PILOT_EMAIL_RECIPIENT,
+      notificationIntendedRecipient: application.email,
     }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     await tx.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, application.id));
     await tx.update(bulkScreeningQueueItems).set({ status: "screened", errorMessage: "", processedAt: new Date(), updatedAt: new Date() })
@@ -715,7 +775,7 @@ export async function bookInterviewSlot(input: { slotId: string; applicationExte
     const nextStage = slot.interviewType === "voice" ? "voice_scheduled" : "final_scheduled";
     const previousStage = slot.interviewType === "voice" ? "voice_booking_pending" : "approved_for_final";
     await tx.update(applications).set({ currentStage: nextStage, updatedAt: new Date() }).where(eq(applications.id, application.id));
-    await tx.insert(applicationStatusHistory).values({ applicationId: application.id, stage: slot.interviewType, previousStage, newStage: nextStage, actorEmail: input.actorEmail, source: "internal_api:booking", actionRequestId: input.actionRequestId });
+    await tx.insert(applicationStatusHistory).values({ applicationId: application.id, stage: slot.interviewType, previousStage, newStage: nextStage, actorEmail: input.actorEmail, source: "internal_api:booking", actionRequestId: input.actionRequestId, notificationStatus: "pending", notificationEventType: slot.interviewType === "voice" ? "voice_booking_confirmation" : "final_booking_confirmation", notificationRecipient: PILOT_EMAIL_RECIPIENT, notificationIntendedRecipient: application.email });
     if (slot.interviewType === "voice") {
       const existing = await tx.select({ id: voiceCallAttempts.id }).from(voiceCallAttempts).where(and(eq(voiceCallAttempts.applicationId, application.id), inArray(voiceCallAttempts.status, ["scheduled", "queued", "calling", "initiated", "in_progress"]))).limit(1);
       if (existing.length === 0) {
@@ -729,7 +789,7 @@ export async function bookInterviewSlot(input: { slotId: string; applicationExte
 export async function createBookingToken(input: { applicationExternalId: string; kind: "voice" | "final"; tokenHash: string; link?: string; expiresAt?: string }) {
   const db = getDb();
   return db.transaction(async (tx) => {
-    const [application] = await tx.select({ id: applications.id, currentStage: applications.currentStage }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
+    const [application] = await tx.select({ id: applications.id, currentStage: applications.currentStage, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
     if (!application) return { token: null, created: false, notificationHistoryId: null, error: "unknown_application" as const };
     const [token] = await tx.insert(bookingTokens).values({ applicationId: application.id, kind: input.kind, tokenHash: input.tokenHash, link: input.link || "", expiresAt: isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: bookingTokens.tokenHash }).returning();
     if (!token) {
@@ -744,6 +804,9 @@ export async function createBookingToken(input: { applicationExternalId: string;
       source: `internal_api:${input.kind}_booking_invitation`,
       actionRequestId: `booking-invitation:${input.kind}:${input.applicationExternalId}`,
       notificationStatus: "pending",
+      notificationEventType: input.kind === "voice" ? "voice_booking_invitation" : "final_booking_invitation",
+      notificationRecipient: PILOT_EMAIL_RECIPIENT,
+      notificationIntendedRecipient: application.email,
     }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId }).returning({ id: applicationStatusHistory.id });
     return { token, created: true, notificationHistoryId: history?.id || null, error: null };
   });
@@ -778,6 +841,7 @@ export async function notificationQueue(stage?: string) {
     applicationExternalId: applications.externalId,
     candidateName: applications.candidateName,
     candidateEmail: applications.email,
+    notificationLink: sql<string>`COALESCE((SELECT bt.link FROM booking_tokens bt WHERE bt.application_id = ${applications.id} AND bt.kind = CASE WHEN ${applicationStatusHistory.notificationEventType} = 'voice_booking_invitation' THEN 'voice' WHEN ${applicationStatusHistory.notificationEventType} = 'final_booking_invitation' THEN 'final' ELSE '' END ORDER BY bt.created_at DESC LIMIT 1), '')`,
     roleExternalId: roles.externalId,
     roleTitle: roles.title,
   }).from(applicationStatusHistory)
@@ -791,8 +855,8 @@ export async function notificationQueue(stage?: string) {
   return rows.map(({ history, ...context }) => ({ ...history, ...context }));
 }
 
-export async function markNotification(input: { historyId: string; status: "sent" | "pending" | "failed" | "not_configured"; error?: string }) {
+export async function markNotification(input: { historyId: string; status: "sent" | "pending" | "failed" | "not_configured"; error?: string; providerMessageId?: string; recipient?: string }) {
   const db = getDb();
-  const [row] = await db.update(applicationStatusHistory).set({ notificationStatus: input.status, notificationError: input.error || "" }).where(eq(applicationStatusHistory.id, input.historyId)).returning({ id: applicationStatusHistory.id });
+  const [row] = await db.update(applicationStatusHistory).set({ notificationStatus: input.status, notificationError: input.error || "", notificationAttemptedAt: new Date(), notificationSentAt: input.status === "sent" ? new Date() : undefined, notificationProviderId: input.providerMessageId || "", notificationRecipient: input.recipient || undefined }).where(eq(applicationStatusHistory.id, input.historyId)).returning({ id: applicationStatusHistory.id });
   return { updated: Boolean(row) };
 }

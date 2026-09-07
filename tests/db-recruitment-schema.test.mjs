@@ -58,10 +58,18 @@ test("voice-call logs migration preserves provider audit fields and deduplicates
 });
 
 test("the migration runner will accept the new files (no functions / DO blocks / dollar-quoting)", () => {
-  for (const f of ["drizzle/0002_payments.sql", "drizzle/0003_recruitment_core.sql", "drizzle/0004_voice_call_logs.sql"]) {
+  for (const f of ["drizzle/0002_payments.sql", "drizzle/0003_recruitment_core.sql", "drizzle/0004_voice_call_logs.sql", "drizzle/0005_candidate_email_events.sql"]) {
     const sql = read(f);
     assert.doesNotMatch(sql, /\$\$|CREATE (OR REPLACE )?FUNCTION|DO \$/i);
   }
+});
+
+test("candidate email events extend application history without changing credit/payment tables", () => {
+  const sql = read("drizzle/0005_candidate_email_events.sql");
+  for (const field of ["notification_event_type", "notification_attempted_at", "notification_sent_at", "notification_provider_id", "notification_recipient", "notification_intended_recipient"]) {
+    assert.match(sql, new RegExp(`ADD COLUMN IF NOT EXISTS \\"${field}\\"`, "i"), `missing ${field}`);
+  }
+  assert.doesNotMatch(sql, /DROP|TRUNCATE|DELETE FROM|credit_balance|credit_ledger|payments/i);
 });
 
 test("the migration runner requires an explicit target and cannot leap to a later file", () => {

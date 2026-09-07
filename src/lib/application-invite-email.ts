@@ -14,7 +14,10 @@ export async function sendApplicationInviteEmail(input: {
   createdByName: string;
   createdByEmail: string;
 }): Promise<{ status: ApplicationInviteEmailStatus; error?: string }> {
-  const url = (await getPortalConfigValue("N8N_Application_Invite_Email_Webhook_URL")).trim();
+  const targetMode = process.env.RECRUITMENT_BACKEND?.trim().toLowerCase() === "postgres";
+  const url = (targetMode
+    ? process.env.N8N_APPLICATION_INVITE_EMAIL_TARGET_WEBHOOK_URL || await getPortalConfigValue("N8N_Application_Invite_Email_Target_Webhook_URL")
+    : await getPortalConfigValue("N8N_Application_Invite_Email_Webhook_URL")).trim();
   const secret = process.env.N8N_WEBHOOK_SECRET?.trim();
   if (!url || !secret) return { status: "not_configured" };
 

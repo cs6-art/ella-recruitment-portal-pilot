@@ -72,6 +72,14 @@ export const PORTAL_CONFIG_CATALOG: PortalConfigEntry[] = [
     default: "",
   },
   {
+    key: "N8N_Application_Invite_Email_Target_Webhook_URL",
+    envKeys: ["N8N_APPLICATION_INVITE_EMAIL_TARGET_WEBHOOK_URL"],
+    category: "Infrastructure",
+    description: "Postgres-target Pilot webhook that sends HR-generated application invitations.",
+    type: "url",
+    default: "",
+  },
+  {
     key: "N8N_Bulk_Resume_Upload_Webhook_URL",
     envKeys: ["N8N_BULK_RESUME_UPLOAD_WEBHOOK_URL"],
     category: "Infrastructure",
