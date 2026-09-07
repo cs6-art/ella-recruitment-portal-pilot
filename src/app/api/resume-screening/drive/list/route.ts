@@ -16,6 +16,11 @@ function escapeForQuery(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
+function maskDriveId(value: string | null | undefined) {
+  const id = (value || "").trim();
+  return id.length > 8 ? `${id.slice(0, 4)}…${id.slice(-4)}` : id || "[missing]";
+}
+
 export async function GET(request: Request) {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
@@ -39,7 +44,7 @@ export async function GET(request: Request) {
 
     const list = await drive.files.list({
       q: parts.join(" and "),
-      fields: "nextPageToken, files(id, name, mimeType, size, modifiedTime)",
+      fields: "nextPageToken, files(id, name, mimeType, size, modifiedTime, driveId, parents, shortcutDetails(targetId, targetMimeType))",
       pageSize: 100,
       orderBy: "folder,name_natural",
       pageToken,
@@ -53,14 +58,31 @@ export async function GET(request: Request) {
       .filter((file) => file.mimeType === FOLDER_MIME)
       .map((file) => ({ id: file.id || "", name: file.name || "Untitled folder" }));
     const files = all
-      .filter((file) => file.mimeType !== FOLDER_MIME && RESUME_EXT.test(file.name || ""))
-      .map((file) => ({
-        id: file.id || "",
-        name: file.name || "Untitled",
-        mimeType: file.mimeType || "",
-        size: Number(file.size || 0),
-        modifiedTime: file.modifiedTime || "",
-      }));
+      .map((file) => {
+        const targetId = file.shortcutDetails?.targetId?.trim();
+        const targetMimeType = file.shortcutDetails?.targetMimeType?.trim();
+        const id = targetId || file.id || "";
+        const mimeType = targetMimeType || file.mimeType || "";
+        const name = file.name || "Untitled";
+        console.info("[Drive List] selection candidate", {
+          name,
+          listedId: maskDriveId(file.id),
+          selectedId: maskDriveId(id),
+          mimeType,
+          driveId: maskDriveId(file.driveId),
+          parentIds: (file.parents || []).map((parent) => maskDriveId(parent)),
+          shortcutTargetId: maskDriveId(targetId),
+        });
+        if (!id || id === "root" || mimeType === FOLDER_MIME || mimeType.startsWith("application/vnd.google-apps.") || !RESUME_EXT.test(name)) return null;
+        return {
+          id,
+          name,
+          mimeType,
+          size: Number(file.size || 0),
+          modifiedTime: file.modifiedTime || "",
+        };
+      })
+      .filter((file): file is { id: string; name: string; mimeType: string; size: number; modifiedTime: string } => Boolean(file));
 
     // Breadcrumb: walk up to My Drive (capped).
     const breadcrumb: Array<{ id: string; name: string }> = [{ id: "root", name: "My Drive" }];
