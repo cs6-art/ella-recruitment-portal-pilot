@@ -38,6 +38,33 @@ export async function GET(request: Request) {
   const nameFilter = (url.searchParams.get("q") || "").trim().slice(0, 200);
 
   try {
+    const sharedDriveResponse = await drive.drives.list({
+      fields: "nextPageToken, drives(id, name)",
+      pageSize: 100,
+    }).catch((error) => {
+      console.warn("[Drive List] shared-drive discovery failed", {
+        status: (error as { response?: { status?: number }; code?: number })?.response?.status || (error as { code?: number })?.code || "unknown",
+      });
+      return { data: { drives: [] } };
+    });
+    const sharedDrives = (sharedDriveResponse.data.drives || [])
+      .filter((shared) => Boolean(shared.id && shared.name))
+      .map((shared) => ({ id: shared.id as string, name: shared.name as string }));
+
+    let currentSharedDrive: { id: string; name: string } | null = null;
+    if (folderId !== "root") {
+      currentSharedDrive = sharedDrives.find((shared) => shared.id === folderId) || null;
+      if (!currentSharedDrive) {
+        const folderMeta = await drive.files.get({
+          fileId: folderId,
+          fields: "id, name, mimeType, parents, driveId",
+          supportsAllDrives: true,
+        });
+        const driveId = folderMeta.data.driveId || "";
+        if (driveId) currentSharedDrive = sharedDrives.find((shared) => shared.id === driveId) || { id: driveId, name: "Shared Drive" };
+      }
+    }
+
     const parts = [`'${escapeForQuery(folderId)}' in parents`, "trashed = false"];
     parts.push(`(mimeType = '${FOLDER_MIME}' or name contains '.pdf' or name contains '.doc')`);
     if (nameFilter) parts.push(`name contains '${escapeForQuery(nameFilter)}'`);
@@ -50,7 +77,8 @@ export async function GET(request: Request) {
       pageToken,
       includeItemsFromAllDrives: true,
       supportsAllDrives: true,
-      corpora: "allDrives",
+      corpora: currentSharedDrive ? "drive" : "allDrives",
+      ...(currentSharedDrive ? { driveId: currentSharedDrive.id } : {}),
     });
 
     const all = list.data.files ?? [];
@@ -84,21 +112,22 @@ export async function GET(request: Request) {
       })
       .filter((file): file is { id: string; name: string; mimeType: string; size: number; modifiedTime: string } => Boolean(file));
 
-    // Breadcrumb: walk up to My Drive (capped).
+    // Breadcrumb: walk up to My Drive or the Shared Drive root (capped).
     const breadcrumb: Array<{ id: string; name: string }> = [{ id: "root", name: "My Drive" }];
     if (folderId !== "root") {
       const chain: Array<{ id: string; name: string }> = [];
       let cursor: string | undefined | null = folderId;
-      for (let depth = 0; depth < 12 && cursor && cursor !== "root"; depth += 1) {
+      for (let depth = 0; depth < 12 && cursor && cursor !== "root" && cursor !== currentSharedDrive?.id; depth += 1) {
         const meta = await drive.files.get({ fileId: cursor, fields: "id, name, parents", supportsAllDrives: true });
         const data: { id?: string | null; name?: string | null; parents?: string[] | null } = meta.data;
         chain.unshift({ id: data.id || cursor, name: data.name || "Folder" });
         cursor = data.parents?.[0] ?? null;
       }
-      breadcrumb.push(...chain);
+      if (currentSharedDrive) breadcrumb.push(currentSharedDrive, ...chain);
+      else breadcrumb.push(...chain);
     }
 
-    return NextResponse.json({ success: true, folderId, folders, files, breadcrumb, nextPageToken: list.data.nextPageToken || null }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ success: true, folderId, sharedDrives, folders, files, breadcrumb, nextPageToken: list.data.nextPageToken || null }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[Drive List] failed:", error);
     return NextResponse.json({ success: false, error: "Unable to read that Google Drive folder." }, { status: 502 });

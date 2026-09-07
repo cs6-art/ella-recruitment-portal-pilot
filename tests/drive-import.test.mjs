@@ -124,6 +124,22 @@ test("Drive listing preserves file IDs and never substitutes container metadata"
   assert.doesNotMatch(list, /id:\s*folderId/);
 });
 
+test("Drive picker exposes Shared Drives and the list API uses shared-drive query options", () => {
+  const list = read("src/app/api/resume-screening/drive/list/route.ts");
+  const picker = read("src/components/DriveFilePicker.tsx");
+  assert.match(list, /drive\.drives\.list\(/);
+  assert.match(list, /fields: "nextPageToken, drives\(id, name\)"/);
+  assert.match(list, /corpora: currentSharedDrive \? "drive" : "allDrives"/);
+  assert.match(list, /driveId: currentSharedDrive\.id/);
+  assert.match(list, /includeItemsFromAllDrives: true/);
+  assert.match(list, /supportsAllDrives: true/);
+  assert.match(list, /sharedDrives/);
+  assert.match(picker, /Shared Drives/);
+  assert.match(picker, /sharedDrive\.id/);
+  assert.match(picker, /navigate\(sharedDrive\.id\)/);
+  assert.match(picker, /selectedFiles = Array\.from\(selected\.values\(\)\)/);
+});
+
 test("Drive intake keeps queue and credit safety guarantees", () => {
   const importRoute = read("src/app/api/resume-screening/drive/import/route.ts");
   const targetIntake = read("src/lib/recruitment-target-bulk.ts");

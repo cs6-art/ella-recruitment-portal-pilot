@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { CloudImportSelection } from "@/lib/cloud-import-request";
 
 type DriveFolder = { id: string; name: string };
+type DriveSharedDrive = { id: string; name: string };
 type DriveFile = CloudImportSelection & { size: number; modifiedTime: string };
 
 const DEFAULT_MAX_SELECTION = 25;
@@ -42,6 +43,7 @@ export default function DriveFilePicker({
   const MAX_SELECTION = maxSelection;
   const [folderId, setFolderId] = useState(initialFolderId || "root");
   const [breadcrumb, setBreadcrumb] = useState<DriveFolder[]>([{ id: "root", name: rootName }]);
+  const [sharedDrives, setSharedDrives] = useState<DriveSharedDrive[]>([]);
   const [folders, setFolders] = useState<DriveFolder[]>([]);
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export default function DriveFilePicker({
       if (!response.ok || data.success !== true) throw new Error(data.error || `Unable to read that ${providerLabel} folder.`);
       setFolderId(data.folderId);
       setBreadcrumb(data.breadcrumb || [{ id: "root", name: rootName }]);
+      setSharedDrives(data.sharedDrives || []);
       setFolders(data.folders || []);
       const returnedFolders = new Set<string>((data.folders || []).map((folder: DriveFolder) => folder.id).filter(Boolean));
       const selectableFiles = (data.files || []).filter((file: DriveFile) => (
@@ -120,6 +123,16 @@ export default function DriveFilePicker({
         {error && <div className="error-box">{error}</div>}
 
         <div className="drive-picker-list">
+          {sharedDrives.length > 0 && (
+            <div className="drive-picker-shared-drives" aria-label="Shared Drives">
+              <strong>Shared Drives</strong>
+              {sharedDrives.map((sharedDrive) => (
+                <button type="button" key={sharedDrive.id} className="drive-picker-row drive-picker-folder" onClick={() => navigate(sharedDrive.id)}>
+                  <span aria-hidden="true">▣</span> <span>{sharedDrive.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {folders.map((folder) => (
             <button type="button" key={folder.id} className="drive-picker-row drive-picker-folder" onClick={() => navigate(folder.id)}>
               <span aria-hidden="true">📁</span> <span>{folder.name}</span>
