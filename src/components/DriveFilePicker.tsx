@@ -25,6 +25,7 @@ export default function DriveFilePicker({
   pageParam = "pageToken",
   providerLabel = "Google Drive",
   rootName = "My Drive",
+  initialFolderId = "root",
   maxSelection = DEFAULT_MAX_SELECTION,
 }: {
   open: boolean;
@@ -35,10 +36,11 @@ export default function DriveFilePicker({
   pageParam?: string;
   providerLabel?: string;
   rootName?: string;
+  initialFolderId?: string;
   maxSelection?: number;
 }) {
   const MAX_SELECTION = maxSelection;
-  const [folderId, setFolderId] = useState("root");
+  const [folderId, setFolderId] = useState(initialFolderId || "root");
   const [breadcrumb, setBreadcrumb] = useState<DriveFolder[]>([{ id: "root", name: rootName }]);
   const [folders, setFolders] = useState<DriveFolder[]>([]);
   const [files, setFiles] = useState<DriveFile[]>([]);
@@ -80,8 +82,8 @@ export default function DriveFilePicker({
   useEffect(() => {
     if (!open) return;
     setSelected(new Set());
-    void load("root");
-  }, [open, load]);
+    void load(initialFolderId || "root");
+  }, [open, initialFolderId, load]);
 
   if (!open) return null;
 

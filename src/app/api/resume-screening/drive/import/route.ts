@@ -18,7 +18,17 @@ const RESUME_EXT = /\.(pdf|docx?|doc)$/i;
 const bodySchema = z.object({
   roleId: z.string().trim().min(1).max(200),
   fileIds: z.array(z.string().trim().min(1).max(200)).min(1).max(MAX_FILES_PER_SUBMISSION),
+  files: z.array(z.object({
+    id: z.string().trim().min(1).max(200),
+    name: z.string().trim().min(1).max(255),
+    mimeType: z.string().trim().max(200),
+  })).max(MAX_FILES_PER_SUBMISSION).optional(),
 });
+
+function maskDriveId(value: string) {
+  const id = value.trim();
+  return id.length > 8 ? `${id.slice(0, 4)}…${id.slice(-4)}` : "[short-id]";
+}
 
 function responseError(error: string, status: number, extra: Record<string, unknown> = {}) {
   return NextResponse.json({ success: false, error, ...extra }, { status });
@@ -36,6 +46,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return responseError(`Select 1 to ${MAX_FILES_PER_SUBMISSION} files and a published role.`, 422);
   const { roleId } = parsed.data;
   const fileIds = [...new Set(parsed.data.fileIds)];
+  const expectedFiles = new Map((parsed.data.files || []).map((file) => [file.id, file]));
 
   const role = await resolvePublishedRecruitmentRole(roleId);
   if (!role) return responseError("The selected role is not available for bulk screening.", 409);
@@ -55,10 +66,21 @@ export async function POST(request: Request) {
         const name = meta.data.name || "file";
         const mimeType = meta.data.mimeType || "";
         const size = Number(meta.data.size || 0);
+        const expected = expectedFiles.get(fileId);
+        console.info("[Drive Import] verified selection", {
+          requestedId: maskDriveId(fileId),
+          requestedName: expected?.name || "",
+          requestedMimeType: expected?.mimeType || "",
+          resolvedId: maskDriveId(resolvedId),
+          resolvedName: name,
+          resolvedMimeType: mimeType,
+        });
         if (!resolvedId || resolvedId !== fileId) {
           rejected.push({ fileName: name, status: "Failed", error: "The selected Drive item could not be verified as a file." });
         } else if (mimeType === "application/vnd.google-apps.folder") {
-          rejected.push({ fileName: name, status: "Failed", error: "Select a resume file, not a Drive folder." });
+          rejected.push({ fileName: expected?.name || name, status: "Failed", error: "Select a resume file, not a Drive folder or shared-drive root." });
+        } else if (expected && (expected.name !== name || (expected.mimeType && expected.mimeType !== mimeType))) {
+          rejected.push({ fileName: expected.name, status: "Failed", error: "The selected Drive file changed before import. Refresh the folder and select it again." });
         } else if (mimeType.startsWith("application/vnd.google-apps.")) {
           rejected.push({ fileName: name, status: "Failed", error: "Google Docs cannot be screened — export as PDF first." });
         } else if (!RESUME_EXT.test(name)) {

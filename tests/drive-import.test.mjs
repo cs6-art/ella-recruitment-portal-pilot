@@ -84,7 +84,8 @@ test("Drive picker selection builds the authenticated import request with the ac
   assert.match(panel, /fetch\(request\.endpoint, request\.init\)/);
   assert.match(request, /\/api\/resume-screening\/drive\/import/);
   assert.match(request, /selectedCloudFileIds\(selections\)/);
-  assert.match(request, /JSON\.stringify\(\{ roleId: normalizedRoleId, fileIds: normalizedFileIds \}\)/);
+  assert.match(request, /selectedCloudFiles\(selections\)/);
+  assert.match(request, /JSON\.stringify\(\{ roleId: normalizedRoleId, fileIds: normalizedFileIds, files: normalizedFiles \}\)/);
 });
 
 test("Drive selection rejects folders, roots, unsupported files, and stale picker IDs", () => {
@@ -94,6 +95,7 @@ test("Drive selection rejects folders, roots, unsupported files, and stale picke
   assert.match(picker, /file\.id !== "root"/);
   assert.match(picker, /file\.isFolder !== true/);
   assert.match(picker, /file\.mimeType !== "application\/vnd\.google-apps\.folder"/);
+  assert.match(picker, /initialFolderId/);
   assert.match(picker, /selectedFiles\.length !== selected\.size/);
   assert.match(request, /id === "root"/);
   assert.match(request, /selection\.isFolder === true/);
@@ -101,7 +103,9 @@ test("Drive selection rejects folders, roots, unsupported files, and stale picke
   assert.match(request, /!RESUME_EXT\.test\(name\)/);
   // The server verifies the returned Drive metadata ID before downloading.
   assert.match(importRoute, /resolvedId !== fileId/);
-  assert.match(importRoute, /Select a resume file, not a Drive folder/);
+  assert.match(importRoute, /Select a resume file, not a Drive folder or shared-drive root/);
+  assert.match(importRoute, /expected\.name !== name/);
+  assert.match(importRoute, /expected\.mimeType !== mimeType/);
 });
 
 test("Drive intake keeps queue and credit safety guarantees", () => {
