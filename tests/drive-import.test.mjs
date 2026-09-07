@@ -78,7 +78,8 @@ test("Drive picker selection builds the authenticated import request with the ac
   const request = read("src/lib/cloud-import-request.ts");
   // The picker passes the rendered file records, not a free-standing ID set.
   // This preserves the exact file-name-to-file-ID mapping selected by HR.
-  assert.match(picker, /const selectedFiles = files\.filter\(\(file\) => selected\.has\(file\.id\)\)/);
+  assert.match(picker, /const selectedFiles = Array\.from\(selected\.values\(\)\)/);
+  assert.match(picker, /next\.set\(file\.id, file\)/);
   assert.match(picker, /onImport\(selectedFiles\)/);
   assert.match(panel, /buildCloudImportRequest\(provider, roleId, selections\)/);
   assert.match(panel, /fetch\(request\.endpoint, request\.init\)/);
@@ -96,7 +97,8 @@ test("Drive selection rejects folders, roots, unsupported files, and stale picke
   assert.match(picker, /file\.isFolder !== true/);
   assert.match(picker, /file\.mimeType !== "application\/vnd\.google-apps\.folder"/);
   assert.match(picker, /initialFolderId/);
-  assert.match(picker, /selectedFiles\.length !== selected\.size/);
+  assert.match(picker, /const loadedIds = new Set\(files\.map\(\(file\) => file\.id\)\)/);
+  assert.match(picker, /selectedFiles\.some\(\(file\) => !loadedIds\.has\(file\.id\)\)/);
   assert.match(request, /id === "root"/);
   assert.match(request, /selection\.isFolder === true/);
   assert.match(request, /mimeType === FOLDER_MIME/);
@@ -106,6 +108,20 @@ test("Drive selection rejects folders, roots, unsupported files, and stale picke
   assert.match(importRoute, /Select a resume file, not a Drive folder or shared-drive root/);
   assert.match(importRoute, /expected\.name !== name/);
   assert.match(importRoute, /expected\.mimeType !== mimeType/);
+  assert.match(importRoute, /shortcutDetails\(targetId, targetMimeType\)/);
+  assert.match(importRoute, /Select the target resume file, not a Drive shortcut/);
+});
+
+test("Drive listing preserves file IDs and never substitutes container metadata", () => {
+  const list = read("src/app/api/resume-screening/drive/list/route.ts");
+  assert.match(list, /files\(id, name, mimeType, size, modifiedTime, driveId, parents, shortcutDetails/);
+  assert.match(list, /const targetId = file\.shortcutDetails\?\.targetId/);
+  assert.match(list, /const id = targetId \|\| file\.id/);
+  assert.match(list, /driveId: maskDriveId\(file\.driveId\)/);
+  assert.match(list, /parentIds:/);
+  assert.doesNotMatch(list, /id:\s*file\.driveId/);
+  assert.doesNotMatch(list, /id:\s*file\.parents/);
+  assert.doesNotMatch(list, /id:\s*folderId/);
 });
 
 test("Drive intake keeps queue and credit safety guarantees", () => {

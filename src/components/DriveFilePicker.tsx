@@ -45,7 +45,10 @@ export default function DriveFilePicker({
   const [folders, setFolders] = useState<DriveFolder[]>([]);
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Retain the complete validated row, not only its ID. This keeps the
+  // filename/mime-type-to-file-ID mapping intact through a picker rerender or
+  // pagination and prevents a container ID from being reconstructed later.
+  const [selected, setSelected] = useState<Map<string, DriveFile>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -81,18 +84,18 @@ export default function DriveFilePicker({
 
   useEffect(() => {
     if (!open) return;
-    setSelected(new Set());
+    setSelected(new Map());
     void load(initialFolderId || "root");
   }, [open, initialFolderId, load]);
 
   if (!open) return null;
 
-  const navigate = (id: string) => { setSelected(new Set()); void load(id); };
-  const toggle = (id: string) => {
+  const navigate = (id: string) => { setSelected(new Map()); void load(id); };
+  const toggle = (file: DriveFile) => {
     setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else if (next.size < MAX_SELECTION) next.add(id);
+      const next = new Map(current);
+      if (next.has(file.id)) next.delete(file.id);
+      else if (next.size < MAX_SELECTION) next.set(file.id, file);
       return next;
     });
   };
@@ -124,7 +127,7 @@ export default function DriveFilePicker({
           ))}
           {files.map((file) => (
             <label key={file.id} className={`drive-picker-row drive-picker-file${selected.has(file.id) ? " is-selected" : ""}`}>
-              <input type="checkbox" checked={selected.has(file.id)} disabled={importing || (!selected.has(file.id) && selected.size >= MAX_SELECTION)} onChange={() => toggle(file.id)} />
+              <input type="checkbox" checked={selected.has(file.id)} disabled={importing || (!selected.has(file.id) && selected.size >= MAX_SELECTION)} onChange={() => toggle(file)} />
               <span className="drive-picker-file-name">{file.name}</span>
               <span className="drive-picker-file-meta">{formatSize(file.size)}</span>
             </label>
@@ -145,8 +148,9 @@ export default function DriveFilePicker({
               className="btn btn-primary"
               disabled={importing || selected.size === 0}
               onClick={() => {
-                const selectedFiles = files.filter((file) => selected.has(file.id));
-                if (selectedFiles.length !== selected.size) {
+                const selectedFiles = Array.from(selected.values());
+                const loadedIds = new Set(files.map((file) => file.id));
+                if (selectedFiles.some((file) => !loadedIds.has(file.id))) {
                   setError("One selected Drive file is no longer available. Refresh the folder and select it again.");
                   return;
                 }

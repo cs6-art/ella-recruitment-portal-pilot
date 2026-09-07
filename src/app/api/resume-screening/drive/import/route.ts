@@ -25,8 +25,8 @@ const bodySchema = z.object({
   })).max(MAX_FILES_PER_SUBMISSION).optional(),
 });
 
-function maskDriveId(value: string) {
-  const id = value.trim();
+function maskDriveId(value: string | null | undefined) {
+  const id = (value || "").trim();
   return id.length > 8 ? `${id.slice(0, 4)}…${id.slice(-4)}` : "[short-id]";
 }
 
@@ -60,13 +60,14 @@ export async function POST(request: Request) {
     const rejected: Array<Record<string, unknown>> = [];
     const valid: Array<{ id: string; name: string; mimeType: string }> = [];
     await Promise.all(fileIds.map(async (fileId) => {
+      const expected = expectedFiles.get(fileId);
       try {
-        const meta = await drive.files.get({ fileId, fields: "id, name, mimeType, size", supportsAllDrives: true });
+        const meta = await drive.files.get({ fileId, fields: "id, name, mimeType, size, driveId, parents, shortcutDetails(targetId, targetMimeType)", supportsAllDrives: true });
         const resolvedId = String(meta.data.id || "").trim();
         const name = meta.data.name || "file";
         const mimeType = meta.data.mimeType || "";
         const size = Number(meta.data.size || 0);
-        const expected = expectedFiles.get(fileId);
+        const shortcutTargetId = meta.data.shortcutDetails?.targetId || "";
         console.info("[Drive Import] verified selection", {
           requestedId: maskDriveId(fileId),
           requestedName: expected?.name || "",
@@ -74,9 +75,14 @@ export async function POST(request: Request) {
           resolvedId: maskDriveId(resolvedId),
           resolvedName: name,
           resolvedMimeType: mimeType,
+          driveId: maskDriveId(meta.data.driveId),
+          parentIds: (meta.data.parents || []).map((parent) => maskDriveId(parent)),
+          shortcutTargetId: maskDriveId(shortcutTargetId),
         });
         if (!resolvedId || resolvedId !== fileId) {
           rejected.push({ fileName: name, status: "Failed", error: "The selected Drive item could not be verified as a file." });
+        } else if (shortcutTargetId) {
+          rejected.push({ fileName: expected?.name || name, status: "Failed", error: "Select the target resume file, not a Drive shortcut." });
         } else if (mimeType === "application/vnd.google-apps.folder") {
           rejected.push({ fileName: expected?.name || name, status: "Failed", error: "Select a resume file, not a Drive folder or shared-drive root." });
         } else if (expected && (expected.name !== name || (expected.mimeType && expected.mimeType !== mimeType))) {
@@ -90,8 +96,14 @@ export async function POST(request: Request) {
         } else {
           valid.push({ id: fileId, name, mimeType });
         }
-      } catch {
-        rejected.push({ fileName: fileId, status: "Failed", error: "That file could not be read from Google Drive." });
+      } catch (error) {
+        console.warn("[Drive Import] selection lookup failed", {
+          requestedId: maskDriveId(fileId),
+          requestedName: expected?.name || "",
+          requestedMimeType: expected?.mimeType || "",
+          status: (error as { response?: { status?: number }; code?: number })?.response?.status || (error as { code?: number })?.code || "unknown",
+        });
+        rejected.push({ fileName: expected?.name || "selected file", status: "Failed", error: "That selected Drive file is unavailable or no longer accessible." });
       }
     }));
 
