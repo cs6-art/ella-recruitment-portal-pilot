@@ -22,6 +22,13 @@ const TAB = "Ella_Credit_Ledger";
 // Deterministic keys the backfill assigns to sheet rows that have a blank
 // `Entry_ID` (`backfill-credits.mjs`). They legitimately exist only in Postgres.
 const SYNTHETIC_PREFIX = "SHEET-";
+// Postgres-target (Scenario C) ledger entries are committed atomically inside a
+// Postgres transaction by the internal API (e.g. target bulk resume screening).
+// n8n/Sheets is not part of that transaction, so these rows are Sheets-absent
+// BY DESIGN — the sheet is stale for exactly them, not a parity defect. They
+// are matched by `actor_email = 'pilot-target-worker'` or a `Postgres target `
+// note prefix, and excluded from the sheet-equality assertions (9, 12, 13),
+// which instead reconcile "Postgres leads the sheet by the target-only rows".
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 // The ledger workbook is explicit via GOOGLE_CREDITS_SPREADSHEET_ID; it falls
@@ -143,6 +150,8 @@ let pgRowCount = 0;
 let pgDeltaSum = 0;
 let pgLatest = null;
 let pgIds = [];
+let pgTargetOnlyIds = [];
+let pgTargetOnlyDelta = 0;
 let pgNullIdCount = 0;
 let pgDuplicateRows = [];
 try {
@@ -166,6 +175,19 @@ try {
   const idRows = await sql`select source_entry_id from credit_ledger where source_entry_id is not null`;
   pgIds = idRows.map((row) => String(row.source_entry_id));
 
+  // Postgres-target (Scenario C) ledger entries are committed atomically in
+  // Postgres by the internal API and never dual-written to the sheet — the
+  // sheet is legitimately stale for exactly these rows. They are identified by
+  // the target worker actor or the target note, and excluded from the
+  // sheet-equality assertions below the same way SHEET-* synthetic keys are.
+  const targetOnlyRows = await sql`
+    select source_entry_id, coalesce(credits_delta, 0)::int as credits_delta
+    from credit_ledger
+    where source_entry_id is not null
+      and (actor_email = 'pilot-target-worker' or note ilike 'Postgres target %')`;
+  pgTargetOnlyIds = targetOnlyRows.map((row) => String(row.source_entry_id));
+  pgTargetOnlyDelta = targetOnlyRows.reduce((total, row) => total + toInt(row.credits_delta), 0);
+
   const nullRows = await sql`select count(*)::int as n from credit_ledger where source_entry_id is null`;
   pgNullIdCount = toInt(nullRows[0].n);
 
@@ -181,18 +203,23 @@ try {
 
 const pgIdSet = new Set(pgIds);
 const pgSyntheticKeys = pgIds.filter((id) => id.startsWith(SYNTHETIC_PREFIX));
-const pgRealIds = pgIds.filter((id) => !id.startsWith(SYNTHETIC_PREFIX));
+const pgTargetOnlyIdSet = new Set(pgTargetOnlyIds);
+// "real" = expected to have a matching sheet row: not a SHEET-* synthetic key
+// and not a Postgres-target-only (Scenario C) entry.
+const pgRealIds = pgIds.filter((id) => !id.startsWith(SYNTHETIC_PREFIX) && !pgTargetOnlyIdSet.has(id));
 const pgRealIdSet = new Set(pgRealIds);
 
 // ---------------------------------------------------------------------------
 // Compare
 // ---------------------------------------------------------------------------
 const idsMissingInPostgres = sheetEntryIds.filter((id) => !pgIdSet.has(id));
-const idsMissingInSheet = pgRealIds.filter((id) => !sheetEntryIdSet.has(id)); // SHEET-* synthetic keys excluded by construction
+const idsMissingInSheet = pgRealIds.filter((id) => !sheetEntryIdSet.has(id)); // SHEET-* + target-only keys excluded by construction
 const pgDuplicateIds = pgDuplicateRows.map((row) => `${row.source_entry_id} x${row.n}`);
 
-const balancesEqual = pgBalance === pgDeltaSum && pgBalance === sheetSum;
-const rowCountsEqual = sheetRowCount === pgRowCount;
+// Postgres leads the sheet by exactly the target-only entries: balance and row
+// count parity is asserted after adding those back to the sheet side.
+const balancesEqual = pgBalance === pgDeltaSum && pgBalance === sheetSum + pgTargetOnlyDelta;
+const rowCountsEqual = sheetRowCount + pgTargetOnlyIds.length === pgRowCount;
 const blanksReconcile = pgNullIdCount === 0 && pgSyntheticKeys.length === sheetBlankIdCount;
 
 const latestText = pgLatest instanceof Date ? pgLatest.toISOString() : String(pgLatest ?? "n/a");
@@ -206,18 +233,19 @@ console.log(`   3  Postgres ledger Σ credits_delta ......... ${pgDeltaSum}`);
 console.log(`   4  Sheets ledger row count ................. ${sheetRowCount}`);
 console.log(`   5  Postgres ledger row count .............. ${pgRowCount}`);
 console.log(`   6  Sheet Entry_ID set size ................ ${sheetEntryIdSet.size}  (blank Entry_ID rows: ${sheetBlankIdCount})`);
-console.log(`   7  Postgres source_entry_id set size ...... ${pgIdSet.size}  (real ${pgRealIdSet.size}, synthetic ${pgSyntheticKeys.length}, NULL ${pgNullIdCount})`);
+console.log(`   7  Postgres source_entry_id set size ...... ${pgIdSet.size}  (real ${pgRealIdSet.size}, synthetic ${pgSyntheticKeys.length}, target-only ${pgTargetOnlyIds.length}, NULL ${pgNullIdCount})`);
+console.log(`      Postgres-target-only entries (Scenario C, sheet-absent by design): ${pgTargetOnlyIds.length}, Σ delta ${pgTargetOnlyDelta}`);
 console.log(`      Sheet last Balance_After ............... ${sheetLastBalanceAfter ?? "n/a"}`);
 console.log(`      Postgres latest entry_time ............ ${latestText}`);
 console.log("");
 
 const assertions = [
   ["8  no Sheet Entry_IDs missing in Postgres", idsMissingInPostgres.length === 0, preview(idsMissingInPostgres)],
-  ["9  no Postgres source_entry_ids missing in Sheet", idsMissingInSheet.length === 0, preview(idsMissingInSheet)],
+  ["9  no Postgres source_entry_ids missing in Sheet (excl. synthetic + target-only)", idsMissingInSheet.length === 0, preview(idsMissingInSheet)],
   ["10 no duplicate IDs (Sheet or Postgres)", sheetDuplicateIds.length === 0 && pgDuplicateIds.length === 0, `sheet ${preview(sheetDuplicateIds)} / pg ${preview(pgDuplicateIds)}`],
   ["11 no NULL source_entry_id; blank Entry_IDs reconcile to synthetic keys", blanksReconcile, `pg NULL ${pgNullIdCount}; sheet blank ${sheetBlankIdCount} vs pg synthetic ${pgSyntheticKeys.length}`],
-  ["12 balances equal (PG balance == PG sum == Sheet sum)", balancesEqual, `${pgBalance} / ${pgDeltaSum} / ${sheetSum}`],
-  ["13 row counts equal (Sheet == Postgres)", rowCountsEqual, `${sheetRowCount} vs ${pgRowCount}`],
+  ["12 balances equal (PG balance == PG sum == Sheet sum + target-only delta)", balancesEqual, `${pgBalance} / ${pgDeltaSum} / ${sheetSum} + ${pgTargetOnlyDelta}`],
+  ["13 row counts equal (Sheet + target-only == Postgres)", rowCountsEqual, `${sheetRowCount} + ${pgTargetOnlyIds.length} vs ${pgRowCount}`],
 ];
 
 console.log("Parity assertions");
