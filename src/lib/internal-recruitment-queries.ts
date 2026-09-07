@@ -477,7 +477,17 @@ export async function enqueueBulkScreening(input: {
 export async function claimBulkQueue(limit = 10) {
   const db = getDb();
   const safeLimit = Math.max(1, Math.min(LIMIT, Math.trunc(limit)));
-  const result = await db.execute(sql`WITH claimed AS (SELECT id FROM bulk_screening_queue_items WHERE status = 'queued' ORDER BY discovered_at, id FOR UPDATE SKIP LOCKED LIMIT ${safeLimit}) UPDATE bulk_screening_queue_items q SET status = 'processing', processing_started_at = now(), attempt_count = q.attempt_count + 1, updated_at = now() FROM claimed c WHERE q.id = c.id RETURNING q.id, q.dedupe_key AS "dedupeKey", q.batch_id AS "batchId", q.status, q.attempt_count AS "attemptCount"`);
+  const result = await db.execute(sql`WITH claimed AS (
+    SELECT id FROM bulk_screening_queue_items
+    WHERE status = 'queued'
+       OR (status = 'processing' AND (processing_started_at IS NULL OR processing_started_at < now() - interval '5 minutes'))
+    ORDER BY discovered_at, id
+    FOR UPDATE SKIP LOCKED LIMIT ${safeLimit}
+  )
+  UPDATE bulk_screening_queue_items q
+  SET status = 'processing', processing_started_at = now(), attempt_count = q.attempt_count + 1, updated_at = now()
+  FROM claimed c WHERE q.id = c.id
+  RETURNING q.id, q.dedupe_key AS "dedupeKey", q.batch_id AS "batchId", q.status, q.attempt_count AS "attemptCount"`);
   return rowsOf<Record<string, unknown>>(result);
 }
 

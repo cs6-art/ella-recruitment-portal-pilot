@@ -86,3 +86,11 @@ test("Neon execute results preserve rows returned by atomic queue claims", () =>
   assert.match(queries, /Array\.isArray\(\(value as \{ rows\?: unknown \}\)\.rows\)/);
   assert.match(queries, /return \(value as \{ rows: T\[\]\s*}\)\.rows/);
 });
+
+test("bulk claims can recover only stale processing rows", () => {
+  const queries = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(queries, /status = 'queued'/);
+  assert.match(queries, /status = 'processing'/);
+  assert.match(queries, /processing_started_at < now\(\) - interval '5 minutes'/);
+  assert.match(queries, /FOR UPDATE SKIP LOCKED/);
+});
