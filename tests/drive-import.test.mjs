@@ -66,7 +66,7 @@ test("the panel offers connect / choose-from-Drive and imports into the same bat
   assert.match(panel, /\/api\/auth\/google-drive\/status/);
   assert.match(panel, /Connect Google Drive/);
   assert.match(panel, /Choose from Google Drive/);
-  assert.match(panel, /buildCloudImportRequest\(provider, roleId, fileIds\)/);
+  assert.match(panel, /buildCloudImportRequest\(provider, roleId, selections\)/);
   assert.match(request, /\/api\/resume-screening\/drive\/import/);
   assert.match(panel, /applyBatchResult/);
   assert.match(panel, /DriveFilePicker/);
@@ -76,9 +76,42 @@ test("Drive picker selection builds the authenticated import request with the ac
   const picker = read("src/components/DriveFilePicker.tsx");
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
   const request = read("src/lib/cloud-import-request.ts");
-  assert.match(picker, /onClick=\{\(\) => onImport\(\[\.\.\.selected\]\)\}/);
-  assert.match(panel, /buildCloudImportRequest\(provider, roleId, fileIds\)/);
+  // The picker passes the rendered file records, not a free-standing ID set.
+  // This preserves the exact file-name-to-file-ID mapping selected by HR.
+  assert.match(picker, /const selectedFiles = files\.filter\(\(file\) => selected\.has\(file\.id\)\)/);
+  assert.match(picker, /onImport\(selectedFiles\)/);
+  assert.match(panel, /buildCloudImportRequest\(provider, roleId, selections\)/);
   assert.match(panel, /fetch\(request\.endpoint, request\.init\)/);
   assert.match(request, /\/api\/resume-screening\/drive\/import/);
+  assert.match(request, /selectedCloudFileIds\(selections\)/);
   assert.match(request, /JSON\.stringify\(\{ roleId: normalizedRoleId, fileIds: normalizedFileIds \}\)/);
+});
+
+test("Drive selection rejects folders, roots, unsupported files, and stale picker IDs", () => {
+  const picker = read("src/components/DriveFilePicker.tsx");
+  const request = read("src/lib/cloud-import-request.ts");
+  const importRoute = read("src/app/api/resume-screening/drive/import/route.ts");
+  assert.match(picker, /file\.id !== "root"/);
+  assert.match(picker, /file\.isFolder !== true/);
+  assert.match(picker, /file\.mimeType !== "application\/vnd\.google-apps\.folder"/);
+  assert.match(picker, /selectedFiles\.length !== selected\.size/);
+  assert.match(request, /id === "root"/);
+  assert.match(request, /selection\.isFolder === true/);
+  assert.match(request, /mimeType === FOLDER_MIME/);
+  assert.match(request, /!RESUME_EXT\.test\(name\)/);
+  // The server verifies the returned Drive metadata ID before downloading.
+  assert.match(importRoute, /resolvedId !== fileId/);
+  assert.match(importRoute, /Select a resume file, not a Drive folder/);
+});
+
+test("Drive intake keeps queue and credit safety guarantees", () => {
+  const importRoute = read("src/app/api/resume-screening/drive/import/route.ts");
+  const targetIntake = read("src/lib/recruitment-target-bulk.ts");
+  const legacyIntake = read("src/lib/bulk-resume-intake.ts");
+  assert.match(importRoute, /submitted: 0/);
+  assert.match(importRoute, /creditsCharged: 0/);
+  assert.match(importRoute, /intakeResumeBatch/);
+  assert.match(targetIntake, /enqueueBulkScreening/);
+  assert.match(legacyIntake, /recordDeduction/);
+  assert.match(legacyIntake, /idempotencyKey: `cv:\$\{resolvedQueueId\}`/);
 });

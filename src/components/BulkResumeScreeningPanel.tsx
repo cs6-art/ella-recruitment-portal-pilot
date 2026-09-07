@@ -7,7 +7,7 @@ import DriveFilePicker from "@/components/DriveFilePicker";
 import EllaCreditsMeter from "@/components/EllaCreditsMeter";
 import GoogleDriveIcon from "@/components/GoogleDriveIcon";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
-import { buildCloudImportRequest } from "@/lib/cloud-import-request";
+import { buildCloudImportRequest, type CloudImportSelection } from "@/lib/cloud-import-request";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
 type RoleOption = { roleId: string; label: string };
@@ -297,10 +297,10 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
     return failedFileSet;
   }
 
-  async function importFromCloud(provider: "google" | "microsoft", fileIds: string[]) {
+  async function importFromCloud(provider: "google" | "microsoft", selections: CloudImportSelection[]) {
     if (driveImporting) return;
     const label = provider === "microsoft" ? "OneDrive" : "Google Drive";
-    const request = buildCloudImportRequest(provider, roleId, fileIds);
+    const request = buildCloudImportRequest(provider, roleId, selections);
     if (!request) {
       setError(`Select a published role and at least one file from ${label}.`);
       return;
@@ -538,7 +538,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
         importing={driveImporting}
         maxSelection={MAX_FILES_PER_SUBMISSION}
         onClose={() => setCloudPicker(null)}
-        onImport={(fileIds) => void importFromCloud("google", fileIds)}
+        onImport={(selections) => void importFromCloud("google", selections)}
       />
       <DriveFilePicker
         open={cloudPicker === "microsoft" && Boolean(roleId)}
@@ -549,7 +549,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl }: { ro
         providerLabel="OneDrive"
         rootName="OneDrive"
         onClose={() => setCloudPicker(null)}
-        onImport={(fileIds) => void importFromCloud("microsoft", fileIds)}
+        onImport={(selections) => void importFromCloud("microsoft", selections)}
       />
     </section>
   );

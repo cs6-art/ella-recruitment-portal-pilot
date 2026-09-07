@@ -66,7 +66,7 @@ test("the panel offers Connect / Choose from OneDrive and reuses the shared batc
   assert.match(panel, /\/api\/auth\/microsoft-drive\/status/);
   assert.match(panel, /Connect OneDrive/);
   assert.match(panel, /Choose from OneDrive/);
-  assert.match(panel, /buildCloudImportRequest\(provider, roleId, fileIds\)/);
+  assert.match(panel, /buildCloudImportRequest\(provider, roleId, selections\)/);
   assert.match(request, /\/api\/resume-screening\/onedrive\/import/);
   assert.match(panel, /applyBatchResult/);
   // one shared picker component, parameterised per provider
