@@ -8,7 +8,7 @@ const routeFiles = [
   "roles/route.ts", "roles/status/route.ts", "applicants/route.ts", "applications/route.ts", "applications/detail/route.ts",
   "screening/route.ts", "screening/invitations/route.ts", "hr-decisions/route.ts", "hr-decisions/queue/route.ts",
   "voice/queue/route.ts", "voice/queue/claim/route.ts", "voice/attempts/status/route.ts", "voice/results/route.ts", "voice/logs/route.ts",
-  "bookings/route.ts", "bookings/slots/route.ts", "bookings/tokens/route.ts", "bulk/queue/route.ts", "bulk/queue/claim/route.ts", "bulk/queue/status/route.ts",
+  "bookings/route.ts", "bookings/slots/route.ts", "bookings/tokens/route.ts", "bookings/calendar/route.ts", "bulk/queue/route.ts", "bulk/queue/claim/route.ts", "bulk/queue/status/route.ts",
   "status-history/route.ts", "notifications/route.ts", "bulk/process/route.ts",
 ];
 

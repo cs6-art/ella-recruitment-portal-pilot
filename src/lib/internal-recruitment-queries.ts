@@ -786,6 +786,85 @@ export async function bookInterviewSlot(input: { slotId: string; applicationExte
   });
 }
 
+/**
+ * Slots that still need a Google Calendar event created by the n8n target
+ * workflow: booked, face-to-face (voice interviews are phone calls and never
+ * get a calendar event), and without a persisted event id. Rows whose last
+ * attempt failed are still returned so a retry can pick them up; a row that
+ * already carries an event id is never returned, which is what stops a
+ * replayed workflow execution from creating a second event.
+ */
+export async function calendarEventQueue() {
+  const db = getDb();
+  const rows = await db.select({ slot: interviewSlots, roleExternalId: roles.externalId })
+    .from(interviewSlots)
+    .leftJoin(roles, eq(roles.id, interviewSlots.roleId))
+    .where(and(
+      eq(interviewSlots.status, "booked"),
+      eq(interviewSlots.interviewType, "final"),
+      eq(interviewSlots.calendarEventId, ""),
+    ))
+    .orderBy(asc(interviewSlots.startsAt))
+    .limit(LIMIT);
+  return rows.map(({ slot, roleExternalId }) => ({ ...slot, roleExternalId: roleExternalId || "" }));
+}
+
+/**
+ * Persist the outcome of the n8n Google Calendar node against an interview
+ * slot. Idempotent: once a slot carries an event id, a replayed "created"
+ * callback with a different id is rejected (no second event is recorded), and
+ * the same id is a no-op. A failure is recorded without clearing a prior event
+ * id and leaves the slot retryable when none exists yet.
+ */
+export async function markInterviewCalendarEvent(input: {
+  slotId?: string;
+  slotCode?: string;
+  applicationExternalId?: string;
+  interviewType?: "voice" | "final";
+  status: "created" | "updated" | "failed" | "skipped";
+  eventId?: string;
+  eventLink?: string;
+  error?: string;
+}) {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    let slot: typeof interviewSlots.$inferSelect | undefined;
+    if (input.slotId) {
+      [slot] = await tx.select().from(interviewSlots).where(eq(interviewSlots.id, input.slotId)).for("update").limit(1);
+    } else if (input.slotCode) {
+      [slot] = await tx.select().from(interviewSlots).where(eq(interviewSlots.slotCode, input.slotCode.trim())).for("update").limit(1);
+    } else if (input.applicationExternalId && input.interviewType) {
+      const [application] = await tx.select({ id: applications.id }).from(applications).where(eq(applications.externalId, input.applicationExternalId.trim())).limit(1);
+      if (application) {
+        [slot] = await tx.select().from(interviewSlots)
+          .where(and(eq(interviewSlots.applicationId, application.id), eq(interviewSlots.interviewType, input.interviewType), eq(interviewSlots.status, "booked")))
+          .orderBy(desc(interviewSlots.bookedAt)).for("update").limit(1);
+      }
+    }
+    if (!slot) return { updated: false, duplicate: false, error: "slot_not_found" as const, eventId: null };
+
+    const incomingId = (input.eventId || "").trim();
+    if (input.status === "failed") {
+      await tx.update(interviewSlots).set({ calendarEventStatus: "failed", calendarEventError: input.error || "calendar_event_failed", updatedAt: new Date() }).where(eq(interviewSlots.id, slot.id));
+      return { updated: true, duplicate: false, error: null, eventId: slot.calendarEventId || null };
+    }
+    if (slot.calendarEventId && incomingId && slot.calendarEventId !== incomingId) {
+      return { updated: false, duplicate: true, error: "calendar_event_already_recorded" as const, eventId: slot.calendarEventId };
+    }
+    if (slot.calendarEventId && (!incomingId || slot.calendarEventId === incomingId) && input.status !== "updated") {
+      return { updated: false, duplicate: true, error: null, eventId: slot.calendarEventId };
+    }
+    await tx.update(interviewSlots).set({
+      calendarEventId: incomingId || slot.calendarEventId,
+      calendarEventLink: input.eventLink || slot.calendarEventLink,
+      calendarEventStatus: input.status === "skipped" ? "skipped" : input.status === "updated" ? "updated" : "created",
+      calendarEventError: "",
+      updatedAt: new Date(),
+    }).where(eq(interviewSlots.id, slot.id));
+    return { updated: true, duplicate: false, error: null, eventId: incomingId || slot.calendarEventId || null };
+  });
+}
+
 export async function createBookingToken(input: { applicationExternalId: string; kind: "voice" | "final"; tokenHash: string; link?: string; expiresAt?: string }) {
   const db = getDb();
   return db.transaction(async (tx) => {

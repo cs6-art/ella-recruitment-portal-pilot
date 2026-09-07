@@ -35,6 +35,18 @@ test("the parity checker gives an explicit BLOCKED message instead of an opaque 
   assert.match(script, /balances equal/);
 });
 
+test("the parity checker excludes Postgres-target-only (Scenario C) entries from sheet equality", () => {
+  const script = read("src/db/check-credit-parity.mjs");
+  // Target-only rows are matched by the worker actor or the target note prefix.
+  assert.match(script, /actor_email = 'pilot-target-worker' or note ilike 'Postgres target %'/);
+  // ...and reconciled as "Postgres leads the sheet by exactly those rows".
+  assert.match(script, /pgBalance === sheetSum \+ pgTargetOnlyDelta/);
+  assert.match(script, /sheetRowCount \+ pgTargetOnlyIds\.length === pgRowCount/);
+  // ...never by mutating the ledger.
+  assert.doesNotMatch(script, /\b(update|insert into|delete from)\b\s+"?credit_ledger/i);
+  assert.match(script, /This script made no writes/);
+});
+
 test("backfill-credits also resolves the explicit credits workbook first", () => {
   const script = read("src/db/backfill-credits.mjs");
   assert.match(script, /GOOGLE_CREDITS_SPREADSHEET_ID \|\| process\.env\.GOOGLE_SHEETS_SPREADSHEET_ID/);
