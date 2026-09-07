@@ -118,6 +118,7 @@ test("Drive listing preserves file IDs and never substitutes container metadata"
   assert.match(list, /const targetId = file\.shortcutDetails\?\.targetId/);
   assert.match(list, /const id = targetId \|\| file\.id/);
   assert.match(list, /driveId: maskDriveId\(file\.driveId\)/);
+  assert.match(list, /parentIds: file\.parents/);
   assert.match(list, /parentIds:/);
   assert.doesNotMatch(list, /id:\s*file\.driveId/);
   assert.doesNotMatch(list, /id:\s*file\.parents/);

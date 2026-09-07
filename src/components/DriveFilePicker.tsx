@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { CloudImportSelection } from "@/lib/cloud-import-request";
 
@@ -53,8 +53,11 @@ export default function DriveFilePicker({
   const [selected, setSelected] = useState<Map<string, DriveFile>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const loadVersion = useRef(0);
 
   const load = useCallback(async (targetFolderId: string, pageToken?: string) => {
+    const version = ++loadVersion.current;
+    if (!pageToken) { setFiles([]); setSelected(new Map()); }
     setLoading(true);
     setError("");
     try {
@@ -62,33 +65,40 @@ export default function DriveFilePicker({
       if (pageToken) params.set(pageParam, pageToken);
       const response = await fetch(`${listUrl}?${params}`, { cache: "no-store" });
       const data = await response.json();
+      if (version !== loadVersion.current) return;
       if (!response.ok || data.success !== true) throw new Error(data.error || `Unable to read that ${providerLabel} folder.`);
       setFolderId(data.folderId);
       setBreadcrumb(data.breadcrumb || [{ id: "root", name: rootName }]);
       setSharedDrives(data.sharedDrives || []);
       setFolders(data.folders || []);
       const returnedFolders = new Set<string>((data.folders || []).map((folder: DriveFolder) => folder.id).filter(Boolean));
+      returnedFolders.add(targetFolderId);
+      for (const drive of data.sharedDrives || []) returnedFolders.add(drive.id);
+      for (const crumb of data.breadcrumb || []) returnedFolders.add(crumb.id);
       const selectableFiles = (data.files || []).filter((file: DriveFile) => (
         Boolean(file.id && file.name)
         && file.id !== "root"
         && !returnedFolders.has(file.id)
         && file.isFolder !== true
         && file.mimeType !== "application/vnd.google-apps.folder"
+        && ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"].includes(file.mimeType || "")
         && /\.(pdf|docx?|doc)$/i.test(file.name)
       ));
       setFiles((current) => (pageToken ? [...current, ...selectableFiles] : selectableFiles));
       setNextPageToken(data.nextPageToken || null);
     } catch (caught) {
+      if (version !== loadVersion.current) return;
       setError(caught instanceof Error ? caught.message : `Unable to read that ${providerLabel} folder.`);
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   }, [listUrl, pageParam, providerLabel, rootName]);
 
   useEffect(() => {
-    if (!open) return;
     setSelected(new Map());
+    if (!open) { loadVersion.current += 1; setFiles([]); return; }
     void load(initialFolderId || "root");
+    return () => { loadVersion.current += 1; };
   }, [open, initialFolderId, load]);
 
   if (!open) return null;
@@ -159,7 +169,7 @@ export default function DriveFilePicker({
             <button
               type="button"
               className="btn btn-primary"
-              disabled={importing || selected.size === 0}
+              disabled={importing || loading || selected.size === 0}
               onClick={() => {
                 const selectedFiles = Array.from(selected.values());
                 const loadedIds = new Set(files.map((file) => file.id));
@@ -167,6 +177,8 @@ export default function DriveFilePicker({
                   setError("One selected Drive file is no longer available. Refresh the folder and select it again.");
                   return;
                 }
+                console.info("[Drive Picker] selection", { folderId, sharedDriveIds: sharedDrives.map((drive) => drive.id), files: selectedFiles.map(({ id, name }) => ({ id, name })) });
+                setSelected(new Map());
                 onImport(selectedFiles);
               }}
             >

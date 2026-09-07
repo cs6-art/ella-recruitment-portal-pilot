@@ -108,9 +108,11 @@ export async function GET(request: Request) {
           mimeType,
           size: Number(file.size || 0),
           modifiedTime: file.modifiedTime || "",
+          driveId: file.driveId || "",
+          parentIds: file.parents || [],
         };
       })
-      .filter((file): file is { id: string; name: string; mimeType: string; size: number; modifiedTime: string } => Boolean(file));
+      .filter((file): file is { id: string; name: string; mimeType: string; size: number; modifiedTime: string; driveId: string; parentIds: string[] } => Boolean(file));
 
     // Breadcrumb: walk up to My Drive or the Shared Drive root (capped).
     const breadcrumb: Array<{ id: string; name: string }> = [{ id: "root", name: "My Drive" }];

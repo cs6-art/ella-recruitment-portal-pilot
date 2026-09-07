@@ -5,6 +5,10 @@ export type CloudImportSelection = {
   name: string;
   mimeType?: string;
   isFolder?: boolean;
+  isSharedDrive?: boolean;
+  driveId?: string;
+  parentId?: string;
+  parentIds?: string[];
 };
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
@@ -22,7 +26,12 @@ export function selectedCloudFileIds(selections: CloudImportSelection[]) {
     const id = selection.id.trim();
     const name = selection.name.trim();
     const mimeType = (selection.mimeType || "").trim();
-    if (!id || id === "root" || !name || selection.isFolder === true || mimeType === FOLDER_MIME || !RESUME_EXT.test(name) || seen.has(id)) continue;
+    const containerIds = new Set([
+      selection.driveId?.trim(),
+      selection.parentId?.trim(),
+      ...(selection.parentIds || []).map((parentId) => parentId.trim()),
+    ].filter(Boolean));
+    if (!id || id === "root" || !name || selection.isFolder === true || selection.isSharedDrive === true || containerIds.has(id) || mimeType === FOLDER_MIME || !RESUME_EXT.test(name) || seen.has(id)) continue;
     seen.add(id);
     ids.push(id);
   }

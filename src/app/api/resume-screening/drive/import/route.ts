@@ -46,6 +46,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return responseError(`Select 1 to ${MAX_FILES_PER_SUBMISSION} files and a published role.`, 422);
   const { roleId } = parsed.data;
   const fileIds = [...new Set(parsed.data.fileIds)];
+  console.info("[Drive Import] request", { roleId, fileIds, fileCount: fileIds.length });
   const expectedFiles = new Map((parsed.data.files || []).map((file) => [file.id, file]));
 
   const role = await resolvePublishedRecruitmentRole(roleId);
@@ -123,6 +124,7 @@ export async function POST(request: Request) {
         mimeType: file.mimeType,
         driveFileId: file.id,
         getBytes: async () => {
+          console.info("[Drive Import] source download", { fileId: file.id, fileName: file.name });
           const media = await drive.files.get(
             { fileId: file.id, alt: "media", supportsAllDrives: true },
             { responseType: "arraybuffer" },

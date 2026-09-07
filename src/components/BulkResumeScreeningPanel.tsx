@@ -120,6 +120,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveR
   }, [roleId]);
 
   function selectRole(nextRoleId: string) {
+    setCloudPicker(null);
     refreshAbort.current?.abort();
     refreshAbort.current = null;
     refreshInFlight.current = false;
@@ -313,6 +314,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveR
     setBatchResultStatuses(new Map());
     batchFiles.current = new Map();
     try {
+      console.info("[Cloud Import] request", { roleId, files: selections.map(({ id, name }) => ({ id, name })), fileIds: JSON.parse(request.init.body).fileIds });
       const response = await fetch(request.endpoint, request.init);
       const result = await response.json();
       if (!response.ok || result.success !== true) throw new Error(result.error || `Unable to import from ${label}.`);
@@ -321,6 +323,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveR
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : `Unable to import from ${label}.`);
     } finally {
+      setCloudPicker(null);
       setDriveImporting(false);
     }
   }
