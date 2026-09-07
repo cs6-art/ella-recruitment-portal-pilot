@@ -10,6 +10,7 @@ import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account"
 import { requireBulkResumeUatConfig, type BulkResumeEnvironment } from "@/lib/bulk-resume-config";
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { createPdfTextParser } from "@/lib/pdf-text-parser";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 
 // This module is the single server-side boundary for resume validation,
 // extraction, private storage, download tokens, and retention cleanup.
@@ -72,6 +73,15 @@ async function resumeFolderId(environment: BulkResumeEnvironment = "production")
   if (environment === "uat") {
     requireBulkResumeUatConfig();
     return process.env.BULK_RESUME_UAT_DRIVE_FOLDER_ID!.trim();
+  }
+  // Postgres target mode must not depend on the Settings sheet for an
+  // operational storage destination. A Sheets quota failure must not prevent
+  // a valid target intake from reaching the Postgres queue. Keep the legacy
+  // Settings lookup for the legacy backend only.
+  if (isPostgresRecruitmentTarget()) {
+    const targetFolderId = process.env.RESUME_STORAGE_DRIVE_FOLDER_ID?.trim();
+    if (!targetFolderId) throw new Error("RESUME_STORAGE_DRIVE_FOLDER_ID is required for Postgres recruitment target intake.");
+    return targetFolderId;
   }
   const folderId = (await getPortalConfigValue("Resume_Storage_Drive_Folder_ID")).trim();
   if (!folderId) throw new Error("Resume storage Drive folder is not configured (Settings -> Infrastructure or RESUME_STORAGE_DRIVE_FOLDER_ID).");
