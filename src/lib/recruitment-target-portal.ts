@@ -25,6 +25,7 @@ import {
   archiveRole,
 } from "@/lib/internal-recruitment-queries";
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
+import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 
 function text(value: unknown) {
   return String(value ?? "").trim();
@@ -385,11 +386,11 @@ export async function targetApplicantMetrics() {
     rejected: stage("rejected"),
     passedFinalInterview: stage("passed_final"),
     stageCounts: [
-      ["resume_review", "Resume Review", "blue"], ["resume_approved", "Resume Approved", "purple"],
-      ["voice_booking_pending", "Voice Booking Pending", "purple"], ["voice_scheduled", "Voice Scheduled", "teal"],
-      ["voice_review_pending", "Voice Review Pending", "orange"], ["approved_for_final", "Approved For Final", "green"],
-      ["final_scheduled", "Final Scheduled", "teal"], ["final_decision_pending", "Final Decision Pending", "orange"],
-      ["passed_final", "Passed Final", "green"], ["rejected", "Rejected", "red"],
+      ["resume_review", applicantStageLabel("resume_review"), "blue"], ["resume_approved", applicantStageLabel("resume_approved"), "purple"],
+      ["voice_booking_pending", applicantStageLabel("voice_booking_pending"), "purple"], ["voice_scheduled", applicantStageLabel("voice_scheduled"), "teal"],
+      ["voice_review_pending", applicantStageLabel("voice_review_pending"), "orange"], ["approved_for_final", applicantStageLabel("approved_for_final"), "green"],
+      ["final_scheduled", applicantStageLabel("final_scheduled"), "teal"], ["final_decision_pending", applicantStageLabel("final_decision_pending"), "orange"],
+      ["passed_final", applicantStageLabel("passed_final"), "green"], ["rejected", applicantStageLabel("rejected"), "red"],
     ].map(([key, label, tone]) => ({ key, label, tone, value: stage(key) })),
   };
 }

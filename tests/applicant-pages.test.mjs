@@ -45,22 +45,43 @@ test("dashboard includes candidate pipeline metrics without exposing them to cre
   const api = read("src/app/api/dashboard/metrics/route.ts");
   const dashboard = read("src/components/DashboardMetrics.tsx");
   const applicantMetrics = read("src/lib/candidate-applications.ts");
+  const stageLabels = read("src/lib/applicant-stage-labels.ts");
   assert.match(api, /getApplicantMetrics/);
   assert.match(api, /canReviewRole === true \|\| user\.canApproveRole === true/);
   assert.match(dashboard, /Pipeline Progress/);
   assert.match(dashboard, /Decision Snapshot/);
   assert.match(dashboard, /Each applicant appears once/);
   assert.match(dashboard, /stageCounts/);
-  assert.match(applicantMetrics, /Resume HR Review/);
-  assert.match(applicantMetrics, /label: "Rejected"/);
+  assert.match(stageLabels, /resume_review: "Resume Review"/);
+  assert.match(stageLabels, /voice_review_pending: "Voice Interview Review"/);
+  assert.match(stageLabels, /passed_final: "Passed Final Interview"/);
+  assert.match(stageLabels, /rejected: "Rejected"/);
   assert.doesNotMatch(applicantMetrics, /label: "Submitted"/);
-  assert.match(applicantMetrics, /Passed Face-to-Face Interview/);
   assert.match(applicantMetrics, /currentApplicantStage/);
   assert.match(dashboard, /Role Request Actions/);
   assert.match(dashboard, /Pending HR Review/);
   assert.match(dashboard, /Approved Roles/);
   // The Management-approval step was removed — no "Pending Approval" card.
   assert.doesNotMatch(dashboard, /Pending%20Management%20Approval/);
+});
+
+test("applicant stage labels are presentation-only and used consistently", () => {
+  const labels = read("src/lib/applicant-stage-labels.ts");
+  const list = read("src/components/ApplicantsList.tsx");
+  const detail = read("src/app/applicants/[applicationId]/page.tsx");
+  assert.match(labels, /resume_review: "Resume Review"/);
+  assert.match(labels, /resume_approved: "Resume Approved"/);
+  assert.match(labels, /voice_review_pending: "Voice Interview Review"/);
+  assert.match(labels, /passed_final: "Passed Final Interview"/);
+  assert.match(labels, /replace\(\/\[\\s-\]\+\/g, "_"\)/);
+  assert.match(list, /applicantStageLabel\(applicant\.currentStage\)/);
+  assert.match(detail, /applicantStageLabel\(applicant\.currentStage\)/);
+  assert.match(detail, /applicantStageLabel\(entry\.newStatus\)/);
+  assert.match(detail, /applicantStageLabel\(applicant\.resumeStatus\)/);
+  assert.match(detail, /applicantStageLabel\(applicant\.voiceStatus\)/);
+  // Canonical keys remain the values used for filters and database/API work.
+  assert.match(list, /applicant\.currentStage === stageFilter/);
+  assert.match(labels, /must continue to\n\s*\* send and persist the canonical status key/);
 });
 
 test("eligible final bookings invite the applicant through Google Calendar", () => {

@@ -11,6 +11,7 @@ import Pagination from "@/components/Pagination";
 import { formatMatchScore } from "@/lib/score-format";
 import { formatPortalDateTime } from "@/lib/portal-time";
 import { isNewApplicant, readApplicantsLastSeen, writeApplicantsLastSeen } from "@/lib/new-applicants";
+import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 
 type Props = {
   applicants: ApplicantSummary[];
@@ -28,15 +29,15 @@ type Props = {
 type RoleOption = { value: string; label: string; roleId?: string };
 
 const DASHBOARD_STAGE_LABELS = [
-  "Resume HR Review",
+  "Resume Review",
   "Resume Approved",
   "Voice Booking Pending",
   "Voice Interview Scheduled",
-  "Voice HR Review",
+  "Voice Interview Review",
   "Approved for Face-to-Face Interview",
   "Face-to-Face Interview Scheduled",
   "Face-to-Face Decision Pending",
-  "Passed Face-to-Face Interview",
+  "Passed Final Interview",
   "Rejected",
 ] as const;
 
@@ -46,18 +47,20 @@ const DASHBOARD_STAGE_LABELS = [
  * labels shown on individual records or the underlying sheet values.
  */
 function dashboardStageLabel(stage: string) {
+  const friendlyLabel = applicantStageLabel(stage);
+  if (friendlyLabel !== stage.trim()) return friendlyLabel;
   const value = stage.trim().toLowerCase();
   if (value.includes("reject")) return "Rejected";
-  if (value.includes("passed hr") || value.includes("passed final") || value === "hired") return "Passed Face-to-Face Interview";
+  if (value.includes("passed hr") || value.includes("passed final") || value === "hired") return "Passed Final Interview";
   if (value.includes("hr decision") || value.includes("final interview completed") || value.includes("hr interview completed")) return "Face-to-Face Decision Pending";
   if (value.includes("hr interview scheduled") || value.includes("final interview scheduled")) return "Face-to-Face Interview Scheduled";
   if (value.includes("approved for hr") || value.includes("approved for final")) return "Approved for Face-to-Face Interview";
-  if (value.includes("voice interview completed") || value.includes("voice hr review") || value.includes("awaiting hr review")) return "Voice HR Review";
+  if (value.includes("voice interview completed") || value.includes("voice hr review") || value.includes("awaiting hr review")) return "Voice Interview Review";
   if (value.includes("voice interview scheduled") || value.includes("ai voice interview scheduled")) return "Voice Interview Scheduled";
   if (value.includes("voice interview in progress") || value.includes("voice interview no show") || value.includes("voice interview busy")) return "Resume Approved";
   if (value.includes("approved for ai voice") || value.includes("awaiting ai voice") || value.includes("voice booking pending")) return "Voice Booking Pending";
   if (value.includes("resume approved")) return "Resume Approved";
-  if (value.includes("pending hr review") || value.includes("resume hr review") || value === "processed") return "Resume HR Review";
+  if (value.includes("pending hr review") || value.includes("resume hr review") || value === "processed") return "Resume Review";
   return stage;
 }
 
@@ -322,7 +325,7 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
                     <td data-label="Role"><strong>{applicant.selectedRole || "Role not provided"}</strong><span className="applicant-subtext">{applicant.roleId}</span></td>
                     <td data-label="Applied">{formatDate(applicant.appliedAt)}</td>
                     <td data-label="Match"><strong className="applicant-score">{scoreValue(applicant.matchScore)}</strong>{applicant.recommendation && <span className="applicant-subtext">{applicant.recommendation}</span>}</td>
-                    <td data-label="Current stage"><span className={stageClass(applicant.currentStage)}>{applicant.currentStage || "Pending HR Review"}</span></td>
+                    <td data-label="Current stage"><span className={stageClass(applicant.currentStage)}>{applicantStageLabel(applicant.currentStage) || "Pending HR Review"}</span></td>
                     <td data-label="Next action">{applicant.nextAction}</td>
                     <td data-label="Action"><div className="applicant-table-actions"><Link href={`/applicants/${encodeURIComponent(applicant.applicationId)}`}>View</Link>{canManageApplicants && !applicant.isHistoricalDemo && <><Link href={`/applicants/${encodeURIComponent(applicant.applicationId)}/edit`}>Edit</Link><button type="button" className="table-danger-action" disabled={deletingIds.has(applicant.applicationId) || deletingId === "bulk"} onClick={() => void deleteApplicants([applicant])}>{deletingIds.has(applicant.applicationId) ? "Deleting..." : "Delete"}</button></>}{applicant.isHistoricalDemo && <span className="applicant-readonly-label">Read-only demo history</span>}</div></td>
                   </tr>
