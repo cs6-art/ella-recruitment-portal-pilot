@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { appendRoleRequestDraft, getFinalInterviewCalendarConfig, getRoleRequestById, getRoleRequests, updateRoleRequestFields } from "@/lib/google-sheets";
 import { invalidateSheetsCache } from "@/lib/sheets-cache";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { createRole, listRoles, updateRoleDetails } from "@/lib/internal-recruitment-queries";
+import { createRole, listRoles } from "@/lib/internal-recruitment-queries";
 import { targetRoleDetails, targetRoleSummaries, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 import { filterVisibleRoles } from "@/lib/access-control";
 import { roleRequestSchema } from "@/lib/role-schema";
@@ -312,18 +312,61 @@ export async function POST(request: Request) {
     if (isPostgresRecruitmentTarget()) {
       const submissionId = crypto.randomUUID();
       const roleId = generateRoleId(input.jobTitle, (await listRoles()).map((role) => String(role.externalId)));
+      const setupDraft = input.recruitmentSetupDraft || {};
+      const setup = {
+        jobDescription: input.jobDescription,
+        screeningCriteria: setupDraft.screeningCriteria || "",
+        requiredInterviewQuestion1: setupDraft.requiredInterviewQuestion1 || "",
+        requiredInterviewQuestion2: setupDraft.requiredInterviewQuestion2 || "",
+        requiredInterviewQuestion3: setupDraft.requiredInterviewQuestion3 || "",
+        requiredInterviewQuestion4: setupDraft.requiredInterviewQuestion4 || "",
+        requiredInterviewQuestion5: setupDraft.requiredInterviewQuestion5 || "",
+        keywordsToLookFor: setupDraft.keywordsToLookFor || "",
+        minimumYearsOfExperience: setupDraft.minimumYearsOfExperience || "",
+        transferableSkillsAccepted: setupDraft.transferableSkillsAccepted || "",
+        licenseOrCertificateRequired: setupDraft.licenseOrCertificateRequired || "",
+        salaryOrBudgetRange: setupDraft.salaryOrBudgetRange || "",
+        earliestAvailabilityRule: setupDraft.earliestAvailabilityRule || "",
+        evaluationFieldToggles: setupDraft.evaluationFieldToggles || [],
+        postingChannels: setupDraft.postingChannels || [],
+        initialInterviewBookingLink: "",
+        hodInterviewBookingLink: "",
+        aiSystemPrompt: STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE,
+        replacementEmployee: input.replacementEmployee,
+        employmentType: input.employmentType,
+        hodAvailabilityDates: input.hodAvailabilityDates,
+        hodAvailabilityTimes: input.hodAvailabilityTimes,
+        hodAvailabilitySlots: input.hodAvailabilitySlots,
+        customScreeningQuestion1: input.customScreeningQuestion1,
+        customScreeningQuestion2: input.customScreeningQuestion2,
+        aiGeneratedScreeningQuestions: input.aiGeneratedScreeningQuestions,
+        reportingManager: input.reportingManager,
+        workLocation: input.workLocation,
+        jobResponsibilities: input.jobResponsibilities,
+        requiredSkills: input.requiredSkills,
+        experienceRequired: input.experienceRequired,
+        educationRequirements: input.educationRequirements,
+        preferredQualifications: input.preferredQualifications,
+        roleExpectations: input.roleExpectations,
+        salaryMin: input.salaryMin ?? "",
+        salaryMax: input.salaryMax ?? "",
+        workSchedule: input.workSchedule,
+        noticePeriodRequirement: input.noticePeriodRequirement,
+        salaryExpectationGuidance: input.salaryExpectationGuidance,
+        interviewBehavior: "",
+        salaryDisclosureStatus: "",
+        experienceRequirementStatus: "",
+        licenseRequirementStatus: "",
+        hodInterviewRequired: "",
+      };
       const created = await createRole({
         externalId: roleId, title: input.jobTitle, departmentSnapshot: input.department, requestType: input.requestType,
         vacancies: input.numberOfVacancies, reason: input.reasonForRequest, targetHiringDate: input.targetHiringDate,
-        status: "pending_hr_discussion", source: "portal", requesterEmail: sessionEmail, requesterName: user.name,
+        status: "pending_hr_discussion", recruitmentSetupStatus: "Draft", setup, evaluationFields: setupDraft.customEvaluationFields || [], hrCalendarEmail: finalInterviewCalendar.email,
+        source: "portal", requesterEmail: sessionEmail, requesterName: user.name, submittedByEmail: sessionEmail,
         actionRequestId: submissionId, actorEmail: sessionEmail, actorName: user.name,
       });
       if (!created.role) return NextResponse.json({ success: false, error: "The role request could not be saved." }, { status: 502 });
-      await updateRoleDetails({
-        externalId: roleId,
-        setup: { jobDescription: input.jobDescription, screeningCriteria: input.recruitmentSetupDraft?.screeningCriteria || "", requiredInterviewQuestion1: input.recruitmentSetupDraft?.requiredInterviewQuestion1 || "", requiredInterviewQuestion2: input.recruitmentSetupDraft?.requiredInterviewQuestion2 || "", requiredInterviewQuestion3: input.recruitmentSetupDraft?.requiredInterviewQuestion3 || "", requiredInterviewQuestion4: input.recruitmentSetupDraft?.requiredInterviewQuestion4 || "", requiredInterviewQuestion5: input.recruitmentSetupDraft?.requiredInterviewQuestion5 || "", postingChannels: input.recruitmentSetupDraft?.postingChannels || [] },
-        evaluationFields: input.recruitmentSetupDraft?.customEvaluationFields || [], actorEmail: sessionEmail,
-      });
       return NextResponse.json({ success: true, roleId, status: "Pending HR Discussion", message: "Role request submitted successfully." }, { status: 201 });
     }
 
