@@ -4,8 +4,10 @@ import test from "node:test";
 
 const readiness = fs.readFileSync("src/lib/recruitment-setup-readiness.ts", "utf8");
 const route = fs.readFileSync("src/app/api/roles/[roleId]/recruitment-setup/route.ts", "utf8");
+const statusRoute = fs.readFileSync("src/app/api/roles/[roleId]/status/route.ts", "utf8");
 const editor = fs.readFileSync("src/components/RecruitmentSetupEditor.tsx", "utf8");
 const roleDetails = fs.readFileSync("src/components/RoleDetails.tsx", "utf8");
+const rolesList = fs.readFileSync("src/components/RolesList.tsx", "utf8");
 
 test("draft readiness keeps the two minimum fields", () => {
   assert.match(readiness, /Job_Description/);
@@ -42,6 +44,24 @@ test("publishing is blocked until Ready for Publishing", () => {
   assert.match(route, /RECRUITMENT_SETUP_NOT_READY/);
   assert.match(route, /Ready for Publishing/);
   assert.match(route, /Job Posted/);
+});
+
+test("published roles are promoted out of temporary draft IDs", () => {
+  assert.match(statusRoute, /renameRoleExternalId/);
+  assert.match(statusRoute, /ROLE_ID_PROMOTION_FAILED/);
+  assert.match(route, /published role ID could not be repaired/i);
+  assert.match(route, /publishedRoleId/);
+  assert.match(rolesList, /searchParams\.get\("published"\)/);
+});
+
+test("successful publishing returns durable validation and queues notification work", () => {
+  assert.match(route, /validation: setupAction === "publish_role"/);
+  assert.match(route, /notificationStatus: setupAction === "publish_role" \? "pending"/);
+  assert.match(route, /targetUpdateRoleFields\(role\.roleId, persistedFields\)/);
+  assert.match(editor, /roles\?published=1/);
+  const queries = fs.readFileSync("src/lib/internal-recruitment-queries.ts", "utf8");
+  assert.match(queries, /notificationStatus: "pending"/);
+  assert.match(queries, /notificationDomain: "role"/);
 });
 
 test("voice interview availability is not part of Recruitment Setup", async () => {

@@ -483,7 +483,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
       // checkboxes appear to clear even though the draft was accepted.
       if (action !== "save_draft" && action !== "autosave_draft") onSaved?.(typeof result.status === "string" ? result.status : undefined);
       if (action === "publish_role") {
-        router.push("/roles");
+        router.push("/roles?published=1");
       }
     } catch (caught) {
       setValidationIssues([]);

@@ -17,6 +17,7 @@ import {
   listBulkQueueForPortal,
   listBookingSlots,
   listRoleStatusHistory,
+  renameRoleExternalId,
   markBookingTokenUsed,
   markScreeningInvitationUsed,
   updateApplicationProfile,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/internal-recruitment-queries";
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
+import { generateRoleId } from "@/lib/role-id";
 
 function text(value: unknown) {
   return String(value ?? "").trim();
@@ -82,7 +84,7 @@ function roleSummary(role: Record<string, unknown>): RoleRequestSummary {
 }
 
 export async function targetRoleSummaries(options: { liveOnly?: boolean } = {}) {
-  const roles = await listRoles();
+  const roles = await repairPublishedRoleIds(await listRoles());
   const visible = options.liveOnly
     ? roles.filter((role) => ["approved", "recruitment_setup", "job_posted"].includes(text(role.status).toLowerCase()))
     : roles;
@@ -90,7 +92,7 @@ export async function targetRoleSummaries(options: { liveOnly?: boolean } = {}) 
 }
 
 export async function targetRoleDetails(externalId: string): Promise<RoleRequestDetails | null> {
-  const roles = await listRoles();
+  const roles = await repairPublishedRoleIds(await listRoles());
   const role = roles.find((candidate) => text(candidate.externalId).toLowerCase() === decodeURIComponent(externalId).trim().toLowerCase());
   if (!role) return null;
   const raw = role as unknown as Record<string, unknown>;
@@ -167,6 +169,28 @@ export async function targetRoleDetails(externalId: string): Promise<RoleRequest
     lastUpdatedByEmail: text(raw.updatedByEmail),
     source: text(raw.source),
   };
+}
+
+/** Repair published rows created before temporary draft IDs were promoted. */
+async function repairPublishedRoleIds(sourceRoles: Awaited<ReturnType<typeof listRoles>>) {
+  const usedIds = sourceRoles.map((role) => text(role.externalId));
+  const repaired = [];
+  for (const role of sourceRoles) {
+    const externalId = text(role.externalId);
+    if (text(role.status).toLowerCase() !== "job_posted" || !externalId.startsWith("DRAFT-")) {
+      repaired.push(role);
+      continue;
+    }
+    const nextExternalId = generateRoleId(text(role.title), usedIds);
+    const result = await renameRoleExternalId({ currentExternalId: externalId, nextExternalId, actorEmail: "system:published-role-id-repair" });
+    if (result.renamed) {
+      usedIds.push(nextExternalId);
+      repaired.push({ ...role, externalId: nextExternalId });
+    } else {
+      repaired.push(role);
+    }
+  }
+  return repaired;
 }
 
 export async function targetRoleStatusHistory(externalId: string) {

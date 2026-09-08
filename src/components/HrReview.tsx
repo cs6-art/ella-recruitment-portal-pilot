@@ -27,6 +27,7 @@ export type RoleStatusHistoryEntry = {
 
 type StatusApiResponse = {
   success?: boolean;
+  roleId?: string;
   status?: string;
   action?: string;
   notificationStatus?: string;
@@ -42,7 +43,7 @@ type HrReviewProps = {
   status: string;
   canReviewRole: boolean;
   history: RoleStatusHistoryEntry[];
-  onSuccess: (message: string, warning?: string, status?: string) => void;
+  onSuccess: (message: string, warning?: string, status?: string, roleId?: string) => void;
   onConflict?: () => void;
 };
 
@@ -164,6 +165,7 @@ export default function HrReview({
         statusMessage,
         warning,
         data.status,
+        data.roleId,
       );
       setComments("");
       retryRequest.current = null;

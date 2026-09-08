@@ -101,6 +101,23 @@ export async function getRole(externalId: string) {
   return role ?? null;
 }
 
+/** Promote a temporary draft external ID without changing the stable row UUID. */
+export async function renameRoleExternalId(input: { currentExternalId: string; nextExternalId: string; actorEmail?: string }) {
+  const db = getDb();
+  const currentExternalId = input.currentExternalId.trim();
+  const nextExternalId = input.nextExternalId.trim();
+  if (!currentExternalId || !nextExternalId) return { renamed: false, error: "invalid_role_id" as const };
+  if (currentExternalId === nextExternalId) return { renamed: false, error: null };
+  return db.transaction(async (tx) => {
+    const [current] = await tx.select({ id: roles.id }).from(roles).where(eq(roles.externalId, currentExternalId)).for("update").limit(1);
+    if (!current) return { renamed: false, error: "unknown_role" as const };
+    const [conflict] = await tx.select({ id: roles.id }).from(roles).where(eq(roles.externalId, nextExternalId)).limit(1);
+    if (conflict) return { renamed: false, error: "role_id_conflict" as const };
+    const [updated] = await tx.update(roles).set({ externalId: nextExternalId, updatedByEmail: input.actorEmail?.trim().toLowerCase() || "", updatedAt: new Date() }).where(eq(roles.id, current.id)).returning({ externalId: roles.externalId });
+    return { renamed: Boolean(updated), error: null };
+  });
+}
+
 export async function createRole(input: { externalId: string; title: string; code?: string; departmentSnapshot?: string; requestType?: string; vacancies?: number; reason?: string; targetHiringDate?: string; status?: string; source?: string; requesterEmail?: string; requesterName?: string; actionRequestId?: string; actorEmail?: string; actorName?: string }) {
   const db = getDb();
   return db.transaction(async (tx) => {
@@ -125,7 +142,7 @@ export async function updateRoleStatus(input: { externalId: string; newStatus: s
     if (existing) return { updated: false, duplicate: true, error: null };
     if (current.status === input.newStatus) return { updated: false, duplicate: false, error: "invalid_transition" as const };
     await tx.update(roles).set({ status: input.newStatus, latestComments: input.comments || "", updatedByEmail: input.actorEmail || "", updatedAt: new Date() }).where(eq(roles.id, current.id));
-    await tx.insert(roleStatusHistory).values({ roleId: current.id, previousStatus: current.status, newStatus: input.newStatus, comments: input.comments || "", action: "status_update", actionSource: "internal_api", actionRequestId: input.actionRequestId, changedByEmail: input.actorEmail || "", changedByName: input.actorName || "" });
+    await tx.insert(roleStatusHistory).values({ roleId: current.id, previousStatus: current.status, newStatus: input.newStatus, comments: input.comments || "", action: "status_update", actionSource: "internal_api", actionRequestId: input.actionRequestId, changedByEmail: input.actorEmail || "", changedByName: input.actorName || "", notificationStatus: "pending" });
     return { updated: true, duplicate: false, error: null };
   });
 }
@@ -198,6 +215,7 @@ export async function updateRoleDetails(input: {
         actionRequestId: input.actionRequestId,
         changedByEmail: input.actorEmail,
         changedByName: input.actorName || "",
+        notificationStatus: normalizedStatus === "job_posted" ? "pending" : "",
       }).onConflictDoNothing({ target: roleStatusHistory.actionRequestId });
     }
     return role ?? null;
@@ -1054,7 +1072,7 @@ export async function listActiveBookingRoleIds() {
 
 export async function notificationQueue(stage?: string) {
   const db = getDb();
-  const rows = await db.select({
+  const applicationRows = await db.select({
     history: applicationStatusHistory,
     applicationExternalId: applications.externalId,
     candidateName: applications.candidateName,
@@ -1070,11 +1088,33 @@ export async function notificationQueue(stage?: string) {
       stage?.trim() ? eq(applicationStatusHistory.newStage, stage.trim()) : undefined,
     ))
     .orderBy(asc(applicationStatusHistory.changedAt)).limit(LIMIT);
-  return rows.map(({ history, ...context }) => ({ ...history, ...context }));
+  const roleRows = await db.select({
+    history: roleStatusHistory,
+    roleExternalId: roles.externalId,
+    roleTitle: roles.title,
+    requesterName: roles.requesterName,
+    requesterEmail: roles.requesterEmail,
+  }).from(roleStatusHistory)
+    .innerJoin(roles, eq(roles.id, roleStatusHistory.roleId))
+    .where(and(
+      inArray(roleStatusHistory.notificationStatus, ["", "pending", "failed"]),
+      stage?.trim() ? eq(roleStatusHistory.newStatus, stage.trim()) : undefined,
+    ))
+    .orderBy(asc(roleStatusHistory.changedAt)).limit(LIMIT);
+  const rows = applicationRows;
+  const applicationItems = (() => {
+    return rows.map(({ history, ...context }) => ({ ...history, ...context }));
+  })();
+  return [
+    ...applicationItems.map((item) => ({ ...item, notificationDomain: "application" })),
+    ...roleRows.map(({ history, ...context }) => ({ ...history, ...context, eventType: "role_status_transition", notificationDomain: "role" })),
+  ].sort((left, right) => new Date(left.changedAt).valueOf() - new Date(right.changedAt).valueOf()).slice(0, LIMIT);
 }
 
 export async function markNotification(input: { historyId: string; status: "sent" | "pending" | "failed" | "not_configured"; error?: string; providerMessageId?: string; recipient?: string }) {
   const db = getDb();
   const [row] = await db.update(applicationStatusHistory).set({ notificationStatus: input.status, notificationError: input.error || "", notificationAttemptedAt: new Date(), notificationSentAt: input.status === "sent" ? new Date() : undefined, notificationProviderId: input.providerMessageId || "", notificationRecipient: input.recipient || undefined }).where(eq(applicationStatusHistory.id, input.historyId)).returning({ id: applicationStatusHistory.id });
-  return { updated: Boolean(row) };
+  if (row) return { updated: true };
+  const [roleRow] = await db.update(roleStatusHistory).set({ notificationStatus: input.status, notificationError: input.error || "" }).where(eq(roleStatusHistory.id, input.historyId)).returning({ id: roleStatusHistory.id });
+  return { updated: Boolean(roleRow) };
 }

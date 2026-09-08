@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
@@ -65,6 +65,7 @@ export default function RolesList({
   canApproveRole,
 }: RolesListProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { confirm } = useConfirmation();
   const [roles, setRoles] = useState<RoleRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,6 +152,12 @@ export default function RolesList({
   useEffect(() => {
     void loadRoles();
   }, [loadRoles]);
+
+  useEffect(() => {
+    if (searchParams.get("published") !== "1") return;
+    setActionMessage("Role published successfully. The published role is now available in the role list.");
+    router.replace("/roles", { scroll: false });
+  }, [router, searchParams]);
 
   const visibleRoles = sort === "target-latest"
     ? [...roles].sort((left, right) => {
