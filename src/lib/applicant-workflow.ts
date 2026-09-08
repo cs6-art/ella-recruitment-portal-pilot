@@ -9,7 +9,7 @@ import { expandHodAvailabilitySlots, parseHodAvailabilitySlots, slotMatchesHodAv
 import { isValidTimezone, scheduledInstant } from "@/lib/interview-time";
 import { bookingLink } from "@/lib/public-url";
 import { isDemoSideEffectAllowed } from "@/lib/demo-mode";
-import { assertCreditsAvailable, EllaCreditsError, recordDeduction } from "@/lib/ella-credits";
+import { assertCreditsAvailable, EllaCreditsError } from "@/lib/ella-credits";
 import { getPortalConfigNumber } from "@/lib/portal-config";
 import { cachedSheetsRead, invalidateSheetsCache } from "@/lib/sheets-cache";
 import type { ResumeFileRecord } from "@/lib/resume-files";
@@ -1193,23 +1193,6 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
     }
   }
   if (queueValues) await appendRows("Voice_Call_Queue", [queueValues]);
-
-  // The voice interview is booked and queued for calling: charge 10 credits.
-  // Only a brand-new booking is charged, and a ledger failure only logs so a
-  // successful booking is never rolled back.
-  if (kind === "voice" && oldSlotIndex < 0) {
-    await recordDeduction({
-      event: "phone_interview",
-      units: 1,
-      reference: context.applicationId,
-      // One AI voice interview per application → charge exactly once even if
-      // the booking is processed more than once.
-      idempotencyKey: `phone:${context.applicationId}`,
-      roleId: context.roleId,
-      actorEmail: context.email,
-      note: "AI voice interview booked",
-    }).catch((error) => console.error("[Voice Interview Booking] Could not record credit deduction:", error));
-  }
 
   if (kind === "final") {
     // Keep the tracking tab aligned with the booked slot. A final
