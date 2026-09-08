@@ -1,4 +1,5 @@
 import { internalJson, readInternalJson, withInternalAuth } from "@/lib/internal-api-http";
+import { assertCreditsAvailable, EllaCreditsError } from "@/lib/ella-credits";
 import { record, requiredString } from "@/lib/internal-recruitment-http";
 import { createVoiceCallLog, dispatchVoiceAttemptDryRun, voiceAttemptContext } from "@/lib/internal-recruitment-queries";
 import { pilotVoiceDryRunEnabled } from "@/lib/pilot-test-safety";
@@ -24,6 +25,14 @@ export const POST = withInternalAuth("voice_attempts", async (request) => {
   const attemptId = String(body.attemptId);
   const context = await voiceAttemptContext(attemptId);
   if (!context) return internalJson({ ok: false, error: "attempt_not_found" }, 404);
+  // Outcome billing happens after the call, but a call may only be started if
+  // the balance can cover the maximum possible outcome (10 credits).
+  try {
+    await assertCreditsAvailable(1, "phone_interview");
+  } catch (error) {
+    if (error instanceof EllaCreditsError) return internalJson({ ok: false, error: "insufficient_voice_credits", required: error.required, available: error.available }, 402);
+    throw error;
+  }
   const providerCallId = `pilot-dry-run-${attemptId}`;
   const attempt = await dispatchVoiceAttemptDryRun({ attemptId, providerCallId });
   if (!attempt) return internalJson({ ok: false, error: "attempt_not_in_calling_state" }, 409);

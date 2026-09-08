@@ -29,19 +29,23 @@ type LedgerResponse = {
   pricing: {
     cvAnalysis: number;
     phoneInterview: number;
+    phoneInterviewNoAnswer: number;
+    phoneInterviewIncomplete: number;
     discountThreshold: number;
     discountPercent: number;
   };
 };
 
-const defaultPricing = { cvAnalysis: 1, phoneInterview: 10, discountThreshold: 2000, discountPercent: 10 };
+const defaultPricing = { cvAnalysis: 1, phoneInterview: 10, phoneInterviewNoAnswer: 5, phoneInterviewIncomplete: 8, discountThreshold: 2000, discountPercent: 10 };
 
 const eventLabels: Record<string, string> = {
   manual_topup: "Manual top-up",
   manual_adjustment: "Manual adjustment",
   volume_discount: "Volume discount bonus",
   cv_analysis: "AI CV analysis",
-  phone_interview: "AI phone interview",
+  phone_interview: "AI phone interview completed",
+  phone_interview_no_answer: "AI phone interview — no answer",
+  phone_interview_incomplete: "AI phone interview — incomplete",
 };
 
 const nf = new Intl.NumberFormat("en-US");
@@ -119,7 +123,7 @@ export default function EllaCreditsPanel() {
       <div className={styles.header}>
         <div>
           <h2>Credits</h2>
-          <p>One shared credit balance meters AI usage — {pricing ? `${nf.format(pricing.cvAnalysis)} credits per CV analysis, ${nf.format(pricing.phoneInterview)} credits per AI phone interview.` : "Pricing is loaded from the active credit settings."} AI actions are blocked when the balance runs out.</p>
+          <p>One shared credit balance meters AI usage — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer.` : "Pricing is loaded from the active credit settings."} AI actions are blocked when the balance runs out.</p>
         </div>
         {data && (
           <div className={`${styles.headline} ${headlineTone}`}>

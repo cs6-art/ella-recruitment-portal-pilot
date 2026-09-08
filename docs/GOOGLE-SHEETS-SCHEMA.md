@@ -271,11 +271,14 @@ Append-only ledger for the org-wide Ella Credits balance. The portal creates
 this tab automatically on first use, so it does not need to be pre-created;
 the headers above are what it writes. `Type` is `TopUp` or `Deduction`;
 `Event` is `manual_topup`, `manual_adjustment`, `cv_analysis`, or
-`phone_interview`. The usable balance is the signed sum of every
+`phone_interview`, `phone_interview_no_answer`, or
+`phone_interview_incomplete`. The usable balance is the signed sum of every
 `Credits_Delta`; `Balance_After` is written for audit convenience only and is
-never trusted on read. AI CV analysis costs 1 credit per resume and an AI
-phone interview costs 10 credits; an action is blocked when the balance cannot
-cover it. Admins adjust the balance from Settings → Ella Credits.
+never trusted on read. AI CV analysis costs 1 credit per resume. A new AI voice
+call is checked against the 10-credit maximum before dispatch, but is billed
+only after its terminal outcome: 10 credits for a completed transcript, 8 for
+an incomplete interview, and 5 for no answer/no-show. Admins adjust the
+balance from Settings → Ella Credits.
 
 ## Optional Role_AI_Settings
 

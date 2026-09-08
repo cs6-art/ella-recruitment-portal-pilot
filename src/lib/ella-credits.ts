@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { assertBalanceCovers, CREDIT_COST, type CreditEvent } from "@/lib/ella-credit-math";
+import { assertBalanceCovers, CREDIT_COST, type CreditEvent, type VoiceInterviewBillingOutcome, VOICE_INTERVIEW_BILLING_COST } from "@/lib/ella-credit-math";
 import { getPortalConfig } from "@/lib/portal-config";
 import { isDatabaseConfigured } from "@/db/client";
 import { appendSheetLedgerEntry, getSheetCreditBalance } from "@/lib/ella-credits-sheets";
@@ -89,6 +89,8 @@ export async function getCreditBalance(options: { fresh?: boolean } = {}): Promi
 export type CreditPricing = {
   cvAnalysis: number;
   phoneInterview: number;
+  phoneInterviewNoAnswer: number;
+  phoneInterviewIncomplete: number;
   discountThreshold: number;
   discountPercent: number;
 };
@@ -103,6 +105,8 @@ export async function getCreditPricing(): Promise<CreditPricing> {
   return {
     cvAnalysis: CREDIT_COST.cv_analysis,
     phoneInterview: CREDIT_COST.phone_interview,
+    phoneInterviewNoAnswer: CREDIT_COST.phone_interview_no_answer,
+    phoneInterviewIncomplete: CREDIT_COST.phone_interview_incomplete,
     discountThreshold: configuredWholeNumber(config.Ella_Credit_Discount_Threshold, 2000),
     discountPercent: configuredWholeNumber(config.Ella_Credit_Discount_Percent, 10),
   };
@@ -110,7 +114,12 @@ export async function getCreditPricing(): Promise<CreditPricing> {
 
 export async function creditCostFor(event: CreditEvent): Promise<number> {
   const pricing = await getCreditPricing();
-  return event === "cv_analysis" ? pricing.cvAnalysis : pricing.phoneInterview;
+  switch (event) {
+    case "cv_analysis": return pricing.cvAnalysis;
+    case "phone_interview_no_answer": return pricing.phoneInterviewNoAnswer;
+    case "phone_interview_incomplete": return pricing.phoneInterviewIncomplete;
+    default: return pricing.phoneInterview;
+  }
 }
 
 export async function volumeDiscountBonus(amount: number): Promise<{ bonus: number; percent: number; threshold: number }> {
@@ -177,6 +186,34 @@ export async function recordDeduction(input: {
     // "append and only log on failure" posture.
     { guard: true },
   );
+}
+
+/**
+ * Bill a completed voice attempt after Vapi has produced a terminal outcome.
+ * The attempt id is the billing identity, so result/log/status retries cannot
+ * charge the same call twice.
+ */
+export async function recordVoiceInterviewDeduction(input: {
+  applicationId: string;
+  attemptId: string;
+  outcome: VoiceInterviewBillingOutcome;
+  actorEmail?: string;
+}): Promise<number> {
+  const event = input.outcome === "completed"
+    ? "phone_interview"
+    : input.outcome === "no_answer"
+      ? "phone_interview_no_answer"
+      : "phone_interview_incomplete";
+  const cost = VOICE_INTERVIEW_BILLING_COST[input.outcome];
+  await recordDeduction({
+    event,
+    units: 1,
+    reference: input.applicationId,
+    idempotencyKey: `voice-attempt:${input.attemptId}`,
+    actorEmail: input.actorEmail,
+    note: `AI voice interview outcome: ${input.outcome}`,
+  });
+  return cost;
 }
 
 export async function recordTopUp(input: {

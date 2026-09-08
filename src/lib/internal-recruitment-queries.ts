@@ -4,6 +4,8 @@ import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { appendPostgresLedgerEntryOnExecutor } from "@/lib/ella-credits-postgres";
+import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
+import { recordVoiceInterviewDeduction } from "@/lib/ella-credits";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
 import {
   applicants,
@@ -401,7 +403,17 @@ export async function updateVoiceAttemptStatus(input: { attemptId: string; statu
   const previousStatuses = Object.entries(VOICE_STATUS_TRANSITIONS).filter(([, next]) => next.includes(input.status)).map(([status]) => status);
   const allowedWhere = previousStatuses.length > 0 ? sql`status IN (${sql.join(previousStatuses.map((status) => sql`${status}`), sql`, `)})` : sql`false`;
   const result = await db.execute(sql`UPDATE voice_call_attempts SET status = ${input.status}, outcome = ${input.outcome || null}, provider_call_id = COALESCE(NULLIF(${input.providerCallId || ""}, ''), provider_call_id), retry_after = ${isoOrNull(input.retryAfter)}, updated_at = now() WHERE id = ${input.attemptId} AND (status = ${input.status} OR ${allowedWhere}) RETURNING id`);
-  return { updated: rowsOf(result).length > 0, error: null };
+  // A status update alone cannot prove a completed or incomplete interview;
+  // those outcomes are billed from the terminal Vapi result/log. No-answer is
+  // safe to settle here because it is itself the terminal call outcome.
+  const classified = classifyVoiceInterviewBillingOutcome({ outcome: input.outcome, callStatus: input.status });
+  const outcome = classified === "no_answer" ? classified : null;
+  let chargedCredits = 0;
+  if (outcome) {
+    const context = await voiceAttemptContext(input.attemptId);
+    if (context) chargedCredits = await recordVoiceInterviewDeduction({ applicationId: context.applicationExternalId, attemptId: input.attemptId, outcome, actorEmail: context.candidateEmail });
+  }
+  return { updated: rowsOf(result).length > 0, chargedCredits, billingOutcome: outcome, error: null };
 }
 
 export async function scheduleVoiceRetry(input: { attemptId: string; retryAfter: string }) {
@@ -461,19 +473,25 @@ export async function scheduleVoiceRetry(input: { attemptId: string; retryAfter:
   });
 }
 
-export async function ingestVoiceResult(input: { applicationExternalId: string; attemptId?: string; score?: number | null; recommendation?: string; strengths?: string; concerns?: string; summary?: string; transcript?: string; callStatus?: string; callFinalStatus?: string; providerEventType?: string; callCompletedAt?: string; raw?: unknown; sourceEventKey?: string }) {
+export async function ingestVoiceResult(input: { applicationExternalId: string; attemptId?: string; score?: number | null; recommendation?: string; strengths?: string; concerns?: string; summary?: string; transcript?: string; callStatus?: string; callFinalStatus?: string; providerEventType?: string; callCompletedAt?: string; raw?: unknown; sourceEventKey?: string; isComplete?: boolean; completenessScore?: number | null }) {
   const db = getDb();
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [application] = await tx.select({ id: applications.id, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
-    if (!application) return { inserted: false, applicationId: null, error: "unknown_application" as const };
+    if (!application) return { inserted: false, applicationId: null, attemptId: null, candidateEmail: "", chargedCredits: 0, billingOutcome: null, error: "unknown_application" as const };
+    const [attempt] = await tx.select({ id: voiceCallAttempts.id }).from(voiceCallAttempts).where(input.attemptId ? and(eq(voiceCallAttempts.id, input.attemptId), eq(voiceCallAttempts.applicationId, application.id)) : eq(voiceCallAttempts.applicationId, application.id)).orderBy(desc(voiceCallAttempts.attemptNumber), desc(voiceCallAttempts.createdAt)).limit(1);
+    const attemptId = attempt?.id || null;
     const completedAt = isoOrNull(input.callCompletedAt);
     const existing = await tx.select({ id: voiceInterviewResults.id }).from(voiceInterviewResults).where(and(eq(voiceInterviewResults.applicationId, application.id), eq(voiceInterviewResults.providerEventType, input.providerEventType || ""), completedAt ? eq(voiceInterviewResults.callCompletedAt, completedAt) : isNull(voiceInterviewResults.callCompletedAt))).limit(1);
-    if (existing.length > 0) return { inserted: false, applicationId: application.id, error: null };
-    const [result] = await tx.insert(voiceInterviewResults).values({ applicationId: application.id, attemptId: input.attemptId || null, score: input.score ?? null, recommendation: input.recommendation || "", strengths: input.strengths || "", concerns: input.concerns || "", summary: input.summary || "", transcript: input.transcript || "", callStatus: input.callStatus || "", callFinalStatus: input.callFinalStatus || "", providerEventType: input.providerEventType || "", callCompletedAt: completedAt, resultReceivedAt: new Date(), raw: (input.raw ?? null) as object | null }).returning();
+    if (existing.length > 0) return { inserted: false, applicationId: application.id, attemptId, candidateEmail: application.email, chargedCredits: 0, billingOutcome: null, error: null };
+    const [inserted] = await tx.insert(voiceInterviewResults).values({ applicationId: application.id, attemptId, score: input.score ?? null, recommendation: input.recommendation || "", strengths: input.strengths || "", concerns: input.concerns || "", summary: input.summary || "", transcript: input.transcript || "", callStatus: input.callStatus || "", callFinalStatus: input.callFinalStatus || "", providerEventType: input.providerEventType || "", callCompletedAt: completedAt, resultReceivedAt: new Date(), raw: (input.raw ?? null) as object | null }).returning();
     await tx.update(applications).set({ currentStage: "voice_review_pending", updatedAt: new Date() }).where(and(eq(applications.id, application.id), eq(applications.currentStage, "voice_scheduled")));
     await tx.insert(applicationStatusHistory).values({ applicationId: application.id, stage: "voice_review_pending", previousStage: "voice_scheduled", newStage: "voice_review_pending", decision: input.recommendation || "", source: "internal_api:voice_result", comments: input.summary || "", actionRequestId: input.sourceEventKey || null, notificationStatus: "pending", notificationEventType: "voice_result_next_step", notificationRecipient: PILOT_EMAIL_RECIPIENT, notificationIntendedRecipient: application.email }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
-    return { inserted: Boolean(result), applicationId: application.id, error: null };
+    return { inserted: Boolean(inserted), applicationId: application.id, attemptId, candidateEmail: application.email, chargedCredits: 0, billingOutcome: null, error: null };
   });
+  if (!result.applicationId || !result.attemptId) return { ...result, chargedCredits: 0, billingOutcome: null };
+  const billingOutcome = classifyVoiceInterviewBillingOutcome(input);
+  const chargedCredits = billingOutcome ? await recordVoiceInterviewDeduction({ applicationId: input.applicationExternalId, attemptId: result.attemptId, outcome: billingOutcome, actorEmail: result.candidateEmail }) : 0;
+  return { ...result, chargedCredits, billingOutcome };
 }
 
 export async function voiceResultStatuses(applicationExternalIds: string[]) {
@@ -482,12 +500,15 @@ export async function voiceResultStatuses(applicationExternalIds: string[]) {
   return db.select({ externalId: applications.externalId, currentStage: applications.currentStage, voiceHrDecision: applications.voiceHrDecision, latestResultAt: sql<string>`max(${voiceInterviewResults.createdAt})` }).from(applications).leftJoin(voiceInterviewResults, eq(voiceInterviewResults.applicationId, applications.id)).where(inArray(applications.externalId, applicationExternalIds)).groupBy(applications.externalId, applications.currentStage, applications.voiceHrDecision);
 }
 
-export async function createVoiceCallLog(input: { applicationExternalId: string; voiceCallAttemptId?: string; provider?: string; providerCallId?: string; providerEventId?: string; sourceEventKey: string; callStatus?: string; durationSeconds?: number | null; recordingUrl?: string; communicationScore?: number | null; completenessScore?: number | null; transcript?: string; summary?: string; recommendation?: string; errorDetails?: string; rawResult?: unknown; startedAt?: string; endedAt?: string }) {
+export async function createVoiceCallLog(input: { applicationExternalId: string; voiceCallAttemptId?: string; provider?: string; providerCallId?: string; providerEventId?: string; sourceEventKey: string; callStatus?: string; durationSeconds?: number | null; recordingUrl?: string; communicationScore?: number | null; completenessScore?: number | null; transcript?: string; summary?: string; recommendation?: string; errorDetails?: string; rawResult?: unknown; startedAt?: string; endedAt?: string; isComplete?: boolean }) {
   const db = getDb();
-  const [application] = await db.select({ id: applications.id }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
+  const [application] = await db.select({ id: applications.id, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
   if (!application) return { log: null, created: false, error: "unknown_application" as const };
-  const [log] = await db.insert(voiceCallLogs).values({ applicationId: application.id, voiceCallAttemptId: input.voiceCallAttemptId || null, provider: input.provider || "", providerCallId: input.providerCallId || "", providerEventId: input.providerEventId || "", sourceEventKey: input.sourceEventKey, callStatus: input.callStatus || "", durationSeconds: input.durationSeconds ?? null, recordingUrl: input.recordingUrl || "", communicationScore: input.communicationScore ?? null, completenessScore: input.completenessScore ?? null, transcript: input.transcript || "", summary: input.summary || "", recommendation: input.recommendation || "", errorDetails: input.errorDetails || "", rawResult: (input.rawResult ?? null) as object | null, startedAt: isoOrNull(input.startedAt), endedAt: isoOrNull(input.endedAt) }).onConflictDoNothing({ target: voiceCallLogs.sourceEventKey }).returning();
-  return { log: log ?? null, created: Boolean(log), error: null };
+  const [attempt] = await db.select({ id: voiceCallAttempts.id }).from(voiceCallAttempts).where(input.voiceCallAttemptId ? and(eq(voiceCallAttempts.id, input.voiceCallAttemptId), eq(voiceCallAttempts.applicationId, application.id)) : eq(voiceCallAttempts.applicationId, application.id)).orderBy(desc(voiceCallAttempts.attemptNumber), desc(voiceCallAttempts.createdAt)).limit(1);
+  const [log] = await db.insert(voiceCallLogs).values({ applicationId: application.id, voiceCallAttemptId: attempt?.id || null, provider: input.provider || "", providerCallId: input.providerCallId || "", providerEventId: input.providerEventId || "", sourceEventKey: input.sourceEventKey, callStatus: input.callStatus || "", durationSeconds: input.durationSeconds ?? null, recordingUrl: input.recordingUrl || "", communicationScore: input.communicationScore ?? null, completenessScore: input.completenessScore ?? null, transcript: input.transcript || "", summary: input.summary || "", recommendation: input.recommendation || "", errorDetails: input.errorDetails || "", rawResult: (input.rawResult ?? null) as object | null, startedAt: isoOrNull(input.startedAt), endedAt: isoOrNull(input.endedAt) }).onConflictDoNothing({ target: voiceCallLogs.sourceEventKey }).returning();
+  const billingOutcome = classifyVoiceInterviewBillingOutcome(input);
+  const chargedCredits = billingOutcome && attempt ? await recordVoiceInterviewDeduction({ applicationId: input.applicationExternalId, attemptId: attempt.id, outcome: billingOutcome, actorEmail: application.email }) : 0;
+  return { log: log ?? null, created: Boolean(log), chargedCredits, billingOutcome, error: null };
 }
 
 export async function hrDecisionQueue(stage?: "resume" | "voice" | "final") {
