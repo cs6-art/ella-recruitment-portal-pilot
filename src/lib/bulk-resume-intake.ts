@@ -4,7 +4,7 @@ import { appendBulkResumeQueueEvent, getBulkResumeQueue, getBulkResumeScreeningE
 import { assertCreditsAvailable, creditCostFor, EllaCreditsError, recordDeduction } from "@/lib/ella-credits";
 import { getPortalConfig, isEnabledChoice } from "@/lib/portal-config";
 import { extractResumeContactDetails } from "@/lib/resume-contact-extraction";
-import { bulkResumeEnvironment, bulkResumeIsUatMarked, bulkResumeWebhookConfig, productionUatBatchId } from "@/lib/bulk-resume-config";
+import { bulkResumeEnvironment, bulkResumeIsUatMarked, bulkResumeWebhookConfig, productionUatBatchId, STALE_PROCESSING_MS } from "@/lib/bulk-resume-config";
 import { deleteResumeFile, MAX_RESUME_FILE_BYTES, storeResumeFile } from "@/lib/resume-files";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { intakeTargetResumeBatch } from "@/lib/recruitment-target-bulk";
@@ -38,7 +38,6 @@ export const MAX_FILES_PER_BATCH = 25;
 export const MAX_FILES_PER_SUBMISSION = 8;
 
 export const MAX_BULK_REQUEST_BYTES = 100 * 1024 * 1024;
-const STALE_PROCESSING_MS = 30 * 60 * 1000;
 
 // Bound each per-file screening webhook so one stuck n8n execution fails that
 // single file (batch continues) instead of hanging until the serverless
@@ -252,7 +251,6 @@ export async function intakeResumeBatch(input: {
       // asynchronous screening is not auto-refunded — that needs a
       // reconciliation sweep. Tracked with the R1 queue-reconcile follow-up.
       if (!rejectedSynchronously) {
-        creditedFiles += 1;
         await recordDeduction({
           event: "cv_analysis",
           units: 1,
@@ -264,7 +262,8 @@ export async function intakeResumeBatch(input: {
           actorName,
           actorEmail,
           note: "Bulk resume screening",
-        }).catch((creditError) => console.error("[Bulk Resume Intake] Could not record credit deduction:", creditError));
+        });
+        creditedFiles += 1;
       }
 
       const queueItem: BulkResumeQueueItem = {

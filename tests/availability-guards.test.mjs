@@ -25,6 +25,8 @@ test("availability rules reject overlapping weekday windows and deduplicate lega
   assert.match(rules, /export function isTargetHiringDateOverdue/);
   assert.match(bookings, /Target hiring date overdue/);
   assert.match(bookings, /is-target-overdue/);
+  assert.match(workflow, /date: normalizeDateOnly\(field\(row, "Date"\)\)/);
+  assert.match(workflow, /startTime: normalizeTimeOnly\(field\(row, "Start_Time", "Start Time"\)\)/);
 });
 
 test("availability write API blocks stacked voice schedules and rejects manual final schedules", () => {

@@ -2,6 +2,11 @@ import { getPortalConfigValue } from "@/lib/portal-config";
 
 export type BulkResumeEnvironment = "production" | "uat";
 
+// A missing terminal callback must not leave the operator-facing queue stuck
+// indefinitely. The downstream webhook is bounded to one minute, so ten
+// minutes gives legitimate Sheets/applicant writes time to settle.
+export const STALE_PROCESSING_MS = 10 * 60 * 1000;
+
 function enabled(value: string | undefined) {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
 }

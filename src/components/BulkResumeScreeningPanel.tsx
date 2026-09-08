@@ -105,7 +105,10 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveR
       // slow poll from overwriting a newer queue snapshot.
       if (requestId !== statusRequestId.current) return;
       setItems(result.items || []);
-      setCounts(result.roleTotals || result.counts || {});
+      // Use the reconciled latest-state counts. Historical retry-event totals
+      // are useful for diagnostics but must not make this summary disagree
+      // with the live batch bar above it.
+      setCounts(result.counts || result.roleTotals || {});
       setConfigured(result.configured !== false);
       if (result.error) setError(result.error);
     } catch (caught) {
