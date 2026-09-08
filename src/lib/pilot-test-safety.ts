@@ -4,22 +4,37 @@
  * The Postgres recruitment target is used only by the Pilot deployment during
  * this validation phase. Its email and voice integrations must therefore be
  * safe by construction: test mail is redirected to the QA mailbox and voice
- * dispatch requires an explicit dry-run flag.
+ * dispatch remains dry-run unless the Pilot explicitly opts into live mode.
  */
 export const PILOT_TEST_EMAIL = "cs6@mclinkgroup.com";
 
+function isTrue(value: string | undefined) {
+  return value?.trim().toLowerCase() === "true";
+}
+
+function isFalse(value: string | undefined) {
+  return value?.trim().toLowerCase() === "false";
+}
+
+/** Candidate mail is redirected by default until the Pilot explicitly opts in. */
+export function pilotEmailRedirectEnabled() {
+  const configured = process.env.EMAIL_TEST_REDIRECT;
+  if (isTrue(configured)) return true;
+  if (isFalse(configured)) return false;
+  return process.env.RECRUITMENT_BACKEND?.trim().toLowerCase() === "postgres";
+}
+
 export function pilotEmailRecipient(intendedRecipient: string) {
   const intended = intendedRecipient.trim().toLowerCase();
-  const targetMode = process.env.RECRUITMENT_BACKEND?.trim().toLowerCase() === "postgres";
-  return targetMode
+  return pilotEmailRedirectEnabled()
     ? { to: PILOT_TEST_EMAIL, intendedTo: intended, redirected: intended !== PILOT_TEST_EMAIL }
     : { to: intended, intendedTo: intended, redirected: false };
 }
 
 export function pilotVoiceDryRunEnabled() {
-  // Postgres target mode is Pilot-only during this validation phase. Keep the
-  // voice boundary fail-safe even if a deployment misses the optional flag;
-  // an explicit true flag remains useful for local tests outside target mode.
-  return process.env.RECRUITMENT_BACKEND?.trim().toLowerCase() === "postgres"
-    || process.env.PILOT_VOICE_DRY_RUN?.trim().toLowerCase() === "true";
+  const configured = process.env.PILOT_VOICE_DRY_RUN;
+  if (isTrue(configured)) return true;
+  if (isFalse(configured)) return false;
+  // Missing configuration remains fail-closed for the Pilot.
+  return process.env.RECRUITMENT_BACKEND?.trim().toLowerCase() === "postgres";
 }

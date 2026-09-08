@@ -263,7 +263,8 @@ export async function targetCreateApplication(input: { externalId: string; roleI
       preferredMobile: input.preferredMobile,
       applicantCountry: input.applicantCountry,
       source: "upload",
-      environment: "production",
+      environment: "pilot",
+      isUat: true,
     });
     if (queued.error) throw new Error(queued.error);
     return { ...result, screeningQueued: true, screeningQueueCreated: queued.created };

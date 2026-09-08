@@ -19,11 +19,11 @@ test("screening, voice result, retry, and final decision paths enqueue typed eve
   assert.match(query, /email:voice_retry:\$\{next\.id\}/);
 });
 
-test("booking invitation and confirmation events retain safe intended-recipient audit data", () => {
+test("booking invitation and confirmation events retain redirectable intended-recipient audit data", () => {
   const query = read("src/lib/internal-recruitment-queries.ts");
   assert.match(query, /notificationEventType: input\.kind === "voice" \? "voice_booking_invitation" : "final_booking_invitation"/);
   assert.match(query, /notificationEventType: slot\.interviewType === "voice" \? "voice_booking_confirmation" : "final_booking_confirmation"/);
-  assert.match(query, /notificationRecipient: PILOT_EMAIL_RECIPIENT/);
+  assert.match(query, /notificationRecipient: pilotEmailRecipient\(application\.email\)\.to/);
   assert.match(query, /notificationIntendedRecipient: application\.email/);
 });
 

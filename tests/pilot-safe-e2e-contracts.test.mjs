@@ -13,12 +13,16 @@ test("Pilot outbound email safety always names the QA mailbox and preserves inte
   assert.match(invite, /testMailbox: "cs6@mclinkgroup\.com"/);
 });
 
-test("Pilot voice dispatch is fail-closed and cannot place a live call", () => {
+test("Pilot voice dispatch is opt-in and has a locked live Vapi path", () => {
   const route = read("src/app/api/internal/recruitment/voice/dispatch/route.ts");
-  assert.match(route, /pilot_voice_dry_run_required/);
-  assert.match(route, /body\.dryRun !== true/);
+  const safety = read("src/lib/pilot-test-safety.ts");
+  assert.match(safety, /PILOT_VOICE_DRY_RUN/);
+  assert.match(safety, /Missing configuration remains fail-closed/);
   assert.match(route, /liveCallPlaced: false/);
   assert.match(route, /pilot-dry-run-/);
+  assert.match(route, /https:\/\/api\.vapi\.ai\/call/);
+  assert.match(route, /beginVoiceAttemptDispatch/);
+  assert.match(route, /recordVoiceAttemptProviderCall/);
   assert.match(route, /createVoiceCallLog/);
   assert.match(route, /outboundPayload/);
 });
@@ -28,6 +32,7 @@ test("target voice booking creates a durable attempt only once", () => {
   assert.match(queries, /slot\.interviewType === "voice"/);
   assert.match(queries, /voiceCallAttempts\.applicationId/);
   assert.match(queries, /\["scheduled", "queued", "calling", "initiated", "in_progress"\]/);
+  assert.match(queries, /status = 'dispatching'/);
   assert.match(queries, /attemptNumber: 1, maxAttempts: 3/);
   assert.match(queries, /scheduleVoiceRetry/);
   assert.match(queries, /nextAttemptNumber = current\.attemptNumber \+ 1/);
