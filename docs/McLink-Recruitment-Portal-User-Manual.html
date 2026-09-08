@@ -124,12 +124,13 @@
       <div class="toc-item"><span class="toc-num">3</span><span><strong>Review and approve requests</strong><span>HR discusses and decides; management and department heads view only</span></span></div>
       <div class="toc-item"><span class="toc-num">4</span><span><strong>Prepare a role for hiring</strong><span>Screening and interview setup</span></span></div>
       <div class="toc-item"><span class="toc-num">5</span><span><strong>Screen and manage applicants</strong><span>Resumes, reviews, decisions, and notes</span></span></div>
-      <div class="toc-item"><span class="toc-num">6</span><span><strong>Arrange interviews</strong><span>Available times, bookings, and attendance</span></span></div>
-      <div class="toc-item"><span class="toc-num">7</span><span><strong>For candidates</strong><span>Apply and choose interview times</span></span></div>
-      <div class="toc-item"><span class="toc-num">8</span><span><strong>Help and good practice</strong><span>Common problems and safe handling</span></span></div>
+      <div class="toc-item"><span class="toc-num">6</span><span><strong>Ella Credits</strong><span>Balance, manual credits, and payment</span></span></div>
+      <div class="toc-item"><span class="toc-num">7</span><span><strong>Arrange interviews</strong><span>Available times, bookings, and attendance</span></span></div>
+      <div class="toc-item"><span class="toc-num">8</span><span><strong>For candidates</strong><span>Apply and choose interview times</span></span></div>
+      <div class="toc-item"><span class="toc-num">9</span><span><strong>Help and good practice</strong><span>Common problems and safe handling</span></span></div>
     </div>
     <div class="callout success"><span class="callout-title">The short version</span>Request the role → HR reviews the details and decides → HR prepares the hiring details → candidates are screened and interviewed.</div>
-    <div class="callout"><span class="callout-title">About this pilot version</span>In the current pilot: HR has a company-wide view and makes all role and applicant decisions. Management has a company-wide <strong>view-only</strong> role — they can see everything but cannot approve, reject, send to manual review, change a role's status, edit recruitment setup, bulk screen, create invites or interview slots, or edit or delete applicants. Department Heads see only their own department's records, read-only. A role requester who has no reviewer access sees only their own requests and no applicant information. The bulk resume upload accepts up to <strong>8</strong> files per batch. Google Drive resume import is available; OneDrive import is not yet available. New-applicant notifications and the "Ella" in-portal help assistant are included (see sections 5 and 8).</div>
+    <div class="callout"><span class="callout-title">About this pilot version</span>In the current pilot: HR has a company-wide view and makes all role and applicant decisions. Management has a company-wide <strong>view-only</strong> role — they can see everything but cannot approve, reject, send to manual review, change a role's status, edit recruitment setup, bulk screen, create invites or interview slots, or edit or delete applicants. Department Heads see only their own department's records, read-only. A role requester who has no reviewer access sees only their own requests and no applicant information. The bulk resume upload accepts up to <strong>8</strong> files per batch. Google Drive resume import is available; OneDrive import is built but stays hidden until a Microsoft administrator completes the Entra setup. Ella Credits include manual top-ups and HitPay sandbox purchases (see section 6). New-applicant notifications and the "Ella" in-portal help assistant are included (see sections 5 and 9).</div>
   </section>
 
   <section class="page">
@@ -323,7 +324,9 @@
       <div class="step"><div class="step-body"><strong>Review the applicants.</strong><span>When processing is complete, choose “View Processed Applicants” to begin the human review.</span></div></div>
     </div>
     <h3>Import from Google Drive</h3>
-    <p>Choose the published role first. The first time you use this, select <strong>Connect Google Drive</strong> and sign in with your McLink Group Google account (HR only). After that, select <strong>Choose from Google Drive</strong>, browse to the folder holding the resumes, tick the files you want (PDF, DOC, or DOCX; up to 8 per import), and confirm. Imported resumes go through exactly the same screening pipeline, duplicate check, and one-credit-per-successful-file rule as a computer upload. A resume already screened for this role is skipped and not charged. OneDrive import is not available in the pilot.</p>
+    <p>Choose the published role first. The first time you use this, select <strong>Connect Google Drive</strong> and sign in with your McLink Group Google account (HR only). After that, select <strong>Choose from Google Drive</strong>, browse to the folder holding the resumes, tick the files you want (PDF, DOC, or DOCX; up to 8 per import), and confirm. Imported resumes go through exactly the same screening pipeline, duplicate check, and one-credit-per-successful-file rule as a computer upload. A resume already screened for this role is skipped and not charged.</p>
+    <h3>Import from OneDrive</h3>
+    <p>OneDrive import works exactly like Google Drive import — same 8-file limit, 10&nbsp;MB per file, accepted file types, duplicate check, and one-credit-per-successful-file rule. Select <strong>Connect OneDrive</strong> and sign in with your Microsoft 365 account (HR only), then <strong>Choose from OneDrive</strong>. <span class="pill amber">Pending setup</span> A Microsoft administrator must first register the portal in Microsoft Entra; until that is done the OneDrive buttons stay hidden. See <em>OneDrive resume import — Microsoft Entra setup</em> for the administrator steps.</p>
     <h3>Queue messages</h3>
     <table>
       <thead><tr><th>Message</th><th>What to do</th></tr></thead>
@@ -339,7 +342,45 @@
   </section>
 
   <section class="page">
-    <div class="eyebrow">6 · Interviews</div>
+    <div class="eyebrow">6 · Ella Credits</div>
+    <h2>Credits, balance, and payment</h2>
+    <p class="section-intro">Ella Credits meter the AI features. One AI CV analysis costs <strong>1 credit</strong>; one AI phone interview costs <strong>10 credits</strong>. The balance is shared for the whole organisation and is shown on <span class="nav-path">Settings &rsaquo; Ella Credits</span>. Skipped duplicates and files that fail before analysis are not charged, and the same billable action is never charged twice.</p>
+    <h3>Who can manage credits</h3>
+    <table>
+      <thead><tr><th>Role</th><th>View balance &amp; ledger, add manual credits, buy credits</th></tr></thead>
+      <tbody>
+        <tr><td>Admin / IT Admin</td><td><span class="pill green">Allowed</span></td></tr>
+        <tr><td>HR</td><td><span class="pill green">Allowed</span></td></tr>
+        <tr><td>Management</td><td><span class="pill red">Not allowed</span></td></tr>
+        <tr><td>HOD / Department Head</td><td><span class="pill red">Not allowed</span></td></tr>
+        <tr><td>Requester / Employee</td><td><span class="pill red">Not allowed</span></td></tr>
+      </tbody>
+    </table>
+    <h3>Add credits manually (demo / adjustment)</h3>
+    <p>On <span class="nav-path">Settings &rsaquo; Ella Credits</span>, enter a <strong>positive whole number</strong> and a <strong>reason</strong> (required), and optionally a reference. The adjustment is written to the credit ledger with your name, the amount, the reason, the reference, the time, and the resulting balance. The balance can never be changed without a ledger entry, and re-submitting the same adjustment does not add the credits twice.</p>
+    <h3>Buy credits (HitPay)</h3>
+    <div class="steps">
+      <div class="step"><div class="step-body"><strong>Choose a credit pack.</strong><span>The price is set by the portal — you only choose a pack, never a price or a credit amount.</span></div></div>
+      <div class="step"><div class="step-body"><strong>Pay on the HitPay page.</strong><span>You are taken to HitPay to complete payment, then returned to the portal.</span></div></div>
+      <div class="step"><div class="step-body"><strong>Wait for confirmation.</strong><span>Credits are added only after HitPay confirms the payment to the portal directly — returning to the page is not enough on its own. This usually takes a few seconds.</span></div></div>
+    </div>
+    <div class="callout warning"><span class="callout-title">Pilot</span>Payments in the pilot run against the HitPay <strong>sandbox</strong> — no real money moves. This feature is inactive until the payment keys are configured for the pilot deployment; until then the “Buy credits” action reports that it is not set up yet.</div>
+    <h3>Payment statuses</h3>
+    <table>
+      <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pill">Pending</span></td><td>Payment started, not yet confirmed. No credits added yet.</td></tr>
+        <tr><td><span class="pill green">Paid</span></td><td>Confirmed by HitPay. Credits have been added to the balance.</td></tr>
+        <tr><td><span class="pill red">Failed</span></td><td>Payment did not complete. No credits added.</td></tr>
+        <tr><td><span class="pill">Expired / Cancelled</span></td><td>The payment link lapsed or was cancelled. No credits added.</td></tr>
+      </tbody>
+    </table>
+    <h3>When the balance is too low</h3>
+    <p>An AI action that the balance cannot cover is refused before any work is done, with a message showing how many credits are needed and how many remain. Top up (manually or by purchase) and try again. Existing screening and interview results are never lost.</p>
+  </section>
+
+  <section class="page">
+    <div class="eyebrow">7 · Interviews</div>
     <h2>Arrange and follow interviews</h2>
     <h3>View the interview calendar</h3>
     <p>HR can open <span class="nav-path">Bookings</span> to see monthly availability and appointments. Use the role and interview-type filters to focus the view. Choose a date to see open times, scheduled candidates, completed interviews, and conflicts.</p>
@@ -363,7 +404,7 @@
   </section>
 
   <section class="page">
-    <div class="eyebrow">7 · Candidate guide</div>
+    <div class="eyebrow">8 · Candidate guide</div>
     <h2>For candidates: applying and booking</h2>
     <h3>Apply for a role</h3>
     <div class="steps">
@@ -381,7 +422,7 @@
   </section>
 
   <section class="page">
-    <div class="eyebrow">8 · Help and good practice</div>
+    <div class="eyebrow">9 · Help and good practice</div>
     <h2>Common questions</h2>
     <h3>“I cannot see a role or applicant.”</h3>
     <p>Your access may limit you to your own requests or your department. Ask HR to confirm that you have the right access.</p>
@@ -392,7 +433,11 @@
     <h3>“The role was approved but candidates cannot apply.”</h3>
     <p>Approval is only one step. HR must complete the Recruitment Setup checklist and publish the role.</p>
     <h3>“A resume failed.”</h3>
-    <p>Make sure it is a readable, unlocked PDF, DOC, or DOCX file and no larger than 10 MB. Try the retry option. If it still fails, ask HR to check the file or enter the candidate another way.</p>
+    <p>Make sure it is a readable, unlocked PDF, DOC, or DOCX file and no larger than 10 MB. Try the retry option. If it still fails, ask HR to check the file or enter the candidate another way. A failed file is not charged an Ella Credit.</p>
+    <h3>“There are not enough Ella Credits.”</h3>
+    <p>The AI action is refused before any work is done — nothing is lost. An Admin or HR user can add credits on <span class="nav-path">Settings &rsaquo; Ella Credits</span> (a manual top-up, or a purchase). See section 6.</p>
+    <h3>“I paid but the credits are not showing.”</h3>
+    <p>Credits are added only when the payment provider confirms the payment to the portal directly, which is usually seconds but can lag. If it has not appeared after a few minutes, an Admin or HR user can open the payment on the Ella Credits page and choose to re-check its status.</p>
     <h3>“The calendar shows no times.”</h3>
     <p>Check the role and interview-type filters, choose the correct month, and refresh. If there are still no times, ask the calendar administrator to check the shared HR calendar.</p>
     <h3>“The page says someone else changed the record.”</h3>
