@@ -57,8 +57,16 @@ test("voice-call logs migration preserves provider audit fields and deduplicates
   assert.doesNotMatch(sql, /DROP|TRUNCATE|DELETE FROM|access_token|refresh_token/i);
 });
 
+test("voice attempt migration matches the provider dispatch state machine", () => {
+  const sql = read("drizzle/0006_voice_attempt_dispatch_states.sql");
+  assert.match(sql, /'dispatching'/);
+  assert.match(sql, /'failed'/);
+  assert.match(sql, /'system_failure'/);
+  assert.match(sql, /DROP CONSTRAINT IF EXISTS "voice_call_attempts_status_check"/);
+});
+
 test("the migration runner will accept the new files (no functions / DO blocks / dollar-quoting)", () => {
-  for (const f of ["drizzle/0002_payments.sql", "drizzle/0003_recruitment_core.sql", "drizzle/0004_voice_call_logs.sql", "drizzle/0005_candidate_email_events.sql"]) {
+  for (const f of ["drizzle/0002_payments.sql", "drizzle/0003_recruitment_core.sql", "drizzle/0004_voice_call_logs.sql", "drizzle/0005_candidate_email_events.sql", "drizzle/0006_voice_attempt_dispatch_states.sql"]) {
     const sql = read(f);
     assert.doesNotMatch(sql, /\$\$|CREATE (OR REPLACE )?FUNCTION|DO \$/i);
   }
