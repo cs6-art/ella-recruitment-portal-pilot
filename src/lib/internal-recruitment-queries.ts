@@ -7,6 +7,7 @@ import { appendPostgresLedgerEntryOnExecutor } from "@/lib/ella-credits-postgres
 import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
 import { recordVoiceInterviewDeduction } from "@/lib/ella-credits";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
+import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
 import {
   applicants,
   applications,
@@ -26,7 +27,6 @@ import {
 
 /** Postgres-only target helpers. New entities stay inactive until explicitly enabled. */
 const LIMIT = 100;
-const PILOT_EMAIL_RECIPIENT = "cs6@mclinkgroup.com";
 const STAGES = ["resume_review", "resume_approved", "voice_booking_pending", "voice_scheduled", "voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final", "rejected", "withdrawn"] as const;
 const DECISIONS = ["", "approve", "reject", "manual_review", "pending"] as const;
 const STAGE_TRANSITIONS: Record<string, readonly string[]> = {
@@ -44,8 +44,11 @@ const STAGE_TRANSITIONS: Record<string, readonly string[]> = {
 };
 const VOICE_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   scheduled: ["queued", "calling", "cancelled"], queued: ["calling", "cancelled"], retry_scheduled: ["queued", "calling", "cancelled"],
-  calling: ["initiated", "in_progress", "completed", "no_show", "cancelled"], initiated: ["in_progress", "completed", "no_show", "cancelled"],
-  in_progress: ["completed", "no_show", "cancelled"], completed: [], no_show: [], cancelled: [],
+  calling: ["dispatching", "initiated", "in_progress", "completed", "no_show", "cancelled", "failed"],
+  dispatching: ["initiated", "failed", "cancelled"],
+  initiated: ["in_progress", "completed", "no_show", "cancelled", "failed"],
+  in_progress: ["completed", "no_show", "cancelled", "failed"],
+  completed: [], no_show: [], cancelled: [], failed: [],
 };
 
 function isoOrNull(value?: string | null): Date | null {
@@ -248,7 +251,7 @@ export async function createApplication(input: { externalId: string; applicantEm
       actionRequestId: `email:application_acknowledgment:${application.externalId}`,
       notificationStatus: "pending",
       notificationEventType: "application_acknowledgment",
-      notificationRecipient: PILOT_EMAIL_RECIPIENT,
+      notificationRecipient: pilotEmailRecipient(email).to,
       notificationIntendedRecipient: email,
     }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     return { application, created: true, error: null };
@@ -321,7 +324,7 @@ export async function upsertScreeningResult(input: { applicationExternalId: stri
       actionRequestId: `email:screening_next_step:${input.applicationExternalId}`,
       notificationStatus: "pending",
       notificationEventType: "screening_next_step",
-      notificationRecipient: PILOT_EMAIL_RECIPIENT,
+      notificationRecipient: pilotEmailRecipient(application.email).to,
       notificationIntendedRecipient: application.email,
     }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     return { result, error: null };
@@ -377,6 +380,48 @@ export async function dispatchVoiceAttemptDryRun(input: { attemptId: string; pro
   return rowsOf<Record<string, unknown>>(result)[0] || null;
 }
 
+/** Claim the provider side-effect before making the outbound request. */
+export async function beginVoiceAttemptDispatch(attemptId: string) {
+  const db = getDb();
+  const result = await db.execute(sql`UPDATE voice_call_attempts SET status = 'dispatching', updated_at = now() WHERE id = ${attemptId.trim()} AND status = 'calling' RETURNING id, application_id AS "applicationId", attempt_number AS "attemptNumber", scheduled_at AS "scheduledAt"`);
+  return rowsOf<Record<string, unknown>>(result)[0] || null;
+}
+
+export async function recordVoiceAttemptProviderCall(input: { attemptId: string; providerCallId: string }) {
+  const db = getDb();
+  const result = await db.execute(sql`UPDATE voice_call_attempts SET status = 'initiated', provider_call_id = ${input.providerCallId.trim()}, updated_at = now() WHERE id = ${input.attemptId.trim()} AND status = 'dispatching' RETURNING id, provider_call_id AS "providerCallId", status`);
+  return rowsOf<Record<string, unknown>>(result)[0] || null;
+}
+
+export async function failVoiceAttemptDispatch(attemptId: string, reason: string) {
+  const db = getDb();
+  const result = await db.execute(sql`UPDATE voice_call_attempts SET status = 'failed', outcome = 'system_failure', updated_at = now() WHERE id = ${attemptId.trim()} AND status = 'dispatching' RETURNING id, status, outcome`);
+  if (rowsOf(result).length > 0) {
+    await createVoiceCallLog({
+      applicationExternalId: (await voiceAttemptContext(attemptId))?.applicationExternalId || "",
+      voiceCallAttemptId: attemptId,
+      provider: "vapi",
+      sourceEventKey: `dispatch-failed:${attemptId}`,
+      callStatus: "failed",
+      errorDetails: reason,
+      rawResult: { dispatchFailed: true },
+    }).catch(() => undefined);
+  }
+  return rowsOf<Record<string, unknown>>(result)[0] || null;
+}
+
+/** Terminally block a claimed attempt when a pre-call safety check fails. */
+export async function blockVoiceAttempt(attemptId: string, reason: string) {
+  const db = getDb();
+  const result = await db.execute(sql`UPDATE voice_call_attempts SET status = 'failed', outcome = 'system_failure', updated_at = now() WHERE id = ${attemptId.trim()} AND status = 'calling' RETURNING id, application_id AS "applicationId"`);
+  const row = rowsOf<Record<string, unknown>>(result)[0];
+  if (row) {
+    const context = await voiceAttemptContext(attemptId);
+    if (context) await createVoiceCallLog({ applicationExternalId: context.applicationExternalId, voiceCallAttemptId: attemptId, provider: "vapi", sourceEventKey: `dispatch-blocked:${attemptId}`, callStatus: "blocked", errorDetails: reason, rawResult: { dispatchBlocked: true } }).catch(() => undefined);
+  }
+  return row || null;
+}
+
 export async function voiceAttemptContext(attemptId: string) {
   const db = getDb();
   const [row] = await db.select({
@@ -387,10 +432,14 @@ export async function voiceAttemptContext(attemptId: string) {
     phone: applications.phone,
     preferredMobile: applications.preferredMobile,
     applicantCountry: applications.applicantCountry,
+    applicantPhone: applicants.phoneE164,
+    currentStage: applications.currentStage,
+    withdrawn: applications.withdrawn,
     roleExternalId: roles.externalId,
     roleTitle: roles.title,
   }).from(voiceCallAttempts)
     .innerJoin(applications, eq(applications.id, voiceCallAttempts.applicationId))
+    .innerJoin(applicants, eq(applicants.id, applications.applicantId))
     .leftJoin(roles, eq(roles.id, voiceCallAttempts.roleId))
     .where(eq(voiceCallAttempts.id, attemptId.trim()))
     .limit(1);
@@ -436,7 +485,7 @@ export async function scheduleVoiceRetry(input: { attemptId: string; retryAfter:
       actionRequestId: `email:voice_no_show:${current.id}`,
       notificationStatus: "pending",
       notificationEventType: "voice_no_show",
-      notificationRecipient: PILOT_EMAIL_RECIPIENT,
+      notificationRecipient: pilotEmailRecipient(application.email).to,
       notificationIntendedRecipient: application.email,
     }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     if (current.attemptNumber >= current.maxAttempts) return { scheduled: false, duplicate: false, terminal: true, error: null };
@@ -465,7 +514,7 @@ export async function scheduleVoiceRetry(input: { attemptId: string; retryAfter:
         actionRequestId: `email:voice_retry:${next.id}`,
         notificationStatus: "pending",
         notificationEventType: "voice_retry",
-        notificationRecipient: PILOT_EMAIL_RECIPIENT,
+        notificationRecipient: pilotEmailRecipient(application.email).to,
         notificationIntendedRecipient: application.email,
       }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     }
@@ -485,7 +534,7 @@ export async function ingestVoiceResult(input: { applicationExternalId: string; 
     if (existing.length > 0) return { inserted: false, applicationId: application.id, attemptId, candidateEmail: application.email, chargedCredits: 0, billingOutcome: null, error: null };
     const [inserted] = await tx.insert(voiceInterviewResults).values({ applicationId: application.id, attemptId, score: input.score ?? null, recommendation: input.recommendation || "", strengths: input.strengths || "", concerns: input.concerns || "", summary: input.summary || "", transcript: input.transcript || "", callStatus: input.callStatus || "", callFinalStatus: input.callFinalStatus || "", providerEventType: input.providerEventType || "", callCompletedAt: completedAt, resultReceivedAt: new Date(), raw: (input.raw ?? null) as object | null }).returning();
     await tx.update(applications).set({ currentStage: "voice_review_pending", updatedAt: new Date() }).where(and(eq(applications.id, application.id), eq(applications.currentStage, "voice_scheduled")));
-    await tx.insert(applicationStatusHistory).values({ applicationId: application.id, stage: "voice_review_pending", previousStage: "voice_scheduled", newStage: "voice_review_pending", decision: input.recommendation || "", source: "internal_api:voice_result", comments: input.summary || "", actionRequestId: input.sourceEventKey || null, notificationStatus: "pending", notificationEventType: "voice_result_next_step", notificationRecipient: PILOT_EMAIL_RECIPIENT, notificationIntendedRecipient: application.email }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
+    await tx.insert(applicationStatusHistory).values({ applicationId: application.id, stage: "voice_review_pending", previousStage: "voice_scheduled", newStage: "voice_review_pending", decision: input.recommendation || "", source: "internal_api:voice_result", comments: input.summary || "", actionRequestId: input.sourceEventKey || null, notificationStatus: "pending", notificationEventType: "voice_result_next_step", notificationRecipient: pilotEmailRecipient(application.email).to, notificationIntendedRecipient: application.email }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     return { inserted: Boolean(inserted), applicationId: application.id, attemptId, candidateEmail: application.email, chargedCredits: 0, billingOutcome: null, error: null };
   });
   if (!result.applicationId || !result.attemptId) return { ...result, chargedCredits: 0, billingOutcome: null };
@@ -535,7 +584,7 @@ export async function applyHrDecision(input: { applicationExternalId: string; st
     const patch = input.stage === "resume" ? { resumeHrDecision: input.decision, resumeHrDecisionAt: new Date(), resumeHrReviewer: input.actorEmail, resumeHrComments: input.comments || "" } : input.stage === "voice" ? { voiceHrDecision: input.decision, voiceHrComments: input.comments || "" } : { finalHrDecision: input.decision, finalInterviewComments: input.comments || "" };
     await tx.update(applications).set({ ...patch, currentStage: targetStage, updatedAt: new Date() }).where(eq(applications.id, current.id));
     const notificationEventType = input.stage === "voice" && input.decision === "reject" ? "voice_rejection" : input.stage === "final" && input.decision === "approve" ? "final_decision_pass" : input.stage === "final" && input.decision === "reject" ? "final_decision_reject" : "";
-    await tx.insert(applicationStatusHistory).values({ applicationId: current.id, stage: input.stage, previousStage: current.currentStage, newStage: targetStage, decision: input.decision, actorEmail: input.actorEmail, actorName: input.actorName || "", comments: input.comments || "", source: "internal_api:hr_decision", actionRequestId: input.actionRequestId, notificationStatus: notificationEventType ? "pending" : "", notificationEventType, notificationRecipient: notificationEventType ? PILOT_EMAIL_RECIPIENT : "", notificationIntendedRecipient: notificationEventType ? current.email : "" });
+    await tx.insert(applicationStatusHistory).values({ applicationId: current.id, stage: input.stage, previousStage: current.currentStage, newStage: targetStage, decision: input.decision, actorEmail: input.actorEmail, actorName: input.actorName || "", comments: input.comments || "", source: "internal_api:hr_decision", actionRequestId: input.actionRequestId, notificationStatus: notificationEventType ? "pending" : "", notificationEventType, notificationRecipient: notificationEventType ? pilotEmailRecipient(current.email).to : "", notificationIntendedRecipient: notificationEventType ? current.email : "" });
     return { updated: true, duplicate: false, error: null };
   });
 }
@@ -738,7 +787,7 @@ export async function finalizeBulkScreening(input: {
       actionRequestId,
       notificationStatus: "pending",
       notificationEventType: "screening_next_step",
-      notificationRecipient: PILOT_EMAIL_RECIPIENT,
+      notificationRecipient: pilotEmailRecipient(application.email).to,
       notificationIntendedRecipient: application.email,
     }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     await tx.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, application.id));
@@ -804,18 +853,20 @@ export async function createInterviewSlot(input: {
 export async function bookInterviewSlot(input: { slotId: string; applicationExternalId: string; actorEmail: string; actionRequestId: string }) {
   const db = getDb();
   return db.transaction(async (tx) => {
-    const [application] = await tx.select({ id: applications.id, candidateName: applications.candidateName, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
+    const [application] = await tx.select({ id: applications.id, applicantId: applications.applicantId, candidateName: applications.candidateName, email: applications.email, phone: applications.phone, preferredMobile: applications.preferredMobile }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
     if (!application) return { booked: false, error: "unknown_application" as const };
+    const [applicant] = await tx.select({ phoneE164: applicants.phoneE164 }).from(applicants).where(eq(applicants.id, application.applicantId)).limit(1);
     const [slot] = await tx.update(interviewSlots).set({ status: "booked", applicationId: application.id, candidateName: application.candidateName, candidateEmail: application.email, bookedAt: new Date(), updatedAt: new Date() }).where(and(eq(interviewSlots.id, input.slotId), eq(interviewSlots.status, "available"))).returning();
     if (!slot) return { booked: false, error: "slot_unavailable" as const };
     const nextStage = slot.interviewType === "voice" ? "voice_scheduled" : "final_scheduled";
     const previousStage = slot.interviewType === "voice" ? "voice_booking_pending" : "approved_for_final";
     await tx.update(applications).set({ currentStage: nextStage, updatedAt: new Date() }).where(eq(applications.id, application.id));
-    await tx.insert(applicationStatusHistory).values({ applicationId: application.id, stage: slot.interviewType, previousStage, newStage: nextStage, actorEmail: input.actorEmail, source: "internal_api:booking", actionRequestId: input.actionRequestId, notificationStatus: "pending", notificationEventType: slot.interviewType === "voice" ? "voice_booking_confirmation" : "final_booking_confirmation", notificationRecipient: PILOT_EMAIL_RECIPIENT, notificationIntendedRecipient: application.email });
+    await tx.insert(applicationStatusHistory).values({ applicationId: application.id, stage: slot.interviewType, previousStage, newStage: nextStage, actorEmail: input.actorEmail, source: "internal_api:booking", actionRequestId: input.actionRequestId, notificationStatus: "pending", notificationEventType: slot.interviewType === "voice" ? "voice_booking_confirmation" : "final_booking_confirmation", notificationRecipient: pilotEmailRecipient(application.email).to, notificationIntendedRecipient: application.email });
     if (slot.interviewType === "voice") {
       const existing = await tx.select({ id: voiceCallAttempts.id }).from(voiceCallAttempts).where(and(eq(voiceCallAttempts.applicationId, application.id), inArray(voiceCallAttempts.status, ["scheduled", "queued", "calling", "initiated", "in_progress"]))).limit(1);
       if (existing.length === 0) {
-        await tx.insert(voiceCallAttempts).values({ applicationId: application.id, roleId: slot.roleId, attemptNumber: 1, maxAttempts: 3, scheduledAt: slot.startsAt, status: "scheduled", preferredMobile: "", contactNumber: "" });
+        const phone = applicant?.phoneE164 || application.preferredMobile || application.phone || "";
+        await tx.insert(voiceCallAttempts).values({ applicationId: application.id, roleId: slot.roleId, attemptNumber: 1, maxAttempts: 3, scheduledAt: slot.startsAt, status: "scheduled", preferredMobile: phone, contactNumber: phone });
       }
     }
     return { booked: true, slot, error: null };
@@ -904,8 +955,18 @@ export async function markInterviewCalendarEvent(input: {
 export async function createBookingToken(input: { applicationExternalId: string; kind: "voice" | "final"; tokenHash?: string; link?: string; expiresAt?: string }) {
   const db = getDb();
   return db.transaction(async (tx) => {
-    const [application] = await tx.select({ id: applications.id, currentStage: applications.currentStage, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
+    // Lock before the lookup so concurrent workflow retries cannot create two
+    // random tokens for the same application and interview type.
+    const [application] = await tx.select({ id: applications.id, currentStage: applications.currentStage, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
     if (!application) return { token: null, created: false, notificationHistoryId: null, error: "unknown_application" as const };
+    const [existingToken] = await tx.select().from(bookingTokens)
+      .where(and(eq(bookingTokens.applicationId, application.id), eq(bookingTokens.kind, input.kind)))
+      .orderBy(desc(bookingTokens.createdAt)).limit(1);
+    if (existingToken) {
+      const [existingHistory] = await tx.select({ id: applicationStatusHistory.id }).from(applicationStatusHistory)
+        .where(eq(applicationStatusHistory.actionRequestId, `booking-invitation:${input.kind}:${input.applicationExternalId}`)).limit(1);
+      return { token: existingToken, created: false, notificationHistoryId: existingHistory?.id || null, error: null };
+    }
     const suppliedTokenHash = input.tokenHash?.trim();
     const rawToken = suppliedTokenHash ? "" : crypto.randomBytes(32).toString("hex");
     const tokenHash = suppliedTokenHash || crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -928,7 +989,7 @@ export async function createBookingToken(input: { applicationExternalId: string;
       actionRequestId: `booking-invitation:${input.kind}:${input.applicationExternalId}`,
       notificationStatus: "pending",
       notificationEventType: input.kind === "voice" ? "voice_booking_invitation" : "final_booking_invitation",
-      notificationRecipient: PILOT_EMAIL_RECIPIENT,
+      notificationRecipient: pilotEmailRecipient(application.email).to,
       notificationIntendedRecipient: application.email,
     }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId }).returning({ id: applicationStatusHistory.id });
     return { token, created: true, notificationHistoryId: history?.id || null, error: null };
