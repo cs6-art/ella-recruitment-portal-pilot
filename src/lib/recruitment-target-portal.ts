@@ -186,12 +186,32 @@ export async function targetRoleStatusHistory(externalId: string) {
   }));
 }
 
+function slotDateTime(value: unknown, timezone: string) {
+  const parsed = value instanceof Date ? value : new Date(text(value));
+  if (Number.isNaN(parsed.getTime())) return { date: "", time: "" };
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone || "Asia/Singapore",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(parsed);
+  const values = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+  return {
+    date: `${values.year}-${values.month}-${values.day}`,
+    time: `${values.hour}:${values.minute}`,
+  };
+}
+
 function bookingSlot(slot: Record<string, unknown>, roleExternalId = "") {
-  const startsAt = text(slot.startsAt);
-  const endsAt = text(slot.endsAt);
+  const timezone = text(slot.timezone) || "Asia/Singapore";
+  const startsAt = slotDateTime(slot.startsAt, timezone);
+  const endsAt = slotDateTime(slot.endsAt, timezone);
   return {
     slotId: text(slot.id), interviewType: text(slot.interviewType) === "voice" ? "AI Voice Interview" : "Final Interview", roleId: roleExternalId,
-    date: startsAt.slice(0, 10), startTime: startsAt.slice(11, 16), endTime: endsAt.slice(11, 16), timezone: text(slot.timezone), status: label(slot.status),
+    date: startsAt.date, startTime: startsAt.time, endTime: endsAt.time, timezone, status: label(slot.status),
     applicationId: text(slot.applicationId), candidateName: text(slot.candidateName), candidateEmail: text(slot.candidateEmail), bookedAt: text(slot.bookedAt),
     calendarEventId: text(slot.calendarEventId), calendarEventLink: text(slot.calendarEventLink), calendarEventStatus: text(slot.calendarEventStatus), calendarEventError: text(slot.calendarEventError),
   };
@@ -498,6 +518,9 @@ export async function targetBookings() {
   const rows = await listBookingSlots();
   return rows.map((row) => {
     const slot = (row as { slot?: Record<string, unknown> }).slot || row as unknown as Record<string, unknown>;
-    return { slotId: text(slot.id), interviewType: text(slot.interviewType), roleId: text((row as { roleExternalId?: string }).roleExternalId), date: text(slot.startsAt).slice(0, 10), startTime: text(slot.startsAt).slice(11, 16), endTime: text(slot.endsAt).slice(11, 16), timezone: text(slot.timezone), status: label(slot.status), applicationId: text(slot.applicationId), candidateName: text(slot.candidateName), candidateEmail: text(slot.candidateEmail), bookedAt: text(slot.bookedAt), lastUpdated: text(slot.updatedAt), calendarEventId: text(slot.calendarEventId), calendarEventLink: text(slot.calendarEventLink), calendarEventStatus: text(slot.calendarEventStatus), calendarEventError: text(slot.calendarEventError) };
+    const timezone = text(slot.timezone) || "Asia/Singapore";
+    const startsAt = slotDateTime(slot.startsAt, timezone);
+    const endsAt = slotDateTime(slot.endsAt, timezone);
+    return { slotId: text(slot.id), interviewType: text(slot.interviewType), roleId: text((row as { roleExternalId?: string }).roleExternalId), date: startsAt.date, startTime: startsAt.time, endTime: endsAt.time, timezone, status: label(slot.status), applicationId: text(slot.applicationId), candidateName: text(slot.candidateName), candidateEmail: text(slot.candidateEmail), bookedAt: text(slot.bookedAt), lastUpdated: text(slot.updatedAt), calendarEventId: text(slot.calendarEventId), calendarEventLink: text(slot.calendarEventLink), calendarEventStatus: text(slot.calendarEventStatus), calendarEventError: text(slot.calendarEventError) };
   });
 }

@@ -6,7 +6,7 @@ import { appendRoleRequestDraft, getFinalInterviewCalendarConfig, getRoleRequest
 import { invalidateSheetsCache } from "@/lib/sheets-cache";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { createRole, listRoles, updateRoleDetails } from "@/lib/internal-recruitment-queries";
-import { targetRoleSummaries } from "@/lib/recruitment-target-portal";
+import { targetRoleDetails, targetRoleSummaries, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 import { filterVisibleRoles } from "@/lib/access-control";
 import { roleRequestSchema } from "@/lib/role-schema";
 import { generateRoleId } from "@/lib/role-id";
@@ -288,8 +288,15 @@ export async function POST(request: Request) {
       // A draft may be created by one Vercel instance and submitted to
       // another. Bypass the process-local role cache for this write-then-read
       // check so a just-appended draft cannot look missing.
-      if (await getRoleRequestById(roleId, { fresh: true })) await updateRoleRequestFields(roleId, fields);
-      else await appendRoleRequestDraft(fields);
+      const existingDraft = isPostgresRecruitmentTarget()
+        ? await targetRoleDetails(roleId)
+        : await getRoleRequestById(roleId, { fresh: true });
+      if (existingDraft) {
+        if (isPostgresRecruitmentTarget()) await targetUpdateRoleFields(roleId, fields);
+        else await updateRoleRequestFields(roleId, fields);
+      } else {
+        await appendRoleRequestDraft(fields);
+      }
       return NextResponse.json({ success: true, draft: true, roleId, status: "Draft", message: "Draft saved." }, { status: 201 });
     }
     const input = roleRequestSchema.parse({

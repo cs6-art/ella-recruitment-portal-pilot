@@ -50,6 +50,27 @@ const VOICE_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   in_progress: ["completed", "no_show", "cancelled", "failed"],
   completed: [], no_show: [], cancelled: [], failed: [],
 };
+const ROLE_STATUSES = ["draft", "pending_hr_discussion", "approved", "recruitment_setup", "job_posted", "returned_for_revision", "on_hold", "rejected"] as const;
+const RECRUITMENT_SETUP_STATUSES = ["draft", "recruitment_ready", "ready_for_publishing", "published"] as const;
+
+function normalizedKey(value: unknown) {
+  return String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function normalizeRoleStatus(value: string | undefined) {
+  const normalized = normalizedKey(value);
+  return (ROLE_STATUSES as readonly string[]).includes(normalized) ? normalized : "draft";
+}
+
+function normalizeRequestType(value: string | undefined) {
+  const normalized = normalizedKey(value);
+  return normalized === "staff_addition" || normalized === "staff_replacement" ? normalized : "";
+}
+
+function normalizeRecruitmentSetupStatus(value: string | undefined) {
+  const normalized = normalizedKey(value);
+  return (RECRUITMENT_SETUP_STATUSES as readonly string[]).includes(normalized) ? normalized : "draft";
+}
 
 function isoOrNull(value?: string | null): Date | null {
   if (!value) return null;
@@ -83,7 +104,7 @@ export async function getRole(externalId: string) {
 export async function createRole(input: { externalId: string; title: string; code?: string; departmentSnapshot?: string; requestType?: string; vacancies?: number; reason?: string; targetHiringDate?: string; status?: string; source?: string; requesterEmail?: string; requesterName?: string; actionRequestId?: string; actorEmail?: string; actorName?: string }) {
   const db = getDb();
   return db.transaction(async (tx) => {
-    const [role] = await tx.insert(roles).values({ externalId: input.externalId.trim(), title: input.title.trim(), code: input.code?.trim() || null, departmentSnapshot: input.departmentSnapshot || "", requestType: input.requestType || "", vacancies: input.vacancies ?? 1, reason: input.reason || "", targetHiringDate: input.targetHiringDate || null, status: input.status || "draft", source: input.source || "internal_api", requesterEmail: input.requesterEmail || "", requesterName: input.requesterName || "", updatedByEmail: input.actorEmail || "" }).onConflictDoNothing({ target: roles.externalId }).returning();
+    const [role] = await tx.insert(roles).values({ externalId: input.externalId.trim(), title: input.title.trim(), code: input.code?.trim() || null, departmentSnapshot: input.departmentSnapshot || "", requestType: normalizeRequestType(input.requestType), vacancies: input.vacancies ?? 1, reason: input.reason || "", targetHiringDate: input.targetHiringDate || null, status: normalizeRoleStatus(input.status), source: input.source || "internal_api", requesterEmail: input.requesterEmail || "", requesterName: input.requesterName || "", updatedByEmail: input.actorEmail || "" }).onConflictDoNothing({ target: roles.externalId }).returning();
     if (!role) {
       const [existing] = await tx.select().from(roles).where(eq(roles.externalId, input.externalId.trim())).limit(1);
       return { role: existing ?? null, created: false };
@@ -139,14 +160,14 @@ export async function updateRoleDetails(input: {
   const db = getDb();
   const patch = {
     ...(input.title === undefined ? {} : { title: input.title.trim() }),
-    ...(input.status === undefined ? {} : { status: input.status }),
+    ...(input.status === undefined ? {} : { status: normalizeRoleStatus(input.status) }),
     ...(input.code === undefined ? {} : { code: input.code?.trim() || null }),
     ...(input.departmentSnapshot === undefined ? {} : { departmentSnapshot: input.departmentSnapshot }),
-    ...(input.requestType === undefined ? {} : { requestType: input.requestType }),
+    ...(input.requestType === undefined ? {} : { requestType: normalizeRequestType(input.requestType) }),
     ...(input.vacancies === undefined ? {} : { vacancies: Math.max(1, Math.trunc(input.vacancies)) }),
     ...(input.reason === undefined ? {} : { reason: input.reason }),
     ...(input.targetHiringDate === undefined ? {} : { targetHiringDate: input.targetHiringDate }),
-    ...(input.recruitmentSetupStatus === undefined ? {} : { recruitmentSetupStatus: input.recruitmentSetupStatus }),
+    ...(input.recruitmentSetupStatus === undefined ? {} : { recruitmentSetupStatus: normalizeRecruitmentSetupStatus(input.recruitmentSetupStatus) }),
     ...(input.setup === undefined ? {} : { setup: input.setup as object }),
     ...(input.evaluationFields === undefined ? {} : { evaluationFields: input.evaluationFields as object }),
     ...(input.availabilityRules === undefined ? {} : { availabilityRules: input.availabilityRules as object }),
@@ -165,11 +186,12 @@ export async function updateRoleDetails(input: {
     const [current] = await tx.select({ id: roles.id, status: roles.status }).from(roles).where(eq(roles.externalId, input.externalId.trim())).limit(1);
     if (!current) return null;
     const [role] = await tx.update(roles).set(patch).where(eq(roles.id, current.id)).returning();
-    if (role && input.status && current.status !== input.status && input.actionRequestId) {
+    const normalizedStatus = input.status === undefined ? undefined : normalizeRoleStatus(input.status);
+    if (role && normalizedStatus && current.status !== normalizedStatus && input.actionRequestId) {
       await tx.insert(roleStatusHistory).values({
         roleId: current.id,
         previousStatus: current.status,
-        newStatus: input.status,
+        newStatus: normalizedStatus,
         comments: input.latestComments || "",
         action: input.action || "role_updated",
         actionSource: "portal_postgres_target",

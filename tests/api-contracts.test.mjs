@@ -64,6 +64,27 @@ test("draft writes use fresh role reads across app instances", () => {
   assert.match(form, /await draftSaveInFlight\.current/);
 });
 
+test("Postgres draft writes stay on the target and normalize constrained labels", () => {
+  const createRoute = fs.readFileSync("src/app/api/roles/route.ts", "utf8");
+  const statusRoute = fs.readFileSync("src/app/api/roles/[roleId]/status/route.ts", "utf8");
+  const queries = fs.readFileSync("src/lib/internal-recruitment-queries.ts", "utf8");
+  assert.match(createRoute, /targetRoleDetails\(roleId\)/);
+  assert.match(createRoute, /targetUpdateRoleFields\(roleId, fields\)/);
+  assert.match(statusRoute, /targetRoleDetails\(roleId\)/);
+  assert.match(statusRoute, /targetRoleStatusHistory\(role\.roleId\)/);
+  assert.match(queries, /normalizeRequestType\(input\.requestType\)/);
+  assert.match(queries, /normalizeRoleStatus\(input\.status\)/);
+  assert.match(queries, /normalizeRecruitmentSetupStatus\(input\.recruitmentSetupStatus\)/);
+});
+
+test("Postgres booking responses convert Date timestamps into local date and time fields", () => {
+  const source = fs.readFileSync("src/lib/recruitment-target-portal.ts", "utf8");
+  assert.match(source, /value instanceof Date/);
+  assert.match(source, /new Intl\.DateTimeFormat\("en-CA"/);
+  assert.doesNotMatch(source, /text\(slot\.startsAt\)\.slice\(0, 10\)/);
+  assert.doesNotMatch(source, /text\(slot\.startsAt\)\.slice\(11, 16\)/);
+});
+
 test("draft submission has an audited transition into HR review", () => {
   const source = fs.readFileSync("src/app/api/roles/[roleId]/status/route.ts", "utf8");
   assert.match(source, /submit_draft_for_hr/);
