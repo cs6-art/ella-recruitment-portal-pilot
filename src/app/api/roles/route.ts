@@ -578,12 +578,13 @@ export async function POST(request: Request) {
       error,
     );
 
+    const detail = error instanceof Error ? error.message.trim() : "";
     return NextResponse.json(
       {
         success: false,
-        error: "Unable to submit the role request.",
+        error: detail || "Role automation failed without a response. Please try again.",
       },
-      { status: 400 },
+      { status: error instanceof Error && /role automation|webhook|fetch|abort|timeout/i.test(detail) ? 502 : 400 },
     );
   }
 }
