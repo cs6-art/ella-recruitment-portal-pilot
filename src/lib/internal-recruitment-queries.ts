@@ -885,9 +885,11 @@ export async function createBookingToken(input: { applicationExternalId: string;
   return db.transaction(async (tx) => {
     const [application] = await tx.select({ id: applications.id, currentStage: applications.currentStage, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
     if (!application) return { token: null, created: false, notificationHistoryId: null, error: "unknown_application" as const };
-    const tokenHash = input.tokenHash?.trim() || crypto.randomBytes(32).toString("hex");
+    const suppliedTokenHash = input.tokenHash?.trim();
+    const rawToken = suppliedTokenHash ? "" : crypto.randomBytes(32).toString("hex");
+    const tokenHash = suppliedTokenHash || crypto.createHash("sha256").update(rawToken).digest("hex");
     const portalOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.APP_URL?.trim() || (process.env.VERCEL_URL?.trim() ? `https://${process.env.VERCEL_URL.trim()}` : "https://ella-recruitment-portal-pilot.vercel.app");
-    const link = input.link || `${portalOrigin.replace(/\/$/, "")}/book/${input.kind}/${tokenHash}`;
+    const link = input.link || `${portalOrigin.replace(/\/$/, "")}/book/${input.kind}/${rawToken || tokenHash}`;
     const [token] = await tx.insert(bookingTokens).values({ applicationId: application.id, kind: input.kind, tokenHash, link, expiresAt: isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: bookingTokens.tokenHash }).returning();
     if (!token) {
       const [existing] = await tx.select().from(bookingTokens).where(eq(bookingTokens.tokenHash, tokenHash)).limit(1);
