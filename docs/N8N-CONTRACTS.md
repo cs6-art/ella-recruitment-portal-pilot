@@ -325,6 +325,13 @@ only to `cs6@mclinkgroup.com`; this does not change User_Directory permissions.
 Return `notificationStatus` as `sent`, `pending`, `failed`, or
 `not_configured`. The email link must use the payload's `portalUrl`.
 
+When `RECRUITMENT_BACKEND=postgres`, the portal commits the role transition
+first and records the role-status notification as `pending`. The target n8n
+notifier must poll `GET /api/internal/recruitment/notifications` with the
+`notifications` entity enabled, send the requester/HR email, then acknowledge
+the history ID with `POST` and `status: sent` (or `failed`). A publish is not
+rolled back because an email attempt is slow or unavailable.
+
 ## Public resume submission receipt
 
 The public resume page currently sends multipart form data to

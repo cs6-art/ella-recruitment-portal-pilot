@@ -20,7 +20,7 @@ import { getPortalConfigValue } from "@/lib/portal-config";
 import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleDetails, targetRoleStatusHistory } from "@/lib/recruitment-target-portal";
-import { updateRoleStatus } from "@/lib/internal-recruitment-queries";
+import { listRoles, renameRoleExternalId, updateRoleStatus } from "@/lib/internal-recruitment-queries";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -204,16 +204,23 @@ export async function POST(
     // Draft status, rename it to the same readable, sequential Role_ID scheme
     // used for roles created directly (e.g. CSE02), so the "DRAFT-..." id
     // never surfaces once HR, management, or the public posting sees it.
-    if (!isPostgresRecruitmentTarget() && action === "submit_draft_for_hr" && role.roleId.startsWith("DRAFT-")) {
+    if (action === "submit_draft_for_hr" && role.roleId.startsWith("DRAFT-")) {
       try {
-        const existingRoles = await getRoleRequests();
+        const existingRoles = isPostgresRecruitmentTarget()
+          ? (await listRoles()).map((existingRole) => ({ roleId: String(existingRole.externalId) }))
+          : await getRoleRequests();
         const renamedRoleId = generateRoleId(role.jobTitle, existingRoles.map((existingRole) => existingRole.roleId));
-        await updateRoleRequestFields(role.roleId, { Role_ID: renamedRoleId });
-        invalidateSheetsCache("Role_Requests");
+        if (isPostgresRecruitmentTarget()) {
+          const renamed = await renameRoleExternalId({ currentExternalId: role.roleId, nextExternalId: renamedRoleId, actorEmail: user.email });
+          if (!renamed.renamed) return jsonError(renamed.error === "role_id_conflict" ? "The generated role ID is already in use. Refresh and try again." : "The role ID could not be promoted from its draft ID.", renamed.error === "unknown_role" ? 404 : 409, { code: renamed.error });
+        } else {
+          await updateRoleRequestFields(role.roleId, { Role_ID: renamedRoleId });
+          invalidateSheetsCache("Role_Requests");
+        }
         role.roleId = renamedRoleId;
       } catch (renameError) {
-        // Keep the DRAFT- id rather than block submission if the rename fails.
         console.error("[API Role Status] Could not rename draft role ID:", renameError);
+        return jsonError("The role could not be submitted because its permanent role ID could not be assigned.", 502, { code: "ROLE_ID_PROMOTION_FAILED" });
       }
     }
 
@@ -258,7 +265,7 @@ export async function POST(
       const targetStatus = transition.target.toLowerCase().replace(/\s+/g, "_");
       const result = await updateRoleStatus({ externalId: role.roleId, newStatus: targetStatus, actorEmail: user.email, actorName: user.name, comments, actionRequestId });
       if (!result.updated && !("duplicate" in result && result.duplicate)) return jsonError(result.error === "invalid_transition" ? "The role status has changed since the page was loaded." : "The role status could not be updated.", result.error === "unknown_role" ? 404 : 409, { code: result.error });
-      return NextResponse.json({ success: true, roleId: role.roleId, previousStatus: role.status, status: transition.target, action, notificationStatus: "not_configured", actionRequestId, idempotentReplay: "duplicate" in result && result.duplicate === true });
+      return NextResponse.json({ success: true, roleId: role.roleId, previousStatus: role.status, status: transition.target, action, notificationStatus: "pending", actionRequestId, idempotentReplay: "duplicate" in result && result.duplicate === true });
     }
 
     // Status transitions use the canonical role webhook. Prefer this over the

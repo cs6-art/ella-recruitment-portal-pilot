@@ -15,6 +15,8 @@ import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { createConfiguredVoiceInterviewSlots } from "@/lib/applicant-workflow";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleDetails, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
+import { listRoles, renameRoleExternalId } from "@/lib/internal-recruitment-queries";
+import { generateRoleId } from "@/lib/role-id";
 import { serializeVoiceInterviewSlots } from "@/lib/voice-interview-availability";
 
 export const runtime = "nodejs";
@@ -108,17 +110,27 @@ export async function POST(request: Request, context: Context) {
     // a partially published state.
     const canRetryPublishedSetup = setupAction === "publish_role" && role.status === "Job Posted";
     if (canRetryPublishedSetup) {
+      let publishedRoleId = role.roleId;
+      if (isPostgresRecruitmentTarget() && publishedRoleId.startsWith("DRAFT-")) {
+        const existingRoles = await listRoles();
+        const nextRoleId = generateRoleId(role.jobTitle, existingRoles.map((existingRole) => String(existingRole.externalId)));
+        const renamed = await renameRoleExternalId({ currentExternalId: publishedRoleId, nextExternalId: nextRoleId, actorEmail: user.email });
+        if (!renamed.renamed) return NextResponse.json({ success: false, error: renamed.error === "role_id_conflict" ? "The generated role ID is already in use. Refresh and try again." : "The published role ID could not be repaired.", code: renamed.error }, { status: renamed.error === "unknown_role" ? 404 : 409 });
+        publishedRoleId = nextRoleId;
+      }
       invalidateSheetsCache("Role_Requests");
       invalidateSheetsCache("Role_Status_History");
       return NextResponse.json({
         success: true,
-        roleId: role.roleId,
+        roleId: publishedRoleId,
         status: "Job Posted",
         action: "recruitment_setup_updated",
         recruitmentSetupStatus: role.recruitmentSetupStatus || "Published",
         message: "This role is already published. No further publish action was needed.",
-        notificationStatus: "not_configured",
+        notificationStatus: "pending",
         notificationError: "",
+        published: true,
+        validation: { persisted: true, status: "Job Posted" },
       });
     }
     if (!canUseRecruitmentSetup(role.status)) return NextResponse.json({ success: false, error: `Recruitment setup is unavailable while this role is \"${role.status || "Unknown"}\". Refresh the role and try again.` }, { status: 409 });
@@ -269,7 +281,7 @@ export async function POST(request: Request, context: Context) {
     // blank fields. These are the same values sent in the payload below, and
     // n8n writes them again immediately after, so the two stay consistent.
     // Role status transitions remain owned by the workflow.
-    await updateRoleRequestFields(role.roleId, {
+    const persistedFields: Record<string, string> = {
       Voice_Interview_Availability_Mode: setup.voiceInterviewAvailabilityMode,
       Voice_Interview_Slots: serializeVoiceInterviewSlots(setup.voiceInterviewSlots),
       Voice_Interview_Auto_Start_Date: setup.voiceInterviewAutoStartDate,
@@ -325,7 +337,12 @@ export async function POST(request: Request, context: Context) {
       Recruitment_Setup_Updated_At: updatedAt,
       Recruitment_Setup_Updated_By_Name: user.name,
        Recruitment_Setup_Updated_By_Email: performerEmail,
-     });
+    };
+    if (isPostgresRecruitmentTarget()) {
+      await targetUpdateRoleFields(role.roleId, persistedFields);
+    } else {
+      await updateRoleRequestFields(role.roleId, persistedFields);
+    }
     if (isPostgresRecruitmentTarget()) {
       let voiceSlotWarning = "";
       let voiceSlotsGeneratedAt = setup.voiceInterviewSlotsGeneratedAt || "";
@@ -355,11 +372,13 @@ export async function POST(request: Request, context: Context) {
         recruitmentSetupStatus: nextRecruitmentSetupStatus,
         updatedAt,
         actionRequestId,
-        notificationStatus: "not_configured",
+        notificationStatus: setupAction === "publish_role" ? "pending" : "",
         notificationError: "",
         message: voiceSlotWarning || "Recruitment setup saved successfully.",
         voiceSlotWarning,
         voiceSlotsGeneratedAt,
+        published: setupAction === "publish_role",
+        validation: setupAction === "publish_role" ? { persisted: true, status: "Job Posted" } : undefined,
       });
     }
     let result: Record<string, unknown> = {};
