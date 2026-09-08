@@ -107,8 +107,7 @@ export async function POST(request: Request) {
       if (intake.resumeFile) storedResume = await storeResumeFile(intake.resumeFile);
       await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: invitation ? "hr_invitation" : "direct", sourceDetail: invitation?.invitationId || "public", consentAt: new Date().toISOString(), resume: storedResume ? { ...storedResume.record } : undefined });
       if (inviteToken) await markResumeScreeningInvitationUsed(inviteToken, applicationId);
-      await recordDeduction({ event: "cv_analysis", units: 1, reference: applicationId, idempotencyKey: `cv:${applicationId}`, roleId, actorEmail: parsed.data.email, note: "Postgres target application screening" });
-      return withPublicCors(request, NextResponse.json({ success: true, applicationId, roleId, status: "Pending HR Review", message: "Application submitted successfully." }, { status: 201 }));
+      return withPublicCors(request, NextResponse.json({ success: true, applicationId, roleId, status: "Pending CV Analysis", message: "Application submitted successfully and queued for CV analysis." }, { status: 201 }));
     }
 
     const webhookUrl = await getPortalConfigValue("N8N_Candidate_Application_Webhook_URL");

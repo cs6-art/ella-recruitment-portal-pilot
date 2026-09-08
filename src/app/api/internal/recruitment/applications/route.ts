@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 export const GET = withInternalAuth("applications", async (request) => {
   const params = new URL(request.url).searchParams;
-  return internalJson({ ok: true, migrated: true, items: await listApplications(params.get("stage") || undefined, params.get("roleExternalId") || undefined) });
+  const items = await listApplications(params.get("stage") || undefined, params.get("roleExternalId") || undefined);
+  return internalJson({ ok: true, migrated: true, items: params.get("screened") === "true" ? items.filter((item) => Boolean(item.screeningResult)) : items });
 });
 
 export const POST = withInternalAuth("applications", async (request) => {

@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
@@ -203,10 +205,12 @@ export async function upsertApplicant(input: { email: string; fullName?: string;
 export async function listApplications(stage?: string, roleExternalId?: string) {
   const db = getDb();
   const stageWhere = stage ? eq(applications.currentStage, stage) : undefined;
-  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail })
+  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles })
     .from(applications)
     .innerJoin(roles, eq(roles.id, applications.roleId))
-    .innerJoin(applicants, eq(applicants.id, applications.applicantId));
+    .innerJoin(applicants, eq(applicants.id, applications.applicantId))
+    .leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id))
+    .leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId));
   return (roleExternalId ? query.where(and(stageWhere, eq(roles.externalId, roleExternalId))) : query.where(stageWhere))
     .orderBy(desc(applications.updatedAt)).limit(LIMIT);
 }
@@ -259,7 +263,7 @@ export async function registerResumeFile(input: { storageRef: string; sha256: st
 
 export async function getApplication(externalId: string) {
   const db = getDb();
-  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).where(eq(applications.externalId, externalId)).limit(1);
+  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
   return row ?? null;
 }
 
@@ -501,6 +505,10 @@ export async function applyHrDecision(input: { applicationExternalId: string; st
     const [current] = await tx.select().from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
     if (!current) return { updated: false, error: "unknown_application" as const };
     if (current.currentStage !== expectedStage) return { updated: false, error: "invalid_transition" as const };
+    if (input.stage === "resume" && input.decision === "approve") {
+      const [screening] = await tx.select({ id: screeningResults.id }).from(screeningResults).where(eq(screeningResults.applicationId, current.id)).limit(1);
+      if (!screening) return { updated: false, error: "screening_required" as const };
+    }
     const [history] = await tx.select({ id: applicationStatusHistory.id }).from(applicationStatusHistory).where(eq(applicationStatusHistory.actionRequestId, input.actionRequestId)).limit(1);
     if (history) return { updated: false, duplicate: true, error: null };
     const patch = input.stage === "resume" ? { resumeHrDecision: input.decision, resumeHrDecisionAt: new Date(), resumeHrReviewer: input.actorEmail, resumeHrComments: input.comments || "" } : input.stage === "voice" ? { voiceHrDecision: input.decision, voiceHrComments: input.comments || "" } : { finalHrDecision: input.decision, finalInterviewComments: input.comments || "" };
@@ -552,6 +560,7 @@ export async function listBulkQueueForPortal(statuses: string[] = ["queued", "pr
 
 export async function enqueueBulkScreening(input: {
   roleExternalId: string;
+  applicationExternalId?: string;
   batchId?: string;
   dedupeKey: string;
   resumeSha256: string;
@@ -572,8 +581,14 @@ export async function enqueueBulkScreening(input: {
   return db.transaction(async (tx) => {
     const [role] = await tx.select({ id: roles.id }).from(roles).where(eq(roles.externalId, input.roleExternalId.trim())).limit(1);
     if (!role) return { item: null, created: false, error: "unknown_role" as const };
+    let applicationId: string | null = null;
+    if (input.applicationExternalId) {
+      const [application] = await tx.select({ id: applications.id }).from(applications).where(eq(applications.externalId, input.applicationExternalId.trim())).limit(1);
+      if (!application) return { item: null, created: false, error: "unknown_application" as const };
+      applicationId = application.id;
+    }
     const [item] = await tx.insert(bulkScreeningQueueItems).values({
-      roleId: role.id, batchId: input.batchId || "", dedupeKey: input.dedupeKey.trim(), resumeSha256: input.resumeSha256.trim().toLowerCase(),
+      roleId: role.id, applicationId, batchId: input.batchId || "", dedupeKey: input.dedupeKey.trim(), resumeSha256: input.resumeSha256.trim().toLowerCase(),
       driveFileId: input.driveFileId.trim(), filename: input.filename.trim(), fileUrl: input.fileUrl || "", mimeType: input.mimeType || "",
       candidateName: input.candidateName || "", candidateEmail: input.candidateEmail || "", preferredMobile: input.preferredMobile || "", applicantCountry: input.applicantCountry || "",
       source: input.source || "", environment: input.environment || "", isUat: input.isUat ?? false, jobId: input.jobId || "",
@@ -865,15 +880,21 @@ export async function markInterviewCalendarEvent(input: {
   });
 }
 
-export async function createBookingToken(input: { applicationExternalId: string; kind: "voice" | "final"; tokenHash: string; link?: string; expiresAt?: string }) {
+export async function createBookingToken(input: { applicationExternalId: string; kind: "voice" | "final"; tokenHash?: string; link?: string; expiresAt?: string }) {
   const db = getDb();
   return db.transaction(async (tx) => {
     const [application] = await tx.select({ id: applications.id, currentStage: applications.currentStage, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
     if (!application) return { token: null, created: false, notificationHistoryId: null, error: "unknown_application" as const };
-    const [token] = await tx.insert(bookingTokens).values({ applicationId: application.id, kind: input.kind, tokenHash: input.tokenHash, link: input.link || "", expiresAt: isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: bookingTokens.tokenHash }).returning();
+    const tokenHash = input.tokenHash?.trim() || crypto.randomBytes(32).toString("hex");
+    const portalOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.APP_URL?.trim() || (process.env.VERCEL_URL?.trim() ? `https://${process.env.VERCEL_URL.trim()}` : "https://ella-recruitment-portal-pilot.vercel.app");
+    const link = input.link || `${portalOrigin.replace(/\/$/, "")}/book/${input.kind}/${tokenHash}`;
+    const [token] = await tx.insert(bookingTokens).values({ applicationId: application.id, kind: input.kind, tokenHash, link, expiresAt: isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: bookingTokens.tokenHash }).returning();
     if (!token) {
-      const [existing] = await tx.select().from(bookingTokens).where(eq(bookingTokens.tokenHash, input.tokenHash)).limit(1);
+      const [existing] = await tx.select().from(bookingTokens).where(eq(bookingTokens.tokenHash, tokenHash)).limit(1);
       return { token: existing ?? null, created: false, notificationHistoryId: null, error: null };
+    }
+    if (input.kind === "voice" && application.currentStage === "resume_approved") {
+      await tx.update(applications).set({ currentStage: "voice_booking_pending", updatedAt: new Date() }).where(eq(applications.id, application.id));
     }
     const [history] = await tx.insert(applicationStatusHistory).values({
       applicationId: application.id,
@@ -895,6 +916,15 @@ export async function getBookingToken(tokenHash: string) {
   const db = getDb();
   const [token] = await db.select({ token: bookingTokens, applicationExternalId: applications.externalId }).from(bookingTokens).innerJoin(applications, eq(applications.id, bookingTokens.applicationId)).where(eq(bookingTokens.tokenHash, tokenHash.trim())).limit(1);
   return token ?? null;
+}
+
+export async function listApplicationBookingTokens(applicationExternalId: string) {
+  const db = getDb();
+  return db.select({ token: bookingTokens }).from(bookingTokens)
+    .innerJoin(applications, eq(applications.id, bookingTokens.applicationId))
+    .where(eq(applications.externalId, applicationExternalId.trim()))
+    .orderBy(desc(bookingTokens.createdAt)).limit(LIMIT)
+    .then((rows) => rows.map(({ token }) => token));
 }
 
 export async function markBookingTokenUsed(tokenHash: string) {
