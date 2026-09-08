@@ -23,6 +23,42 @@ test("voice billing maps the requested outcomes to the requested costs", () => {
   assert.equal(CREDIT_COST.phone_interview, 10);
 });
 
+test("Vapi no-contact ended reasons all bill as no_answer (-5), never incomplete", () => {
+  // The regression: `customer-busy` used to fall through to `incomplete` (-8)
+  // because "ended" is a terminal signal and no NO_ANSWER entry matched.
+  for (const reason of [
+    "customer-busy",
+    "customer_busy",
+    "busy",
+    "customer-did-not-answer",
+    "customer_did_not_answer",
+    "no-answer",
+    "no_answer",
+    "voicemail",
+    "no-show",
+    "no_show",
+  ]) {
+    assert.equal(
+      classifyVoiceInterviewBillingOutcome({ outcome: reason, callFinalStatus: "ended", transcript: "" }),
+      "no_answer",
+      `${reason} should bill as no_answer`,
+    );
+    assert.equal(VOICE_INTERVIEW_BILLING_COST.no_answer, 5);
+  }
+});
+
+test("the exact mis-billed live callback now classifies as no_answer", () => {
+  assert.equal(
+    classifyVoiceInterviewBillingOutcome({ callFinalStatus: "ended", outcome: "customer-busy", transcript: "" }),
+    "no_answer",
+  );
+});
+
+test("a connected-but-unfinished interview still bills as incomplete (-8)", () => {
+  assert.equal(classifyVoiceInterviewBillingOutcome({ callStatus: "ended", outcome: "incomplete", transcript: "" }), "incomplete");
+  assert.equal(VOICE_INTERVIEW_BILLING_COST.incomplete, 8);
+});
+
 test("non-terminal outcomes, cancellations, and provider failures are free", () => {
   for (const input of [
     { callStatus: "initiated" },
