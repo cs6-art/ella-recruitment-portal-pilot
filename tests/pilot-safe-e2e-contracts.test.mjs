@@ -13,18 +13,14 @@ test("Pilot outbound email safety always names the QA mailbox and preserves inte
   assert.match(invite, /testMailbox: "cs6@mclinkgroup\.com"/);
 });
 
-test("Pilot voice dispatch is opt-in and has a locked live Vapi path", () => {
+test("Pilot voice dispatch delegates provider ownership to n8n", () => {
   const route = read("src/app/api/internal/recruitment/voice/dispatch/route.ts");
-  const safety = read("src/lib/pilot-test-safety.ts");
-  assert.match(safety, /PILOT_VOICE_DRY_RUN/);
-  assert.match(safety, /Missing configuration remains fail-closed/);
-  assert.match(route, /liveCallPlaced: false/);
-  assert.match(route, /pilot-dry-run-/);
-  assert.match(route, /https:\/\/api\.vapi\.ai\/call/);
   assert.match(route, /beginVoiceAttemptDispatch/);
-  assert.match(route, /recordVoiceAttemptProviderCall/);
-  assert.match(route, /createVoiceCallLog/);
-  assert.match(route, /outboundPayload/);
+  assert.match(route, /dispatchReady: true/);
+  assert.match(route, /candidate:/);
+  assert.match(route, /phoneNumber/);
+  assert.doesNotMatch(route, /api\.vapi\.ai\/call/);
+  assert.doesNotMatch(route, /PILOT_VAPI_API_KEY/);
 });
 
 test("target voice booking creates a durable attempt only once", () => {

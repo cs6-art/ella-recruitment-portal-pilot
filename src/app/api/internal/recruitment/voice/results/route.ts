@@ -16,6 +16,8 @@ type ResultBody = {
   callStatus?: string;
   callFinalStatus?: string;
   providerEventType?: string;
+  providerEventId?: string;
+  sourceEventKey?: string;
   callCompletedAt?: string;
   raw?: unknown;
   isComplete?: boolean;
