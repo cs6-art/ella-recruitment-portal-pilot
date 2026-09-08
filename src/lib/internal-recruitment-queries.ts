@@ -959,12 +959,15 @@ export async function createBookingToken(input: { applicationExternalId: string;
     // random tokens for the same application and interview type.
     const [application] = await tx.select({ id: applications.id, currentStage: applications.currentStage, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
     if (!application) return { token: null, created: false, notificationHistoryId: null, error: "unknown_application" as const };
+    // Replays reuse the current pending/active token. Once a token has been
+    // used, expired, revoked, or otherwise terminally consumed, a deliberate
+    // re-invitation must receive a fresh token and notification identity.
     const [existingToken] = await tx.select().from(bookingTokens)
-      .where(and(eq(bookingTokens.applicationId, application.id), eq(bookingTokens.kind, input.kind)))
+      .where(and(eq(bookingTokens.applicationId, application.id), eq(bookingTokens.kind, input.kind), inArray(bookingTokens.status, ["pending", "active"])))
       .orderBy(desc(bookingTokens.createdAt)).limit(1);
     if (existingToken) {
       const [existingHistory] = await tx.select({ id: applicationStatusHistory.id }).from(applicationStatusHistory)
-        .where(eq(applicationStatusHistory.actionRequestId, `booking-invitation:${input.kind}:${input.applicationExternalId}`)).limit(1);
+        .where(eq(applicationStatusHistory.actionRequestId, `booking-invitation:${input.kind}:${input.applicationExternalId}:${existingToken.tokenHash}`)).limit(1);
       return { token: existingToken, created: false, notificationHistoryId: existingHistory?.id || null, error: null };
     }
     const suppliedTokenHash = input.tokenHash?.trim();
@@ -986,7 +989,7 @@ export async function createBookingToken(input: { applicationExternalId: string;
       previousStage: application.currentStage,
       newStage: application.currentStage,
       source: `internal_api:${input.kind}_booking_invitation`,
-      actionRequestId: `booking-invitation:${input.kind}:${input.applicationExternalId}`,
+      actionRequestId: `booking-invitation:${input.kind}:${input.applicationExternalId}:${tokenHash}`,
       notificationStatus: "pending",
       notificationEventType: input.kind === "voice" ? "voice_booking_invitation" : "final_booking_invitation",
       notificationRecipient: pilotEmailRecipient(application.email).to,

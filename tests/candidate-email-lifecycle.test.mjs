@@ -27,6 +27,12 @@ test("booking invitation and confirmation events retain redirectable intended-re
   assert.match(query, /notificationIntendedRecipient: application\.email/);
 });
 
+test("booking-token replay is idempotent while terminal tokens can be reissued", () => {
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(query, /inArray\(bookingTokens\.status, \["pending", "active"\]\)/);
+  assert.match(query, /booking-invitation:\$\{input\.kind\}:\$\{input\.applicationExternalId\}:\$\{tokenHash\}/);
+});
+
 test("notification state records attempt, sent time, provider ID, and recipient", () => {
   const query = read("src/lib/internal-recruitment-queries.ts");
   const route = read("src/app/api/internal/recruitment/notifications/route.ts");

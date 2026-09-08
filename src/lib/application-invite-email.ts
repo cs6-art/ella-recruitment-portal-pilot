@@ -35,11 +35,10 @@ export async function sendApplicationInviteEmail(input: {
         invitationId: input.invitationId,
         roleId: input.roleId,
         roleTitle: input.roleTitle,
-        // The downstream mail workflow sends candidate.email. In safe Pilot
-        // mode this is redirected at the boundary; intendedEmail remains
-        // available for audit/reporting.
+        // The downstream mail workflow sends candidate.email and copies the
+        // configured internal monitoring recipients.
         candidate: { name: input.candidateName, email: recipient.to, intendedEmail: recipient.intendedTo },
-        delivery: { to: recipient.to, intendedTo: recipient.intendedTo, redirected: recipient.redirected, testMailbox: "cs6@mclinkgroup.com" },
+        delivery: { to: recipient.to, cc: recipient.cc, intendedTo: recipient.intendedTo, redirected: recipient.redirected },
         applicationLink: input.link,
         expiresAt: input.expiresAt,
         createdBy: { name: input.createdByName, email: input.createdByEmail },

@@ -4,13 +4,17 @@ import test from "node:test";
 
 const read = (file) => fs.readFileSync(file, "utf8");
 
-test("Pilot outbound email safety always names the QA mailbox and preserves intended recipient metadata", () => {
+test("Pilot outbound email uses the applicant and explicit monitoring copies", () => {
   const safety = read("src/lib/pilot-test-safety.ts");
   const invite = read("src/lib/application-invite-email.ts");
   assert.match(safety, /PILOT_TEST_EMAIL = "cs6@mclinkgroup\.com"/);
+  assert.match(safety, /PILOT_INTERNAL_EMAIL_COPIES = \["cs6@mclinkgroup\.com", "cs9@mclinkgroup\.com"\]/);
+  assert.match(safety, /return false/);
+  assert.match(safety, /const cc = PILOT_INTERNAL_EMAIL_COPIES\.filter/);
   assert.match(safety, /intendedTo/);
   assert.match(invite, /pilotEmailRecipient\(input\.candidateEmail\)/);
-  assert.match(invite, /testMailbox: "cs6@mclinkgroup\.com"/);
+  assert.match(invite, /delivery: \{ to: recipient\.to, cc: recipient\.cc/);
+  assert.doesNotMatch(invite, /testMailbox/);
 });
 
 test("Pilot voice dispatch delegates provider ownership to n8n", () => {
