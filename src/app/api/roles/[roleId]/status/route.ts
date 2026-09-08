@@ -19,6 +19,7 @@ import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { targetRoleDetails, targetRoleStatusHistory } from "@/lib/recruitment-target-portal";
 import { updateRoleStatus } from "@/lib/internal-recruitment-queries";
 
 export const runtime = "nodejs";
@@ -167,7 +168,9 @@ export async function POST(
     // Status submission immediately follows the draft PATCH. Do not use the
     // process-local role cache here: the two requests may hit different
     // instances and the second instance may not know about the new draft yet.
-    const role = await getRoleRequestById(roleId, { fresh: true });
+    const role = isPostgresRecruitmentTarget()
+      ? await targetRoleDetails(roleId)
+      : await getRoleRequestById(roleId, { fresh: true });
     if (!role) {
       return jsonError("Role request not found.", 404);
     }
@@ -214,7 +217,9 @@ export async function POST(
       }
     }
 
-    const history = await getRoleStatusHistory(role.roleId);
+    const history = isPostgresRecruitmentTarget()
+      ? await targetRoleStatusHistory(role.roleId)
+      : await getRoleStatusHistory(role.roleId);
     const existing = history.find(
       (entry) => entry.actionRequestId === actionRequestId,
     );
