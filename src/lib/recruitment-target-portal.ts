@@ -84,7 +84,7 @@ function roleSummary(role: Record<string, unknown>): RoleRequestSummary {
 }
 
 export async function targetRoleSummaries(options: { liveOnly?: boolean } = {}) {
-  const roles = await repairPublishedRoleIds(await listRoles());
+  const roles = (await repairPublishedRoleIds(await listRoles())).filter((role) => !isArchivedRole(role as unknown as Record<string, unknown>));
   const visible = options.liveOnly
     ? roles.filter((role) => ["approved", "recruitment_setup", "job_posted"].includes(text(role.status).toLowerCase()))
     : roles;
@@ -96,6 +96,7 @@ export async function targetRoleDetails(externalId: string): Promise<RoleRequest
   const role = roles.find((candidate) => text(candidate.externalId).toLowerCase() === decodeURIComponent(externalId).trim().toLowerCase());
   if (!role) return null;
   const raw = role as unknown as Record<string, unknown>;
+  if (isArchivedRole(raw)) return null;
   const summary = roleSummary(raw);
   const setup = (raw.setup as Record<string, unknown> | undefined) || {};
   return {
@@ -112,27 +113,28 @@ export async function targetRoleDetails(externalId: string): Promise<RoleRequest
     requesterType: "HR or Management",
     reasonForRequest: text(raw.reason),
     jobDescription: text(setup.jobDescription),
-    replacementEmployee: "",
-    hodAvailabilityDates: "",
-    hodAvailabilityTimes: "",
-    voiceInterviewSlotsGeneratedAt: "",
-    customScreeningQuestion1: "",
-    customScreeningQuestion2: "",
-    aiGeneratedScreeningQuestions: "",
-    reportingManager: "",
-    workLocation: "",
-    employmentType: "",
-    jobResponsibilities: "",
-    requiredSkills: "",
-    experienceRequired: "",
-    educationRequirements: "",
-    preferredQualifications: "",
-    roleExpectations: "",
-    salaryMin: "",
-    salaryMax: "",
-    workSchedule: "",
-    noticePeriodRequirement: "",
-    salaryExpectationGuidance: "",
+    replacementEmployee: text(setup.replacementEmployee),
+    hodAvailabilityDates: text(setup.hodAvailabilityDates),
+    hodAvailabilityTimes: text(setup.hodAvailabilityTimes),
+    hodAvailabilitySlots: jsonText(setup.hodAvailabilitySlots, []),
+    voiceInterviewSlotsGeneratedAt: text(setup.voiceInterviewSlotsGeneratedAt),
+    customScreeningQuestion1: text(setup.customScreeningQuestion1),
+    customScreeningQuestion2: text(setup.customScreeningQuestion2),
+    aiGeneratedScreeningQuestions: text(setup.aiGeneratedScreeningQuestions),
+    reportingManager: text(setup.reportingManager),
+    workLocation: text(setup.workLocation),
+    employmentType: text(setup.employmentType) || "Full-Time",
+    jobResponsibilities: text(setup.jobResponsibilities),
+    requiredSkills: text(setup.requiredSkills),
+    experienceRequired: text(setup.experienceRequired),
+    educationRequirements: text(setup.educationRequirements),
+    preferredQualifications: text(setup.preferredQualifications),
+    roleExpectations: text(setup.roleExpectations),
+    salaryMin: text(setup.salaryMin),
+    salaryMax: text(setup.salaryMax),
+    workSchedule: text(setup.workSchedule),
+    noticePeriodRequirement: text(setup.noticePeriodRequirement),
+    salaryExpectationGuidance: text(setup.salaryExpectationGuidance),
     screeningCriteria: text(setup.screeningCriteria),
     requiredInterviewQuestion1: text(setup.requiredInterviewQuestion1),
     requiredInterviewQuestion2: text(setup.requiredInterviewQuestion2),
@@ -140,16 +142,16 @@ export async function targetRoleDetails(externalId: string): Promise<RoleRequest
     requiredInterviewQuestion4: text(setup.requiredInterviewQuestion4),
     requiredInterviewQuestion5: text(setup.requiredInterviewQuestion5),
     aiSystemPrompt: text(setup.aiSystemPrompt),
-    initialInterviewBookingLink: "",
-    hodInterviewBookingLink: "",
+    initialInterviewBookingLink: text(setup.initialInterviewBookingLink),
+    hodInterviewBookingLink: text(setup.hodInterviewBookingLink),
     licenseOrCertificateRequired: text(setup.licenseOrCertificateRequired),
     evaluationFieldToggles: jsonText(raw.evaluationFields, []),
     customEvaluationFields: Array.isArray(raw.evaluationFields) ? raw.evaluationFields as { key: string; label: string; description: string }[] : [],
-    salaryDisclosureStatus: "",
-    experienceRequirementStatus: "",
-    licenseRequirementStatus: "",
-    hodInterviewRequired: "",
-    finalInterviewVenue: "",
+    salaryDisclosureStatus: text(setup.salaryDisclosureStatus),
+    experienceRequirementStatus: text(setup.experienceRequirementStatus),
+    licenseRequirementStatus: text(setup.licenseRequirementStatus),
+    hodInterviewRequired: text(setup.hodInterviewRequired),
+    finalInterviewVenue: text(setup.finalInterviewVenue),
     recruitmentSetupUpdatedAt: text(raw.updatedAt),
     recruitmentSetupUpdatedByName: "",
     recruitmentSetupUpdatedByEmail: text(raw.updatedByEmail),
@@ -169,6 +171,11 @@ export async function targetRoleDetails(externalId: string): Promise<RoleRequest
     lastUpdatedByEmail: text(raw.updatedByEmail),
     source: text(raw.source),
   };
+}
+
+function isArchivedRole(role: Record<string, unknown>) {
+  const archive = role.archive;
+  return Boolean(archive && typeof archive === "object" && text((archive as Record<string, unknown>).archivedAt));
 }
 
 /** Repair published rows created before temporary draft IDs were promoted. */
@@ -358,9 +365,41 @@ export async function targetUpdateRoleFields(roleId: string, fields: Record<stri
     voiceInterviewAutoStartDate: fields.Voice_Interview_Auto_Start_Date,
     voiceInterviewAutoEndDate: fields.Voice_Interview_Auto_End_Date,
     voiceInterviewTimezone: fields.Voice_Interview_Timezone,
+    replacementEmployee: fields.Replacement_Employee,
+    employmentType: fields.Employment_Type,
+    hodAvailabilityDates: fields.HOD_Availability_Dates,
+    hodAvailabilityTimes: fields.HOD_Availability_Times,
+    hodAvailabilitySlots: fields.HOD_Availability_Slots,
+    customScreeningQuestion1: fields.Custom_Screening_Question_1,
+    customScreeningQuestion2: fields.Custom_Screening_Question_2,
+    aiGeneratedScreeningQuestions: fields.AI_Screening_Questions,
+    reportingManager: fields.Reporting_Manager,
+    workLocation: fields.Work_Location,
+    jobResponsibilities: fields.Job_Responsibilities,
+    requiredSkills: fields.Required_Skills,
+    experienceRequired: fields.Experience_Required,
+    educationRequirements: fields.Education_Requirements,
+    preferredQualifications: fields.Preferred_Qualifications,
+    roleExpectations: fields.Role_Expectations,
+    salaryMin: fields.Salary_Minimum,
+    salaryMax: fields.Salary_Maximum,
+    workSchedule: fields.Work_Schedule,
+    noticePeriodRequirement: fields.Notice_Period_Requirement,
+    salaryExpectationGuidance: fields.Salary_Expectation_Guidance,
+    interviewBehavior: fields.Interview_Behavior,
+    initialInterviewBookingLink: fields.Initial_Interview_Booking_Link,
+    hodInterviewBookingLink: fields.HOD_Interview_Booking_Link,
+    salaryDisclosureStatus: fields.Salary_Disclosure_Status,
+    experienceRequirementStatus: fields.Experience_Requirement_Status,
+    licenseRequirementStatus: fields.License_Requirement_Status,
+    hodInterviewRequired: fields.HOD_Interview_Required,
+    finalInterviewVenue: fields.Final_Interview_Venue,
+    voiceInterviewSlotsGeneratedAt: fields.Voice_Interview_Slots_Generated_At,
   };
   let availabilityRules: unknown = undefined;
   try { if (fields.Interview_Availability_Rules) availabilityRules = JSON.parse(fields.Interview_Availability_Rules); } catch { availabilityRules = []; }
+  let evaluationFields: unknown = undefined;
+  try { if (fields.Evaluation_Fields) evaluationFields = JSON.parse(fields.Evaluation_Fields); } catch { evaluationFields = []; }
   return updateRoleDetails({
     externalId: roleId,
     status: normalizeTargetRoleStatus(fields.Status) || (["true", "1", "yes"].includes(text(fields.Posting_Confirmed).toLowerCase()) ? "job_posted" : undefined),
@@ -372,6 +411,7 @@ export async function targetUpdateRoleFields(roleId: string, fields: Record<stri
     targetHiringDate: fields.Target_Hiring_Date || null,
     recruitmentSetupStatus: text(fields.Recruitment_Setup_Status).toLowerCase().replaceAll(" ", "_") || undefined,
     setup,
+    evaluationFields,
     availabilityRules,
     hrCalendarEmail: fields.HOD_Email,
     applicationLink: fields.Application_Link,

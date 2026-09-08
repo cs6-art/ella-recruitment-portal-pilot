@@ -92,6 +92,18 @@ test("target write primitives are transactional, idempotent, and concurrency-saf
   assert.match(source, /WITH claimed AS/);
 });
 
+test("role CRUD routes use the Postgres target for edit and archive", () => {
+  const editPage = read("src/app/roles/[roleId]/edit/page.tsx");
+  const detailsRoute = read("src/app/api/roles/[roleId]/route.ts");
+  const targetPortal = read("src/lib/recruitment-target-portal.ts");
+  const queries = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(editPage, /isPostgresRecruitmentTarget\(\)[\s\S]*targetRoleDetails\(roleId\)/);
+  assert.match(detailsRoute, /const updatedFields/);
+  assert.match(detailsRoute, /targetUpdateRoleFields\(access\.role\.roleId, updatedFields\)/);
+  assert.match(queries, /archive: \{ archivedAt:/);
+  assert.match(targetPortal, /isArchivedRole/);
+});
+
 test("pilot target allowlist is explicit and does not use a global bypass", () => {
   const source = read("src/lib/internal-api.ts");
   const env = read(".env.local");

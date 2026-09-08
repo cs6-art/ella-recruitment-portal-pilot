@@ -169,6 +169,7 @@ export async function updateRoleDetails(input: {
   approvedBy?: string;
   approvedAt?: string | null;
   latestComments?: string;
+  archive?: unknown;
   actionRequestId?: string;
   actorName?: string;
   action?: string;
@@ -196,6 +197,7 @@ export async function updateRoleDetails(input: {
     ...(input.approvedBy === undefined ? {} : { approvedBy: input.approvedBy }),
     ...(input.approvedAt === undefined ? {} : { approvedAt: isoOrNull(input.approvedAt) }),
     ...(input.latestComments === undefined ? {} : { latestComments: input.latestComments }),
+    ...(input.archive === undefined ? {} : { archive: input.archive as object }),
     updatedByEmail: input.actorEmail,
     updatedAt: new Date(),
   };
@@ -226,8 +228,8 @@ export async function updateRoleDetails(input: {
 export async function archiveRole(input: { externalId: string; actorEmail: string; actorName?: string; actionRequestId: string }) {
   return updateRoleDetails({
     externalId: input.externalId,
-    status: "archived",
     latestComments: "Role archived by portal operator",
+    archive: { archivedAt: new Date().toISOString(), archivedBy: input.actorEmail, reason: "deleted_from_portal" },
     actionRequestId: input.actionRequestId,
     actorEmail: input.actorEmail,
     actorName: input.actorName,
