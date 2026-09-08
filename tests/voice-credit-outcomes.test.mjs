@@ -23,11 +23,36 @@ test("voice billing maps the requested outcomes to the requested costs", () => {
   assert.equal(CREDIT_COST.phone_interview, 10);
 });
 
+test("non-terminal outcomes, cancellations, and provider failures are free", () => {
+  for (const input of [
+    { callStatus: "initiated" },
+    { callStatus: "in_progress", transcript: "" },
+    { outcome: "cancelled" },
+    { outcome: "provider_failure" },
+    { outcome: "system_failure" },
+  ]) assert.equal(classifyVoiceInterviewBillingOutcome(input), null);
+});
+
 test("booking no longer owns the Postgres Pilot voice charge", () => {
   const workflow = readFileSync(new URL("../src/lib/applicant-workflow.ts", import.meta.url), "utf8");
-  const targetBooking = workflow.slice(workflow.indexOf("async function reserveTargetBooking"), workflow.indexOf("async function reserveBookingInternal"));
-  assert.doesNotMatch(targetBooking, /recordDeduction/);
-  assert.doesNotMatch(targetBooking, /assertCreditsAvailable/);
+  const booking = workflow.slice(workflow.indexOf("async function reserveTargetBooking"), workflow.indexOf("if (kind === \"final\")", workflow.indexOf("async function reserveBookingInternal")));
+  assert.doesNotMatch(booking, /recordDeduction/);
+  assert.doesNotMatch(booking, /recordVoiceInterviewDeduction/);
+});
+
+test("terminal billing is owned by voice result ingestion and remains idempotent per attempt", () => {
+  const queries = readFileSync(new URL("../src/lib/internal-recruitment-queries.ts", import.meta.url), "utf8");
+  const credits = readFileSync(new URL("../src/lib/ella-credits.ts", import.meta.url), "utf8");
+  const booking = queries.slice(queries.indexOf("export async function bookInterviewSlot"), queries.indexOf("export async function calendarEventQueue"));
+  assert.doesNotMatch(booking, /recordVoiceInterviewDeduction/);
+  assert.match(credits, /idempotencyKey: `voice-attempt:\$\{input\.attemptId\}`/);
+  assert.match(queries, /export async function ingestVoiceResult/);
+  assert.match(queries, /export async function createVoiceCallLog/);
+});
+
+test("dispatch retains the maximum voice charge preflight", () => {
+  const dispatch = readFileSync(new URL("../src/app/api/internal/recruitment/voice/dispatch/route.ts", import.meta.url), "utf8");
+  assert.match(dispatch, /assertCreditsAvailable\(1, "phone_interview"\)/);
 });
 
 test("voice result and log routes expose outcome billing fields", () => {
