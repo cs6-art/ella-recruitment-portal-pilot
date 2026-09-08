@@ -85,6 +85,13 @@ test("Postgres booking responses convert Date timestamps into local date and tim
   assert.doesNotMatch(source, /text\(slot\.startsAt\)\.slice\(11, 16\)/);
 });
 
+test("Postgres role statuses preserve HR review action labels", () => {
+  const source = fs.readFileSync("src/lib/recruitment-target-portal.ts", "utf8");
+  assert.match(source, /replace\(\/\\bHr\\b\/g, "HR"\)/);
+  assert.match(source, /previousStatus: label\(history\.previousStatus\)/);
+  assert.match(source, /newStatus: label\(history\.newStatus\)/);
+});
+
 test("draft submission has an audited transition into HR review", () => {
   const source = fs.readFileSync("src/app/api/roles/[roleId]/status/route.ts", "utf8");
   assert.match(source, /submit_draft_for_hr/);

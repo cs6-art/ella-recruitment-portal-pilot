@@ -41,7 +41,12 @@ function jsonText(value: unknown, fallback: unknown) {
 }
 
 function label(value: unknown) {
-  return text(value).replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+  return text(value)
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/\bHr\b/g, "HR")
+    .replace(/\bAi\b/g, "AI")
+    .replace(/\bHod\b/g, "HOD");
 }
 
 function roleSummary(role: Record<string, unknown>): RoleRequestSummary {
@@ -172,8 +177,8 @@ export async function targetRoleStatusHistory(externalId: string) {
     changedAt: text(history.changedAt),
     changedByName: text(history.changedByName),
     changedByEmail: text(history.changedByEmail),
-    previousStatus: text(history.previousStatus),
-    newStatus: text(history.newStatus),
+    previousStatus: label(history.previousStatus),
+    newStatus: label(history.newStatus),
     comments: text(history.comments),
     actionSource: text(history.actionSource),
     actionRequestId: text(history.actionRequestId),
