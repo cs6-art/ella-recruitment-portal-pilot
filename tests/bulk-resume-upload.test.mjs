@@ -110,7 +110,7 @@ test("a resume the workflow rejects synchronously is not billed", () => {
   const deductionIdx = route.indexOf("recordDeduction({");
   assert.ok(statusIdx > 0 && deductionIdx > statusIdx, "workflow status must be parsed before the deduction");
   assert.match(route, /rejectedSynchronously = \/\^\(failed\|skipped\)\$\/i\.test\(terminalStatus\)/);
-  assert.match(route, /if \(!rejectedSynchronously\) \{\s*creditedFiles \+= 1;/);
+  assert.match(route, /if \(!rejectedSynchronously\) \{\s*await recordDeduction\(\{/);
   // the deduction call sits inside that guard
   const guardBlock = route.slice(route.indexOf("if (!rejectedSynchronously)"), route.indexOf("if (!rejectedSynchronously)") + 600);
   assert.match(guardBlock, /recordDeduction\(\{/);
@@ -183,9 +183,9 @@ test("bulk status reconciliation supports historical identifiers and expires sta
   assert.match(queue, /byResumeSha/);
   assert.match(queue, /byDriveFileId/);
   assert.match(queue, /byRoleAndFileName/);
-  assert.match(route, /STALE_PROCESSING_MS = 30 \* 60 \* 1000/);
+  assert.match(route, /STALE_PROCESSING_MS/);
   assert.match(route, /Applicant result could not be persisted/);
-  assert.match(route, /Screening did not produce a saved result within 30 minutes/);
+  assert.match(route, /Screening did not produce a saved result within 10 minutes/);
 });
 
 test("bulk retries stale queue states only when no saved applicant evidence exists", () => {
@@ -196,7 +196,7 @@ test("bulk retries stale queue states only when no saved applicant evidence exis
   assert.match(upload, /recoveryMayBypassTerminalState = immediateUatRecovery/);
   assert.match(upload, /const savedScreeningEvidence = await getBulkResumeScreeningEvidence\(queue\)/);
   assert.match(upload, /const shouldSkip = previousIsActive && !recoveryMayBypassTerminalState && \(previousHasSavedResult \|\| previousRunIsFresh\)/);
-  assert.match(upload, /const STALE_PROCESSING_MS = 30 \* 60 \* 1000/);
+  assert.match(upload, /STALE_PROCESSING_MS/);
 });
 
 test("uploaded resumes keep a traceable Drive link back to the candidate/application", () => {

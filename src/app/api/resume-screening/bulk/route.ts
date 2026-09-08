@@ -3,13 +3,11 @@ import { NextResponse } from "next/server";
 
 import { canManagePipeline } from "@/lib/access-control";
 import { getBulkResumeQueue, getBulkResumeQueueTotals, getBulkResumeScreeningEvidence } from "@/lib/candidate-applications";
-import { bulkResumeEnvironment, bulkResumeIsUatMarked, productionUatBatchId } from "@/lib/bulk-resume-config";
+import { bulkResumeEnvironment, bulkResumeIsUatMarked, productionUatBatchId, STALE_PROCESSING_MS } from "@/lib/bulk-resume-config";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
-const STALE_PROCESSING_MS = 30 * 60 * 1000;
-
 function errorResponse(error: string, status: number) {
   return NextResponse.json({ success: false, error }, { status });
 }
@@ -38,7 +36,7 @@ export async function GET(request: Request) {
     // Keep the table on the latest state per resume, but count every saved
     // queue event separately so retries and repeated failed batches are not
     // silently collapsed into one historical total.
-    const roleTotals = await getBulkResumeQueueTotals(roleId, { fresh: true });
+    const historicalTotals = await getBulkResumeQueueTotals(roleId, { fresh: true });
     // Reconcile every current queue item, including historical rows that were
     // written before jobId existed. The evidence matcher falls back through
     // application ID, SHA, Drive file ID, role-scoped filename, and unique
@@ -65,7 +63,7 @@ export async function GET(request: Request) {
         return { ...item, status: "Processing", errorMessage: "Waiting for the saved applicant screening result." };
       }
       if (rawStatus === "processing" && queueAge(item) >= STALE_PROCESSING_MS) {
-        return { ...item, status: "Failed", errorMessage: "Screening did not produce a saved result within 30 minutes." };
+        return { ...item, status: "Failed", errorMessage: "Screening did not produce a saved result within 10 minutes." };
       }
       return item;
     });
@@ -86,7 +84,12 @@ export async function GET(request: Request) {
       environment: bulkResumeIsUatMarked() ? "uat" : bulkResumeEnvironment(),
       isUat: bulkResumeIsUatMarked(),
       counts,
-      roleTotals,
+      // The cards below the batch bar describe the role's current queue
+      // state, not the number of append-only retry events. Returning the same
+      // reconciled counts used by the items prevents Processing and Completed
+      // from disagreeing with the live batch bar.
+      roleTotals: counts,
+      historicalTotals,
       items: items.slice(0, 50),
       updatedAt: new Date().toISOString(),
     });

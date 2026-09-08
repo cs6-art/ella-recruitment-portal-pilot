@@ -261,6 +261,9 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
         jobTitle: result.draft?.role.jobTitle || current.jobTitle,
         department: result.draft?.role.department || current.department,
         jobDescription: result.draft?.role.jobDescription || current.jobDescription,
+        // The parser intentionally does not invent a hiring date. Do not let
+        // its empty placeholder erase a date HR already selected.
+        targetHiringDate: result.draft?.role.targetHiringDate || current.targetHiringDate,
         aiGeneratedScreeningQuestions: questions,
         recruitmentSetupDraft: result.draft?.recruitmentSetup || current.recruitmentSetupDraft,
       }));

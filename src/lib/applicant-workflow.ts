@@ -14,6 +14,7 @@ import { getPortalConfigNumber } from "@/lib/portal-config";
 import { cachedSheetsRead, invalidateSheetsCache } from "@/lib/sheets-cache";
 import type { ResumeFileRecord } from "@/lib/resume-files";
 import { generateAutomaticVoiceInterviewSlots, type VoiceInterviewSlot } from "@/lib/voice-interview-availability";
+import { normalizeDateOnly, normalizeTimeOnly } from "@/lib/date-only";
 import { countActiveVoiceInterviews, isActiveVoiceInterviewStatus, MAX_CONCURRENT_VOICE_INTERVIEWS, voiceCapacitySlotId, voiceInterviewConcurrencyKey } from "@/lib/voice-interview-capacity";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isCurrentCalendarMonth, isStandardFinalInterviewSlot, isStandardVoiceInterviewSlot, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
@@ -312,9 +313,12 @@ function slotFrom(row: Row): BookingSlot {
     slotId: field(row, "Slot_ID", "Slot ID"),
     interviewType: field(row, "Interview_Type", "Interview Type"),
     roleId: field(row, "Role_ID", "Role ID"),
-    date: field(row, "Date"),
-    startTime: field(row, "Start_Time", "Start Time"),
-    endTime: field(row, "End_Time", "End Time"),
+    // Legacy workbooks contain both locale-formatted dates and time cells
+    // returned as full timestamps. Normalize at the boundary so a malformed
+    // Sheets representation cannot reach the candidate booking page.
+    date: normalizeDateOnly(field(row, "Date")),
+    startTime: normalizeTimeOnly(field(row, "Start_Time", "Start Time")),
+    endTime: normalizeTimeOnly(field(row, "End_Time", "End Time")),
     timezone: field(row, "Timezone", "Time Zone"),
     status: field(row, "Status"),
     applicationId: field(row, "Application_ID", "Application ID"),
@@ -336,9 +340,9 @@ function rowAsVoiceCapacitySlot(row: Row): BookingSlot {
     slotId: field(row, "Slot_ID", "Slot ID"),
     interviewType: field(row, "Interview_Type", "Interview Type"),
     roleId: field(row, "Role_ID", "Role ID"),
-    date: field(row, "Date"),
-    startTime: field(row, "Start_Time", "Start Time"),
-    endTime: field(row, "End_Time", "End Time"),
+    date: normalizeDateOnly(field(row, "Date")),
+    startTime: normalizeTimeOnly(field(row, "Start_Time", "Start Time")),
+    endTime: normalizeTimeOnly(field(row, "End_Time", "End Time")),
     timezone: field(row, "Timezone", "Time Zone") || "Asia/Singapore",
     status: field(row, "Status"),
   };
@@ -559,8 +563,8 @@ export async function getBookingContext(kind: BookingKind, token: string): Promi
   if (expiry && Date.parse(expiry) < Date.now()) return null;
   const roleId = field(row, "Role_ID", "Role ID");
   const role = await getRoleRequestById(roleId);
-  const currentSlot = slotsData.rows
-    .map((slot, index) => ({ slot: slotFrom(slot), index }))
+  const normalizedSlots = slotsData.rows.map((raw, index) => ({ raw, slot: slotFrom(raw), index }));
+  const currentSlot = normalizedSlots
     .find(({ slot }) => slot.applicationId === field(row, "Application ID", "Application_ID")
       && slot.interviewType === bookingKindValue(kind)
       && ["booked", "completed", "no show"].includes((slot.status || "").toLowerCase()));
@@ -575,12 +579,12 @@ export async function getBookingContext(kind: BookingKind, token: string): Promi
   // token without its own booked slot is still invalid for late contenders.
   if (["used", "booked", "expired", "revoked"].includes(tokenStatus.toLowerCase()) && !currentSlot && !canRescheduleNoShow) return null;
   const status = tokenStatus || (kind === "voice" ? field(row, "Booking_Token_Status") : field(row, "Status 3 (Final Interview)"));
-  const legacySlots = slotsData.rows
-    .filter((slot) => field(slot, "Role_ID", "Role ID").toLowerCase() === roleId.toLowerCase())
-    .filter((slot) => field(slot, "Interview_Type", "Interview Type") === bookingKindValue(kind))
-    .filter((slot) => field(slot, "Status").toLowerCase() === "available")
-    .filter((slot) => isBeforeTargetHiringDate(field(slot, "Date"), role?.targetHiringDate))
-    .map(slotFrom)
+  const legacySlots = normalizedSlots
+    .map(({ slot }) => slot)
+    .filter((slot) => slot.roleId.toLowerCase() === roleId.toLowerCase())
+    .filter((slot) => slot.interviewType === bookingKindValue(kind))
+    .filter((slot) => (slot.status || "").toLowerCase() === "available")
+    .filter((slot) => isBeforeTargetHiringDate(slot.date, role?.targetHiringDate))
     .filter((slot) => kind !== "voice" || isStandardVoiceInterviewSlot(slot))
     .filter((slot) => kind !== "final" || isStandardFinalInterviewSlot(slot))
     .filter((slot) => isCurrentCalendarMonth(slot.date, slot.timezone || role?.voiceInterviewTimezone || "Asia/Singapore"))
@@ -593,10 +597,10 @@ export async function getBookingContext(kind: BookingKind, token: string): Promi
     })
     .filter((slot) => slot.slotId)
     .sort(slotSort);
-  const legacyAll = slotsData.rows
-    .filter((slot) => field(slot, "Role_ID", "Role ID").toLowerCase() === roleId.toLowerCase())
-    .filter((slot) => field(slot, "Interview_Type", "Interview Type") === bookingKindValue(kind))
-    .map(slotFrom);
+  const legacyAll = normalizedSlots
+    .map(({ slot }) => slot)
+    .filter((slot) => slot.roleId.toLowerCase() === roleId.toLowerCase())
+    .filter((slot) => slot.interviewType === bookingKindValue(kind));
   const existingKeys = new Set(legacyAll.map((slot) => slotKey(slot)));
   const virtual = role
     ? virtualSlotsForRole(role, bookingKindValue(kind) as "AI Voice Interview" | "Final Interview")
@@ -665,11 +669,11 @@ export async function getBookingContext(kind: BookingKind, token: string): Promi
     }
   }
   const scheduledDate = currentSlot?.slot.date || (kind === "voice"
-    ? field(row, "Voice_Interview_Scheduled_Date")
-    : field(row, "Final_Interview_Scheduled_Date"));
+    ? normalizeDateOnly(field(row, "Voice_Interview_Scheduled_Date"))
+    : normalizeDateOnly(field(row, "Final_Interview_Scheduled_Date")));
   const scheduledTime = currentSlot?.slot.startTime || (kind === "voice"
-    ? field(row, "Voice_Interview_Scheduled_Time")
-    : field(row, "Final_Interview_Scheduled_Time"));
+    ? normalizeTimeOnly(field(row, "Voice_Interview_Scheduled_Time"))
+    : normalizeTimeOnly(field(row, "Final_Interview_Scheduled_Time")));
   const timezone = currentSlot?.slot.timezone || (kind === "voice"
     ? field(row, "Voice_Interview_Timezone")
     : field(row, "Final_Interview_Timezone"));
@@ -1001,10 +1005,11 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
     virtualReservation = true;
   }
   if (!matchingSlot) throw new Error("The selected interview slot is no longer available.");
+  const normalizedMatchingSlot = slotFrom(matchingSlot);
   // Re-check at confirmation time so a page opened earlier cannot reserve a
   // slot that has since started or passed.
-  if (!hasValidFutureTime({ date: field(matchingSlot, "Date"), startTime: field(matchingSlot, "Start_Time", "Start Time"), timezone: field(matchingSlot, "Timezone", "Time Zone") || "Asia/Singapore" })) throw new Error("This interview slot has already passed. Choose another time.");
-  if (!isBeforeTargetHiringDate(field(matchingSlot, "Date"), role?.targetHiringDate)) throw new Error("This interview slot is outside the role's target hiring window. Choose another slot.");
+  if (!hasValidFutureTime(normalizedMatchingSlot)) throw new Error("This interview slot has already passed. Choose another time.");
+  if (!isBeforeTargetHiringDate(normalizedMatchingSlot.date, role?.targetHiringDate)) throw new Error("This interview slot is outside the role's target hiring window. Choose another slot.");
   const matchingStatus = field(matchingSlot, "Status").toLowerCase();
   const matchingVoiceSlot = kind === "voice" && field(matchingSlot, "Interview_Type", "Interview Type").toLowerCase().includes("voice");
   const matchingVoiceBooking = matchingVoiceSlot && isActiveVoiceInterviewStatus(matchingStatus);
@@ -1046,7 +1051,7 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
   const calendarHodEmail = finalCalendarEmail;
   if (kind === "final") {
     if (!calendarHodEmail) throw new Error("No HR interviewer email is configured for this role.");
-    const calendar = await checkCalendarAvailability({ hodEmail: calendarHodEmail, date: field(matchingSlot, "Date"), startTime: field(matchingSlot, "Start_Time", "Start Time"), endTime: field(matchingSlot, "End_Time", "End Time"), timezone: field(matchingSlot, "Timezone", "Time Zone") || "Asia/Singapore" });
+    const calendar = await checkCalendarAvailability({ hodEmail: calendarHodEmail, date: normalizedMatchingSlot.date, startTime: normalizedMatchingSlot.startTime, endTime: normalizedMatchingSlot.endTime, timezone: normalizedMatchingSlot.timezone || "Asia/Singapore" });
     if (!calendar.checked) throw new Error(calendar.reason === "not_connected" ? "Connect the HR Google Calendar before booking an HR interview." : "Unable to verify the HR Google Calendar. Please try again.");
     if (!calendar.available) throw new Error("This HR interview time is now blocked by the HR Google Calendar. Choose another time.");
   }
@@ -1100,9 +1105,9 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
       { tab: "High_Match_Profile", row: applicantRow, header: "Final_Status", value: "AI Voice Interview Scheduled" },
       { tab: "High_Match_Profile", row: applicantRow, header: "Voice_Interview_Booking_Status", value: "Booked" },
       { tab: "High_Match_Profile", row: applicantRow, header: "Booking_Token_Status", value: "Used" },
-      { tab: "High_Match_Profile", row: applicantRow, header: "Voice_Interview_Scheduled_Date", value: field(matchingSlot, "Date") },
-      { tab: "High_Match_Profile", row: applicantRow, header: "Voice_Interview_Scheduled_Time", value: field(matchingSlot, "Start_Time", "Start Time") },
-      { tab: "High_Match_Profile", row: applicantRow, header: "Voice_Interview_Timezone", value: field(matchingSlot, "Timezone", "Time Zone") },
+      { tab: "High_Match_Profile", row: applicantRow, header: "Voice_Interview_Scheduled_Date", value: normalizedMatchingSlot.date },
+      { tab: "High_Match_Profile", row: applicantRow, header: "Voice_Interview_Scheduled_Time", value: normalizedMatchingSlot.startTime },
+      { tab: "High_Match_Profile", row: applicantRow, header: "Voice_Interview_Timezone", value: normalizedMatchingSlot.timezone || "Asia/Singapore" },
       { tab: "High_Match_Profile", row: applicantRow, header: "Booking_Completed_At", value: now },
       { tab: "High_Match_Profile", row: applicantRow, header: "Last_Updated", value: now },
     );
@@ -1114,9 +1119,9 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
     const applicantRecord = applicantData.rows[applicantIndex];
     const queueData = await readSheet("Voice_Call_Queue", "X");
     const voiceMaxAttempts = Math.max(1, Math.round(await getPortalConfigNumber("Voice_Call_Max_Attempts", 3)));
-    const scheduledDate = field(matchingSlot, "Date");
-    const scheduledTime = field(matchingSlot, "Start_Time", "Start Time");
-    const scheduledTimezone = field(matchingSlot, "Timezone", "Time Zone") || "Asia/Singapore";
+    const scheduledDate = normalizedMatchingSlot.date;
+    const scheduledTime = normalizedMatchingSlot.startTime;
+    const scheduledTimezone = normalizedMatchingSlot.timezone || "Asia/Singapore";
     let scheduledAt = "";
     try {
       scheduledAt = scheduledInstant(scheduledDate, scheduledTime, scheduledTimezone).toISOString();
@@ -1161,9 +1166,9 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
       { tab: "High_Match_Profile", row: applicantRow, header: "Final_Status", value: "Final Interview Scheduled" },
       { tab: "High_Match_Profile", row: applicantRow, header: "Final_Interview_Booking_Token_Status", value: "Used" },
       { tab: "High_Match_Profile", row: applicantRow, header: "Final_Interview_Booking_Token_Used_At", value: now },
-      { tab: "High_Match_Profile", row: applicantRow, header: "Final_Interview_Scheduled_Date", value: field(matchingSlot, "Date") },
-      { tab: "High_Match_Profile", row: applicantRow, header: "Final_Interview_Scheduled_Time", value: field(matchingSlot, "Start_Time", "Start Time") },
-      { tab: "High_Match_Profile", row: applicantRow, header: "Final_Interview_Timezone", value: field(matchingSlot, "Timezone", "Time Zone") || "Asia/Singapore" },
+      { tab: "High_Match_Profile", row: applicantRow, header: "Final_Interview_Scheduled_Date", value: normalizedMatchingSlot.date },
+      { tab: "High_Match_Profile", row: applicantRow, header: "Final_Interview_Scheduled_Time", value: normalizedMatchingSlot.startTime },
+      { tab: "High_Match_Profile", row: applicantRow, header: "Final_Interview_Timezone", value: normalizedMatchingSlot.timezone || "Asia/Singapore" },
       { tab: "High_Match_Profile", row: applicantRow, header: "Last_Updated", value: now },
     );
     const interviewerName = finalCalendarEmail ? "HR" : "";
@@ -1231,10 +1236,10 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
           summary: `HR Interview: ${context.candidateName} — ${context.selectedRole}`,
           description: `HR interview for ${context.candidateName} (${context.applicationId}) applying for ${context.selectedRole}.\n\nCandidate email: ${context.email}${finalVenue ? `\n\nVenue:\n${finalVenue}` : ""}`,
           location: finalVenue,
-          date: field(matchingSlot, "Date"),
-          startTime: field(matchingSlot, "Start_Time", "Start Time"),
-          endTime: field(matchingSlot, "End_Time", "End Time"),
-          timezone: field(matchingSlot, "Timezone", "Time Zone"),
+          date: normalizedMatchingSlot.date,
+          startTime: normalizedMatchingSlot.startTime,
+          endTime: normalizedMatchingSlot.endTime,
+          timezone: normalizedMatchingSlot.timezone || "Asia/Singapore",
           // Booking is already protected by the fixed demo cutoff and
           // synthetic-record guard above. Invite the eligible applicant so
           // Google Calendar sends the actual interview invitation.
@@ -1276,7 +1281,7 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
     status: "Booked",
     applicationId: context.applicationId,
   };
-  return { ...context, preferredMobile: confirmedMobile, bookingStatus: kind === "voice" ? "Scheduled" : "Interview Scheduled", scheduledDate: field(matchingSlot, "Date"), scheduledTime: field(matchingSlot, "Start_Time", "Start Time"), timezone: field(matchingSlot, "Timezone", "Time Zone"), currentSlot: bookedSlot, slots: [] };
+  return { ...context, preferredMobile: confirmedMobile, bookingStatus: kind === "voice" ? "Scheduled" : "Interview Scheduled", scheduledDate: normalizedMatchingSlot.date, scheduledTime: normalizedMatchingSlot.startTime, timezone: normalizedMatchingSlot.timezone, currentSlot: bookedSlot, slots: [] };
 }
 
 async function syncFinalTrackingBooking(input: {

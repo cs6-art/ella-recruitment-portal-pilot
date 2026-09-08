@@ -92,6 +92,50 @@ function roleDraftFields(input: Record<string, unknown>, roleId: string, now: st
   };
 }
 
+const ROLE_WEBHOOK_MAX_ATTEMPTS = 3;
+const ROLE_WEBHOOK_TIMEOUT_MS = 15_000;
+
+function isRetryableRoleWebhookStatus(status: number) {
+  return status === 429 || status >= 500;
+}
+
+async function postRoleRequestWebhook(url: string, secret: string, payload: Record<string, unknown>) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < ROLE_WEBHOOK_MAX_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ROLE_WEBHOOK_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Webhook-Secret": secret,
+        },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!isRetryableRoleWebhookStatus(response.status) || attempt === ROLE_WEBHOOK_MAX_ATTEMPTS - 1) return response;
+
+      // Drain a retryable response before the next attempt and respect a
+      // server-provided Retry-After value when n8n is rate limiting us.
+      await response.text();
+      const retryAfterSeconds = Number(response.headers.get("retry-after") || "");
+      const delayMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? Math.min(retryAfterSeconds * 1000, 5000)
+        : Math.min(1000 * (attempt + 1), 5000);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    } catch (error) {
+      lastError = error;
+      if (attempt === ROLE_WEBHOOK_MAX_ATTEMPTS - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * (attempt + 1), 5000)));
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("The role request webhook did not respond.");
+}
+
 export async function GET(request: Request) {
   console.log("[API Roles] GET started");
 
@@ -281,17 +325,6 @@ export async function POST(request: Request) {
     const webhookSecret =
       process.env.N8N_WEBHOOK_SECRET;
 
-    if (!webhookUrl || !webhookSecret) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "The n8n webhook is not configured.",
-        },
-        { status: 503 },
-      );
-    }
-
     const submissionId = crypto.randomUUID();
     const existingRoles = await getRoleRequests();
     const roleId = generateRoleId(
@@ -450,27 +483,15 @@ export async function POST(request: Request) {
       source: "Role Creation Website",
     };
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    let webhookResponse: Response;
-    try {
-      webhookResponse = await fetch(
-        webhookUrl,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Webhook-Secret":
-              webhookSecret,
-          },
-          body: JSON.stringify(payload),
-          cache: "no-store",
-          signal: controller.signal,
-        },
-      );
-    } finally {
-      clearTimeout(timeout);
+    const configuredWebhookUrl = webhookUrl.trim();
+    const configuredWebhookSecret = webhookSecret?.trim() || "";
+    if (!configuredWebhookUrl || !configuredWebhookSecret) {
+      return NextResponse.json({ success: false, error: "The n8n role automation is not configured. Contact an administrator." }, { status: 503 });
     }
+
+    // Retry transient n8n failures, including HTTP 429 rate limits, but never
+    // report success unless the automation returns a valid response.
+    const webhookResponse = await postRoleRequestWebhook(configuredWebhookUrl, configuredWebhookSecret, payload);
 
     const raw =
       await webhookResponse.text();
@@ -509,14 +530,12 @@ export async function POST(request: Request) {
         result,
       );
 
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "The role request could not be saved.",
-        },
-        { status: 502 },
-      );
+      const detail = typeof result.error === "string"
+        ? result.error
+        : typeof result.message === "string"
+          ? result.message
+          : `n8n returned HTTP ${webhookResponse.status}`;
+      return NextResponse.json({ success: false, error: `Role automation failed: ${detail}` }, { status: 502 });
     }
 
     if (
@@ -530,14 +549,7 @@ export async function POST(request: Request) {
         { returnedRoleId, returnedStatus, roleId, initialStatus },
       );
 
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "The role request workflow did not persist the required foundation fields.",
-        },
-        { status: 502 },
-      );
+      return NextResponse.json({ success: false, error: "Role automation returned an incomplete response. The role was not created; please retry." }, { status: 502 });
     }
 
     // getRoleRequests() above cached the pre-creation snapshot, and n8n has
