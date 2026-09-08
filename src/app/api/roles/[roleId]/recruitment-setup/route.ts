@@ -189,6 +189,7 @@ export async function POST(request: Request, context: Context) {
       roleId: role.roleId,
       Role_ID: role.roleId,
       Job_Title: role.jobTitle,
+      Target_Hiring_Date: role.targetHiringDate || "",
       actionRequestId,
       expectedCurrentStatus: role.status,
       setupAction,
@@ -282,6 +283,7 @@ export async function POST(request: Request, context: Context) {
     // n8n writes them again immediately after, so the two stay consistent.
     // Role status transitions remain owned by the workflow.
     const persistedFields: Record<string, string> = {
+      Target_Hiring_Date: role.targetHiringDate || "",
       Voice_Interview_Availability_Mode: setup.voiceInterviewAvailabilityMode,
       Voice_Interview_Slots: serializeVoiceInterviewSlots(setup.voiceInterviewSlots),
       Voice_Interview_Auto_Start_Date: setup.voiceInterviewAutoStartDate,

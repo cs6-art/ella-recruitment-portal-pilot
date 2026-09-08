@@ -417,6 +417,7 @@ export async function POST(request: Request) {
       Notification_Status: "",
       Notification_Error: "",
       Recruitment_Setup_Status: "Draft",
+      Target_Hiring_Date: input.targetHiringDate,
       Salary_Disclosure_Status: "",
       Experience_Requirement_Status: "",
       License_Requirement_Status: "",

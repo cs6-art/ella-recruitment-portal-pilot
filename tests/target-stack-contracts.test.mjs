@@ -118,6 +118,13 @@ test("target role creation persists the complete role and setup snapshot", () =>
   assert.match(queries, /db\.transaction\(async \(tx\) => \{/);
 });
 
+test("role creation and publishing preserve the target hiring date column", () => {
+  const createRoute = read("src/app/api/roles/route.ts");
+  const setupRoute = read("src/app/api/roles/[roleId]/recruitment-setup/route.ts");
+  assert.match(createRoute, /Target_Hiring_Date: input\.targetHiringDate/);
+  assert.match(setupRoute, /Target_Hiring_Date: role\.targetHiringDate \|\| ""/);
+});
+
 test("pilot target allowlist is explicit and does not use a global bypass", () => {
   const source = read("src/lib/internal-api.ts");
   const env = read(".env.local");
