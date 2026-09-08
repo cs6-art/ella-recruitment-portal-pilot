@@ -935,11 +935,9 @@ async function reserveTargetBooking(kind: BookingKind, token: string, slotId: st
   if (kind === "voice" && !isPreferredMobileValid(confirmedMobile)) throw new Error("Confirm a valid preferred mobile number in international format.");
   const context = await targetBookingContext(kind, hashToken(token));
   if (!context) throw new Error("This booking link is invalid or expired.");
-  if (kind === "voice" && !context.currentSlot) await assertCreditsAvailable(1, "phone_interview");
   if (kind === "voice" && confirmedMobile) await targetUpdateApplicantProfile({ applicationId: context.applicationId, candidateName: context.candidateName, email: context.email, preferredMobile: confirmedMobile, applicantCountry: "" });
   const result = await targetReserveBooking(kind, hashToken(token), slotId, "public-booking");
   if (!result.booked) throw new Error(result.error || "The selected interview slot is no longer available.");
-  if (kind === "voice" && !context.currentSlot) await recordDeduction({ event: "phone_interview", units: 1, reference: context.applicationId, idempotencyKey: `voice:${context.applicationId}`, actorEmail: context.email, note: "Postgres target voice interview booking" });
   return result;
 }
 

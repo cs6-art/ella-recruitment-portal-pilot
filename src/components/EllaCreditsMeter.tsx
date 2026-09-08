@@ -17,6 +17,8 @@ type EllaCreditsMeterProps = {
 type CreditPricing = {
   cvAnalysis: number;
   phoneInterview: number;
+  phoneInterviewNoAnswer: number;
+  phoneInterviewIncomplete: number;
 };
 
 type MeterData = { balance: number; pricing: CreditPricing | null };
@@ -35,7 +37,7 @@ async function fetchMeterData(): Promise<MeterData | null> {
   const data = await response.json();
   if (data?.success !== true || !Number.isFinite(Number(data.balance))) return null;
   const pricing = data.pricing && Number.isFinite(Number(data.pricing.cvAnalysis)) && Number.isFinite(Number(data.pricing.phoneInterview))
-    ? { cvAnalysis: Number(data.pricing.cvAnalysis), phoneInterview: Number(data.pricing.phoneInterview) }
+    ? { cvAnalysis: Number(data.pricing.cvAnalysis), phoneInterview: Number(data.pricing.phoneInterview), phoneInterviewNoAnswer: Number(data.pricing.phoneInterviewNoAnswer ?? 5), phoneInterviewIncomplete: Number(data.pricing.phoneInterviewIncomplete ?? 8) }
     : null;
   return { balance: Number(data.balance), pricing };
 }
@@ -94,7 +96,7 @@ export default function EllaCreditsMeter({ variant = "inline", collapsed = false
   return (
     <div
       className={`${styles.meter} ${variantClass} ${tone} ${flash ? styles.changed : ""} ${balance === null ? styles.loading : ""}`}
-      title={pricing ? `Credits — ${formatCredits(pricing.cvAnalysis)} per AI CV analysis, ${formatCredits(pricing.phoneInterview)} per AI phone interview` : "Credits"}
+      title={pricing ? `Credits — ${formatCredits(pricing.cvAnalysis)} per AI CV analysis, AI voice interview: ${formatCredits(pricing.phoneInterview)} complete, ${formatCredits(pricing.phoneInterviewIncomplete)} incomplete, ${formatCredits(pricing.phoneInterviewNoAnswer)} no answer` : "Credits"}
       aria-live="polite"
       aria-label={`Credits remaining: ${balance === null ? "loading" : formatCredits(shown)}`}
     >

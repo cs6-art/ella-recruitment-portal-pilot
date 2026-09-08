@@ -18,6 +18,8 @@ type ResultBody = {
   providerEventType?: string;
   callCompletedAt?: string;
   raw?: unknown;
+  isComplete?: boolean;
+  completenessScore?: number | null;
 };
 
 function isResultBody(value: unknown): value is ResultBody {
@@ -30,7 +32,7 @@ export const POST = withInternalAuth("voice_results", async (request) => {
   if (!body) return internalJson({ ok: false, error: "applicationExternalId is required" }, 422);
   const result = await ingestVoiceResult(body);
   if (!result.applicationId) return internalJson({ ok: false, error: "unknown_application" }, 404);
-  return internalJson({ ok: true, migrated: true, inserted: result.inserted });
+  return internalJson({ ok: true, migrated: true, inserted: result.inserted, chargedCredits: result.chargedCredits || 0, billingOutcome: result.billingOutcome || null });
 });
 
 // Reconciliation poll: ?ids=APP-1,APP-2

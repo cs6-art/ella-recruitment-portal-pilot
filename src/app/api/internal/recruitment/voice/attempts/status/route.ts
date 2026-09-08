@@ -13,5 +13,5 @@ export const POST = withInternalAuth("voice_attempts", async (request) => {
   if (!body) return internalJson({ ok: false, error: "attemptId_and_status_required" }, 422);
   const result = await updateVoiceAttemptStatus({ attemptId: String(body.attemptId), status: String(body.status), outcome: typeof body.outcome === "string" ? body.outcome : undefined, providerCallId: typeof body.providerCallId === "string" ? body.providerCallId : undefined, retryAfter: typeof body.retryAfter === "string" ? body.retryAfter : undefined });
   if (result.error) return internalJson({ ok: false, error: result.error }, 422);
-  return internalJson({ ok: true, migrated: true, updated: result.updated });
+  return internalJson({ ok: true, migrated: true, updated: result.updated, chargedCredits: result.chargedCredits || 0, billingOutcome: result.billingOutcome || null });
 });
