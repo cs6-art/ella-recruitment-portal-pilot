@@ -12,6 +12,7 @@ import {
   getScreeningInvitation,
   listActiveBookingRoleIds,
   listApplicationSlots,
+  listApplicationBookingTokens,
   listApplications,
   listBulkQueueForPortal,
   listBookingSlots,
@@ -248,7 +249,26 @@ export async function targetCreateApplication(input: { externalId: string; roleI
   const resumeFileId = input.resume ? await registerResumeFile({ storageRef: input.resume.fileId, sha256: input.resume.sha256, filename: input.resume.fileName, mimeType: input.resume.mimeType, size: input.resume.size, kind: input.resume.kind, expiresAt: input.resume.expiresAt }) : null;
   const result = await createApplication({ externalId: input.externalId, roleExternalId: input.roleId, applicantEmail: input.email, applicantName: input.candidateName, phone: input.phone, preferredMobile: input.preferredMobile, applicantCountry: input.applicantCountry, source: input.source, sourceDetail: input.sourceDetail, consentAt: input.consentAt, resumeFileId: resumeFileId || undefined });
   if (!result.application) throw new Error(result.error || "Unable to create the application.");
-  return result;
+  if (input.resume) {
+    const queued = await enqueueBulkScreening({
+      applicationExternalId: result.application.externalId,
+      roleExternalId: input.roleId,
+      dedupeKey: result.application.externalId,
+      resumeSha256: input.resume.sha256,
+      driveFileId: input.resume.fileId,
+      filename: input.resume.fileName,
+      mimeType: input.resume.mimeType,
+      candidateName: input.candidateName,
+      candidateEmail: input.email,
+      preferredMobile: input.preferredMobile,
+      applicantCountry: input.applicantCountry,
+      source: "upload",
+      environment: "production",
+    });
+    if (queued.error) throw new Error(queued.error);
+    return { ...result, screeningQueued: true, screeningQueueCreated: queued.created };
+  }
+  return { ...result, screeningQueued: false, screeningQueueCreated: false };
 }
 
 export async function targetGetScreeningInvitation(token: string) {
@@ -342,6 +362,7 @@ export async function targetApplicantSummaries() {
   const rows = await listApplications();
   return rows.map((row) => {
     const application = row.application as unknown as Record<string, unknown>;
+    const screening = row.screeningResult as unknown as Record<string, unknown> | null;
     return {
       applicationId: text(application.externalId),
       candidateName: text(application.candidateName),
@@ -351,10 +372,10 @@ export async function targetApplicantSummaries() {
       selectedRole: text(row.roleTitle),
       department: text(row.departmentSnapshot),
       appliedAt: text(application.appliedAt),
-      matchScore: "",
+      matchScore: screening?.matchScore == null ? "" : String(screening.matchScore),
       recommendation: label(application.currentStage),
-      cvRecommendation: text(application.resumeHrDecision),
-      resumeStatus: text(application.resumeHrDecision),
+      cvRecommendation: text(screening?.recommendation || application.resumeHrDecision),
+      resumeStatus: text(application.resumeHrDecision || (screening ? "Processed" : "")),
       voiceStatus: text(application.voiceHrDecision),
       finalInterviewStatus: text(application.finalHrDecision),
       finalStatus: label(application.currentStage),
@@ -399,7 +420,52 @@ export async function targetApplicantDetails(externalId: string) {
   const row = await getApplication(externalId);
   if (!row) return null;
   const [summary] = (await targetApplicantSummaries()).filter((candidate) => candidate.applicationId === externalId);
-  return summary ? { ...summary, roleDetails: await targetRoleDetails(row.roleExternalId), aiAnalysisSummary: "", interviewQuestions: "", resumeText: "", resumeFileId: "", resumeFileName: "", resumeFileMimeType: "", resumeFileExpiresAt: "", strengths: "", gaps: "", resumeDecision: "", resumeDecisionDate: "", resumeReviewer: "", resumeComments: "", resumeEvaluationFields: [], voiceDecision: "", voiceComments: "", voiceScore: "", voiceRecommendation: "", voiceSummary: "", voiceStrengths: "", voiceConcerns: "", voiceCommunicationQuality: "", voiceAnswerCompleteness: "", voiceFollowUpQuestions: "", voiceEvaluationFields: [], voiceTranscript: "", voiceScheduledDate: "", voiceScheduledTime: "", voiceBookingStatus: "", voiceBookingLink: "", bookingTokenStatus: "", bookingTokenExpiresAt: "", finalBookingStatus: "", finalScheduledDate: "", finalScheduledTime: "", finalTimezone: "", finalBookingLink: "", finalBookingTokenExpiresAt: "", finalComments: "", lastUpdated: text((row.application as unknown as Record<string, unknown>).updatedAt) } : null;
+  if (!summary) return null;
+  const application = row.application as unknown as Record<string, unknown>;
+  const screening = row.screeningResult as unknown as Record<string, unknown> | null;
+  const resumeFile = row.resumeFile as unknown as Record<string, unknown> | null;
+  const slots = await listApplicationSlots(externalId);
+  const tokens = await listApplicationBookingTokens(externalId);
+  const voiceSlot = slots.map(({ slot }) => slot as unknown as Record<string, unknown>).find((slot) => text(slot.interviewType) === "voice");
+  const finalSlot = slots.map(({ slot }) => slot as unknown as Record<string, unknown>).find((slot) => text(slot.interviewType) === "final");
+  const voiceToken = tokens.find((token) => token.kind === "voice");
+  const finalToken = tokens.find((token) => token.kind === "final");
+  const date = (value: unknown) => value instanceof Date ? value.toISOString() : text(value);
+  return {
+    ...summary,
+    roleDetails: await targetRoleDetails(row.roleExternalId),
+    aiAnalysisSummary: text(screening?.summary),
+    interviewQuestions: text(screening?.interviewQuestions),
+    resumeText: "",
+    resumeFileId: text(resumeFile?.storageRef),
+    resumeFileName: text(resumeFile?.filename),
+    resumeFileMimeType: text(resumeFile?.mimeType),
+    resumeFileExpiresAt: date(resumeFile?.expiresAt),
+    strengths: text(screening?.strengths),
+    gaps: text(screening?.gaps),
+    resumeDecision: text(application.resumeHrDecision),
+    resumeDecisionDate: date(application.resumeHrDecisionAt),
+    resumeReviewer: text(application.resumeHrReviewer),
+    resumeComments: text(application.resumeHrComments),
+    resumeEvaluationFields: [],
+    voiceDecision: text(application.voiceHrDecision),
+    voiceComments: text(application.voiceHrComments),
+    voiceScore: "", voiceRecommendation: "", voiceSummary: "", voiceStrengths: "", voiceConcerns: "", voiceCommunicationQuality: "", voiceAnswerCompleteness: "", voiceFollowUpQuestions: "", voiceEvaluationFields: [], voiceTranscript: "",
+    voiceScheduledDate: date(voiceSlot?.startsAt).slice(0, 10),
+    voiceScheduledTime: date(voiceSlot?.startsAt).slice(11, 16),
+    voiceBookingStatus: text(voiceToken?.status || voiceSlot?.status),
+    voiceBookingLink: text(voiceToken?.link),
+    bookingTokenStatus: text(voiceToken?.status),
+    bookingTokenExpiresAt: date(voiceToken?.expiresAt),
+    finalBookingStatus: text(finalToken?.status || finalSlot?.status),
+    finalScheduledDate: date(finalSlot?.startsAt).slice(0, 10),
+    finalScheduledTime: date(finalSlot?.startsAt).slice(11, 16),
+    finalTimezone: text(finalSlot?.timezone),
+    finalBookingLink: text(finalToken?.link),
+    finalBookingTokenExpiresAt: date(finalToken?.expiresAt),
+    finalComments: text(application.finalInterviewComments),
+    lastUpdated: date(application.updatedAt),
+  };
 }
 
 export async function targetActiveBookingLinkRoleIds() {
