@@ -6,6 +6,8 @@ import RecruitmentSetupEditor from "@/components/RecruitmentSetupEditor";
 import RoleRequestForm, { type RoleRequestFormValues } from "@/components/RoleRequestForm";
 import { canEditRoleRequest, canViewRole } from "@/lib/access-control";
 import { getRoleRequestById } from "@/lib/google-sheets";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { targetRoleDetails } from "@/lib/recruitment-target-portal";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +38,9 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
 
   const { roleId: encodedRoleId } = await params;
   const roleId = decodeURIComponent(encodedRoleId);
-  const role = await getRoleRequestById(roleId, { fresh: true });
+  const role = isPostgresRecruitmentTarget()
+    ? await targetRoleDetails(roleId)
+    : await getRoleRequestById(roleId, { fresh: true });
   if (!role || !canViewRole(user, role) || !canEditRoleRequest(user, role)) redirect(`/roles/${encodeURIComponent(roleId)}`);
 
   const initialValues: Partial<RoleRequestFormValues> = {

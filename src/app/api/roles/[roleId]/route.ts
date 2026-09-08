@@ -256,7 +256,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     };
     const updatedAt = new Date().toISOString();
 
-    await updateRoleRequestFields(access.role.roleId, {
+    const updatedFields = {
       Request_Type: input.requestType,
       Department: input.department,
       Job_Title: input.jobTitle,
@@ -277,7 +277,13 @@ export async function PATCH(request: Request, context: RouteContext) {
       Last_Updated_By_Name: access.user.name,
       Last_Updated_By_Email: access.user.email,
       ...preservedSetupFields,
-    });
+    };
+    if (isPostgresRecruitmentTarget()) {
+      const updated = await targetUpdateRoleFields(access.role.roleId, updatedFields);
+      if (!updated) return NextResponse.json({ success: false, error: "The role request could not be updated." }, { status: 404 });
+    } else {
+      await updateRoleRequestFields(access.role.roleId, updatedFields);
+    }
 
     return NextResponse.json({ success: true, roleId: access.role.roleId, status: access.role.status, message: "Role request updated successfully." });
   } catch (error) {
