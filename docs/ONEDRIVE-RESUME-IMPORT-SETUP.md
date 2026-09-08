@@ -1,5 +1,18 @@
 # OneDrive resume import — Microsoft Entra setup
 
+**Implementation status (2026-09-03): code COMPLETE.** OAuth connect/callback/
+status/disconnect, Graph token refresh, folder browse, file download, the
+shared bulk-intake pipeline (SHA-256 dedupe, `Bulk_Resume_Queue`, one
+`cv_analysis` credit per screened file, batch-complete notification), the
+**8-file-per-submission cap** (now identical to Google Drive import — was 25),
+10 MB / PDF-DOC-DOCX validation, and every failure path in the table below are
+all built and unit-tested (`tests/onedrive-import.test.mjs`).
+
+**Remaining = external configuration only (`BLOCKED-MANUAL`):** the Microsoft
+Entra app registration and its three secrets below. No live authorization has
+been performed. Until the env vars are set the controls are inert (by design)
+and every route returns a clean "not configured" response.
+
 The "Connect OneDrive" / "Choose from OneDrive" controls on the Resume
 Screening page are **inert until** a Microsoft Entra (Azure AD) app registration
 is created and its credentials are set as environment variables. This is a

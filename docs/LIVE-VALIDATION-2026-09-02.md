@@ -140,8 +140,8 @@ Corrected against current deployed behaviour:
   as not available**.
 - New **"About this pilot version"** callout summarising the RBAC + limits.
 - Added **new-applicant notifications** subsection (with the per-device
-  localStorage limitation) and an **Ella help assistant** subsection (noting it
-  may still reply "being configured" during the pilot).
+  localStorage limitation) and an **Ella help assistant** subsection. HelpBot is
+  hidden and unavailable until `OPENAI_API_KEY` is configured.
 - Added **voice interview** and **face-to-face interview (venue/address in the
   invite + on the completed booking)** subsections.
 
