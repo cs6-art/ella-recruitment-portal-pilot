@@ -21,16 +21,25 @@ export const VOICE_INTERVIEW_BILLING_COST = {
   incomplete: CREDIT_COST.phone_interview_incomplete,
 } as const satisfies Record<VoiceInterviewBillingOutcome, number>;
 
+// Vapi terminal ended-reasons where the candidate was never reached. These are
+// billed as `no_answer` (-5), never as `incomplete` (-8): no interview started.
 const NO_ANSWER_SIGNALS = new Set([
   "no_answer",
   "no-answer",
   "no answer",
   "no_show",
   "no-show",
+  "no show",
   "busy",
+  "customer-busy",
+  "customer_busy",
+  "customer busy",
   "voicemail",
   "customer-did-not-answer",
   "customer_did_not_answer",
+  "customer did not answer",
+  "did-not-answer",
+  "did_not_answer",
 ]);
 
 const INCOMPLETE_SIGNALS = new Set([
