@@ -42,6 +42,18 @@ function jsonText(value: unknown, fallback: unknown) {
   }
 }
 
+function listText(value: unknown) {
+  if (Array.isArray(value)) return value.map(text).filter(Boolean).join(", ");
+  const raw = text(value);
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(text).filter(Boolean).join(", ") : raw;
+  } catch {
+    return raw;
+  }
+}
+
 function label(value: unknown) {
   return text(value)
     .replaceAll("_", " ")
@@ -71,7 +83,7 @@ function roleSummary(role: Record<string, unknown>): RoleRequestSummary {
     postingConfirmed: posted ? "TRUE" : "FALSE",
     postedAt: text(role.postedAt),
     jobDescription: text((role.setup as Record<string, unknown> | undefined)?.jobDescription),
-    postingChannels: jsonText((role.setup as Record<string, unknown> | undefined)?.postingChannels, []),
+    postingChannels: listText((role.setup as Record<string, unknown> | undefined)?.postingChannels),
     hodEmail: text(role.hrCalendarEmail),
     hodAvailabilitySlots: jsonText((role.setup as Record<string, unknown> | undefined)?.hodAvailabilitySlots, []),
     interviewAvailabilityRules: jsonText(role.availabilityRules, []),
@@ -107,7 +119,7 @@ export async function targetRoleDetails(externalId: string): Promise<RoleRequest
     voiceInterviewAutoEndDate: text(raw.voiceInterviewAutoEndDate),
     voiceInterviewTimezone: text(raw.voiceInterviewTimezone),
     interviewAvailabilityRules: jsonText(raw.availabilityRules, []),
-    postingChannels: jsonText((setup as Record<string, unknown>).postingChannels, []),
+    postingChannels: listText((setup as Record<string, unknown>).postingChannels),
     submittedByEmail: text(raw.submittedByEmail),
     submittedByName: text(raw.requesterName),
     requesterType: "HR or Management",
@@ -145,7 +157,7 @@ export async function targetRoleDetails(externalId: string): Promise<RoleRequest
     initialInterviewBookingLink: text(setup.initialInterviewBookingLink),
     hodInterviewBookingLink: text(setup.hodInterviewBookingLink),
     licenseOrCertificateRequired: text(setup.licenseOrCertificateRequired),
-    evaluationFieldToggles: jsonText(raw.evaluationFields, []),
+    evaluationFieldToggles: listText(raw.evaluationFields),
     customEvaluationFields: Array.isArray(raw.evaluationFields) ? raw.evaluationFields as { key: string; label: string; description: string }[] : [],
     salaryDisclosureStatus: text(setup.salaryDisclosureStatus),
     experienceRequirementStatus: text(setup.experienceRequirementStatus),

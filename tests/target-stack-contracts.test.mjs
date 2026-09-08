@@ -104,6 +104,20 @@ test("role CRUD routes use the Postgres target for edit and archive", () => {
   assert.match(targetPortal, /isArchivedRole/);
 });
 
+test("target role creation persists the complete role and setup snapshot", () => {
+  const createRoute = read("src/app/api/roles/route.ts");
+  const queries = read("src/lib/internal-recruitment-queries.ts");
+  for (const field of ["replacementEmployee", "employmentType", "customScreeningQuestion1", "aiGeneratedScreeningQuestions", "reportingManager", "workLocation", "jobResponsibilities", "requiredSkills", "experienceRequired", "educationRequirements", "preferredQualifications", "roleExpectations", "salaryMin", "salaryMax", "workSchedule", "noticePeriodRequirement", "salaryExpectationGuidance"]) {
+    assert.match(createRoute, new RegExp(`${field}:`), `create route omitted ${field}`);
+  }
+  assert.match(createRoute, /submittedByEmail: sessionEmail/);
+  assert.match(createRoute, /recruitmentSetupStatus: "Draft", setup, evaluationFields: setupDraft\.customEvaluationFields/);
+  assert.match(createRoute, /evaluationFields: setupDraft\.customEvaluationFields/);
+  assert.match(queries, /submittedByEmail: input\.submittedByEmail/);
+  assert.match(queries, /setup: \(input\.setup \|\| \{\}\) as object/);
+  assert.match(queries, /db\.transaction\(async \(tx\) => \{/);
+});
+
 test("pilot target allowlist is explicit and does not use a global bypass", () => {
   const source = read("src/lib/internal-api.ts");
   const env = read(".env.local");
