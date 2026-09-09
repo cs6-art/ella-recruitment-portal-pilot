@@ -86,6 +86,34 @@ test("applicant stage labels are presentation-only and used consistently", () =>
   assert.match(labels, /must continue to\n\s*\* send and persist the canonical status key/);
 });
 
+test("stored list values render as readable HR text, not raw JSON arrays", async () => {
+  const { parseTextList } = await import("../src/lib/formatters.ts");
+  assert.deepEqual(parseTextList('["7+ years accounting","SAP Business One"]'), ["7+ years accounting", "SAP Business One"]);
+  assert.deepEqual(parseTextList("- First point\n- Second point"), ["First point", "Second point"]);
+  assert.deepEqual(parseTextList("Just one paragraph."), ["Just one paragraph."]);
+  assert.deepEqual(parseTextList(""), []);
+  assert.deepEqual(parseTextList("[not json"), ["[not json"]);
+
+  const detail = read("src/app/applicants/[applicationId]/page.tsx");
+  assert.match(detail, /<ReadableList value=\{applicant\.strengths\}/);
+  assert.match(detail, /<ReadableList value=\{applicant\.gaps\}/);
+  assert.match(detail, /<ReadableList value=\{applicant\.voiceStrengths\}/);
+  assert.match(detail, /questionItems\(value\)/);
+});
+
+test("voice review reflects the real call outcome when no interview took place", () => {
+  const target = read("src/lib/recruitment-target-portal.ts");
+  const detail = read("src/app/applicants/[applicationId]/page.tsx");
+  const applications = read("src/lib/candidate-applications.ts");
+  assert.match(target, /applicationVoiceReview\(externalId\)/);
+  assert.match(target, /classifyVoiceInterviewBillingOutcome\(/);
+  assert.match(target, /voiceCallStatus/);
+  assert.match(target, /storedResumeText\(resumeFile\)/);
+  assert.match(applications, /voiceCallStatus: field\(record, "Status 2 \(Voice Interview\)"/);
+  assert.match(detail, /applicantStageLabel\(voiceCallStatus\)/);
+  assert.match(detail, /voiceNotConducted/);
+});
+
 test("eligible final bookings invite the applicant through Google Calendar", () => {
   const workflow = read("src/lib/applicant-workflow.ts");
   const applications = read("src/lib/candidate-applications.ts");

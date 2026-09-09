@@ -687,6 +687,17 @@ export async function ingestVoiceResult(input: { applicationExternalId: string; 
   return { ...result, chargedCredits, billingOutcome };
 }
 
+/** Latest voice-call artefacts for one application, for the HR review view. */
+export async function applicationVoiceReview(externalId: string) {
+  const db = getDb();
+  const [application] = await db.select({ id: applications.id }).from(applications).where(eq(applications.externalId, externalId.trim())).limit(1);
+  if (!application) return null;
+  const [result] = await db.select().from(voiceInterviewResults).where(eq(voiceInterviewResults.applicationId, application.id)).orderBy(desc(voiceInterviewResults.createdAt)).limit(1);
+  const [log] = await db.select().from(voiceCallLogs).where(eq(voiceCallLogs.applicationId, application.id)).orderBy(desc(voiceCallLogs.createdAt)).limit(1);
+  const [attempt] = await db.select().from(voiceCallAttempts).where(eq(voiceCallAttempts.applicationId, application.id)).orderBy(desc(voiceCallAttempts.attemptNumber), desc(voiceCallAttempts.createdAt)).limit(1);
+  return { result: result ?? null, log: log ?? null, attempt: attempt ?? null };
+}
+
 export async function voiceResultStatuses(applicationExternalIds: string[]) {
   const db = getDb();
   if (applicationExternalIds.length === 0) return [];
