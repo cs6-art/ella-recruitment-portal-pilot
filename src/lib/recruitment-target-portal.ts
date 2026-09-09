@@ -23,6 +23,8 @@ import {
   markInterviewCalendarEvent,
   markScreeningInvitationUsed,
   updateApplicationProfile,
+  deleteApplication,
+  markInterviewNoShow as markTargetInterviewNoShow,
   listRoles,
   registerResumeFile,
   updateRoleDetails,
@@ -32,7 +34,7 @@ import {
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { generateRoleId } from "@/lib/role-id";
-import { checkCalendarAvailability, createFinalInterviewEvent } from "@/lib/google-calendar";
+import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent } from "@/lib/google-calendar";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isStandardFinalInterviewSlot } from "@/lib/interview-availability-rules";
 
 function text(value: unknown) {
@@ -588,6 +590,26 @@ export async function targetApplicantSummaries() {
       nextAction: label(application.currentStage),
     };
   });
+}
+
+export async function targetDeleteApplicant(externalId: string) {
+  const row = await getApplication(externalId);
+  if (!row) return { deleted: false, error: "unknown_application" as const };
+  const slots = await listApplicationSlots(externalId);
+  const finalBookedSlots = slots
+    .map(({ slot }) => slot as unknown as Record<string, unknown>)
+    .filter((slot) => text(slot.interviewType) === "final" && text(slot.status) === "booked" && text(slot.calendarEventId));
+  for (const slot of finalBookedSlots) {
+    const calendarResult = await deleteFinalInterviewEvent(text(row.roleHrCalendarEmail), text(slot.calendarEventId), { allowDemoSideEffect: true });
+    if (!calendarResult.deleted) {
+      return { deleted: false, error: "calendar_event_delete_failed" as const };
+    }
+  }
+  return deleteApplication(externalId);
+}
+
+export async function targetMarkInterviewNoShow(slotId: string, actor: { email: string; name: string }) {
+  return markTargetInterviewNoShow(slotId, actor.email, actor.name);
 }
 
 export async function targetApplicantMetrics() {

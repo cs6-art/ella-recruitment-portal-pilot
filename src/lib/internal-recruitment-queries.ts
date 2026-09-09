@@ -10,6 +10,7 @@ import type { LedgerAppend } from "@/lib/ella-credits-store";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
 import {
   applicants,
+  applicantAliases,
   applications,
   applicationStatusHistory,
   bookingTokens,
@@ -345,6 +346,107 @@ export async function updateApplicationProfile(input: {
       }).where(eq(applicants.id, current.applicantId));
     }
     return { application, error: null };
+  });
+}
+
+/**
+ * Remove one application and its dependent workflow records atomically.
+ * Application IDs are the portal's public identity; the person row is only
+ * removed when it no longer has another application.
+ */
+export async function deleteApplication(externalId: string) {
+  const db = getDb();
+  const cleanExternalId = externalId.trim();
+  if (!cleanExternalId) return { deleted: false, error: "invalid_application" as const };
+
+  return db.transaction(async (tx) => {
+    const [current] = await tx.select({ id: applications.id, applicantId: applications.applicantId })
+      .from(applications)
+      .where(eq(applications.externalId, cleanExternalId))
+      .for("update")
+      .limit(1);
+    if (!current) return { deleted: false, error: "unknown_application" as const };
+
+    const activeStatuses = ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "retry_scheduled"];
+    const activeAttempts = await tx.select({ id: voiceCallAttempts.id })
+      .from(voiceCallAttempts)
+      .where(and(eq(voiceCallAttempts.applicationId, current.id), inArray(voiceCallAttempts.status, activeStatuses)))
+      .limit(1);
+    if (activeAttempts.length > 0) return { deleted: false, error: "voice_interview_in_progress" as const };
+
+    // Delete children first because the recruitment migration deliberately
+    // keeps foreign keys restrictive instead of silently cascading workflow
+    // history and calendar data.
+    await tx.delete(voiceCallLogs).where(eq(voiceCallLogs.applicationId, current.id));
+    await tx.delete(voiceInterviewResults).where(eq(voiceInterviewResults.applicationId, current.id));
+    await tx.delete(voiceCallAttempts).where(eq(voiceCallAttempts.applicationId, current.id));
+    await tx.delete(screeningResults).where(eq(screeningResults.applicationId, current.id));
+    await tx.delete(screeningInvitations).where(eq(screeningInvitations.applicationId, current.id));
+    await tx.delete(bulkScreeningQueueItems).where(eq(bulkScreeningQueueItems.applicationId, current.id));
+    await tx.delete(interviewSlots).where(eq(interviewSlots.applicationId, current.id));
+    await tx.delete(bookingTokens).where(eq(bookingTokens.applicationId, current.id));
+    await tx.delete(applicationStatusHistory).where(eq(applicationStatusHistory.applicationId, current.id));
+    await tx.delete(applications).where(eq(applications.id, current.id));
+
+    const remaining = await tx.select({ id: applications.id })
+      .from(applications)
+      .where(eq(applications.applicantId, current.applicantId))
+      .limit(1);
+    if (remaining.length === 0) {
+      await tx.delete(applicantAliases).where(eq(applicantAliases.applicantId, current.applicantId));
+      await tx.delete(applicants).where(eq(applicants.id, current.applicantId));
+    }
+    return { deleted: true, error: null } as const;
+  });
+}
+
+export async function markInterviewNoShow(slotId: string, actorEmail = "", actorName = "") {
+  const db = getDb();
+  const cleanSlotId = slotId.trim();
+  if (!cleanSlotId) return { updated: false, error: "invalid_slot" as const };
+
+  return db.transaction(async (tx) => {
+    const [slot] = await tx.select({
+      id: interviewSlots.id,
+      status: interviewSlots.status,
+      interviewType: interviewSlots.interviewType,
+      startsAt: interviewSlots.startsAt,
+      applicationId: interviewSlots.applicationId,
+    }).from(interviewSlots).where(eq(interviewSlots.id, cleanSlotId)).for("update").limit(1);
+    if (!slot) return { updated: false, error: "unknown_slot" as const };
+    if (slot.status !== "booked") return { updated: false, error: "slot_not_booked" as const };
+    if (slot.startsAt.getTime() > Date.now()) return { updated: false, error: "slot_not_started" as const };
+
+    await tx.update(interviewSlots).set({ status: "no_show", updatedAt: new Date() }).where(eq(interviewSlots.id, slot.id));
+    if (!slot.applicationId) return { updated: true, applicationId: "", status: "No Show" } as const;
+
+    const [application] = await tx.select({ id: applications.id, currentStage: applications.currentStage })
+      .from(applications).where(eq(applications.id, slot.applicationId)).for("update").limit(1);
+    if (!application) return { updated: true, applicationId: "", status: "No Show" } as const;
+    const nextStage = slot.interviewType === "voice" && application.currentStage === "voice_scheduled"
+      ? "voice_review_pending"
+      : slot.interviewType === "final" && application.currentStage === "final_scheduled"
+        ? "final_decision_pending"
+        : application.currentStage;
+    if (nextStage !== application.currentStage) {
+      await tx.update(applications).set({ currentStage: nextStage, updatedAt: new Date() }).where(eq(applications.id, application.id));
+      await tx.insert(applicationStatusHistory).values({
+        applicationId: application.id,
+        stage: slot.interviewType === "voice" ? "voice" : "final",
+        previousStage: application.currentStage,
+        newStage: nextStage,
+        decision: "no_show",
+        actorName,
+        actorEmail,
+        comments: `${slot.interviewType === "voice" ? "Voice" : "Face-to-face"} interview marked No Show.`,
+        source: "portal:no_show",
+        actionRequestId: `portal:no_show:${slot.id}`,
+        notificationStatus: "pending",
+        notificationEventType: "application_stage_update",
+      }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
+    }
+    const [external] = await tx.select({ externalId: applications.externalId }).from(applications).where(eq(applications.id, application.id)).limit(1);
+    return { updated: true, applicationId: external?.externalId || "", status: "No Show" } as const;
   });
 }
 
