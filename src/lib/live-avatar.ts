@@ -97,7 +97,10 @@ export async function createLiveAvatarSession(
       interactivity_type: "CONVERSATIONAL",
       // Hard stop so an abandoned browser tab cannot run up LiveAvatar
       // credits indefinitely.
-      max_session_duration: 900,
+      // LiveAvatar sandbox keys currently enforce a 60-second maximum.
+      // Staying at the provider limit prevents the session request from being
+      // rejected before a room is created.
+      max_session_duration: 60,
     }),
   });
 
