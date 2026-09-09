@@ -9,6 +9,7 @@ const calendarBusyRoute = fs.readFileSync("src/app/api/bookings/calendar-busy/ro
 const roleDetails = fs.readFileSync("src/components/RoleDetails.tsx", "utf8");
 const roleForm = fs.readFileSync("src/components/RoleRequestForm.tsx", "utf8");
 const workflow = fs.readFileSync("src/lib/applicant-workflow.ts", "utf8");
+const instrumentation = fs.readFileSync("src/instrumentation.ts", "utf8");
 
 test("availability rules reject overlapping weekday windows and deduplicate legacy reads", () => {
   assert.match(rules, /"Completed", "No Show", "Cancelled"/);
@@ -29,20 +30,24 @@ test("availability rules reject overlapping weekday windows and deduplicate lega
   assert.match(workflow, /startTime: normalizeTimeOnly\(field\(row, "Start_Time", "Start Time"\)\)/);
 });
 
-test("availability write API blocks stacked voice schedules and rejects manual final schedules", () => {
+test("availability write API blocks stacked voice schedules while final slots use the calendar-checked slot API", () => {
   assert.match(availabilityRoute, /availabilityRulesOverlap/);
   assert.match(availabilityRoute, /overlaps an existing active schedule/);
   assert.match(availabilityRoute, /HR interview availability is managed automatically through the connected HR Google Calendar/);
+  assert.doesNotMatch(fs.readFileSync("src/app/api/bookings/slots/route.ts", "utf8"), /HR interview availability is managed automatically/);
+  assert.match(workflow, /targetCreateInterviewSlot/);
   assert.doesNotMatch(availabilityRoute, /slotMatchesHodAvailability/);
 });
 
-test("final interview setup no longer asks for manual dates or availability windows", () => {
+test("final interview setup allows HR to save a manually selected calendar-checked slot", () => {
   assert.doesNotMatch(roleDetails, /HodAvailabilityEditor/);
   assert.doesNotMatch(roleDetails, /Availability Windows/);
   assert.match(roleDetails, /Managed through the shared HR Google Calendar configured in Settings/);
   assert.doesNotMatch(roleForm, /addAvailability|removeAvailability|updateAvailability/);
   assert.doesNotMatch(bookings, /<option>Final Interview<\/option>/);
-  assert.match(bookings, /Face-to-Face interview availability/);
+  assert.match(bookings, /Set HR \/ face-to-face interview/);
+  assert.match(bookings, /fetch\("\/api\/bookings\/slots"/);
+  assert.match(bookings, /Save HR interview slot/);
   assert.doesNotMatch(bookings, /<strong>AI Voice Interview<\/strong>/);
   assert.match(workflow, /let slots = kind === "final" \? \[\]/);
   assert.match(workflow, /Connect the HR Google Calendar before booking an HR interview/);
@@ -55,4 +60,9 @@ test("calendar counter uses configured windows and recruitment setup is editable
   assert.match(bookings, /\{activeWindows\}/);
   assert.match(bookings, /Configured recurring and specific windows/);
   assert.match(roleDetails, /RecruitmentSetupEditor[^\n]*editable=\{canReviewRole\}/);
+});
+
+test("Postgres deployments do not start the legacy Sheets maintenance timer", () => {
+  assert.match(instrumentation, /isPostgresRecruitmentTarget/);
+  assert.match(instrumentation, /if \(usePostgresTarget\) return/);
 });

@@ -209,6 +209,7 @@ test("the bulk panel supports drag-and-drop, live auto-refresh, and retrying onl
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
   assert.match(panel, /onDrop=/);
   assert.match(panel, /setInterval\(\(\) => \{\s*if \(typeof document === "undefined" \|\| document\.visibilityState === "visible"\) void refreshStatus\(\);\s*\}, POLL_INTERVAL_MS\)/);
+  assert.match(panel, /const POLL_INTERVAL_MS = 90_000/);
   assert.match(panel, /Retry failed/);
   assert.match(panel, /failedFiles/);
   assert.match(panel, /Bulk Resume Processing/);
@@ -218,8 +219,8 @@ test("the bulk panel supports drag-and-drop, live auto-refresh, and retrying onl
   assert.match(panel, /refreshInFlight/);
   assert.match(panel, /AbortController/);
   assert.match(panel, /successful completion must come from the queue-backed status API/);
-  assert.match(panel, /const POLL_INTERVAL_MS = 60000/);
-  assert.match(panel, /updates automatically every minute/);
+  assert.match(panel, /const POLL_INTERVAL_MS = 90_000/);
+  assert.match(panel, /updates automatically/);
 });
 
 test("the bulk panel shows auto-dismissing feedback and portal-timezone timestamps", () => {

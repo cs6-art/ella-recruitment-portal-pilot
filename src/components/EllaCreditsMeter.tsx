@@ -28,7 +28,7 @@ type MeterData = { balance: number; pricing: CreditPricing | null };
 // burst, so a slow background poll is enough to catch out-of-band changes
 // (e.g. another user spending credits). Every mounted meter shares one poll.
 const POLL_KEY = "ella-credits-balance";
-const POLL_INTERVAL_MS = 90_000;
+const POLL_INTERVAL_MS = 5 * 60_000;
 const RECONCILE_DELAYS_MS = [1200, 4000, 9000];
 
 async function fetchMeterData(): Promise<MeterData | null> {

@@ -29,7 +29,7 @@ test("Applicants badge keeps reviewer-only visibility and refresh behavior", () 
   // The 60s poll + focus refresh now live in the shared, visibility-aware poller
   // so the sidebar badge and the header bell share a single request.
   assert.match(feed, /useSharedPoll<RecentApplicant\[\]>\(POLL_KEY, fetchRecentApplicants, POLL_INTERVAL_MS, enabled\)/);
-  assert.match(feed, /POLL_INTERVAL_MS = 60_000/);
+  assert.match(feed, /POLL_INTERVAL_MS = 5 \* 60_000/);
   assert.match(poll, /setInterval\(/);
   assert.match(poll, /window\.addEventListener\("focus"/);
   assert.match(feed, /window\.addEventListener\("storage"/);

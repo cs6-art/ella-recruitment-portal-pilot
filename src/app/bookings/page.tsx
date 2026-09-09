@@ -7,6 +7,8 @@ import BookingsList from "@/components/BookingsList";
 import { getActiveBookingLinkRoleIds, getInterviewBookings } from "@/lib/candidate-applications";
 import { canManageInterviewAvailability, canManagePipeline } from "@/lib/access-control";
 import { getRoleRequests } from "@/lib/google-sheets";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { targetRoleSummaries } from "@/lib/recruitment-target-portal";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +29,7 @@ function BookingsLoading() {
 }
 
 async function BookingsData() {
-  const [bookings, roles, activeBookingLinks] = await Promise.all([getInterviewBookings(), getRoleRequests(), getActiveBookingLinkRoleIds()]);
+  const [bookings, roles, activeBookingLinks] = await Promise.all([getInterviewBookings(), isPostgresRecruitmentTarget() ? targetRoleSummaries() : getRoleRequests(), getActiveBookingLinkRoleIds()]);
   const approvedRoles = await Promise.all(roles
     .filter((role) => canManageInterviewAvailability(role.status))
     .map(async ({ roleId, jobTitle, targetHiringDate, hodEmail, voiceInterviewAvailabilityMode, voiceInterviewSlots, voiceInterviewAutoStartDate, voiceInterviewAutoEndDate, voiceInterviewTimezone, interviewAvailabilityRules }) => ({

@@ -18,7 +18,6 @@ export async function POST(request: Request) {
     const roleId = String(body.roleId ?? "").trim();
     const role = isPostgresRecruitmentTarget() ? null : await getRoleRequestById(roleId);
     if (!isPostgresRecruitmentTarget() && (!role || !canManageInterviewAvailability(role.status))) throw new Error("Interview availability can only be added for approved or active recruitment roles.");
-    if (body.interviewType === "Final Interview") throw new Error("HR interview availability is managed automatically through the connected HR Google Calendar.");
     const slot = await createInterviewSlot({ interviewType: body.interviewType, roleId, date: body.date, startTime: body.startTime, endTime: body.endTime, timezone: body.timezone });
     return NextResponse.json({ success: true, slot }, { status: 201 });
   } catch (error) {

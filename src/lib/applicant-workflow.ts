@@ -1757,8 +1757,22 @@ export async function createInterviewSlot(input: CreateInterviewSlotInput) {
   if (Number.isNaN(Date.parse(`${date}T${startTime}:00`)) || Number.isNaN(Date.parse(`${date}T${endTime}:00`)) || startTime >= endTime) throw new Error("Choose a valid interview time range.");
   if (!isValidTimezone(timezone)) throw new Error("Choose a valid interview timezone.");
   if (isPostgresRecruitmentTarget()) {
-    if (input.interviewType === "Final Interview") throw new Error("HR interview availability is managed automatically through the connected HR Google Calendar.");
-    return targetCreateInterviewSlot({ ...input, roleId });
+    if (scheduledInstant(date, startTime, timezone).getTime() <= Date.now()) throw new Error("Interview slots must start in the future. Choose a later date or time.");
+    const result = await targetCreateInterviewSlot({ ...input, roleId });
+    if (!result.slot) {
+      const messages: Record<string, string> = {
+        unknown_role: "Role request not found.",
+        role_not_ready: "HR interview availability can only be added for an approved or published role.",
+        invalid_final_slot: "HR interview slots must be one hour between 10:00 and 16:00, excluding 12:00–13:00.",
+        after_target_hiring_date: "The HR interview date must be on or before the role's target hiring date.",
+        past_slot: "Interview slots must start in the future. Choose a later date or time.",
+        calendar_not_connected: "Connect the assigned HR Google Calendar before adding an HR interview slot.",
+        calendar_unavailable: "Unable to verify the HR Google Calendar for this HR interview slot.",
+        calendar_conflict: "The HR Google Calendar is busy during this HR interview slot.",
+      };
+      throw new Error(messages[result.error || ""] || "Unable to create interview availability.");
+    }
+    return result;
   }
   if (scheduledInstant(date, startTime, timezone).getTime() <= Date.now()) throw new Error("Interview slots must start in the future. Choose a later date or time.");
   const role = input.interviewType === "Final Interview" ? await getRoleRequestById(roleId) : null;
