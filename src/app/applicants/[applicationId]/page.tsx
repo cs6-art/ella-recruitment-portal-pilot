@@ -20,6 +20,7 @@ import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { formatMatchScore } from "@/lib/score-format";
 import { formatPortalClock, formatPortalDateTime } from "@/lib/portal-time";
 import { applicantDecisionLabel, applicantStageLabel } from "@/lib/applicant-stage-labels";
+import { parseTextList } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
 
@@ -55,9 +56,18 @@ function latestDecisionComment(history: CandidateStatusHistoryEntry[], stage: Ca
 }
 
 function questionItems(value: string) {
-  // Strip a leading bullet, "1." / "1)", or the canonical "Q1:" label so the
-  // list renders with its own consistent numbering.
-  return value.split(/\r?\n/).map((line) => line.replace(/^\s*(?:Q\s*\d+\s*[:.)-]?|[-•*]|\d+[.)])\s*/i, "").trim()).filter(Boolean);
+  // Accepts a JSON array (the AI screening format), or bullet / numbered text.
+  // Strip any remaining "Q1:" label so the list renders with its own numbering.
+  return parseTextList(value).map((line) => line.replace(/^\s*Q\s*\d+\s*[:.)-]?\s*/i, "").trim()).filter(Boolean);
+}
+
+// Render a stored list value (JSON array or bulleted text) as a readable list.
+// A single item renders as a paragraph so short values stay compact.
+function ReadableList({ value, empty }: { value: string; empty: string }) {
+  const items = parseTextList(value);
+  if (items.length === 0) return <p>{empty}</p>;
+  if (items.length === 1) return <p>{items[0]}</p>;
+  return <ul className="applicant-readable-list">{items.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>;
 }
 
 function DetailField({ label, value, className = "" }: { label: string; value?: string; className?: string }) {
@@ -121,6 +131,9 @@ function FinalInterviewCard({ applicant, role }: { applicant: ApplicantDetails; 
 }
 
 function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails }) {
+  const voiceCallStatus = applicant.voiceCallStatus?.trim() || "";
+  const voiceNotConducted = /no answer|no[- ]?show|incomplete|not connected|voicemail|busy|declined|cancell?ed/i.test(voiceCallStatus);
+  const voiceScorePending = voiceNotConducted ? "Not evaluated — no completed interview" : "Awaiting AI evaluation";
   return <section className="card applicant-detail-card applicant-screening-evidence-card">
     <DetailCardHeader icon="document" title="AI Screening Evidence" description="CV analysis and voice interview evidence for one complete HR review." />
     <div className="applicant-detail-content">
@@ -133,24 +146,24 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
           <DetailField label="Reviewed By" value={applicant.resumeReviewer} />
         </div>
         <div className="applicant-copy-block"><span>AI Analysis Summary</span><p>{applicant.aiAnalysisSummary || "No AI summary is available."}</p></div>
-        <div className="applicant-copy-columns"><div><span>Strengths</span><p>{applicant.strengths || "Not Provided."}</p></div><div><span>Gaps</span><p>{applicant.gaps || "Not Provided."}</p></div></div>
+        <div className="applicant-copy-columns"><div><span>Strengths</span><ReadableList value={applicant.strengths} empty="Not provided." /></div><div><span>Gaps</span><ReadableList value={applicant.gaps} empty="Not provided." /></div></div>
         {applicant.resumeEvaluationFields.length > 0 && <div className="applicant-copy-columns">{applicant.resumeEvaluationFields.map((evaluation) => <div key={`resume-${evaluation.key}`}><span>{evaluation.label}</span><p>{evaluation.value}</p></div>)}</div>}
       </div>
       <div className="applicant-evidence-subsection">
         <div className="applicant-evidence-subsection-heading"><UiIcon name="microphone" size={16} /><h3>Voice Interview Review</h3></div>
         <div className="applicant-detail-inline-fields">
-          <DetailField label="Status" value={applicantStageLabel(applicant.voiceStatus) || "Not Started"} />
+          <DetailField label="Status" value={applicantStageLabel(voiceCallStatus) || applicantStageLabel(applicant.voiceStatus) || "Not Started"} />
           <DetailField label="Booking Status" value={applicant.voiceBookingStatus || "Not Booked"} />
           <DetailField label="Scheduled" value={scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />
           <DetailField label="Timezone" value={recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || applicant.voiceTimezone || "Not provided"} />
-          <DetailField label="Voice AI Score" value={applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : "Awaiting AI evaluation"} />
-          <DetailField label="AI Recommendation" value={applicant.voiceRecommendation || "Awaiting AI evaluation"} />
+          <DetailField label="Voice AI Score" value={applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : voiceScorePending} />
+          <DetailField label="AI Recommendation" value={applicant.voiceRecommendation || voiceScorePending} />
         </div>
-        <div className="applicant-copy-block"><span>AI Summary</span><p>{applicant.voiceSummary || "No AI summary is available."}</p></div>
-        <div className="applicant-copy-columns"><div><span>Strengths</span><p>{applicant.voiceStrengths || "No strengths recorded."}</p></div><div><span>Concerns</span><p>{applicant.voiceConcerns || "No concerns recorded."}</p></div></div>
+        <div className="applicant-copy-block"><span>AI Summary</span><p>{applicant.voiceSummary || (voiceNotConducted ? "No interview took place, so there is no AI summary." : "No AI summary is available.")}</p></div>
+        <div className="applicant-copy-columns"><div><span>Strengths</span><ReadableList value={applicant.voiceStrengths} empty="No strengths recorded." /></div><div><span>Concerns</span><ReadableList value={applicant.voiceConcerns} empty="No concerns recorded." /></div></div>
         <div className="applicant-copy-columns"><div><span>Communication Quality</span><p>{applicant.voiceCommunicationQuality || "Not provided."}</p></div><div><span>Answer Completeness</span><p>{applicant.voiceAnswerCompleteness || "Not provided."}</p></div></div>
         {applicant.voiceEvaluationFields.length > 0 && <div className="applicant-copy-columns">{applicant.voiceEvaluationFields.map((evaluation) => <div key={evaluation.key}><span>{evaluation.label}</span><p>{evaluation.value}</p></div>)}</div>}
-        <div className="applicant-copy-block"><span>Recommended Follow-up Questions</span><p>{applicant.voiceFollowUpQuestions || "No follow-up questions were recommended."}</p></div>
+        <div className="applicant-copy-block"><span>Recommended Follow-up Questions</span><ReadableList value={applicant.voiceFollowUpQuestions} empty="No follow-up questions were recommended." /></div>
         {applicant.voiceTranscript ? <details className="applicant-transcript"><summary>View full transcript</summary><pre>{applicant.voiceTranscript}</pre></details> : <div className="applicant-copy-block"><span>Transcript</span><p>No transcript is available.</p></div>}
       </div>
     </div>

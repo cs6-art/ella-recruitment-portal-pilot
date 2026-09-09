@@ -31,7 +31,10 @@ import {
   archiveRole,
   calendarEventQueue,
   createBookingToken,
+  applicationVoiceReview,
 } from "@/lib/internal-recruitment-queries";
+import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
+import { extractStoredResumeText, type ResumeFileKind, type ResumeFileRecord } from "@/lib/resume-files";
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { generateRoleId } from "@/lib/role-id";
@@ -59,6 +62,38 @@ function listText(value: unknown) {
     return Array.isArray(parsed) ? parsed.map(text).filter(Boolean).join(", ") : raw;
   } catch {
     return raw;
+  }
+}
+
+const VOICE_OUTCOME_LABELS: Record<string, string> = {
+  no_answer: "No Answer",
+  incomplete: "Incomplete",
+  completed: "Completed",
+};
+
+function storedResumeRecord(value: Record<string, unknown> | null | undefined): ResumeFileRecord | null {
+  if (!value) return null;
+  const kind = text(value.kind);
+  if (kind !== "pdf" && kind !== "docx" && kind !== "doc") return null;
+  return {
+    fileId: text(value.storageRef), fileName: text(value.filename), mimeType: text(value.mimeType),
+    size: Number(value.size) || 0, sha256: text(value.sha256),
+    uploadedAt: value.uploadedAt instanceof Date ? value.uploadedAt.toISOString() : text(value.uploadedAt),
+    expiresAt: value.expiresAt instanceof Date ? value.expiresAt.toISOString() : text(value.expiresAt),
+    kind: kind as ResumeFileKind,
+  };
+}
+
+// The extracted resume text is not persisted; it is re-read from the stored
+// file on demand. A missing or expired file is not an error for the HR view.
+async function storedResumeText(value: Record<string, unknown> | null | undefined) {
+  const record = storedResumeRecord(value);
+  if (!record) return "";
+  if (record.expiresAt && new Date(record.expiresAt).getTime() <= Date.now()) return "";
+  try {
+    return await extractStoredResumeText(record);
+  } catch {
+    return "";
   }
 }
 
@@ -699,12 +734,32 @@ export async function targetApplicantDetails(externalId: string) {
   const finalSlotTimezone = text(finalSlot?.timezone) || "Asia/Singapore";
   const voiceStartsAt = voiceSlot ? slotDateTime(voiceSlot.startsAt, voiceTimezone) : { date: "", time: "" };
   const finalStartsAt = finalSlot ? slotDateTime(finalSlot.startsAt, finalSlotTimezone) : { date: "", time: "" };
+  const voiceReview = await applicationVoiceReview(externalId);
+  const voiceResult = voiceReview?.result ?? null;
+  const voiceLog = voiceReview?.log ?? null;
+  const voiceAttempt = voiceReview?.attempt ?? null;
+  const voiceOutcome = voiceResult || voiceAttempt
+    ? classifyVoiceInterviewBillingOutcome({
+        outcome: text(voiceAttempt?.outcome),
+        callStatus: text(voiceResult?.callStatus),
+        callFinalStatus: text(voiceResult?.callFinalStatus),
+        transcript: text(voiceResult?.transcript || voiceLog?.transcript),
+      })
+    : null;
+  const voiceCallStatus = voiceOutcome
+    ? VOICE_OUTCOME_LABELS[voiceOutcome]
+    : voiceResult
+      ? "Completed"
+      : summary.currentStage === "voice_review_pending"
+        ? "Awaiting Review"
+        : "";
+  const resumeText = await storedResumeText(resumeFile);
   return {
     ...summary,
     roleDetails: await targetRoleDetails(row.roleExternalId),
     aiAnalysisSummary: text(screening?.summary),
     interviewQuestions: text(screening?.interviewQuestions),
-    resumeText: "",
+    resumeText,
     resumeFileId: text(resumeFile?.storageRef),
     resumeFileName: text(resumeFile?.filename),
     resumeFileMimeType: text(resumeFile?.mimeType),
@@ -718,7 +773,17 @@ export async function targetApplicantDetails(externalId: string) {
     resumeEvaluationFields: [],
     voiceDecision: text(application.voiceHrDecision),
     voiceComments: text(application.voiceHrComments),
-    voiceScore: "", voiceRecommendation: "", voiceSummary: "", voiceStrengths: "", voiceConcerns: "", voiceCommunicationQuality: "", voiceAnswerCompleteness: "", voiceFollowUpQuestions: "", voiceEvaluationFields: [], voiceTranscript: "",
+    voiceScore: voiceResult?.score == null ? "" : String(voiceResult.score),
+    voiceRecommendation: text(voiceResult?.recommendation || voiceLog?.recommendation),
+    voiceSummary: text(voiceResult?.summary || voiceLog?.summary),
+    voiceStrengths: text(voiceResult?.strengths),
+    voiceConcerns: text(voiceResult?.concerns),
+    voiceCommunicationQuality: voiceLog?.communicationScore == null ? "" : String(voiceLog.communicationScore),
+    voiceAnswerCompleteness: voiceLog?.completenessScore == null ? "" : String(voiceLog.completenessScore),
+    voiceFollowUpQuestions: text(voiceLog?.followUpQuestions),
+    voiceEvaluationFields: [],
+    voiceTranscript: text(voiceResult?.transcript || voiceLog?.transcript),
+    voiceCallStatus,
     voiceScheduledDate: voiceStartsAt.date,
     voiceScheduledTime: voiceStartsAt.time,
     voiceTimezone: voiceSlot ? voiceTimezone : "",

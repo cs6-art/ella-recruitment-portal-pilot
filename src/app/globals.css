@@ -1281,6 +1281,8 @@ a { color: inherit; text-decoration: none; }
 .applicant-evidence-subsection-heading h3 { margin: 0; font-size: 15px; }
 .applicant-copy-block p, .applicant-copy-columns p { margin: 5px 0 0; color: #35516d; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
 .applicant-copy-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.applicant-readable-list { margin: 6px 0 0; padding-left: 18px; color: #35516d; font-size: 13px; line-height: 1.6; }
+.applicant-readable-list li { margin: 3px 0; }
 .applicant-resume { overflow: auto; max-height: 500px; margin: 0; padding: 20px 24px; color: #35516d; font-family: inherit; font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
 .applicant-timeline { display: grid; gap: 0; padding: 8px 24px 20px; }
 .applicant-timeline div { display: grid; gap: 4px; padding: 12px 0; border-bottom: 1px solid #edf1f5; }
