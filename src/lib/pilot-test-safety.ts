@@ -8,7 +8,7 @@
  * dry-run unless the Pilot explicitly opts into live mode.
  */
 export const PILOT_TEST_EMAIL = "cs6@mclinkgroup.com";
-export const PILOT_INTERNAL_EMAIL_COPIES = ["cs6@mclinkgroup.com", "cs9@mclinkgroup.com"] as const;
+export const PILOT_INTERNAL_EMAIL_COPIES = ["cs6@mclinkgroup.com", "cs9@mclinkgroup.com", "hrsg@mclinkgroup.com"] as const;
 
 function isTrue(value: string | undefined) {
   return value?.trim().toLowerCase() === "true";
