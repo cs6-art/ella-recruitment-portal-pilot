@@ -109,7 +109,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle }: Props) {
             <p>
               Prefer talking instead of waiting for a call back? Ella, McLink&apos;s AI interview
               assistant, can meet you right now over live video for a quick, {roleTitle} focused
-              chat — about ten to fifteen minutes.
+              chat — about one minute in the sandbox.
             </p>
             <p className="live-avatar-disclosure">
               Ella is an AI interviewer, not a person. This is optional and separate from the
