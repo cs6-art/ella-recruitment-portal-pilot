@@ -951,7 +951,23 @@ async function reserveTargetBooking(kind: BookingKind, token: string, slotId: st
   if (kind === "voice" && confirmedMobile) await targetUpdateApplicantProfile({ applicationId: context.applicationId, candidateName: context.candidateName, email: context.email, preferredMobile: confirmedMobile, applicantCountry: "" });
   const result = await targetReserveBooking(kind, hashToken(token), slotId, "public-booking");
   if (!result.booked) throw new Error(result.error || "The selected interview slot is no longer available.");
-  return result;
+  // The booking token is now spent, so targetBookingContext() can no longer
+  // rebuild the context. Return the same context-shaped payload the Sheets
+  // path returns so the booking page can render the confirmed state instead
+  // of crashing on a missing `slots`/`kind`.
+  const bookedSlot = context.slots.find((slot) => slot.slotId === text(slotId));
+  return {
+    ...context,
+    preferredMobile: confirmedMobile || context.preferredMobile,
+    bookingStatus: kind === "voice" ? "Scheduled" : "Interview Scheduled",
+    scheduledDate: bookedSlot?.date ?? context.scheduledDate,
+    scheduledTime: bookedSlot?.startTime ?? context.scheduledTime,
+    timezone: bookedSlot?.timezone ?? context.timezone,
+    currentSlot: bookedSlot
+      ? { ...bookedSlot, status: "Booked", applicationId: context.applicationId }
+      : context.currentSlot,
+    slots: [],
+  };
 }
 
 async function reserveBookingInternal(kind: BookingKind, token: string, slotId: string, preferredMobile: string) {

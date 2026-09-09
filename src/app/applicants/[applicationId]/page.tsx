@@ -18,13 +18,18 @@ import {
 import type { RoleRequestDetails } from "@/lib/google-sheets";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { formatMatchScore } from "@/lib/score-format";
-import { formatPortalDateTime } from "@/lib/portal-time";
+import { formatPortalClock, formatPortalDateTime } from "@/lib/portal-time";
 import { applicantDecisionLabel, applicantStageLabel } from "@/lib/applicant-stage-labels";
 
 export const dynamic = "force-dynamic";
 
 function dateValue(value: string) {
   return formatPortalDateTime(value, true);
+}
+
+function scheduledValue(date: string, time: string) {
+  const parts = [date ? formatPortalDateTime(date, false) : "", formatPortalClock(time)].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "Not scheduled";
 }
 
 function recordValue(record: Record<string, string> | undefined, ...keys: string[]) {
@@ -104,7 +109,7 @@ function FinalInterviewCard({ applicant, role }: { applicant: ApplicantDetails; 
         <DetailField label="Role" value={applicant.selectedRole} />
         <DetailField label="Status" value={displayedStatus} />
         <DetailField label="Booking Status" value={bookingStatus} />
-        <DetailField label="Scheduled" value={[scheduledDate, scheduledTime].filter(Boolean).join(" ") || "Not scheduled"} />
+        <DetailField label="Scheduled" value={scheduledValue(scheduledDate, scheduledTime)} />
         <DetailField label="Timezone" value={timezone || "Not provided"} />
         <DetailField label="Interviewer" value={interviewer} className="applicant-final-interviewer-field" />
         <DetailField label="Recommendation" value={recommendation} />
@@ -136,8 +141,8 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
         <div className="applicant-detail-inline-fields">
           <DetailField label="Status" value={applicantStageLabel(applicant.voiceStatus) || "Not Started"} />
           <DetailField label="Booking Status" value={applicant.voiceBookingStatus || "Not Booked"} />
-          <DetailField label="Scheduled" value={[applicant.voiceScheduledDate, applicant.voiceScheduledTime].filter(Boolean).join(" ") || "Not scheduled"} />
-          <DetailField label="Timezone" value={recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || "Not provided"} />
+          <DetailField label="Scheduled" value={scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />
+          <DetailField label="Timezone" value={recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || applicant.voiceTimezone || "Not provided"} />
           <DetailField label="Voice AI Score" value={applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : "Awaiting AI evaluation"} />
           <DetailField label="AI Recommendation" value={applicant.voiceRecommendation || "Awaiting AI evaluation"} />
         </div>

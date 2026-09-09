@@ -695,6 +695,10 @@ export async function targetApplicantDetails(externalId: string) {
   const voiceToken = tokens.find((token) => token.kind === "voice");
   const finalToken = tokens.find((token) => token.kind === "final");
   const date = (value: unknown) => value instanceof Date ? value.toISOString() : text(value);
+  const voiceTimezone = text(voiceSlot?.timezone) || "Asia/Singapore";
+  const finalSlotTimezone = text(finalSlot?.timezone) || "Asia/Singapore";
+  const voiceStartsAt = voiceSlot ? slotDateTime(voiceSlot.startsAt, voiceTimezone) : { date: "", time: "" };
+  const finalStartsAt = finalSlot ? slotDateTime(finalSlot.startsAt, finalSlotTimezone) : { date: "", time: "" };
   return {
     ...summary,
     roleDetails: await targetRoleDetails(row.roleExternalId),
@@ -715,16 +719,18 @@ export async function targetApplicantDetails(externalId: string) {
     voiceDecision: text(application.voiceHrDecision),
     voiceComments: text(application.voiceHrComments),
     voiceScore: "", voiceRecommendation: "", voiceSummary: "", voiceStrengths: "", voiceConcerns: "", voiceCommunicationQuality: "", voiceAnswerCompleteness: "", voiceFollowUpQuestions: "", voiceEvaluationFields: [], voiceTranscript: "",
-    voiceScheduledDate: date(voiceSlot?.startsAt).slice(0, 10),
-    voiceScheduledTime: date(voiceSlot?.startsAt).slice(11, 16),
-    voiceBookingStatus: text(voiceToken?.status || voiceSlot?.status),
+    voiceScheduledDate: voiceStartsAt.date,
+    voiceScheduledTime: voiceStartsAt.time,
+    voiceTimezone: voiceSlot ? voiceTimezone : "",
+    interviewSlot: voiceSlot ? { timezone: voiceTimezone, status: label(voiceSlot.status) } : undefined,
+    voiceBookingStatus: label(voiceToken?.status || voiceSlot?.status),
     voiceBookingLink: text(voiceToken?.link),
     bookingTokenStatus: text(voiceToken?.status),
     bookingTokenExpiresAt: date(voiceToken?.expiresAt),
-    finalBookingStatus: text(finalToken?.status || finalSlot?.status),
-    finalScheduledDate: date(finalSlot?.startsAt).slice(0, 10),
-    finalScheduledTime: date(finalSlot?.startsAt).slice(11, 16),
-    finalTimezone: text(finalSlot?.timezone),
+    finalBookingStatus: label(finalToken?.status || finalSlot?.status),
+    finalScheduledDate: finalStartsAt.date,
+    finalScheduledTime: finalStartsAt.time,
+    finalTimezone: finalSlot ? finalSlotTimezone : "",
     finalBookingLink: text(finalToken?.link),
     finalBookingTokenExpiresAt: date(finalToken?.expiresAt),
     finalComments: text(application.finalInterviewComments),

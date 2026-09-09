@@ -20,6 +20,21 @@ export function formatPortalDateTime(value: string, includeTime = true) {
   }).format(parsed);
 }
 
+// Render a stored 24-hour "HH:MM" wall-clock time as a 12-hour label with an
+// AM/PM suffix (e.g. "11:40" -> "11:40 AM"). Values that are not a bare
+// "HH:MM" are returned unchanged so already-formatted strings pass through.
+export function formatPortalClock(value: string) {
+  const raw = String(value || "").trim();
+  const match = /^(\d{1,2}):(\d{2})$/.exec(raw);
+  if (!match) return raw;
+  const hours = Number(match[1]);
+  const minutes = match[2];
+  if (hours > 23 || Number(minutes) > 59) return raw;
+  const suffix = hours < 12 ? "AM" : "PM";
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${minutes} ${suffix}`;
+}
+
 export function formatPortalDateKey(value: Date | string) {
   const parsed = value instanceof Date ? value : parsePortalDate(value);
   if (!parsed) return String(value || "");
