@@ -23,6 +23,7 @@ test("only booked face-to-face slots with no event id are surfaced for calendar 
   assert.match(queries, /eq\(interviewSlots\.status, "booked"\)/);
   assert.match(queries, /eq\(interviewSlots\.interviewType, "final"\)/);
   assert.match(queries, /eq\(interviewSlots\.calendarEventId, ""\)/);
+  assert.match(queries, /not\(eq\(interviewSlots\.calendarEventStatus, "skipped"\)\)/);
 });
 
 test("a replayed calendar callback never records a second event id", () => {

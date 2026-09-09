@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, not, or, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { appendPostgresLedgerEntryOnExecutor } from "@/lib/ella-credits-postgres";
@@ -933,6 +933,7 @@ export async function calendarEventQueue() {
       eq(interviewSlots.status, "booked"),
       eq(interviewSlots.interviewType, "final"),
       eq(interviewSlots.calendarEventId, ""),
+      not(eq(interviewSlots.calendarEventStatus, "skipped")),
     ))
     .orderBy(asc(interviewSlots.startsAt))
     .limit(LIMIT);
