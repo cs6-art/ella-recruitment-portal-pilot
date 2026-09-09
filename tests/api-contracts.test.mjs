@@ -39,6 +39,17 @@ test("role creation uses the canonical n8n event", () => {
   assert.match(source, /\/roles\/\$\{encodeURIComponent\(roleId\)\}/);
 });
 
+test("role creation exposes notification outcome and sends complete recipient fields", () => {
+  const source = fs.readFileSync("src/app/api/roles/route.ts", "utf8");
+  const workflow = JSON.parse(fs.readFileSync("integrations/n8n/role-request-foundation.json", "utf8"));
+  assert.match(source, /Requester_Email: performerEmail/);
+  assert.match(source, /notificationStatus/);
+  assert.match(source, /notificationError/);
+  assert.ok(workflow.nodes.some((node) => node.type === "n8n-nodes-base.gmail"), "role workflow must contain an email node");
+  assert.ok(workflow.nodes.some((node) => node.name === "Finalize Role Request Notification"), "role workflow must return notification status");
+  assert.equal(workflow.nodes.find((node) => node.name === "Send Role Request Notification").continueOnFail, true);
+});
+
 test("role forms autosave drafts without invoking the creation workflow", () => {
   const route = fs.readFileSync("src/app/api/roles/route.ts", "utf8");
   const detailsRoute = fs.readFileSync("src/app/api/roles/[roleId]/route.ts", "utf8");
@@ -83,6 +94,21 @@ test("Postgres booking responses convert Date timestamps into local date and tim
   assert.match(source, /new Intl\.DateTimeFormat\("en-CA"/);
   assert.doesNotMatch(source, /text\(slot\.startsAt\)\.slice\(0, 10\)/);
   assert.doesNotMatch(source, /text\(slot\.startsAt\)\.slice\(11, 16\)/);
+});
+
+test("target public booking hides stale and post-target slots before confirmation", () => {
+  const portal = fs.readFileSync("src/lib/recruitment-target-portal.ts", "utf8");
+  const queries = fs.readFileSync("src/lib/internal-recruitment-queries.ts", "utf8");
+  assert.match(portal, /isBeforeTargetHiringDate\(slot\.date, row\.roleTargetHiringDate \|\| undefined\)/);
+  assert.match(portal, /hasValidFutureTime\(slot\)/);
+  assert.match(queries, /roleTargetHiringDate: roles\.targetHiringDate/);
+});
+
+test("target role creation enters the notification queue as a role request", () => {
+  const queries = fs.readFileSync("src/lib/internal-recruitment-queries.ts", "utf8");
+  assert.match(queries, /action: "role_created"/);
+  assert.match(queries, /notificationStatus: "pending"/);
+  assert.match(queries, /history\.action === "role_created" \? "role_request_created"/);
 });
 
 test("Postgres role statuses preserve HR review action labels", () => {

@@ -1,11 +1,142 @@
 {
   "name": "McLink - Role Request Foundation",
   "nodes": [
-    {"parameters":{"httpMethod":"POST","path":"role-request","responseMode":"responseNode","options":{}},"id":"role-request-webhook","name":"Role Request Webhook","type":"n8n-nodes-base.webhook","typeVersion":2.1,"position":[260,300],"webhookId":"role-request"},
-    {"parameters":{"jsCode":"const body = $json.body ?? $json;\nconst fields = body.workflowFields ?? body;\nconst required = ['Role_ID','Created_At','Status','Last_Updated_At','Last_Updated_By_Name','Last_Updated_By_Email','Latest_Comments','Resume_Target_Status'];\nfor (const field of required) if (typeof fields[field] !== 'string') throw new Error(`Missing server-generated field: ${field}`);\nif (fields.Status !== 'Pending HR Discussion') throw new Error('New role requests must start at Pending HR Discussion');\nconst role = body.role ?? {};\nconst requiredRoleFields = [['Job_Description', role.jobDescription],['Job_Title', role.jobTitle],['Department', role.department],['Number_Of_Vacancies', role.numberOfVacancies],['Reason_For_Request', role.reasonForRequest],['Target_Hiring_Date', role.targetHiringDate]];\nconst missingFields = requiredRoleFields.filter(([, value]) => String(value ?? '').trim() === '').map(([name]) => name);\nif (missingFields.length) throw new Error(`REQUISITION_INCOMPLETE: ${missingFields.join(', ')}`);\nconst row = {Request_Type:role.requestType??'',Department:role.department??'',Job_Title:role.jobTitle??'',Number_Of_Vacancies:role.numberOfVacancies??'',Reason_For_Request:role.reasonForRequest??'',Job_Description:role.jobDescription??'',Replacement_Employee:role.replacementEmployee??'',Target_Hiring_Date:role.targetHiringDate??'',HOD_Availability_Dates:role.hodAvailabilityDates??'',HOD_Availability_Times:role.hodAvailabilityTimes??'',Custom_Screening_Question_1:role.customScreeningQuestion1??'',Custom_Screening_Question_2:role.customScreeningQuestion2??'',AI_Screening_Questions:(role.aiGeneratedScreeningQuestions??[]).slice(0,5).join('\\n'),Reporting_Manager:role.reportingManager??'',Work_Location:role.workLocation??'',Employment_Type:role.employmentType??'',Job_Responsibilities:role.jobResponsibilities??'',Required_Skills:role.requiredSkills??'',Experience_Required:role.experienceRequired??'',Education_Requirements:role.educationRequirements??'',Preferred_Qualifications:role.preferredQualifications??'',Role_Expectations:role.roleExpectations??'',Salary_Min:role.salaryMin??'',Salary_Max:role.salaryMax??'',Work_Schedule:role.workSchedule??'',Notice_Period_Requirement:role.noticePeriodRequirement??'',Salary_Expectation_Guidance:role.salaryExpectationGuidance??'',Role_ID:fields.Role_ID,Created_At:fields.Created_At,Status:fields.Status,Last_Updated_At:fields.Last_Updated_At,Last_Updated_By_Name:fields.Last_Updated_By_Name,Last_Updated_By_Email:fields.Last_Updated_By_Email,Latest_Comments:fields.Latest_Comments,Resume_Target_Status:fields.Resume_Target_Status,Requester_Name:body.requester?.name??'',Requester_Email:body.requester?.email??'',Requester_Type:body.requester?.type??'',Submitted_By_Name:body.submittedBy?.name??'',Submitted_By_Email:body.submittedBy?.email??'',Submission_ID:body.submissionId??'',Source:body.source??'Role Creation Website'};\nreturn [{json:row}];"},"id":"validate-and-map-role-request","name":"Validate and Map Role Request","type":"n8n-nodes-base.code","typeVersion":2,"position":[500,300]},
-    {"parameters":{"operation":"append","documentId":{"__rl":true,"mode":"id","value":"={{$env.GOOGLE_SHEETS_SPREADSHEET_ID}}"},"sheetName":{"__rl":true,"mode":"name","value":"Role_Requests"},"columns":{"mappingMode":"autoMapInputData","value":{}},"options":{}},"id":"append-role-request","name":"Append Role Request","type":"n8n-nodes-base.googleSheets","typeVersion":4.7,"position":[760,300]},
-    {"parameters":{"respondWith":"json","responseBody":"={{ JSON.stringify({success:true, roleId:$node['Validate and Map Role Request'].json.Role_ID, status:$node['Validate and Map Role Request'].json.Status, message:'Role request submitted successfully.'}) }}","options":{}},"id":"role-request-response","name":"Return Role Request Result","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.4,"position":[1020,300]}
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "role-request",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "role-request-webhook",
+      "name": "Role Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [260, 300],
+      "webhookId": "role-request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Role request webhook secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst fields = body.workflowFields ?? body;\nconst text = (value) => String(value ?? '').trim();\nconst required = ['Role_ID','Created_At','Status','Last_Updated_At','Last_Updated_By_Name','Last_Updated_By_Email','Latest_Comments','Resume_Target_Status'];\nfor (const field of required) if (typeof fields[field] !== 'string') throw new Error(`Missing server-generated field: ${field}`);\nif (fields.Status !== 'Pending HR Discussion') throw new Error('New role requests must start at Pending HR Discussion');\nconst role = body.role ?? {};\nconst requiredRoleFields = [['Job_Description', role.jobDescription],['Job_Title', role.jobTitle],['Department', role.department],['Number_Of_Vacancies', role.numberOfVacancies],['Reason_For_Request', role.reasonForRequest],['Target_Hiring_Date', role.targetHiringDate]];\nconst missingFields = requiredRoleFields.filter(([, value]) => text(value) === '').map(([name]) => name);\nif (missingFields.length) throw new Error(`REQUISITION_INCOMPLETE: ${missingFields.join(', ')}`);\nconst requester = body.requester ?? {};\nconst submittedBy = body.submittedBy ?? {};\nconst row = {Request_Type:role.requestType??'',Department:role.department??'',Job_Title:role.jobTitle??'',Number_Of_Vacancies:role.numberOfVacancies??'',Reason_For_Request:role.reasonForRequest??'',Job_Description:role.jobDescription??'',Replacement_Employee:role.replacementEmployee??'',Target_Hiring_Date:role.targetHiringDate??'',HOD_Email:fields.HOD_Email??role.hodEmail??'',HOD_Availability_Dates:role.hodAvailabilityDates??'',HOD_Availability_Times:role.hodAvailabilityTimes??'',Custom_Screening_Question_1:role.customScreeningQuestion1??'',Custom_Screening_Question_2:role.customScreeningQuestion2??'',AI_Screening_Questions:(role.aiGeneratedScreeningQuestions??[]).slice(0,5).join('\\n'),Reporting_Manager:role.reportingManager??'',Work_Location:role.workLocation??'',Employment_Type:role.employmentType??'',Job_Responsibilities:role.jobResponsibilities??'',Required_Skills:role.requiredSkills??'',Experience_Required:role.experienceRequired??'',Education_Requirements:role.educationRequirements??'',Preferred_Qualifications:role.preferredQualifications??'',Role_Expectations:role.roleExpectations??'',Salary_Min:role.salaryMin??'',Salary_Max:role.salaryMax??'',Work_Schedule:role.workSchedule??'',Notice_Period_Requirement:role.noticePeriodRequirement??'',Salary_Expectation_Guidance:role.salaryExpectationGuidance??'',Role_ID:fields.Role_ID,Created_At:fields.Created_At,Status:fields.Status,Last_Updated_At:fields.Last_Updated_At,Last_Updated_By_Name:fields.Last_Updated_By_Name,Last_Updated_By_Email:fields.Last_Updated_By_Email,Latest_Comments:fields.Latest_Comments,Resume_Target_Status:fields.Resume_Target_Status,Requester_Name:fields.Requester_Name??requester.name??'',Requester_Email:fields.Requester_Email??requester.email??'',Requester_Type:fields.Requester_Type??requester.type??'',Submitted_By_Name:fields.Submitted_By_Name??submittedBy.name??'',Submitted_By_Email:fields.Submitted_By_Email??submittedBy.email??'',Submission_ID:body.submissionId??fields.Submission_ID??'',Source:body.source??fields.Source??'Role Creation Website',Notification_Status:'pending',Notification_Error:''};\nreturn [{json:row}];"
+      },
+      "id": "validate-and-map-role-request",
+      "name": "Validate and Map Role Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{$env.GOOGLE_SHEETS_SPREADSHEET_ID}}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Role_Requests"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "append-role-request",
+      "name": "Append Role Request",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Role Request Webhook').item.json.body ?? $('Role Request Webhook').item.json;\nconst row = $('Validate and Map Role Request').item.json;\nconst escapeHtml = (value) => String(value ?? '').replace(/[&<>\\\"']/g, (character) => ({'&':'&amp;','<':'&lt;','>':'&gt;','\\\"':'&quot;',\"'\":'&#39;'}[character]));\nconst portalUrl = String(input.portalUrl ?? '').trim();\nconst roleTitle = escapeHtml(row.Job_Title);\nconst roleId = escapeHtml(row.Role_ID);\nconst recipient = 'cs6@mclinkgroup.com';\nreturn [{json:{...row, notificationRecipient:recipient, notificationSubject:`New role request: ${row.Job_Title} (${row.Role_ID})`, notificationMessage:`<p>A new role request was submitted for HR discussion.</p><p><strong>Role:</strong> ${roleTitle}<br><strong>Role ID:</strong> ${roleId}<br><strong>Department:</strong> ${escapeHtml(row.Department)}<br><strong>Requester:</strong> ${escapeHtml(row.Requester_Name)} (${escapeHtml(row.Requester_Email)})<br><strong>Target hiring date:</strong> ${escapeHtml(row.Target_Hiring_Date)}</p>${portalUrl ? `<p><a href=\\\"${escapeHtml(portalUrl)}\\\">Open role request in the portal</a></p>` : ''}<p>Regards,<br>McLink Recruitment Portal</p>`}}];"
+      },
+      "id": "prepare-role-request-notification",
+      "name": "Prepare Role Request Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.notificationRecipient }}",
+        "subject": "={{ $json.notificationSubject }}",
+        "emailType": "html",
+        "message": "={{ $json.notificationMessage }}"
+      },
+      "id": "send-role-request-notification",
+      "name": "Send Role Request Notification",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1240, 300],
+      "continueOnFail": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json;\nconst error = result.error;\nreturn [{json:{roleId:$('Validate and Map Role Request').item.json.Role_ID,status:$('Validate and Map Role Request').item.json.Status,action:'role_request_created',actionRequestId:$('Role Request Webhook').item.json.body?.submissionId ?? '',notificationStatus:error ? 'failed' : 'sent',notificationError:error ? String(error.message ?? error) : ''}}];"
+      },
+      "id": "finalize-role-request-notification",
+      "name": "Finalize Role Request Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1480, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({success:true, roleId:$json.roleId, status:$json.status, action:$json.action, actionRequestId:$json.actionRequestId, notificationStatus:$json.notificationStatus, notificationError:$json.notificationError, message:$json.notificationStatus === 'sent' ? 'Role request submitted and notification sent.' : 'Role request submitted; notification requires attention.'}) }}",
+        "options": {}
+      },
+      "id": "role-request-response",
+      "name": "Return Role Request Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [1720, 300]
+    }
   ],
-  "connections":{"Role Request Webhook":{"main":[[{"node":"Validate and Map Role Request","type":"main","index":0}]]},"Validate and Map Role Request":{"main":[[{"node":"Append Role Request","type":"main","index":0}]]},"Append Role Request":{"main":[[{"node":"Return Role Request Result","type":"main","index":0}]]}},
-  "active":false,"settings":{},"versionId":"role-request-foundation-v2","meta":{"templateCredsSetupCompleted":false},"tags":[]
+  "connections": {
+    "Role Request Webhook": {
+      "main": [[{"node":"Validate and Map Role Request","type":"main","index":0}]]
+    },
+    "Validate and Map Role Request": {
+      "main": [[{"node":"Append Role Request","type":"main","index":0}]]
+    },
+    "Append Role Request": {
+      "main": [[{"node":"Prepare Role Request Notification","type":"main","index":0}]]
+    },
+    "Prepare Role Request Notification": {
+      "main": [[{"node":"Send Role Request Notification","type":"main","index":0}]]
+    },
+    "Send Role Request Notification": {
+      "main": [[{"node":"Finalize Role Request Notification","type":"main","index":0}]]
+    },
+    "Finalize Role Request Notification": {
+      "main": [[{"node":"Return Role Request Result","type":"main","index":0}]]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "role-request-foundation-v3-email",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
 }

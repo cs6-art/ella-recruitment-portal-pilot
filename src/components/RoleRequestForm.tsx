@@ -26,6 +26,8 @@ type RoleSubmissionResult = {
   success?: boolean;
   roleId?: string;
   status?: string;
+  notificationStatus?: string;
+  notificationError?: string;
   error?: string;
 };
 
@@ -119,7 +121,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
   const [draftError, setDraftError] = useState("");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [success, setSuccess] = useState<{ roleId: string; status: string } | null>(null);
+  const [success, setSuccess] = useState<{ roleId: string; status: string; notificationStatus: string; notificationError: string } | null>(null);
   const [jobDescriptionFile, setJobDescriptionFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState("");
@@ -375,6 +377,8 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
       setSuccess({
         roleId: savedRoleId || "Not provided",
         status: result.status || "Pending HR Discussion",
+        notificationStatus: result.notificationStatus || "not_configured",
+        notificationError: result.notificationError || "",
       });
       if (isEditing) {
         router.push(`/roles/${encodeURIComponent(savedRoleId)}?updated=1`);
@@ -403,7 +407,8 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
             <ActionFeedback kind="success">
               <strong>Role request submitted.</strong><br />
               Role ID: {success.roleId}<br />
-              Status: {success.status}
+              Status: {success.status}<br />
+              Email notification: {success.notificationStatus.replace(/_/g, " ")}{success.notificationError ? ` (${success.notificationError})` : ""}
             </ActionFeedback>
           </div>
         )}
