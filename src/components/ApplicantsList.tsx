@@ -264,7 +264,15 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
     setDeletingId("");
   }
 
+  // A new selection means the previous delete outcome no longer applies, so
+  // clear the banner instead of leaving a stale error on screen.
+  function clearActionFeedback() {
+    setActionError("");
+    setActionMessage("");
+  }
+
   function toggleApplicantSelection(applicationId: string) {
+    clearActionFeedback();
     setSelectedIds((current) => {
       const next = new Set(current);
       if (next.has(applicationId)) next.delete(applicationId);
@@ -274,6 +282,7 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
   }
 
   function toggleAllVisibleApplicants() {
+    clearActionFeedback();
     setSelectedIds((current) => {
       const next = new Set(current);
       if (allVisibleSelected) selectableVisibleApplicants.forEach((applicant) => next.delete(applicant.applicationId));
@@ -294,7 +303,7 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
       </div>
 
       {actionMessage && <ActionFeedback kind="success" className="applicants-action-feedback">{actionMessage}</ActionFeedback>}
-      {actionError && <ActionFeedback kind="error" className="applicants-action-feedback">{actionError}</ActionFeedback>}
+      {actionError && <ActionFeedback kind="error" className="applicants-action-feedback" dismissAfterMs={12000}>{actionError}</ActionFeedback>}
 
       {topContent && <div className="applicants-intake-section">{topContent}</div>}
 

@@ -8,7 +8,7 @@ import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
 import { recordVoiceInterviewDeduction } from "@/lib/ella-credits";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
-import { notificationEventLabel, notificationStatusLabel, notificationSummary } from "@/lib/notification-labels";
+import { notificationEmail, notificationEventLabel, notificationStatusLabel, notificationSummary } from "@/lib/notification-labels";
 import {
   applicants,
   applicantAliases,
@@ -368,12 +368,16 @@ export async function deleteApplication(externalId: string) {
       .limit(1);
     if (!current) return { deleted: false, error: "unknown_application" as const };
 
-    const activeStatuses = ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "retry_scheduled"];
-    const activeAttempts = await tx.select({ id: voiceCallAttempts.id })
+    // Only block deletion while a call is genuinely on the line. A merely
+    // scheduled, queued, or retry-pending attempt has no live provider call
+    // and is safe to remove with the rest of the record — the cascade below
+    // deletes the attempt so no call is ever placed.
+    const liveCallStatuses = ["calling", "dispatching", "initiated", "in_progress"];
+    const liveCall = await tx.select({ id: voiceCallAttempts.id })
       .from(voiceCallAttempts)
-      .where(and(eq(voiceCallAttempts.applicationId, current.id), inArray(voiceCallAttempts.status, activeStatuses)))
+      .where(and(eq(voiceCallAttempts.applicationId, current.id), inArray(voiceCallAttempts.status, liveCallStatuses)))
       .limit(1);
-    if (activeAttempts.length > 0) return { deleted: false, error: "voice_interview_in_progress" as const };
+    if (liveCall.length > 0) return { deleted: false, error: "voice_interview_in_progress" as const };
 
     // Delete children first because the recruitment migration deliberately
     // keeps foreign keys restrictive instead of silently cascading workflow
@@ -1017,7 +1021,11 @@ export async function bookInterviewSlot(input: { slotId: string; applicationExte
     const nextStage = slot.interviewType === "voice" ? "voice_scheduled" : "final_scheduled";
     const previousStage = slot.interviewType === "voice" ? "voice_booking_pending" : "approved_for_final";
     await tx.update(applications).set({ currentStage: nextStage, updatedAt: new Date() }).where(eq(applications.id, application.id));
-    await tx.insert(applicationStatusHistory).values({ applicationId: application.id, stage: slot.interviewType, previousStage, newStage: nextStage, actorEmail: input.actorEmail, source: "internal_api:booking", actionRequestId: input.actionRequestId, notificationStatus: "pending", notificationEventType: slot.interviewType === "voice" ? "voice_booking_confirmation" : "final_booking_confirmation", notificationRecipient: pilotEmailRecipient(application.email).to, notificationIntendedRecipient: application.email });
+    // The face-to-face booking confirmation is delivered by the Google
+    // Calendar invitation (the candidate is added as an attendee), so its
+    // history row is recorded for audit but never queued for an email.
+    const confirmationIsEmailed = slot.interviewType === "voice";
+    await tx.insert(applicationStatusHistory).values({ applicationId: application.id, stage: slot.interviewType, previousStage, newStage: nextStage, actorEmail: input.actorEmail, source: "internal_api:booking", actionRequestId: input.actionRequestId, notificationStatus: confirmationIsEmailed ? "pending" : "skipped", notificationEventType: slot.interviewType === "voice" ? "voice_booking_confirmation" : "final_booking_confirmation", notificationRecipient: confirmationIsEmailed ? pilotEmailRecipient(application.email).to : "", notificationIntendedRecipient: confirmationIsEmailed ? application.email : "" });
     if (slot.interviewType === "voice") {
       const existing = await tx.select({ id: voiceCallAttempts.id }).from(voiceCallAttempts).where(and(eq(voiceCallAttempts.applicationId, application.id), inArray(voiceCallAttempts.status, ["scheduled", "queued", "calling", "initiated", "in_progress"]))).limit(1);
       if (existing.length === 0) {
@@ -1199,6 +1207,8 @@ export async function notificationQueue(stage?: string) {
     candidateName: applications.candidateName,
     candidateEmail: applications.email,
     notificationLink: sql<string>`COALESCE((SELECT bt.link FROM booking_tokens bt WHERE bt.application_id = ${applications.id} AND bt.kind = CASE WHEN ${applicationStatusHistory.notificationEventType} = 'voice_booking_invitation' THEN 'voice' WHEN ${applicationStatusHistory.notificationEventType} = 'final_booking_invitation' THEN 'final' ELSE '' END ORDER BY bt.created_at DESC LIMIT 1), '')`,
+    bookedSlotStartsAt: sql<string>`COALESCE((SELECT to_char(s.starts_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM interview_slots s WHERE s.application_id = ${applications.id} AND s.interview_type = CASE WHEN ${applicationStatusHistory.notificationEventType} = 'voice_booking_confirmation' THEN 'voice' WHEN ${applicationStatusHistory.notificationEventType} = 'final_booking_confirmation' THEN 'final' ELSE '' END AND s.status IN ('booked', 'completed') ORDER BY s.booked_at DESC NULLS LAST LIMIT 1), '')`,
+    bookedSlotTimezone: sql<string>`COALESCE((SELECT s.timezone FROM interview_slots s WHERE s.application_id = ${applications.id} AND s.interview_type = CASE WHEN ${applicationStatusHistory.notificationEventType} = 'voice_booking_confirmation' THEN 'voice' WHEN ${applicationStatusHistory.notificationEventType} = 'final_booking_confirmation' THEN 'final' ELSE '' END AND s.status IN ('booked', 'completed') ORDER BY s.booked_at DESC NULLS LAST LIMIT 1), '')`,
     roleExternalId: roles.externalId,
     roleTitle: roles.title,
   }).from(applicationStatusHistory)
@@ -1224,6 +1234,14 @@ export async function notificationQueue(stage?: string) {
     ))
     .orderBy(asc(roleStatusHistory.changedAt)).limit(LIMIT);
   const rows = applicationRows;
+  const scheduledLabel = (startsAt: string, timezone: string) => {
+    const parsed = new Date(startsAt);
+    if (!startsAt || Number.isNaN(parsed.getTime())) return "";
+    const tz = timezone || "Asia/Singapore";
+    const date = new Intl.DateTimeFormat("en-GB", { timeZone: tz, day: "numeric", month: "long", year: "numeric" }).format(parsed);
+    const time = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit", hour12: true }).format(parsed);
+    return `${date} at ${time} (${tz.replace(/_/g, " ")})`;
+  };
   const applicationItems = (() => {
     return rows.map(({ history, ...context }) => ({
       ...history,
@@ -1233,6 +1251,12 @@ export async function notificationQueue(stage?: string) {
       statusLabel: notificationStatusLabel(history.newStage),
       previousStatusLabel: notificationStatusLabel(history.previousStage),
       summary: notificationSummary(history.notificationEventType, history.comments),
+      email: notificationEmail(history.notificationEventType, {
+        candidateName: context.candidateName,
+        roleTitle: context.roleTitle,
+        bookingLink: context.notificationLink,
+        scheduledLabel: scheduledLabel(context.bookedSlotStartsAt, context.bookedSlotTimezone),
+      }),
     }));
   })();
   return [

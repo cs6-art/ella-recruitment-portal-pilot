@@ -202,7 +202,16 @@ export function ruleToSlots(rule: InterviewAvailabilityRule, maxDays = 180): Voi
   return result;
 }
 
-export function roleAvailabilityRules(role: { roleId: string; targetHiringDate?: string; voiceInterviewAvailabilityMode?: string; voiceInterviewSlots?: string; voiceInterviewAutoStartDate?: string; voiceInterviewAutoEndDate?: string; voiceInterviewTimezone?: string; interviewAvailabilityRules?: string }): InterviewAvailabilityRule[] {
+export function roleAvailabilityRules(
+  role: { roleId: string; targetHiringDate?: string; voiceInterviewAvailabilityMode?: string; voiceInterviewSlots?: string; voiceInterviewAutoStartDate?: string; voiceInterviewAutoEndDate?: string; voiceInterviewTimezone?: string; interviewAvailabilityRules?: string },
+  // The AI voice interview is a phone call to the candidate, so its slot times
+  // are shown in the candidate's own timezone when one is supplied. The
+  // face-to-face interview always stays in the office timezone below.
+  voiceTimezoneOverride?: string,
+): InterviewAvailabilityRule[] {
+  const voiceTimezone = voiceTimezoneOverride && validTimezone(voiceTimezoneOverride) === voiceTimezoneOverride
+    ? voiceTimezoneOverride
+    : "";
   // Final-interview availability is derived from the connected HR Google
   // Calendar. Ignore legacy manually saved final rules.
   const stored = parseAvailabilityRules(role.interviewAvailabilityRules).filter((rule) => rule.interviewType !== "Final Interview");
@@ -212,7 +221,7 @@ export function roleAvailabilityRules(role: { roleId: string; targetHiringDate?:
   const hasVoiceRule = rules.some((rule) => rule.interviewType === "AI Voice Interview");
   if (!hasVoiceRule) {
     // Legacy roles without a stored rule inherit the standard voice schedule.
-    const timezone = validTimezone(text(role.voiceInterviewTimezone) || "Asia/Singapore");
+    const timezone = voiceTimezone || validTimezone(text(role.voiceInterviewTimezone) || "Asia/Singapore");
     const today = todayInTimezone(timezone);
     const configuredStart = DATE.test(role.voiceInterviewAutoStartDate || "") ? role.voiceInterviewAutoStartDate || today : today;
     const startDate = configuredStart > today ? configuredStart : today;
@@ -225,11 +234,17 @@ export function roleAvailabilityRules(role: { roleId: string; targetHiringDate?:
   // Existing roles receive a full current-month HR interview schedule while
   // targetHiringDate still limits candidate-visible slots to the hiring plan.
   rules.push({ ruleId: `CALENDAR-FINAL-${role.roleId}`, roleId: role.roleId, interviewType: "Final Interview", mode: "recurring", startDate: monthStart(today), endDate: monthEnd(today), weekdays: [1, 2, 3, 4, 5], startTime: "10:00", endTime: "16:00", slotDurationMinutes: 60, timezone: finalTimezone, specificSlots: [], status: "Active" });
+  // Only the AI voice interview follows the candidate's timezone.
+  if (voiceTimezone) {
+    for (const rule of rules) {
+      if (rule.interviewType === "AI Voice Interview") rule.timezone = voiceTimezone;
+    }
+  }
   return rules;
 }
 
-export function virtualSlotsForRole(role: Parameters<typeof roleAvailabilityRules>[0], interviewType: "AI Voice Interview" | "Final Interview", respectTargetHiringDate = true) {
-  const slots = roleAvailabilityRules(role).filter((rule) => rule.interviewType === interviewType).flatMap((rule) => ruleToSlots(rule).filter((slot) => !respectTargetHiringDate || isBeforeTargetHiringDate(slot.date, role.targetHiringDate)).map((slot) => ({
+export function virtualSlotsForRole(role: Parameters<typeof roleAvailabilityRules>[0], interviewType: "AI Voice Interview" | "Final Interview", respectTargetHiringDate = true, voiceTimezoneOverride?: string) {
+  const slots = roleAvailabilityRules(role, voiceTimezoneOverride).filter((rule) => rule.interviewType === interviewType).flatMap((rule) => ruleToSlots(rule).filter((slot) => !respectTargetHiringDate || isBeforeTargetHiringDate(slot.date, role.targetHiringDate)).map((slot) => ({
     slotId: `VIRTUAL-${hash(`${rule.ruleId}|${slot.date}|${slot.startTime}|${slot.endTime}|${slot.timezone}`).toUpperCase()}`,
     interviewType,
     roleId: role.roleId,
