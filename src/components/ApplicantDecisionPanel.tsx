@@ -11,6 +11,7 @@ type Stage = "resume" | "voice" | "final";
 type SavedDecision = { decision: string; comments: string };
 type Props = {
   applicationId: string;
+  currentStage: string;
   resumeDecision: string;
   resumeComments: string;
   voiceDecision: string;
@@ -37,11 +38,18 @@ function isRejectedDecision(value: string) {
 }
 
 function reviewStage(props: Props): Stage {
-  if (/completed/i.test(props.finalInterviewStatus) || /(?:final|hr) interview (passed|rejected)/i.test(props.finalStatus)) return "final";
-  // An incomplete voice interview still needs HR review. Treating it as an
-  // unrecognized status falls back to the already-decided CV stage and hides
-  // the voice approval actions.
-  if (/interviewed|completed|incomplete/i.test(`${props.voiceStatus} ${props.finalStatus}`)) return "voice";
+  // The canonical workflow stage is the source of truth when it is available
+  // (Postgres applicants); the status-text heuristics below keep the Sheets
+  // applicants working where only display labels are provided.
+  const stageKey = props.currentStage.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (["approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"].includes(stageKey)
+    || /completed/i.test(props.finalInterviewStatus)
+    || /(?:final|hr) interview (passed|rejected)/i.test(props.finalStatus)) return "final";
+  // A voice interview that was not answered or not completed still needs an HR
+  // decision. Treating it as an unrecognized status falls back to the
+  // already-decided CV stage and hides the voice approval actions.
+  if (stageKey === "voice_review_pending"
+    || /interviewed|completed|incomplete|no[_ -]?answer|no[_ -]?show/i.test(`${props.voiceStatus} ${props.finalStatus}`)) return "voice";
   return "resume";
 }
 

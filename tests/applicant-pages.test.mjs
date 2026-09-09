@@ -112,6 +112,13 @@ test("voice review reflects the real call outcome when no interview took place",
   assert.match(applications, /voiceCallStatus: field\(record, "Status 2 \(Voice Interview\)"/);
   assert.match(detail, /applicantStageLabel\(voiceCallStatus\)/);
   assert.match(detail, /voiceNotConducted/);
+
+  // HR must still get an approval step for a voice interview that was not
+  // answered or completed — the panel keys on the canonical workflow stage.
+  const decisionPanel = read("src/components/ApplicantDecisionPanel.tsx");
+  assert.match(decisionPanel, /stageKey === "voice_review_pending"/);
+  assert.match(decisionPanel, /no\[_ -\]\?answer\|no\[_ -\]\?show/);
+  assert.match(detail, /currentStage=\{applicant\.currentStage\}/);
 });
 
 test("eligible final bookings invite the applicant through Google Calendar", () => {
