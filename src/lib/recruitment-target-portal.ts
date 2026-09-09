@@ -72,6 +72,11 @@ const VOICE_OUTCOME_LABELS: Record<string, string> = {
   completed: "Completed",
 };
 
+const RESUME_TEXT_CACHE_TTL_MS = 15 * 60 * 1000;
+const RESUME_TEXT_CACHE_MAX_ENTRIES = 32;
+const resumeTextCache = new Map<string, { text: string; expiresAt: number }>();
+const resumeTextInFlight = new Map<string, Promise<string>>();
+
 function storedResumeRecord(value: Record<string, unknown> | null | undefined): ResumeFileRecord | null {
   if (!value) return null;
   const kind = text(value.kind);
@@ -91,10 +96,27 @@ async function storedResumeText(value: Record<string, unknown> | null | undefine
   const record = storedResumeRecord(value);
   if (!record) return "";
   if (record.expiresAt && new Date(record.expiresAt).getTime() <= Date.now()) return "";
+  const key = record.fileId;
+  const cached = resumeTextCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.text;
+  if (cached) resumeTextCache.delete(key);
+  const existing = resumeTextInFlight.get(key);
+  if (existing) return existing;
+  const extraction = extractStoredResumeText(record).catch(() => "");
+  resumeTextInFlight.set(key, extraction);
   try {
-    return await extractStoredResumeText(record);
-  } catch {
-    return "";
+    const textValue = await extraction;
+    if (textValue) {
+      resumeTextCache.set(key, { text: textValue, expiresAt: Date.now() + RESUME_TEXT_CACHE_TTL_MS });
+      while (resumeTextCache.size > RESUME_TEXT_CACHE_MAX_ENTRIES) {
+        const oldest = resumeTextCache.keys().next().value;
+        if (!oldest) break;
+        resumeTextCache.delete(oldest);
+      }
+    }
+    return textValue;
+  } finally {
+    resumeTextInFlight.delete(key);
   }
 }
 
@@ -657,9 +679,9 @@ export async function targetArchiveRole(roleId: string, actor: { email: string; 
   return archiveRole({ externalId: roleId, actorEmail: actor.email, actorName: actor.name, actionRequestId: `archive:${roleId}` });
 }
 
-export async function targetApplicantSummaries() {
-  const rows = await listApplications();
-  return rows.map((row) => {
+type TargetApplicationRow = Awaited<ReturnType<typeof listApplications>>[number];
+
+function targetApplicantSummary(row: TargetApplicationRow) {
     const application = row.application as unknown as Record<string, unknown>;
     const screening = row.screeningResult as unknown as Record<string, unknown> | null;
     return {
@@ -681,7 +703,11 @@ export async function targetApplicantSummaries() {
       currentStage: text(application.currentStage),
       nextAction: label(application.currentStage),
     };
-  });
+}
+
+export async function targetApplicantSummaries() {
+  const rows = await listApplications();
+  return rows.map(targetApplicantSummary);
 }
 
 export async function targetDeleteApplicant(externalId: string) {
@@ -704,18 +730,18 @@ export async function targetMarkInterviewNoShow(slotId: string, actor: { email: 
   return markTargetInterviewNoShow(slotId, actor.email, actor.name);
 }
 
-export async function targetApplicantMetrics() {
-  const rows = await targetApplicantSummaries();
+export async function targetApplicantMetrics(rows?: Awaited<ReturnType<typeof targetApplicantSummaries>>) {
+  const summaries = rows || await targetApplicantSummaries();
   const stageCounts = new Map<string, number>();
-  for (const row of rows) stageCounts.set(row.currentStage, (stageCounts.get(row.currentStage) || 0) + 1);
+  for (const row of summaries) stageCounts.set(row.currentStage, (stageCounts.get(row.currentStage) || 0) + 1);
   const stage = (key: string) => stageCounts.get(key) || 0;
   return {
-    total: rows.length,
-    today: rows.filter((row) => text(row.appliedAt).slice(0, 10) === new Date().toISOString().slice(0, 10)).length,
-    screened: rows.filter((row) => Boolean(row.cvRecommendation || row.resumeStatus)).length,
-    interviewed: rows.filter((row) => ["voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"].includes(row.currentStage)).length,
-    voiceActivity: rows.filter((row) => Boolean(row.voiceStatus)).length,
-    hrActivity: rows.filter((row) => Boolean(row.cvRecommendation || row.voiceStatus || row.finalInterviewStatus)).length,
+    total: summaries.length,
+    today: summaries.filter((row) => text(row.appliedAt).slice(0, 10) === new Date().toISOString().slice(0, 10)).length,
+    screened: summaries.filter((row) => Boolean(row.cvRecommendation || row.resumeStatus)).length,
+    interviewed: summaries.filter((row) => ["voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"].includes(row.currentStage)).length,
+    voiceActivity: summaries.filter((row) => Boolean(row.voiceStatus)).length,
+    hrActivity: summaries.filter((row) => Boolean(row.cvRecommendation || row.voiceStatus || row.finalInterviewStatus)).length,
     resumeApproved: stage("resume_approved"),
     voiceBookingPending: stage("voice_booking_pending"),
     voiceScheduled: stage("voice_scheduled"),
@@ -738,8 +764,7 @@ export async function targetApplicantMetrics() {
 export async function targetApplicantDetails(externalId: string) {
   const row = await getApplication(externalId);
   if (!row) return null;
-  const [summary] = (await targetApplicantSummaries()).filter((candidate) => candidate.applicationId === externalId);
-  if (!summary) return null;
+  const summary = targetApplicantSummary(row);
   const application = row.application as unknown as Record<string, unknown>;
   const screening = row.screeningResult as unknown as Record<string, unknown> | null;
   const resumeFile = row.resumeFile as unknown as Record<string, unknown> | null;

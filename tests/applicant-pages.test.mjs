@@ -303,6 +303,7 @@ test("resume processing is bounded and standalone uploads require HR review acce
   const resumeFiles = read("src/lib/resume-files.ts");
   const limiter = read("src/lib/rate-limit.ts");
   const instrumentation = read("src/instrumentation.ts");
+  const cleanupRoute = read("src/app/api/cron/resume-cleanup/route.ts");
 
   assert.match(uploadRoute, /verifySessionToken/);
   assert.match(uploadRoute, /canReviewRole !== true/);
@@ -314,8 +315,10 @@ test("resume processing is bounded and standalone uploads require HR review acce
   assert.match(resumeFiles, /CLEANUP_INTERVAL_MS/);
   assert.match(resumeFiles, /expiresAt/);
   assert.match(limiter, /MAX_BUCKETS/);
-  assert.match(instrumentation, /cleanupExpiredResumeFiles/);
-  assert.match(instrumentation, /setInterval/);
+  assert.doesNotMatch(instrumentation, /cleanupExpiredResumeFiles|setInterval|setTimeout/);
+  assert.match(cleanupRoute, /CRON_SECRET/);
+  assert.match(cleanupRoute, /cleanupExpiredResumeFiles/);
+  assert.match(cleanupRoute, /VERCEL_ENV === "preview"/);
 });
 
 test("candidate screening contract is role-bound and HR-owned", () => {

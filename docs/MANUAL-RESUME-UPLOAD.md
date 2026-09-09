@@ -25,10 +25,11 @@ fallback during rollout. PDF, DOC, and DOCX bytes are never placed in
    download a non-expired file. Expiry is 30 days by default.
 
 Uploads are limited per client/user and request bodies are bounded before
-`formData()` parsing. In the Node.js server runtime, `src/instrumentation.ts`
-runs retention cleanup at startup and hourly afterward, deleting any Drive
-file whose `expiresAt` property has passed. This can also be triggered by a
-scheduled hosting job calling `cleanupExpiredResumeFiles()`. Before
+`formData()` parsing. Retention cleanup is available through the protected
+`/api/cron/resume-cleanup` endpoint, deleting any Drive file whose `expiresAt`
+property has passed. A production scheduler must send `Authorization: Bearer
+$CRON_SECRET` (or `X-Cron-Secret`) to that endpoint; Preview deployments skip
+the operation. Uploads also retain a once-per-process safety cleanup. Before
 production enablement, share the `RESUME_STORAGE_DRIVE_FOLDER_ID` folder with
 `GOOGLE_SERVICE_ACCOUNT_EMAIL` (Editor access — prefer a Shared Drive, since
 a service account has no Drive storage quota of its own) and add malware

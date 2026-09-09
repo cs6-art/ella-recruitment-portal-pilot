@@ -236,6 +236,9 @@ let cleanupInFlight: Promise<unknown> | null = null;
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 async function cleanupIfDue() {
+  // Preview deployments must never mutate the shared production Drive folder
+  // as a side effect of a user upload.
+  if (process.env.VERCEL_ENV === "preview") return;
   const now = Date.now();
   if (cleanupInFlight) return cleanupInFlight;
   if (lastCleanupAt + CLEANUP_INTERVAL_MS > now) return;
