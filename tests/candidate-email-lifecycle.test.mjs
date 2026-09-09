@@ -43,6 +43,14 @@ test("resume approval queues the voice booking invitation immediately and safely
   assert.match(query, /newStage: nextStage/);
 });
 
+test("target booking links expose generated availability and materialize the selected virtual slot", () => {
+  const target = read("src/lib/recruitment-target-portal.ts");
+  assert.match(target, /virtualSlotsForRole\(role, kind === "voice" \? "AI Voice Interview" : "Final Interview"\)/);
+  assert.match(target, /const virtualSlot = isVirtualSlotId\(slotId\) \? context\.slots\.find\(\(slot\) => slot\.slotId === slotId\) : undefined/);
+  assert.match(target, /slotCode: kind === "final" \? virtualSlot\.slotId : undefined/);
+  assert.match(target, /persistedSlotId = materialized\.slot\.id/);
+});
+
 test("notification state records attempt, sent time, provider ID, and recipient", () => {
   const query = read("src/lib/internal-recruitment-queries.ts");
   const route = read("src/app/api/internal/recruitment/notifications/route.ts");
