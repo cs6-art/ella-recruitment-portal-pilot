@@ -53,32 +53,6 @@ export async function intakeTargetResumeBatch(input: {
       queueKey = queueId;
       const contact = extractResumeContactDetails(stored.extractedText);
       if (!contact.candidateEmail) throw new Error("The resume must contain a readable candidate email address.");
-      stage = "queue_persistence";
-      const queued = await enqueueBulkScreening({
-        roleExternalId: input.roleId,
-        batchId,
-        dedupeKey: queueId,
-        resumeSha256: stored.record.sha256,
-        driveFileId: source.driveFileId || stored.record.fileId,
-        filename: stored.record.fileName,
-        fileUrl: driveFileUrl(stored.record.fileId),
-        mimeType: stored.record.mimeType,
-        candidateName: contact.candidateName,
-        candidateEmail: contact.candidateEmail,
-        preferredMobile: contact.preferredMobile,
-        applicantCountry: contact.applicantCountry,
-        source: input.sourceLabel.toLowerCase().includes("drive") ? "drive" : "upload",
-        environment,
-        isUat,
-        jobId: queueId,
-      });
-      if (!queued.item) throw new Error(queued.error || "Unable to enqueue the resume.");
-      if (!queued.created) {
-        if (!stored.reused) await deleteResumeFile(stored.record).catch(() => undefined);
-        results.push({ fileName: source.name, queueId, status: "Skipped", skipped: true, message: "This resume is already queued or processed for this role." });
-        continue;
-      }
-      durableQueue = true;
       stage = "application_persistence";
 
       const applicationId = `APP-${crypto.createHash("sha256").update(`${input.roleId}:${stored.record.sha256}`).digest("hex").slice(0, 24)}`;
@@ -104,9 +78,40 @@ export async function intakeTargetResumeBatch(input: {
         resumeFileId: resumeFileId || undefined,
       });
       if (!application.application) {
-        await updateBulkQueueStatus({ dedupeKey: queueId, status: "failed", errorMessage: application.error || "Unable to create the application." });
         throw new Error(application.error || "Unable to create the application.");
       }
+
+      // Attach the application in the initial INSERT. A queue row with a
+      // null application_id is immediately claimable; a concurrent worker
+      // could otherwise process it between enqueue and this update, fail with
+      // missing_application, and never reach the credit boundary.
+      stage = "queue_persistence";
+      const queued = await enqueueBulkScreening({
+        roleExternalId: input.roleId,
+        applicationExternalId: applicationId,
+        batchId,
+        dedupeKey: queueId,
+        resumeSha256: stored.record.sha256,
+        driveFileId: source.driveFileId || stored.record.fileId,
+        filename: stored.record.fileName,
+        fileUrl: driveFileUrl(stored.record.fileId),
+        mimeType: stored.record.mimeType,
+        candidateName: contact.candidateName,
+        candidateEmail: contact.candidateEmail,
+        preferredMobile: contact.preferredMobile,
+        applicantCountry: contact.applicantCountry,
+        source: input.sourceLabel.toLowerCase().includes("drive") ? "drive" : "upload",
+        environment,
+        isUat,
+        jobId: queueId,
+      });
+      if (!queued.item) throw new Error(queued.error || "Unable to enqueue the resume.");
+      if (!queued.created) {
+        if (!stored.reused) await deleteResumeFile(stored.record).catch(() => undefined);
+        results.push({ fileName: source.name, queueId, status: "Skipped", skipped: true, message: "This resume is already queued or processed for this role." });
+        continue;
+      }
+      durableQueue = true;
       await updateBulkQueueStatus({ dedupeKey: queueId, status: "queued", applicationId: application.application.id });
       submitted += 1;
       results.push({ fileName: stored.record.fileName, queueId, applicationId, status: "Queued", driveFileUrl: driveFileUrl(stored.record.fileId) });

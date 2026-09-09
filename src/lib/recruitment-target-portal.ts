@@ -36,6 +36,7 @@ import {
 import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
 import { applicantVoiceTimezone } from "@/lib/applicant-timezone";
 import { extractStoredResumeText, type ResumeFileKind, type ResumeFileRecord } from "@/lib/resume-files";
+import { scheduledInstant } from "@/lib/interview-time";
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { generateRoleId } from "@/lib/role-id";
@@ -475,19 +476,30 @@ export async function processTargetCalendarEventQueue(limit = 10) {
 }
 
 export async function targetCreateInterviewSlot(input: { slotCode?: string; roleId: string; interviewType: "AI Voice Interview" | "Final Interview"; date: string; startTime: string; endTime: string; timezone: string }) {
+  let startsAt: string;
+  let endsAt: string;
+  try {
+    // Store the absolute instant represented by the candidate's local time.
+    // Appending `Z` here would silently reinterpret Manila/Kuala Lumpur/etc.
+    // times as UTC and can move a call several hours from its booking.
+    startsAt = scheduledInstant(input.date, input.startTime, input.timezone).toISOString();
+    endsAt = scheduledInstant(input.date, input.endTime, input.timezone).toISOString();
+  } catch {
+    return { slot: null, created: false, error: "invalid_slot" as const };
+  }
   if (input.interviewType === "Final Interview") {
     const role = await getRole(input.roleId);
     if (!role) return { slot: null, created: false, error: "unknown_role" as const };
     if (!["approved", "recruitment_setup", "job_posted"].includes(text(role.status).toLowerCase())) return { slot: null, created: false, error: "role_not_ready" as const };
     if (!isStandardFinalInterviewSlot({ interviewType: input.interviewType, startTime: input.startTime, endTime: input.endTime })) return { slot: null, created: false, error: "invalid_final_slot" as const };
     if (!isBeforeTargetHiringDate(input.date, role.targetHiringDate || undefined)) return { slot: null, created: false, error: "after_target_hiring_date" as const };
-    const start = new Date(`${input.date}T${input.startTime}:00${input.timezone === "Asia/Singapore" ? "+08:00" : "Z"}`);
+    const start = new Date(startsAt);
     if (Number.isNaN(start.getTime()) || start.getTime() <= Date.now()) return { slot: null, created: false, error: "past_slot" as const };
     const calendar = await checkCalendarAvailability({ hodEmail: text(role.hrCalendarEmail), date: input.date, startTime: input.startTime, endTime: input.endTime, timezone: input.timezone });
     if (!calendar.checked) return { slot: null, created: false, error: calendar.reason === "not_connected" ? "calendar_not_connected" as const : "calendar_unavailable" as const };
     if (!calendar.available) return { slot: null, created: false, error: "calendar_conflict" as const };
   }
-  return createInterviewSlot({ slotCode: input.slotCode, roleExternalId: input.roleId, interviewType: input.interviewType.toLowerCase().includes("voice") ? "voice" : "final", startsAt: `${input.date}T${input.startTime}:00${input.timezone === "Asia/Singapore" ? "+08:00" : "Z"}`, endsAt: `${input.date}T${input.endTime}:00${input.timezone === "Asia/Singapore" ? "+08:00" : "Z"}`, timezone: input.timezone });
+  return createInterviewSlot({ slotCode: input.slotCode, roleExternalId: input.roleId, interviewType: input.interviewType.toLowerCase().includes("voice") ? "voice" : "final", startsAt, endsAt, timezone: input.timezone });
 }
 
 export async function targetUpdateApplicantProfile(input: { applicationId: string; candidateName: string; email: string; preferredMobile: string; applicantCountry: string }) {
