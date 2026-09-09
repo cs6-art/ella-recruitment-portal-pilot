@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 import {
   getApplication,
+  getRole,
   getBookingToken,
   applyHrDecision,
   bookInterviewSlot,
@@ -19,17 +20,20 @@ import {
   listRoleStatusHistory,
   renameRoleExternalId,
   markBookingTokenUsed,
+  markInterviewCalendarEvent,
   markScreeningInvitationUsed,
   updateApplicationProfile,
   listRoles,
   registerResumeFile,
   updateRoleDetails,
   archiveRole,
+  calendarEventQueue,
 } from "@/lib/internal-recruitment-queries";
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { generateRoleId } from "@/lib/role-id";
-import { hasValidFutureTime, isBeforeTargetHiringDate } from "@/lib/interview-availability-rules";
+import { checkCalendarAvailability, createFinalInterviewEvent } from "@/lib/google-calendar";
+import { hasValidFutureTime, isBeforeTargetHiringDate, isStandardFinalInterviewSlot } from "@/lib/interview-availability-rules";
 
 function text(value: unknown) {
   return String(value ?? "").trim();
@@ -281,10 +285,12 @@ export async function targetBookingContext(kind: "voice" | "final", tokenHash: s
     .map((value) => bookingSlot(((value as { slot?: unknown }).slot || value) as Record<string, unknown>, roleId))
     .filter((slot) => isBeforeTargetHiringDate(slot.date, row.roleTargetHiringDate || undefined))
     .filter((slot) => hasValidFutureTime(slot));
+  const roleSetup = row.roleSetup && typeof row.roleSetup === "object" ? row.roleSetup as Record<string, unknown> : {};
   return {
     kind, applicationId: text(row.application.externalId), candidateName: text(row.application.candidateName), email: text(row.application.email || row.applicantEmail),
     selectedRole: text(row.roleTitle), roleId, bookingStatus: text(token.token.status), scheduledDate: text(currentSlot?.date), scheduledTime: text(currentSlot?.startTime),
-    timezone: text(currentSlot?.timezone), appliedAt: text(row.application.appliedAt), preferredMobile: text(row.application.preferredMobile || row.application.phone), currentSlot, slots: available,
+    timezone: text(currentSlot?.timezone), appliedAt: text(row.application.appliedAt), preferredMobile: text(row.application.preferredMobile || row.application.phone),
+    finalInterviewVenue: text(roleSetup.finalInterviewVenue), roleHrCalendarEmail: text(row.roleHrCalendarEmail), currentSlot, slots: available,
   };
 }
 
@@ -292,11 +298,104 @@ export async function targetReserveBooking(kind: "voice" | "final", tokenHash: s
   const context = await targetBookingContext(kind, tokenHash);
   if (!context) return { booked: false, error: "invalid_booking_token" as const };
   const result = await bookInterviewSlot({ slotId, applicationExternalId: context.applicationId, actorEmail, actionRequestId: `booking:${tokenHash}:${slotId}` });
-  if (result.booked) await markBookingTokenUsed(tokenHash);
-  return result;
+  if (!result.booked) return result;
+  if (!result.slot) return { booked: false, error: "booking_missing_slot" as const };
+  await markBookingTokenUsed(tokenHash);
+  if (kind !== "final") return result;
+
+  const slot = result.slot;
+  const timezone = text(slot.timezone) || "Asia/Singapore";
+  const startsAt = slotDateTime(slot.startsAt, timezone);
+  const endsAt = slotDateTime(slot.endsAt, timezone);
+  let calendar: Awaited<ReturnType<typeof createFinalInterviewEvent>>;
+  try {
+    calendar = await createFinalInterviewEvent({
+      hodEmail: context.roleHrCalendarEmail,
+      summary: `HR Interview: ${context.candidateName} — ${context.selectedRole}`,
+      description: `HR interview for ${context.candidateName} (${context.applicationId}) applying for ${context.selectedRole}.\n\nCandidate email: ${context.email}${context.finalInterviewVenue ? `\n\nVenue:\n${context.finalInterviewVenue}` : ""}`,
+      date: startsAt.date,
+      startTime: `${startsAt.time}:00`,
+      endTime: `${endsAt.time}:00`,
+      timezone,
+      attendeeEmails: [context.email],
+      location: context.finalInterviewVenue,
+    });
+  } catch (error) {
+    calendar = { created: false, reason: "error", error: error instanceof Error ? error.message : String(error) };
+  }
+  try {
+    await markInterviewCalendarEvent({
+      slotId: slot.id,
+      status: calendar.created ? "created" : "failed",
+      eventId: calendar.created ? calendar.eventId : undefined,
+      eventLink: calendar.created ? calendar.htmlLink : undefined,
+      error: calendar.created ? undefined : ("error" in calendar ? calendar.error : calendar.reason),
+    });
+  } catch (error) {
+    calendar = calendar.created
+      ? { created: false, reason: "error", error: `Calendar event created but write-back failed: ${error instanceof Error ? error.message : String(error)}` }
+      : { ...calendar, error: `${"error" in calendar && calendar.error ? calendar.error : calendar.reason}; write-back failed: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  return { ...result, calendar };
+}
+
+/** Retry Calendar writes for bookings that survived a transient provider or
+ * deployment failure. The direct booking path already attempts this inline;
+ * this worker closes the gap for failed attempts and legacy queued bookings. */
+export async function processTargetCalendarEventQueue(limit = 10) {
+  const rows = (await calendarEventQueue()).slice(0, Math.max(1, Math.min(10, Math.trunc(limit))));
+  const results = [];
+  for (const row of rows) {
+    const timezone = text(row.timezone) || "Asia/Singapore";
+    const startsAt = slotDateTime(row.startsAt, timezone);
+    const endsAt = slotDateTime(row.endsAt, timezone);
+    if (!startsAt.date || new Date(String(row.startsAt)).getTime() <= Date.now()) {
+      const marked = await markInterviewCalendarEvent({ slotId: row.id, status: "skipped", error: "The scheduled interview time has already passed." });
+      results.push({ slotId: row.id, status: "skipped", updated: marked.updated });
+      continue;
+    }
+    const setup = row.roleSetup && typeof row.roleSetup === "object" ? row.roleSetup as Record<string, unknown> : {};
+    let calendar: Awaited<ReturnType<typeof createFinalInterviewEvent>>;
+    try {
+      calendar = await createFinalInterviewEvent({
+        hodEmail: text(row.roleHrCalendarEmail),
+        summary: `HR Interview: ${text(row.candidateName) || "Candidate"} — ${text(row.roleExternalId)}`,
+        description: `HR interview for ${text(row.candidateName) || "Candidate"} (${text(row.applicationExternalId)}).${text(row.candidateEmail) ? `\n\nCandidate email: ${text(row.candidateEmail)}` : ""}`,
+        date: startsAt.date,
+        startTime: `${startsAt.time}:00`,
+        endTime: `${endsAt.time}:00`,
+        timezone,
+        attendeeEmails: text(row.candidateEmail) ? [text(row.candidateEmail)] : [],
+        location: text(setup.finalInterviewVenue),
+      });
+    } catch (error) {
+      calendar = { created: false, reason: "error", error: error instanceof Error ? error.message : String(error) };
+    }
+    const marked = await markInterviewCalendarEvent({
+      slotId: row.id,
+      status: calendar.created ? "created" : "failed",
+      eventId: calendar.created ? calendar.eventId : undefined,
+      eventLink: calendar.created ? calendar.htmlLink : undefined,
+      error: calendar.created ? undefined : ("error" in calendar ? calendar.error : calendar.reason),
+    });
+    results.push({ slotId: row.id, status: calendar.created ? "created" : "failed", updated: marked.updated, error: "error" in calendar ? calendar.error : undefined });
+  }
+  return { processed: results.length, results };
 }
 
 export async function targetCreateInterviewSlot(input: { roleId: string; interviewType: "AI Voice Interview" | "Final Interview"; date: string; startTime: string; endTime: string; timezone: string }) {
+  if (input.interviewType === "Final Interview") {
+    const role = await getRole(input.roleId);
+    if (!role) return { slot: null, created: false, error: "unknown_role" as const };
+    if (!["approved", "recruitment_setup", "job_posted"].includes(text(role.status).toLowerCase())) return { slot: null, created: false, error: "role_not_ready" as const };
+    if (!isStandardFinalInterviewSlot({ interviewType: input.interviewType, startTime: input.startTime, endTime: input.endTime })) return { slot: null, created: false, error: "invalid_final_slot" as const };
+    if (!isBeforeTargetHiringDate(input.date, role.targetHiringDate || undefined)) return { slot: null, created: false, error: "after_target_hiring_date" as const };
+    const start = new Date(`${input.date}T${input.startTime}:00${input.timezone === "Asia/Singapore" ? "+08:00" : "Z"}`);
+    if (Number.isNaN(start.getTime()) || start.getTime() <= Date.now()) return { slot: null, created: false, error: "past_slot" as const };
+    const calendar = await checkCalendarAvailability({ hodEmail: text(role.hrCalendarEmail), date: input.date, startTime: input.startTime, endTime: input.endTime, timezone: input.timezone });
+    if (!calendar.checked) return { slot: null, created: false, error: calendar.reason === "not_connected" ? "calendar_not_connected" as const : "calendar_unavailable" as const };
+    if (!calendar.available) return { slot: null, created: false, error: "calendar_conflict" as const };
+  }
   return createInterviewSlot({ roleExternalId: input.roleId, interviewType: input.interviewType.toLowerCase().includes("voice") ? "voice" : "final", startsAt: `${input.date}T${input.startTime}:00${input.timezone === "Asia/Singapore" ? "+08:00" : "Z"}`, endsAt: `${input.date}T${input.endTime}:00${input.timezone === "Asia/Singapore" ? "+08:00" : "Z"}`, timezone: input.timezone });
 }
 

@@ -310,7 +310,7 @@ export async function registerResumeFile(input: { storageRef: string; sha256: st
 
 export async function getApplication(externalId: string) {
   const db = getDb();
-  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, roleTargetHiringDate: roles.targetHiringDate, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
+  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, roleTargetHiringDate: roles.targetHiringDate, roleHrCalendarEmail: roles.hrCalendarEmail, roleSetup: roles.setup, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
   return row ?? null;
 }
 
@@ -925,9 +925,10 @@ export async function bookInterviewSlot(input: { slotId: string; applicationExte
  */
 export async function calendarEventQueue() {
   const db = getDb();
-  const rows = await db.select({ slot: interviewSlots, roleExternalId: roles.externalId })
+  const rows = await db.select({ slot: interviewSlots, roleExternalId: roles.externalId, roleHrCalendarEmail: roles.hrCalendarEmail, roleSetup: roles.setup, applicationExternalId: applications.externalId })
     .from(interviewSlots)
     .leftJoin(roles, eq(roles.id, interviewSlots.roleId))
+    .leftJoin(applications, eq(applications.id, interviewSlots.applicationId))
     .where(and(
       eq(interviewSlots.status, "booked"),
       eq(interviewSlots.interviewType, "final"),
@@ -935,7 +936,7 @@ export async function calendarEventQueue() {
     ))
     .orderBy(asc(interviewSlots.startsAt))
     .limit(LIMIT);
-  return rows.map(({ slot, roleExternalId }) => ({ ...slot, roleExternalId: roleExternalId || "" }));
+  return rows.map(({ slot, roleExternalId, roleHrCalendarEmail, roleSetup, applicationExternalId }) => ({ ...slot, roleExternalId: roleExternalId || "", roleHrCalendarEmail: roleHrCalendarEmail || "", roleSetup: roleSetup || {}, applicationExternalId: applicationExternalId || "" }));
 }
 
 /**

@@ -18,10 +18,10 @@ test("the shared poller dedupes in-flight requests and is visibility-aware", () 
   assert.match(poll, /Date\.now\(\) - lastFetch < throttleMs/);       // throttled focus refresh
 });
 
-test("EllaCreditsMeter shares one poll, backs off to 90s, and keeps event-driven refresh", () => {
+test("EllaCreditsMeter shares one poll, backs off to five minutes, and keeps event-driven refresh", () => {
   assert.match(meter, /useSharedPoll<MeterData>\(POLL_KEY, fetchMeterData, POLL_INTERVAL_MS\)/);
   assert.match(meter, /POLL_KEY = "ella-credits-balance"/);
-  assert.match(meter, /POLL_INTERVAL_MS = 90_000/);
+  assert.match(meter, /POLL_INTERVAL_MS = 5 \* 60_000/);
   // no component-local polling interval any more
   assert.doesNotMatch(meter, /setInterval/);
   // a credit-changing action still updates the meter immediately + reconciles
@@ -33,7 +33,7 @@ test("EllaCreditsMeter shares one poll, backs off to 90s, and keeps event-driven
 test("the recent-applicants feed is a single shared poll for both callers", () => {
   assert.match(bell, /useSharedPoll<RecentApplicant\[\]>\(POLL_KEY, fetchRecentApplicants, POLL_INTERVAL_MS, enabled\)/);
   assert.match(bell, /POLL_KEY = "applicants-recent"/);
-  assert.match(bell, /POLL_INTERVAL_MS = 60_000/);
+  assert.match(bell, /POLL_INTERVAL_MS = 5 \* 60_000/);
   assert.doesNotMatch(bell, /setInterval/);
   // exactly one place fetches the endpoint, and AppShell reuses the same hook
   const hits = (s) => (s.match(/fetch\("\/api\/applicants\/recent"/g) || []).length;

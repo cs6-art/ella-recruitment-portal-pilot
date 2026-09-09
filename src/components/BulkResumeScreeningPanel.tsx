@@ -29,7 +29,7 @@ type QueueItem = {
 };
 
 const statusOrder = ["Queued", "Processing", "Completed", "Failed", "Skipped"];
-const POLL_INTERVAL_MS = 60000;
+const POLL_INTERVAL_MS = 90_000;
 // Temporary operator-facing cap, mirrors MAX_FILES_PER_SUBMISSION in
 // src/lib/bulk-resume-intake.ts (kept as a local literal because that module is
 // server-only). The server also enforces it — see bulk/upload and drive/import.

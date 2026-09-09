@@ -6,6 +6,8 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 const queries = read("src/lib/internal-recruitment-queries.ts");
 const route = read("src/app/api/internal/recruitment/bookings/calendar/route.ts");
+const targetPortal = read("src/lib/recruitment-target-portal.ts");
+const slotsRoute = read("src/app/api/bookings/slots/route.ts");
 
 test("the calendar write-back route is authenticated, Sheets-free, and dual (GET queue + POST)", () => {
   assert.match(route, /withInternalAuth\("booking"/);
@@ -42,4 +44,13 @@ test("the slot is resolvable by id, code, or application + interview type", () =
   assert.match(queries, /if \(input\.slotId\)/);
   assert.match(queries, /else if \(input\.slotCode\)/);
   assert.match(queries, /else if \(input\.applicationExternalId && input\.interviewType\)/);
+});
+
+test("Postgres HR slots are manually creatable and final booking creates and records Calendar events", () => {
+  assert.doesNotMatch(slotsRoute, /HR interview availability is managed automatically/);
+  assert.match(targetPortal, /createFinalInterviewEvent/);
+  assert.match(targetPortal, /markInterviewCalendarEvent/);
+  assert.match(targetPortal, /kind !== "final"/);
+  assert.match(targetPortal, /calendar\.created \? "created" : "failed"/);
+  assert.match(targetPortal, /attendeeEmails: \[context\.email\]/);
 });

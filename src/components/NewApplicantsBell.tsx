@@ -17,7 +17,7 @@ import {
 } from "@/lib/new-applicants";
 
 const POLL_KEY = "applicants-recent";
-const POLL_INTERVAL_MS = 60_000;
+const POLL_INTERVAL_MS = 5 * 60_000;
 
 async function fetchRecentApplicants(): Promise<RecentApplicant[] | null> {
   const response = await fetch("/api/applicants/recent", { credentials: "same-origin" });
