@@ -8,6 +8,7 @@ import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
 import { recordVoiceInterviewDeduction } from "@/lib/ella-credits";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
+import { notificationEventLabel, notificationStatusLabel, notificationSummary } from "@/lib/notification-labels";
 import {
   applicants,
   applicantAliases,
@@ -1224,7 +1225,15 @@ export async function notificationQueue(stage?: string) {
     .orderBy(asc(roleStatusHistory.changedAt)).limit(LIMIT);
   const rows = applicationRows;
   const applicationItems = (() => {
-    return rows.map(({ history, ...context }) => ({ ...history, ...context }));
+    return rows.map(({ history, ...context }) => ({
+      ...history,
+      ...context,
+      // Email-ready copy so the notifier never renders raw workflow keys.
+      eventLabel: notificationEventLabel(history.notificationEventType),
+      statusLabel: notificationStatusLabel(history.newStage),
+      previousStatusLabel: notificationStatusLabel(history.previousStage),
+      summary: notificationSummary(history.notificationEventType, history.comments),
+    }));
   })();
   return [
     ...applicationItems.map((item) => ({ ...item, notificationDomain: "application" })),

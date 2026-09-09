@@ -43,6 +43,23 @@ test("resume approval queues the voice booking invitation immediately and safely
   assert.match(query, /newStage: nextStage/);
 });
 
+test("voice approval invites the candidate to book the face-to-face interview", () => {
+  const target = read("src/lib/recruitment-target-portal.ts");
+  assert.match(target, /input\.stage === "voice" && input\.decision === "Approve"/);
+  assert.match(target, /kind: "final"/);
+  assert.match(target, /finalBookingInvitationQueued: true/);
+});
+
+test("notification queue exposes email-ready wording, not raw workflow keys", () => {
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  const labels = read("src/lib/notification-labels.ts");
+  assert.match(query, /eventLabel: notificationEventLabel\(history\.notificationEventType\)/);
+  assert.match(query, /statusLabel: notificationStatusLabel\(history\.newStage\)/);
+  assert.match(query, /summary: notificationSummary\(history\.notificationEventType, history\.comments\)/);
+  assert.match(labels, /voice_result_next_step: "AI voice interview completed — HR review needed"/);
+  assert.match(labels, /A recruitment workflow update requires your attention\./);
+});
+
 test("target booking links expose generated availability and materialize the selected virtual slot", () => {
   const target = read("src/lib/recruitment-target-portal.ts");
   assert.match(target, /virtualSlotsForRole\(role, kind === "voice" \? "AI Voice Interview" : "Final Interview"\)/);

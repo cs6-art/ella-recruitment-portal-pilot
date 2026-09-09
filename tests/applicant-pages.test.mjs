@@ -265,7 +265,9 @@ test("candidate intake forms and decisions expose the required fields", () => {
   assert.match(decisionPanel, /useRouter/);
   assert.match(decisionPanel, /router\.refresh\(\)/);
   assert.doesNotMatch(decisionPanel, /window\.location\.reload\(\)/);
-  assert.match(decisionPanel, /Request Manual Review/);
+  // HR decisions are Approve / Reject only — the "Return for review" action was removed.
+  assert.doesNotMatch(decisionPanel, /Return for review/);
+  assert.doesNotMatch(decisionPanel, /Manual Review/);
   assert.match(decisionPanel, /Comments \*/);
   assert.match(decisionPanel, /disabled=\{busy \|\|/);
   assert.doesNotMatch(route, /findDuplicateCandidateApplication|DUPLICATE_APPLICATION/);

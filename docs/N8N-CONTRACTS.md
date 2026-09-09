@@ -337,6 +337,27 @@ notifier must poll `GET /api/internal/recruitment/notifications` with the
 the history ID with `POST` and `status: sent` (or `failed`). A publish is not
 rolled back because an email attempt is slow or unavailable.
 
+### Notification queue display fields
+
+Every application item from `GET /api/internal/recruitment/notifications`
+carries email-ready copy alongside the raw keys. **Bind these in the email
+template instead of the raw `notificationEventType` / `newStage` values:**
+
+| Field | Example | Use |
+| --- | --- | --- |
+| `eventLabel` | `AI voice interview completed — HR review needed` | Subject / heading (from `notificationEventType`) |
+| `statusLabel` | `Voice Interview Review` | "Status" line (from `newStage`) |
+| `previousStatusLabel` | `Voice Interview Scheduled` | Optional "from" context (from `previousStage`) |
+| `summary` | `The AI voice interview is complete. Open the applicant record to review…` | Body sentence — the reviewer's comment when present, otherwise a per-event default |
+
+The raw `notificationEventType`, `newStage`, `previousStage`, and `comments`
+fields remain in the payload for routing and auditing.
+
+Approving the AI voice interview now emits a `final_booking_invitation`
+event (a `final` booking token is created in the same request), so the
+candidate receives the face-to-face interview booking link the same way
+resume approval sends the voice interview link.
+
 ## Public resume submission receipt
 
 The public resume page currently sends multipart form data to

@@ -49,7 +49,9 @@ test("target notification queue preserves history IDs and enriches safe delivery
   const query = read("src/lib/internal-recruitment-queries.ts");
   const route = read("src/app/api/internal/recruitment/notifications/route.ts");
   assert.match(query, /applicationExternalId: applications\.externalId/);
-  assert.match(query, /return rows\.map\(\(\{ history, \.\.\.context \}\) => \(\{ \.\.\.history, \.\.\.context \}\)\)/);
+  assert.match(query, /rows\.map\(\(\{ history, \.\.\.context \}\) => \(\{\s*\.\.\.history,\s*\.\.\.context,/);
+  assert.match(query, /eventLabel: notificationEventLabel\(history\.notificationEventType\)/);
+  assert.match(query, /summary: notificationSummary\(history\.notificationEventType, history\.comments\)/);
   assert.match(route, /searchParams\.get\("stage"\)/);
 });
 
