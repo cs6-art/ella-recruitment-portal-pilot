@@ -480,6 +480,19 @@ export async function targetRecordApplicantDecision(input: { applicationId: stri
     if (!invitation.token) throw new Error(invitation.error || "Unable to create the voice interview booking invitation.");
     return { ...result, voiceBookingInvitationQueued: true, voiceBookingNotificationHistoryId: invitation.notificationHistoryId };
   }
+  // Approving the voice interview must invite the candidate to book the
+  // face-to-face (HR) interview, the same way resume approval invites the
+  // voice interview. Without this the candidate is moved to
+  // "approved_for_final" but never receives a booking link.
+  if (input.stage === "voice" && input.decision === "Approve") {
+    const invitation = await createBookingToken({
+      applicationExternalId: input.applicationId,
+      kind: "final",
+      expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    if (!invitation.token) throw new Error(invitation.error || "Unable to create the face-to-face interview booking invitation.");
+    return { ...result, finalBookingInvitationQueued: true, finalBookingNotificationHistoryId: invitation.notificationHistoryId };
+  }
   return result;
 }
 
