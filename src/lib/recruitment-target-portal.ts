@@ -34,6 +34,7 @@ import {
   applicationVoiceReview,
 } from "@/lib/internal-recruitment-queries";
 import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
+import { applicantVoiceTimezone } from "@/lib/applicant-timezone";
 import { extractStoredResumeText, type ResumeFileKind, type ResumeFileRecord } from "@/lib/resume-files";
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
@@ -325,8 +326,14 @@ export async function targetBookingContext(kind: "voice" | "final", tokenHash: s
     .filter((slot) => isBeforeTargetHiringDate(slot.date, row.roleTargetHiringDate || undefined))
     .filter((slot) => hasValidFutureTime(slot));
   const persistedKeys = new Set(persistedAvailable.map((slot) => slotKey(slot)));
+  // The AI voice interview is a phone call to the candidate, so its offered
+  // times follow the candidate's own country timezone. The face-to-face
+  // interview stays in the office timezone.
+  const voiceTimezone = kind === "voice"
+    ? applicantVoiceTimezone({ country: text(row.application.applicantCountry), phone: text(row.application.preferredMobile || row.application.phone) })
+    : undefined;
   const virtualAvailable = role
-    ? virtualSlotsForRole(role, kind === "voice" ? "AI Voice Interview" : "Final Interview")
+    ? virtualSlotsForRole(role, kind === "voice" ? "AI Voice Interview" : "Final Interview", true, voiceTimezone)
       .filter((slot) => !persistedKeys.has(slotKey(slot)))
       .filter((slot) => hasValidFutureTime(slot))
       .map((slot) => ({ ...slot, roleId, status: "Available" as const }))

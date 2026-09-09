@@ -60,9 +60,44 @@ test("notification queue exposes email-ready wording, not raw workflow keys", ()
   assert.match(labels, /A recruitment workflow update requires your attention\./);
 });
 
+test("notification queue carries ready-to-send candidate email copy per booking event", () => {
+  const labels = read("src/lib/notification-labels.ts");
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(labels, /voice_booking_invitation: "Schedule your AI voice interview with McLink Group"/);
+  assert.match(labels, /voice_booking_confirmation: "Your AI voice interview is confirmed"/);
+  assert.match(labels, /Ella, will call you at your preferred mobile number/);
+  assert.match(labels, /cta: "Choose your interview time"/);
+  assert.match(labels, /cta: "Schedule final interview"/);
+  // Google Calendar delivers the face-to-face confirmation, so no email here.
+  assert.match(labels, /if \(key === "final_booking_confirmation"\) return null/);
+  assert.match(query, /email: notificationEmail\(history\.notificationEventType/);
+  assert.match(query, /confirmationIsEmailed \? "pending" : "skipped"/);
+});
+
+test("AI voice interview times follow the applicant country timezone; face-to-face stays office time", async () => {
+  const { applicantVoiceTimezone } = await import("../src/lib/applicant-timezone.ts");
+  assert.equal(applicantVoiceTimezone({ country: "PH" }), "Asia/Manila");
+  assert.equal(applicantVoiceTimezone({ country: "MY" }), "Asia/Kuala_Lumpur");
+  assert.equal(applicantVoiceTimezone({ country: "", phone: "+639171234567" }), "Asia/Manila");
+  assert.equal(applicantVoiceTimezone({ country: "" }), "Asia/Singapore");
+
+  const rules = read("src/lib/interview-availability-rules.ts");
+  assert.match(rules, /voiceTimezoneOverride\?: string/);
+  assert.match(rules, /if \(rule\.interviewType === "AI Voice Interview"\) rule\.timezone = voiceTimezone/);
+  assert.match(rules, /const finalTimezone = "Asia\/Singapore"/);
+  const target = read("src/lib/recruitment-target-portal.ts");
+  assert.match(target, /kind === "voice"\s*\?\s*applicantVoiceTimezone/);
+});
+
+test("a scheduled voice interview no longer blocks applicant deletion", () => {
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(query, /const liveCallStatuses = \["calling", "dispatching", "initiated", "in_progress"\]/);
+  assert.doesNotMatch(query, /activeStatuses = \["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "retry_scheduled"\]/);
+});
+
 test("target booking links expose generated availability and materialize the selected virtual slot", () => {
   const target = read("src/lib/recruitment-target-portal.ts");
-  assert.match(target, /virtualSlotsForRole\(role, kind === "voice" \? "AI Voice Interview" : "Final Interview"\)/);
+  assert.match(target, /virtualSlotsForRole\(role, kind === "voice" \? "AI Voice Interview" : "Final Interview", true, voiceTimezone\)/);
   assert.match(target, /const virtualSlot = isVirtualSlotId\(slotId\) \? context\.slots\.find\(\(slot\) => slot\.slotId === slotId\) : undefined/);
   assert.match(target, /slotCode: kind === "final" \? virtualSlot\.slotId : undefined/);
   assert.match(target, /persistedSlotId = materialized\.slot\.id/);

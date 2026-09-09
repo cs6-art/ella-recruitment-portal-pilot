@@ -349,6 +349,13 @@ template instead of the raw `notificationEventType` / `newStage` values:**
 | `statusLabel` | `Voice Interview Review` | "Status" line (from `newStage`) |
 | `previousStatusLabel` | `Voice Interview Scheduled` | Optional "from" context (from `previousStage`) |
 | `summary` | `The AI voice interview is complete. Open the applicant record to review…` | Body sentence — the reviewer's comment when present, otherwise a per-event default |
+| `email` | `{ subject, heading, message, cta, ctaLink, signoff }` or `null` | Full candidate-facing email body. Render these fields directly; `cta`/`ctaLink` are empty when there is no button. `null` means **do not send an email** for this event. |
+
+`email.message` already contains the greeting and paragraphs (`\n\n`
+between them); append `email.signoff` after it. For booking invitations
+`email.ctaLink` is the secure booking URL; for the AI voice confirmation the
+message embeds `Scheduled for: <date> at <time> (<timezone>)` in the
+candidate's timezone and there is no CTA (attach an ICS instead).
 
 The raw `notificationEventType`, `newStage`, `previousStage`, and `comments`
 fields remain in the payload for routing and auditing.
@@ -357,6 +364,18 @@ Approving the AI voice interview now emits a `final_booking_invitation`
 event (a `final` booking token is created in the same request), so the
 candidate receives the face-to-face interview booking link the same way
 resume approval sends the voice interview link.
+
+**No face-to-face booking confirmation email.** Booking a face-to-face slot
+records a `final_booking_confirmation` history row with
+`notificationStatus: "skipped"`, so it never appears in the queue — the
+Google Calendar invitation (the candidate is added as an attendee) is the
+confirmation. The AI voice interview still sends `voice_booking_confirmation`
+because that call has no calendar event.
+
+**AI voice interview timezone.** Voice interview slot times are generated in
+the applicant's own country timezone (resolved from the stored country, or
+the E.164 phone number). Face-to-face slots stay in the office timezone
+(`Asia/Singapore`).
 
 ## Public resume submission receipt
 
