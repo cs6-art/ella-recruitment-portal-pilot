@@ -30,6 +30,7 @@ import {
   updateRoleDetails,
   archiveRole,
   calendarEventQueue,
+  createBookingToken,
 } from "@/lib/internal-recruitment-queries";
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
@@ -408,6 +409,18 @@ export async function targetUpdateApplicantProfile(input: { applicationId: strin
 export async function targetRecordApplicantDecision(input: { applicationId: string; stage: "resume" | "voice" | "final"; decision: string; comments: string; reviewer: { name: string; email: string } }) {
   const result = await applyHrDecision({ applicationExternalId: input.applicationId, stage: input.stage, decision: input.decision === "Approve" ? "approve" : input.decision === "Reject" ? "reject" : input.decision === "Manual Review" ? "manual_review" : "pending", comments: input.comments, actorEmail: input.reviewer.email, actorName: input.reviewer.name, actionRequestId: `portal-decision:${input.applicationId}:${input.stage}:${input.decision}:${input.reviewer.email}` });
   if (!result.updated && !("duplicate" in result && result.duplicate)) throw new Error(result.error || "Unable to record the applicant decision.");
+  // Issue the voice booking invitation as part of the approval request. The
+  // n8n poller remains a recovery path, while this idempotent write removes
+  // the race where approval and the five-minute poll run at the same time.
+  if (input.stage === "resume" && input.decision === "Approve") {
+    const invitation = await createBookingToken({
+      applicationExternalId: input.applicationId,
+      kind: "voice",
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    if (!invitation.token) throw new Error(invitation.error || "Unable to create the voice interview booking invitation.");
+    return { ...result, voiceBookingInvitationQueued: true, voiceBookingNotificationHistoryId: invitation.notificationHistoryId };
+  }
   return result;
 }
 

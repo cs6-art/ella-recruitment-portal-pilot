@@ -73,11 +73,13 @@ test("applicant stage labels are presentation-only and used consistently", () =>
   assert.match(labels, /resume_approved: "Resume Approved"/);
   assert.match(labels, /voice_review_pending: "Voice Interview Review"/);
   assert.match(labels, /passed_final: "Passed Final Interview"/);
+  assert.match(labels, /if \(key === "approve" \|\| key === "approved"\) return "Approve"/);
+  assert.match(labels, /if \(key === "reject" \|\| key === "rejected"\) return "Reject"/);
   assert.match(labels, /replace\(\/\[\\s-\]\+\/g, "_"\)/);
   assert.match(list, /applicantStageLabel\(applicant\.currentStage\)/);
   assert.match(detail, /applicantStageLabel\(applicant\.currentStage\)/);
   assert.match(detail, /applicantStageLabel\(entry\.newStatus\)/);
-  assert.match(detail, /applicantStageLabel\(applicant\.resumeStatus\)/);
+  assert.match(detail, /applicantDecisionLabel\(applicant\.resumeStatus\)/);
   assert.match(detail, /applicantStageLabel\(applicant\.voiceStatus\)/);
   // Canonical keys remain the values used for filters and database/API work.
   assert.match(list, /applicant\.currentStage === stageFilter/);
@@ -147,6 +149,7 @@ test("applicant routes are protected and render populated sheet data", () => {
   // Applicant timestamps are rendered in the shared HR operating timezone so
   // UTC values from Sheets never appear shifted in the reviewer UI.
   assert.match(detail, /formatPortalDateTime/);
+  assert.match(detail, /ApplicantLiveRefresh/);
 });
 
 test("applicants are reachable from the reviewer shell and role detail", () => {

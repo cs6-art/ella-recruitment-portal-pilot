@@ -718,13 +718,13 @@ export async function applyHrDecision(input: { applicationExternalId: string; st
   return db.transaction(async (tx) => {
     const [current] = await tx.select().from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
     if (!current) return { updated: false, error: "unknown_application" as const };
-    if (current.currentStage !== expectedStage) return { updated: false, error: "invalid_transition" as const };
     if (input.stage === "resume" && input.decision === "approve") {
       const [screening] = await tx.select({ id: screeningResults.id }).from(screeningResults).where(eq(screeningResults.applicationId, current.id)).limit(1);
       if (!screening) return { updated: false, error: "screening_required" as const };
     }
     const [history] = await tx.select({ id: applicationStatusHistory.id }).from(applicationStatusHistory).where(eq(applicationStatusHistory.actionRequestId, input.actionRequestId)).limit(1);
     if (history) return { updated: false, duplicate: true, error: null };
+    if (current.currentStage !== expectedStage) return { updated: false, error: "invalid_transition" as const };
     const patch = input.stage === "resume" ? { resumeHrDecision: input.decision, resumeHrDecisionAt: new Date(), resumeHrReviewer: input.actorEmail, resumeHrComments: input.comments || "" } : input.stage === "voice" ? { voiceHrDecision: input.decision, voiceHrComments: input.comments || "" } : { finalHrDecision: input.decision, finalInterviewComments: input.comments || "" };
     await tx.update(applications).set({ ...patch, currentStage: targetStage, updatedAt: new Date() }).where(eq(applications.id, current.id));
     const notificationEventType = input.stage === "voice" && input.decision === "reject" ? "voice_rejection" : input.stage === "final" && input.decision === "approve" ? "final_decision_pass" : input.stage === "final" && input.decision === "reject" ? "final_decision_reject" : "";
@@ -1126,14 +1126,17 @@ export async function createBookingToken(input: { applicationExternalId: string;
       const [existing] = await tx.select().from(bookingTokens).where(eq(bookingTokens.tokenHash, tokenHash)).limit(1);
       return { token: existing ?? null, created: false, notificationHistoryId: null, error: null };
     }
-    if (input.kind === "voice" && application.currentStage === "resume_approved") {
-      await tx.update(applications).set({ currentStage: "voice_booking_pending", updatedAt: new Date() }).where(eq(applications.id, application.id));
+    const nextStage = input.kind === "voice" && application.currentStage === "resume_approved"
+      ? "voice_booking_pending"
+      : application.currentStage;
+    if (nextStage !== application.currentStage) {
+      await tx.update(applications).set({ currentStage: nextStage, updatedAt: new Date() }).where(eq(applications.id, application.id));
     }
     const [history] = await tx.insert(applicationStatusHistory).values({
       applicationId: application.id,
       stage: input.kind,
       previousStage: application.currentStage,
-      newStage: application.currentStage,
+      newStage: nextStage,
       source: `internal_api:${input.kind}_booking_invitation`,
       actionRequestId: `booking-invitation:${input.kind}:${input.applicationExternalId}:${tokenHash}`,
       notificationStatus: "pending",

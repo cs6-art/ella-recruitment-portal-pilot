@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import ValidationSummary from "@/components/ValidationSummary";
+import { applicantDecisionLabel } from "@/lib/applicant-stage-labels";
 
 type Stage = "resume" | "voice" | "final";
 type SavedDecision = { decision: string; comments: string };
@@ -30,14 +31,6 @@ function isDecided(current: string) {
     normalized.includes("passed") || normalized.includes("rejected");
 }
 
-function decisionLabel(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "approve" || normalized === "approved") return "Approved";
-  if (normalized === "reject" || normalized === "rejected") return "Rejected";
-  if (normalized === "manual review" || normalized === "return for review" || normalized === "to review") return "Return for review";
-  return value || "Pending";
-}
-
 function isRejectedDecision(value: string) {
   const normalized = value.trim().toLowerCase();
   return normalized === "reject" || normalized === "rejected" || normalized.includes("rejected");
@@ -53,7 +46,7 @@ function reviewStage(props: Props): Stage {
 }
 
 function CompletedDecision({ title, decision, comments, link }: { title: string; decision: string; comments: string; link?: string }) {
-  return <div className="applicant-completed-decision"><div className="applicant-decision-title"><strong>{title}</strong><span className={`applicant-decision-badge ${isRejectedDecision(decision) ? "is-rejected" : ""}`}>{decisionLabel(decision)}</span></div>{link && <a className="applicant-booking-link" href={link} target="_blank" rel="noreferrer">Open Face-to-Face Interview Booking Link</a>}{comments ? <div className="applicant-completed-comments"><span>Comments</span><p>{comments}</p></div> : <p className="applicant-completed-empty">No comments were recorded for this decision.</p>}</div>;
+  return <div className="applicant-completed-decision"><div className="applicant-decision-title"><strong>{title}</strong><span className={`applicant-decision-badge ${isRejectedDecision(decision) ? "is-rejected" : ""}`}>{applicantDecisionLabel(decision)}</span></div>{link && <a className="applicant-booking-link" href={link} target="_blank" rel="noreferrer">Open Face-to-Face Interview Booking Link</a>}{comments ? <div className="applicant-completed-comments"><span>Comments</span><p>{comments}</p></div> : <p className="applicant-completed-empty">No comments were recorded for this decision.</p>}</div>;
 }
 
 function DecisionRow({ stage, title, description, current, link, enabled = true, applicationId, canReview, onSaved }: {
@@ -101,7 +94,7 @@ function DecisionRow({ stage, title, description, current, link, enabled = true,
 
   return <div className="applicant-decision-row">
     <div className="applicant-decision-copy">
-      <div className="applicant-decision-title"><strong>{title}</strong>{current && <span className={`applicant-decision-badge ${isRejectedDecision(current) ? "is-rejected" : "is-approved"}`}>{decisionLabel(current)}</span>}</div>
+      <div className="applicant-decision-title"><strong>{title}</strong>{current && <span className={`applicant-decision-badge ${isRejectedDecision(current) ? "is-rejected" : "is-approved"}`}>{applicantDecisionLabel(current)}</span>}</div>
       <p>{description}</p>
       {link && <a className="applicant-booking-link" href={link} target="_blank" rel="noreferrer">Open Booking Link</a>}
       <label className="field applicant-decision-comments" htmlFor={`${stage}-decision-comments`}><span>Comments *</span><textarea id={`${stage}-decision-comments`} value={comments} disabled={busy || !canReview || !enabled || decided} minLength={1} maxLength={5000} required placeholder={stage === "voice" ? "Explain the Face-to-Face interview decision or return note." : "Explain the decision or provide the review note."} onChange={(event) => { setComments(event.target.value); setError(""); }} /></label>

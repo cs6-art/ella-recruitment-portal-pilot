@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import ApplicantDetailActions from "@/components/ApplicantDetailActions";
 import ApplicantDecisionPanel from "@/components/ApplicantDecisionPanel";
+import ApplicantLiveRefresh from "@/components/ApplicantLiveRefresh";
 import UiIcon, { type UiIconName } from "@/components/UiIcon";
 import { canDecideApplicant, canEditApplicant, canViewApplicant } from "@/lib/access-control";
 import {
@@ -18,7 +19,7 @@ import type { RoleRequestDetails } from "@/lib/google-sheets";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { formatMatchScore } from "@/lib/score-format";
 import { formatPortalDateTime } from "@/lib/portal-time";
-import { applicantStageLabel } from "@/lib/applicant-stage-labels";
+import { applicantDecisionLabel, applicantStageLabel } from "@/lib/applicant-stage-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -121,9 +122,9 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
       <div className="applicant-evidence-subsection">
         <div className="applicant-evidence-subsection-heading"><UiIcon name="document" size={16} /><h3>AI CV Analysis</h3></div>
         <div className="applicant-detail-inline-fields">
-          <DetailField label="CV Analysis Status" value={applicantStageLabel(applicant.resumeStatus)} />
+          <DetailField label="CV Analysis Status" value={applicantDecisionLabel(applicant.resumeStatus)} />
           <DetailField label="CV Recommendation" value={applicant.cvRecommendation || "Not Provided"} />
-          <DetailField label="HR Decision" value={applicant.resumeDecision} />
+          <DetailField label="HR Decision" value={applicantDecisionLabel(applicant.resumeDecision)} />
           <DetailField label="Reviewed By" value={applicant.resumeReviewer} />
         </div>
         <div className="applicant-copy-block"><span>AI Analysis Summary</span><p>{applicant.aiAnalysisSummary || "No AI summary is available."}</p></div>
@@ -189,6 +190,7 @@ export default async function ApplicantDetailsPage({ params }: { params: Promise
   const finalComments = applicant.finalComments || latestDecisionComment(history, "final");
 
   return <AppShell user={user}><main className="container page applicant-details-page">
+    <ApplicantLiveRefresh />
     <header className="applicant-detail-header"><Link href="/applicants" className="portal-back-link applicant-back-link"><UiIcon name="arrow-left" size={15} />Back to Applicants</Link><div className="applicant-detail-title-row"><div><span className="eyebrow-dark">APPLICANT PROFILE</span><h1>{applicant.candidateName || "Unnamed Candidate"}</h1><p>{applicant.applicationId} · {applicant.email || "No Email Provided"}</p></div><span className={applicantStageClass(applicant.currentStage)}>{applicantStageLabel(applicant.currentStage)}</span></div><div className="applicant-detail-actions"><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}`}><UiIcon name="briefcase" size={15} />View Role</Link><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}/applicants`}><UiIcon name="applicants" size={15} />Role Applicants</Link><ApplicantDetailActions applicationId={applicant.applicationId} candidateName={applicant.candidateName} canManage={canEditApplicant(user)} /></div></header>
     <div className="applicant-detail-summary"><DetailField label="Selected Role" value={applicant.selectedRole} /><DetailField label="Department" value={applicant.department} /><DetailField label="Applied" value={dateValue(applicant.appliedAt)} /><DetailField label="Match Score" value={formatMatchScore(applicant.matchScore)} /><DetailField label="Recommendation" value={applicant.recommendation} /><DetailField label="Next Action" value={applicant.nextAction} /></div>
     <div className="applicant-detail-grid"><div className="applicant-detail-main">
@@ -199,7 +201,7 @@ export default async function ApplicantDetailsPage({ params }: { params: Promise
       <HistoryTimeline history={history} />
     </div><aside className="applicant-detail-side">
       {applicant.voiceDecision.toLowerCase() === "approve" && <FinalInterviewCard applicant={applicant} role={role} />}
-      <section className="card applicant-detail-card"><DetailCardHeader icon="clock" title="Status Tracking" description="Current progress through the candidate workflow." /><div className="applicant-timeline"><div><strong>1. AI CV Analysis</strong><span>{applicantStageLabel(applicant.resumeStatus) || "Not Started"}</span></div><div><strong>2. Voice Interview</strong><span>{applicantStageLabel(applicant.voiceStatus) || "Not Started"}</span></div><div><strong>3. Voice HR Review</strong><span>{applicantStageLabel(applicant.voiceDecision) || "Pending"}</span></div><div><strong>4. Face-to-Face Interview</strong><span>{applicantStageLabel(applicant.finalInterviewStatus) || "Not Started"}</span></div><div><strong>Last Updated</strong><span>{dateValue(applicant.lastUpdated)}</span></div></div></section>
+      <section className="card applicant-detail-card"><DetailCardHeader icon="clock" title="Status Tracking" description="Current progress through the candidate workflow." /><div className="applicant-timeline"><div><strong>1. AI CV Analysis</strong><span>{applicantDecisionLabel(applicant.resumeStatus) || "Not Started"}</span></div><div><strong>2. Voice Interview</strong><span>{applicantStageLabel(applicant.voiceStatus) || "Not Started"}</span></div><div><strong>3. Voice HR Review</strong><span>{applicantDecisionLabel(applicant.voiceDecision) || "Pending"}</span></div><div><strong>4. Face-to-Face Interview</strong><span>{applicantStageLabel(applicant.finalInterviewStatus) || "Not Started"}</span></div><div><strong>Last Updated</strong><span>{dateValue(applicant.lastUpdated)}</span></div></div></section>
     </aside></div>
   </main></AppShell>;
 }

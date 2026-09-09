@@ -32,3 +32,19 @@ export function applicantStageLabel(value: string | null | undefined) {
     : text);
 }
 
+/**
+ * Decision values are stored as workflow keys, but decisions are shown as
+ * short action labels in the HR UI. Keep this separate from stage labels:
+ * `approve` is a decision, while `resume_approved` is a workflow stage.
+ */
+export function applicantDecisionLabel(value: string | null | undefined) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const key = text.toLowerCase().replace(/[\s-]+/g, "_");
+  if (key === "approve" || key === "approved") return "Approve";
+  if (key === "reject" || key === "rejected") return "Reject";
+  if (key === "manual_review" || key === "return_for_review" || key === "to_review") return "Return for review";
+  if (key === "no_show") return "No Show";
+  if (key === "pending") return "Pending";
+  return text;
+}
