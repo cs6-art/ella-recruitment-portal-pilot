@@ -86,6 +86,7 @@ export type ApplicantDetails = ApplicantSummary & {
   voiceTranscript: string;
   voiceScheduledDate: string;
   voiceScheduledTime: string;
+  voiceTimezone: string;
   voiceBookingStatus: string;
   voiceBookingLink: string;
   bookingTokenStatus: string;
@@ -1108,6 +1109,7 @@ export async function getApplicantById(id: string): Promise<ApplicantDetails | n
     voiceTranscript: field(voiceResult ?? {}, "Transcript", "Voice_Transcript", "Call_Transcript") || field(callLog ?? {}, "Transcript", "Voice_Transcript", "Call_Transcript"),
     voiceScheduledDate: field(record, "Voice_Interview_Scheduled_Date"),
     voiceScheduledTime: field(record, "Voice_Interview_Scheduled_Time"),
+    voiceTimezone: field(record, "Voice_Interview_Timezone") || voiceInterviewSlot?.timezone || voiceInterviewSlot?.time_zone || "",
     voiceBookingStatus: field(record, "Voice_Interview_Booking_Status"),
     voiceBookingLink: field(record, "Voice_Interview_Booking_Link"),
     bookingTokenStatus: field(record, "Booking_Token_Status"),
