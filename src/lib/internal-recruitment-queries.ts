@@ -126,7 +126,7 @@ export async function createRole(input: { externalId: string; title: string; cod
       const [existing] = await tx.select().from(roles).where(eq(roles.externalId, input.externalId.trim())).limit(1);
       return { role: existing ?? null, created: false };
     }
-    await tx.insert(roleStatusHistory).values({ roleId: role.id, previousStatus: "", newStatus: role.status, action: "role_created", actionSource: "internal_api", actionRequestId: input.actionRequestId || null, changedByEmail: input.actorEmail || "", changedByName: input.actorName || "" }).onConflictDoNothing({ target: roleStatusHistory.actionRequestId });
+    await tx.insert(roleStatusHistory).values({ roleId: role.id, previousStatus: "", newStatus: role.status, action: "role_created", actionSource: "internal_api", actionRequestId: input.actionRequestId || null, changedByEmail: input.actorEmail || "", changedByName: input.actorName || "", notificationStatus: "pending" }).onConflictDoNothing({ target: roleStatusHistory.actionRequestId });
     return { role, created: true };
   });
 }
@@ -310,7 +310,7 @@ export async function registerResumeFile(input: { storageRef: string; sha256: st
 
 export async function getApplication(externalId: string) {
   const db = getDb();
-  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
+  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, roleTargetHiringDate: roles.targetHiringDate, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
   return row ?? null;
 }
 
@@ -1109,7 +1109,7 @@ export async function notificationQueue(stage?: string) {
   })();
   return [
     ...applicationItems.map((item) => ({ ...item, notificationDomain: "application" })),
-    ...roleRows.map(({ history, ...context }) => ({ ...history, ...context, eventType: "role_status_transition", notificationDomain: "role" })),
+    ...roleRows.map(({ history, ...context }) => ({ ...history, ...context, eventType: history.action === "role_created" ? "role_request_created" : "role_status_transition", notificationDomain: "role" })),
   ].sort((left, right) => new Date(left.changedAt).valueOf() - new Date(right.changedAt).valueOf()).slice(0, LIMIT);
 }
 

@@ -367,7 +367,7 @@ export async function POST(request: Request) {
         actionRequestId: submissionId, actorEmail: sessionEmail, actorName: user.name,
       });
       if (!created.role) return NextResponse.json({ success: false, error: "The role request could not be saved." }, { status: 502 });
-      return NextResponse.json({ success: true, roleId, status: "Pending HR Discussion", message: "Role request submitted successfully." }, { status: 201 });
+      return NextResponse.json({ success: true, roleId, status: "Pending HR Discussion", notificationStatus: "pending", notificationError: "", message: "Role request submitted successfully." }, { status: 201 });
     }
 
     const webhookUrl = await getPortalConfigValue("N8N_Role_Webhook_URL");
@@ -414,6 +414,12 @@ export async function POST(request: Request) {
       Action: "role_request_created",
       Access_Role: user.accessRole,
       Department: user.department,
+      Requester_Name: user.name,
+      Requester_Email: performerEmail,
+      Requester_Type: "HR or Management",
+      Submitted_By_Name: user.name,
+      Submitted_By_Email: performerEmail,
+      HOD_Email: finalInterviewCalendar.email,
       Notification_Status: "",
       Notification_Error: "",
       Recruitment_Setup_Status: "Draft",
@@ -573,6 +579,12 @@ export async function POST(request: Request) {
           : raw.trim() === ""
             ? initialStatus
             : undefined;
+    const notificationStatus = ["sent", "pending", "failed", "not_configured"].includes(String(result.notificationStatus))
+      ? String(result.notificationStatus)
+      : "not_configured";
+    const notificationError = typeof result.notificationError === "string"
+      ? result.notificationError
+      : "";
 
     if (!webhookResponse.ok) {
       console.error(
@@ -617,6 +629,8 @@ export async function POST(request: Request) {
         // same row in Role_Requests.
         roleId: returnedRoleId,
         status: initialStatus,
+        notificationStatus,
+        notificationError,
         message:
           result.message ||
           "Role request submitted successfully.",

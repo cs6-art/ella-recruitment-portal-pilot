@@ -29,6 +29,7 @@ import {
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { generateRoleId } from "@/lib/role-id";
+import { hasValidFutureTime, isBeforeTargetHiringDate } from "@/lib/interview-availability-rules";
 
 function text(value: unknown) {
   return String(value ?? "").trim();
@@ -276,7 +277,10 @@ export async function targetBookingContext(kind: "voice" | "final", tokenHash: s
   const matching = slots.map(({ slot }) => bookingSlot(slot as unknown as Record<string, unknown>, roleId)).filter((slot) => text(slot.interviewType).toLowerCase().includes(targetType));
   const currentSlot = matching.find((slot) => ["booked", "completed", "no show"].includes(text(slot.status).toLowerCase()));
   const availableRows = await listBookingSlots(targetType, roleId);
-  const available = availableRows.map((value) => bookingSlot(((value as { slot?: unknown }).slot || value) as Record<string, unknown>, roleId));
+  const available = availableRows
+    .map((value) => bookingSlot(((value as { slot?: unknown }).slot || value) as Record<string, unknown>, roleId))
+    .filter((slot) => isBeforeTargetHiringDate(slot.date, row.roleTargetHiringDate || undefined))
+    .filter((slot) => hasValidFutureTime(slot));
   return {
     kind, applicationId: text(row.application.externalId), candidateName: text(row.application.candidateName), email: text(row.application.email || row.applicantEmail),
     selectedRole: text(row.roleTitle), roleId, bookingStatus: text(token.token.status), scheduledDate: text(currentSlot?.date), scheduledTime: text(currentSlot?.startTime),

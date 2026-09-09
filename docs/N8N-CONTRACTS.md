@@ -162,6 +162,11 @@ with `success`, `roleId`, `status`, `action`, `actionRequestId`,
 `notificationStatus`, `notificationError`, and optional `idempotentReplay`.
 `notificationStatus` is `sent`, `pending`, `failed`, or `not_configured`.
 Notification failure must not change `success` to false after the sheet update.
+For `role_request_created`, the foundation workflow must append the role row
+before sending the internal HR notification. The checked-in implementation is
+`integrations/n8n/role-request-foundation.json`; it requires the Gmail account
+and header-auth credentials to be assigned and the workflow to be active in
+n8n. See `integrations/n8n/ROLE-REQUEST-NOTIFICATIONS.md`.
 
 ## Candidate application submission
 
