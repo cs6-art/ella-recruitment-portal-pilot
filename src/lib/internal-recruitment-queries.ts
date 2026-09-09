@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { and, asc, desc, eq, inArray, isNull, lte, not, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, not, or, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { appendPostgresLedgerEntryOnExecutor } from "@/lib/ella-credits-postgres";
@@ -29,6 +29,13 @@ import {
 
 /** Postgres-only target helpers. New entities stay inactive until explicitly enabled. */
 const LIMIT = 100;
+// A worker outage must not turn a yesterday's appointment into an unexpected
+// call when the queue comes back. Keep this configurable for environments
+// with a different polling interval, but bound it to a safe operational range.
+const configuredVoiceCallLateGraceMinutes = Number(process.env.VOICE_CALL_MAX_LATE_MINUTES || "15");
+const VOICE_CALL_MAX_LATE_MINUTES = Number.isFinite(configuredVoiceCallLateGraceMinutes)
+  ? Math.max(1, Math.min(60, Math.trunc(configuredVoiceCallLateGraceMinutes)))
+  : 15;
 const STAGES = ["resume_review", "resume_approved", "voice_booking_pending", "voice_scheduled", "voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final", "rejected", "withdrawn"] as const;
 const DECISIONS = ["", "approve", "reject", "manual_review", "pending"] as const;
 const STAGE_TRANSITIONS: Record<string, readonly string[]> = {
@@ -514,13 +521,20 @@ export async function markScreeningInvitationUsed(tokenHash: string, application
 export async function claimVoiceCalls(limit = 10) {
   const db = getDb();
   const safeLimit = Math.max(1, Math.min(LIMIT, Math.trunc(limit)));
-  const result = await db.execute(sql`WITH claimed AS (SELECT id FROM voice_call_attempts WHERE status IN ('scheduled','queued','retry_scheduled') AND (scheduled_at IS NULL OR scheduled_at <= now()) ORDER BY scheduled_at NULLS FIRST, created_at FOR UPDATE SKIP LOCKED LIMIT ${safeLimit}) UPDATE voice_call_attempts v SET status = 'calling', updated_at = now() FROM claimed c WHERE v.id = c.id RETURNING v.id, v.application_id AS "applicationId", v.attempt_number AS "attemptNumber", v.max_attempts AS "maxAttempts", v.status, v.scheduled_at AS "scheduledAt"`);
-  return rowsOf<Record<string, unknown>>(result);
+  return db.transaction(async (tx) => {
+    // Do this in the same transaction as the claim. A data-modifying CTE and
+    // its sibling SELECT share a snapshot, so putting expiry in one statement
+    // could leave an expired row visible to the claim query.
+    await tx.execute(sql`UPDATE voice_call_attempts SET status = 'failed', outcome = 'system_failure', updated_at = now() WHERE status IN ('scheduled','queued','retry_scheduled') AND scheduled_at < now() - (${VOICE_CALL_MAX_LATE_MINUTES} * interval '1 minute')`);
+    const result = await tx.execute(sql`WITH claimed AS (SELECT id FROM voice_call_attempts WHERE status IN ('scheduled','queued','retry_scheduled') AND (scheduled_at IS NULL OR scheduled_at <= now()) ORDER BY scheduled_at NULLS FIRST, created_at FOR UPDATE SKIP LOCKED LIMIT ${safeLimit}) UPDATE voice_call_attempts v SET status = 'calling', updated_at = now() FROM claimed c WHERE v.id = c.id RETURNING v.id, v.application_id AS "applicationId", v.attempt_number AS "attemptNumber", v.max_attempts AS "maxAttempts", v.status, v.scheduled_at AS "scheduledAt"`);
+    return rowsOf<Record<string, unknown>>(result);
+  });
 }
 
 export async function pendingVoiceCalls() {
   const db = getDb();
-  return db.select({ id: voiceCallAttempts.id, applicationId: voiceCallAttempts.applicationId, externalId: applications.externalId, candidateName: applications.candidateName, email: applications.email, preferredMobile: voiceCallAttempts.preferredMobile, contactNumber: voiceCallAttempts.contactNumber, applicantCountry: voiceCallAttempts.applicantCountry, attemptNumber: voiceCallAttempts.attemptNumber, maxAttempts: voiceCallAttempts.maxAttempts, scheduledAt: voiceCallAttempts.scheduledAt, status: voiceCallAttempts.status }).from(voiceCallAttempts).innerJoin(applications, eq(applications.id, voiceCallAttempts.applicationId)).where(and(inArray(voiceCallAttempts.status, ["scheduled", "queued", "retry_scheduled"]), or(isNull(voiceCallAttempts.scheduledAt), lte(voiceCallAttempts.scheduledAt, sql`now()`)))).orderBy(asc(voiceCallAttempts.scheduledAt)).limit(LIMIT);
+  await db.execute(sql`UPDATE voice_call_attempts SET status = 'failed', outcome = 'system_failure', updated_at = now() WHERE status IN ('scheduled','queued','retry_scheduled') AND scheduled_at < now() - (${VOICE_CALL_MAX_LATE_MINUTES} * interval '1 minute')`);
+  return db.select({ id: voiceCallAttempts.id, applicationId: voiceCallAttempts.applicationId, externalId: applications.externalId, candidateName: applications.candidateName, email: applications.email, preferredMobile: voiceCallAttempts.preferredMobile, contactNumber: voiceCallAttempts.contactNumber, applicantCountry: voiceCallAttempts.applicantCountry, attemptNumber: voiceCallAttempts.attemptNumber, maxAttempts: voiceCallAttempts.maxAttempts, scheduledAt: voiceCallAttempts.scheduledAt, status: voiceCallAttempts.status }).from(voiceCallAttempts).innerJoin(applications, eq(applications.id, voiceCallAttempts.applicationId)).where(and(inArray(voiceCallAttempts.status, ["scheduled", "queued", "retry_scheduled"]), or(isNull(voiceCallAttempts.scheduledAt), and(lte(voiceCallAttempts.scheduledAt, sql`now()`), gte(voiceCallAttempts.scheduledAt, sql`now() - (${VOICE_CALL_MAX_LATE_MINUTES} * interval '1 minute')`))))).orderBy(asc(voiceCallAttempts.scheduledAt)).limit(LIMIT);
 }
 
 export async function dispatchVoiceAttemptDryRun(input: { attemptId: string; providerCallId: string }) {
