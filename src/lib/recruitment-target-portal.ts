@@ -293,6 +293,7 @@ export async function targetBookingContext(kind: "voice" | "final", tokenHash: s
   const virtualAvailable = role
     ? virtualSlotsForRole(role, kind === "voice" ? "AI Voice Interview" : "Final Interview")
       .filter((slot) => !persistedKeys.has(slotKey(slot)))
+      .filter((slot) => hasValidFutureTime(slot))
       .map((slot) => ({ ...slot, roleId, status: "Available" as const }))
     : [];
   const available = [...persistedAvailable, ...virtualAvailable].sort((left, right) => `${left.date} ${left.startTime}`.localeCompare(`${right.date} ${right.startTime}`));
