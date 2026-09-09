@@ -1096,6 +1096,7 @@ export async function notificationQueue(stage?: string) {
     history: roleStatusHistory,
     roleExternalId: roles.externalId,
     roleTitle: roles.title,
+    departmentSnapshot: roles.departmentSnapshot,
     requesterName: roles.requesterName,
     requesterEmail: roles.requesterEmail,
   }).from(roleStatusHistory)
