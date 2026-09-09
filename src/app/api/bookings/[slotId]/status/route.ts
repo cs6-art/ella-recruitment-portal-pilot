@@ -15,7 +15,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slo
   if (!rate.allowed) return NextResponse.json({ error: "Too many interview status updates. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
 
   try {
-    const result = await markInterviewNoShow(decodeURIComponent((await params).slotId));
+    const result = await markInterviewNoShow(decodeURIComponent((await params).slotId), { email: user.email, name: user.name });
     return NextResponse.json({ success: true, result });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to mark interview as No Show." }, { status: 400 });

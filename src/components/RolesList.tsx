@@ -211,7 +211,7 @@ export default function RolesList({
     const countLabel = rolesToDelete.length === 1 ? rolesToDelete[0].jobTitle || rolesToDelete[0].roleId : `${rolesToDelete.length} role requests`;
     if (!(await confirm({ title: "Delete role requests?", message: `Delete ${countLabel}? These role requests cannot be recovered.${activeWarning}`, confirmLabel: "Delete", tone: "danger" }))) return;
 
-    const ids = rolesToDelete.map((role) => role.roleId);
+    const ids = [...new Set(rolesToDelete.map((role) => role.roleId.trim()).filter(Boolean))];
     setDeletingRoleId(ids.length === 1 ? ids[0] : "bulk");
     setDeletingRoleIds(new Set(ids));
     setActionError("");

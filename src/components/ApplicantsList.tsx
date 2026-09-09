@@ -145,7 +145,16 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
   // Historical demo rows are hidden during normal browsing, but become
   // visible when HR explicitly chooses a dashboard stage to inspect them.
   const showHistoricalDemo = stageFilter !== "All Stages";
-  const activeApplicants = useMemo(() => applicants.filter((applicant) => !removedIds.has(applicant.applicationId) && (!applicant.isHistoricalDemo || showHistoricalDemo)), [applicants, removedIds, showHistoricalDemo]);
+  const activeApplicants = useMemo(() => {
+    const seen = new Set<string>();
+    return applicants.filter((applicant) => {
+      if (removedIds.has(applicant.applicationId) || (applicant.isHistoricalDemo && !showHistoricalDemo)) return false;
+      const key = applicant.applicationId.trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [applicants, removedIds, showHistoricalDemo]);
   const dashboardStages = useMemo(() => {
     const labels = historyMetrics?.stageCounts.map((stage) => stage.label) ?? [];
     return labels.length > 0 ? labels : [...DASHBOARD_STAGE_LABELS];
@@ -214,7 +223,10 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
     const countLabel = applicantsToDelete.length === 1 ? applicantsToDelete[0].candidateName || "this applicant" : `${applicantsToDelete.length} applicants`;
     if (!(await confirm({ title: "Delete applicant record?", message: `Delete ${countLabel}? This removes the applicant, screening evidence, history, and linked interview slots.`, confirmLabel: "Delete", tone: "danger" }))) return;
 
-    const ids = applicantsToDelete.map((applicant) => applicant.applicationId);
+    // A stale merge or legacy snapshot can contain the same application more
+    // than once. Deletes are keyed by application ID, so issue one request per
+    // identity or the second request incorrectly reports "Applicant not found".
+    const ids = [...new Set(applicantsToDelete.map((applicant) => applicant.applicationId.trim()).filter(Boolean))];
     setDeletingId(ids.length === 1 ? ids[0] : "bulk");
     setDeletingIds(new Set(ids));
     setActionError("");

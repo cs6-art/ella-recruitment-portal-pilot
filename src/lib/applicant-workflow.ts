@@ -18,7 +18,7 @@ import { normalizeDateOnly, normalizeTimeOnly } from "@/lib/date-only";
 import { countActiveVoiceInterviews, isActiveVoiceInterviewStatus, MAX_CONCURRENT_VOICE_INTERVIEWS, voiceCapacitySlotId, voiceInterviewConcurrencyKey } from "@/lib/voice-interview-capacity";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isCurrentCalendarMonth, isStandardFinalInterviewSlot, isStandardVoiceInterviewSlot, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { targetBookingContext, targetCreateInterviewSlot, targetRecordApplicantDecision, targetReserveBooking, targetUpdateApplicantProfile } from "@/lib/recruitment-target-portal";
+import { targetBookingContext, targetCreateInterviewSlot, targetDeleteApplicant, targetMarkInterviewNoShow, targetRecordApplicantDecision, targetReserveBooking, targetUpdateApplicantProfile, } from "@/lib/recruitment-target-portal";
 import { listApplicationHistory } from "@/lib/internal-recruitment-queries";
 
 export type BookingKind = "voice" | "final";
@@ -825,6 +825,15 @@ async function readOptionalSheet(tab: string, endColumn: string): Promise<SheetD
 export async function deleteApplicant(applicationId: string) {
   const normalizedApplicationId = applicationId.trim().toLowerCase();
   if (!normalizedApplicationId) throw new Error("Applicant ID is required.");
+  if (isPostgresRecruitmentTarget()) {
+    const result = await targetDeleteApplicant(applicationId.trim());
+    if (!result.deleted) {
+      if (result.error === "voice_interview_in_progress") throw new Error("This applicant cannot be deleted while the voice interview is in progress.");
+      if (result.error === "calendar_event_delete_failed") throw new Error("The linked HR interview calendar event could not be removed, so the applicant was not deleted.");
+      throw new Error("Applicant not found.");
+    }
+    return { applicationId: applicationId.trim() };
+  }
   const [applicantData, slots, history, voiceResults, callLogs, finalTracking, callQueue] = await Promise.all([
     readSheet("High_Match_Profile", "CZ"),
     readOptionalSheet("Interview_Slots", "X"),
@@ -1335,9 +1344,20 @@ async function syncFinalTrackingBooking(input: {
   invalidateSheetsCache("Final_Interview_Tracking");
 }
 
-export async function markInterviewNoShow(slotId: string) {
+export async function markInterviewNoShow(slotId: string, actor: { email: string; name: string } = { email: "portal", name: "Portal" }) {
   const cleanSlotId = text(slotId);
   if (!cleanSlotId) throw new Error("Interview slot is required.");
+  if (isPostgresRecruitmentTarget()) {
+    const result = await targetMarkInterviewNoShow(cleanSlotId, actor);
+    if (result.updated) return result;
+    const messages: Record<string, string> = {
+      invalid_slot: "Interview slot is required.",
+      unknown_slot: "Interview slot not found.",
+      slot_not_booked: "Only booked interviews can be marked as No Show.",
+      slot_not_started: "No Show can only be recorded after the scheduled start time.",
+    };
+    throw new Error(messages[result.error || ""] || "Unable to mark interview as No Show.");
+  }
   const [slotsData, applicantsData] = await Promise.all([readSheet("Interview_Slots", "X"), readSheet("High_Match_Profile", "CZ")]);
   const slotIndex = slotsData.rows.findIndex((row) => field(row, "Slot_ID", "Slot ID") === cleanSlotId);
   if (slotIndex < 0) throw new Error("Interview slot not found.");

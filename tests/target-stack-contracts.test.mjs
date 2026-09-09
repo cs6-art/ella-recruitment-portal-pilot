@@ -50,6 +50,32 @@ test("portal operational helpers have a Postgres target branch", () => {
   assert.match(workflow, /targetReserveBooking/);
 });
 
+test("target applicant CRUD bypasses legacy Sheets guards and deletes dependents atomically", () => {
+  const candidates = read("src/lib/candidate-applications.ts");
+  const workflow = read("src/lib/applicant-workflow.ts");
+  const queries = read("src/lib/internal-recruitment-queries.ts");
+  const targetPortal = read("src/lib/recruitment-target-portal.ts");
+  const applicantRoute = read("src/app/api/applicants/[applicationId]/route.ts");
+  assert.match(candidates, /demoActionBlockReason[\s\S]*isPostgresRecruitmentTarget\(\)\) return null/);
+  assert.match(workflow, /isPostgresRecruitmentTarget\(\)[\s\S]*targetDeleteApplicant/);
+  assert.match(queries, /export async function deleteApplication/);
+  for (const child of ["voiceCallLogs", "voiceInterviewResults", "voiceCallAttempts", "screeningResults", "screeningInvitations", "bulkScreeningQueueItems", "interviewSlots", "bookingTokens", "applicationStatusHistory"]) {
+    assert.match(queries, new RegExp(`tx\\.delete\\(${child}\\)`), `applicant delete omitted ${child}`);
+  }
+  assert.match(applicantRoute, /deleteApplicant\(applicationId\)/);
+  assert.match(targetPortal, /deleteFinalInterviewEvent/);
+  assert.match(targetPortal, /calendar_event_delete_failed/);
+  assert.match(workflow, /targetMarkInterviewNoShow/);
+  assert.match(queries, /export async function markInterviewNoShow/);
+});
+
+test("bulk role and applicant deletes issue one request per record identity", () => {
+  const applicants = read("src/components/ApplicantsList.tsx");
+  const roles = read("src/components/RolesList.tsx");
+  assert.match(applicants, /new Set\(applicantsToDelete\.map/);
+  assert.match(roles, /new Set\(rolesToDelete\.map/);
+});
+
 test("target API exposes the write contracts needed to keep portal operations out of Sheets", () => {
   const roles = read("src/app/api/internal/recruitment/roles/route.ts");
   const applications = read("src/app/api/internal/recruitment/applications/route.ts");

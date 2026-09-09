@@ -573,6 +573,10 @@ function withDemoBookings(bookings: InterviewBooking[]): InterviewBooking[] {
  * workflow; booking and contact actions have their own downstream guards.
  */
 export async function demoActionBlockReason(targetApplicationId: string): Promise<string | null> {
+  // The active recruitment target stores applicants in Postgres. The demo
+  // guard below intentionally reads the legacy Sheets snapshot, which makes
+  // every target-mode edit/delete look like a missing applicant.
+  if (isPostgresRecruitmentTarget()) return null;
   if (!isDemoMode()) return null;
   const normalizedId = text(targetApplicationId).toLowerCase();
   const { rows } = await readTab("High_Match_Profile", "CZ");
