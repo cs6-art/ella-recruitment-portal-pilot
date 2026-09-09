@@ -33,6 +33,16 @@ test("booking-token replay is idempotent while terminal tokens can be reissued",
   assert.match(query, /booking-invitation:\$\{input\.kind\}:\$\{input\.applicationExternalId\}:\$\{tokenHash\}/);
 });
 
+test("resume approval queues the voice booking invitation immediately and safely replays", () => {
+  const target = read("src/lib/recruitment-target-portal.ts");
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(target, /input\.stage === "resume" && input\.decision === "Approve"/);
+  assert.match(target, /createBookingToken\(\{/);
+  assert.match(target, /voiceBookingInvitationQueued: true/);
+  assert.match(query, /if \(history\) return \{ updated: false, duplicate: true, error: null \};/);
+  assert.match(query, /newStage: nextStage/);
+});
+
 test("notification state records attempt, sent time, provider ID, and recipient", () => {
   const query = read("src/lib/internal-recruitment-queries.ts");
   const route = read("src/app/api/internal/recruitment/notifications/route.ts");
