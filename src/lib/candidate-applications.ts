@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { google } from "googleapis";
 import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account";
 import { bulkResumeSpreadsheetId } from "@/lib/bulk-resume-config";
@@ -17,6 +18,11 @@ export {
   syncPastBookedInterviewsNoShow,
   type CandidateStatusHistoryEntry,
 } from "./applicant-workflow";
+
+// Applicants and their metrics are rendered together on the HR list page.
+// React request memoization lets both views share the same bounded Postgres
+// query without introducing cross-request stale data.
+const cachedTargetApplicantSummaries = cache(targetApplicantSummaries);
 
 const spreadsheetId = process.env.GOOGLE_CANDIDATE_SPREADSHEET_ID || process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
 const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -601,7 +607,7 @@ export async function demoActionBlockReason(targetApplicationId: string): Promis
 }
 
 export async function getApplicants(): Promise<ApplicantSummary[]> {
-  if (isPostgresRecruitmentTarget()) return targetApplicantSummaries();
+  if (isPostgresRecruitmentTarget()) return cachedTargetApplicantSummaries();
   // No-show maintenance runs in the background. Keep the Applicants page
   // focused on reading the data it needs to render.
   // Same cross-instance staleness this codebase already works around for the
@@ -622,7 +628,7 @@ export async function getApplicants(): Promise<ApplicantSummary[]> {
 }
 
 export async function getApplicantMetrics(): Promise<ApplicantMetrics> {
-  if (isPostgresRecruitmentTarget()) return targetApplicantMetrics() as Promise<ApplicantMetrics>;
+  if (isPostgresRecruitmentTarget()) return targetApplicantMetrics(await cachedTargetApplicantSummaries()) as Promise<ApplicantMetrics>;
   // The scheduled interview maintenance handles past no-show updates. Keep
   // dashboard metrics read-only so the dashboard does not wait on that work.
   const rows = withDemoHistory((await readTab("High_Match_Profile", "CZ")).rows);

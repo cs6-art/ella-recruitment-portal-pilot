@@ -62,7 +62,7 @@ test("calendar counter uses configured windows and recruitment setup is editable
   assert.match(roleDetails, /RecruitmentSetupEditor[^\n]*editable=\{canReviewRole\}/);
 });
 
-test("Postgres deployments do not start the legacy Sheets maintenance timer", () => {
-  assert.match(instrumentation, /isPostgresRecruitmentTarget/);
-  assert.match(instrumentation, /if \(usePostgresTarget\) return/);
+test("server startup does not start maintenance timers on Vercel", () => {
+  assert.match(instrumentation, /Intentionally no timers/);
+  assert.doesNotMatch(instrumentation, /setInterval|setTimeout/);
 });

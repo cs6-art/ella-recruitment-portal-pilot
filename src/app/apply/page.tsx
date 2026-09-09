@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
 
-export const dynamic = "force-dynamic";
+// Public role catalogue data can tolerate a short freshness window. The
+// application POST route revalidates the role live before accepting a form.
+export const revalidate = 60;
 
 export default async function ApplyIndexPage() {
   const roles = (await getRoleRequests({ liveOnly: true })).filter(isPublishedRoleForIntake);

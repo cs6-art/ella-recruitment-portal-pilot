@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import CandidateApplicationForm from "@/components/CandidateApplicationForm";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 
+// Dynamic public role details remain live so publication changes are reflected
+// immediately; the application POST route also revalidates the role.
 export const dynamic = "force-dynamic";
 
 export default async function ApplyPage({ params }: { params: Promise<{ roleId: string }> }) {
