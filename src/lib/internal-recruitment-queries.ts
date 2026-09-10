@@ -1308,6 +1308,10 @@ export async function notificationQueue(stage?: string) {
     }).from(applicationStatusHistory)
       .where(and(
         inArray(applicationStatusHistory.notificationStatus, ["", "pending", "failed"]),
+        // History rows without an event type are audit-only transitions, not
+        // outbound notifications. Excluding them prevents a stage-filtered
+        // worker from claiming and sending an unrelated email.
+        not(eq(applicationStatusHistory.notificationEventType, "")),
         or(isNull(applicationStatusHistory.notificationAttemptedAt), lte(applicationStatusHistory.notificationAttemptedAt, leaseCutoff)),
         cleanStage ? eq(applicationStatusHistory.newStage, cleanStage) : undefined,
       ))
