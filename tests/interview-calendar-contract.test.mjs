@@ -55,3 +55,11 @@ test("Postgres HR slots are manually creatable and final booking creates and rec
   assert.match(targetPortal, /calendar\.created \? "created" : "failed"/);
   assert.match(targetPortal, /attendeeEmails: \[context\.email\]/);
 });
+
+test("Pilot applicant booking hides calendar-busy final slots and rechecks persisted slots", () => {
+  assert.match(targetPortal, /getCalendarBusyWindows/);
+  assert.match(targetPortal, /if \(kind === "final" && available\.length > 0\)/);
+  assert.match(targetPortal, /available = busyResult\.checked/);
+  assert.match(targetPortal, /if \(kind === "final" && persistedSlot\)/);
+  assert.match(targetPortal, /calendar_conflict/);
+});

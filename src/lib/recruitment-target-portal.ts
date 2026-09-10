@@ -42,7 +42,7 @@ import { scheduledInstant } from "@/lib/interview-time";
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { generateRoleId } from "@/lib/role-id";
-import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent } from "@/lib/google-calendar";
+import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows } from "@/lib/google-calendar";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isStandardFinalInterviewSlot, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 
 function text(value: unknown) {
@@ -364,7 +364,40 @@ export async function targetBookingContext(kind: "voice" | "final", tokenHash: s
       .filter((slot) => hasValidFutureTime(slot))
       .map((slot) => ({ ...slot, roleId, status: "Available" as const }))
     : [];
-  const available = [...persistedAvailable, ...virtualAvailable].sort((left, right) => `${left.date} ${left.startTime}`.localeCompare(`${right.date} ${right.startTime}`));
+  let available = [...persistedAvailable, ...virtualAvailable].sort((left, right) => `${left.date} ${left.startTime}`.localeCompare(`${right.date} ${right.startTime}`));
+  if (kind === "final" && available.length > 0) {
+    // Calendar availability is the applicant-facing source of truth. Check
+    // the complete range once so stale persisted rows cannot be displayed as
+    // selectable times after an HR calendar event was added.
+    const calendarEmail = text(row.roleHrCalendarEmail || role?.hodEmail);
+    const instants = available.flatMap((slot) => {
+      try {
+        return [scheduledInstant(slot.date, slot.startTime, slot.timezone || "Asia/Singapore"), scheduledInstant(slot.date, slot.endTime, slot.timezone || "Asia/Singapore")];
+      } catch {
+        return [];
+      }
+    });
+    if (!calendarEmail || instants.length === 0) {
+      available = [];
+    } else {
+      const busyResult = await getCalendarBusyWindows({
+        hodEmail: calendarEmail,
+        start: new Date(Math.min(...instants.map((value) => value.getTime()))),
+        end: new Date(Math.max(...instants.map((value) => value.getTime()))),
+      });
+      available = busyResult.checked
+        ? available.filter((slot) => {
+            try {
+              const start = scheduledInstant(slot.date, slot.startTime, slot.timezone || "Asia/Singapore").getTime();
+              const end = scheduledInstant(slot.date, slot.endTime, slot.timezone || "Asia/Singapore").getTime();
+              return !busyResult.busy.some((window) => Date.parse(window.start) < end && Date.parse(window.end) > start);
+            } catch {
+              return false;
+            }
+          })
+        : [];
+    }
+  }
   const roleSetup = row.roleSetup && typeof row.roleSetup === "object" ? row.roleSetup as Record<string, unknown> : {};
   return {
     kind, applicationId: text(row.application.externalId), candidateName: text(row.application.candidateName), email: text(row.application.email || row.applicantEmail),
@@ -379,6 +412,20 @@ export async function targetReserveBooking(kind: "voice" | "final", tokenHash: s
   if (!context) return { booked: false, error: "invalid_booking_token" as const };
   let persistedSlotId = slotId;
   const virtualSlot = isVirtualSlotId(slotId) ? context.slots.find((slot) => slot.slotId === slotId) : undefined;
+  const persistedSlot = !virtualSlot ? context.slots.find((slot) => slot.slotId === slotId) : undefined;
+  if (kind === "final" && persistedSlot) {
+    // Recheck persisted slots at confirmation time as well as during the
+    // initial page load; the calendar may change while the applicant waits.
+    const calendar = await checkCalendarAvailability({
+      hodEmail: context.roleHrCalendarEmail,
+      date: persistedSlot.date,
+      startTime: persistedSlot.startTime,
+      endTime: persistedSlot.endTime,
+      timezone: persistedSlot.timezone || "Asia/Singapore",
+    });
+    if (!calendar.checked) return { booked: false, error: calendar.reason === "not_connected" ? "calendar_not_connected" as const : "calendar_unavailable" as const };
+    if (!calendar.available) return { booked: false, error: "calendar_conflict" as const };
+  }
   if (virtualSlot) {
     const materialized = await targetCreateInterviewSlot({
       slotCode: kind === "final" ? virtualSlot.slotId : undefined,
