@@ -26,6 +26,7 @@ type QueueItem = {
   processedAt: string;
   attemptCount: string;
   lastUpdated: string;
+  jobId: string;
 };
 
 const statusOrder = ["Queued", "Processing", "Completed", "Failed", "Skipped"];
@@ -35,6 +36,13 @@ const POLL_INTERVAL_MS = 90_000;
 // server-only). The server also enforces it — see bulk/upload and drive/import.
 const MAX_FILES_PER_SUBMISSION = 8;
 const TERMINAL_STATUSES = new Set(["screened", "processed", "failed", "skipped"]);
+
+// Pilot Postgres keeps the Drive object ID for storage traceability, while
+// the upload UI tracks the role-scoped queue/job ID. Legacy rows may not have
+// jobId, so retain driveFileId as a compatibility fallback.
+function queueIdentity(item: Pick<QueueItem, "jobId" | "driveFileId">) {
+  return item.jobId || item.driveFileId;
+}
 
 function statusClass(status: string) {
   return `bulk-status bulk-status-${status.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
@@ -190,7 +198,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveR
   const pendingInBatch = useMemo(() => {
     if (activeBatch.size === 0) return false;
     return Array.from(activeBatch.keys()).some((queueId) => {
-      const item = items.find((entry) => entry.driveFileId === queueId);
+      const item = items.find((entry) => queueIdentity(entry) === queueId);
       const reportedStatus = batchResultStatuses.get(queueId)?.toLowerCase() || "";
       // A successful response without a queue row is still only an accepted
       // handoff. Local validation/request failures may terminate immediately,
@@ -346,7 +354,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveR
     if (batchTotal === 0) return { completed: 0, failed: 0, processing: 0, queued: 0, skipped: 0 };
     let completed = 0, failed = 0, processing = 0, queued = 0, skipped = 0;
     for (const queueId of activeBatch.keys()) {
-      const item = items.find((entry) => entry.driveFileId === queueId);
+      const item = items.find((entry) => queueIdentity(entry) === queueId);
       const reportedStatus = batchResultStatuses.get(queueId)?.toLowerCase() || "";
       const status = (item?.status || (["failed", "skipped"].includes(reportedStatus) ? reportedStatus : "Queued")).toLowerCase();
       if (status === "screened" || status === "processed") completed += 1;
@@ -362,7 +370,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveR
   const batchFinished = batchTotal > 0 && batchTerminal.queued === 0 && batchTerminal.processing === 0;
   const failedFiles = useMemo(() => {
     const failedIds = [...activeBatch.keys()].filter((queueId) => {
-      const item = items.find((entry) => entry.driveFileId === queueId);
+      const item = items.find((entry) => queueIdentity(entry) === queueId);
       return (item?.status || batchResultStatuses.get(queueId) || "").toLowerCase() === "failed";
     });
     return failedIds.map((queueId) => batchFiles.current.get(queueId)).filter((file): file is File => Boolean(file));
