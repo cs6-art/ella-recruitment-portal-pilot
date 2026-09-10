@@ -33,6 +33,7 @@ import {
   calendarEventQueue,
   createBookingToken,
   applicationVoiceReview,
+  copyScreeningResult,
 } from "@/lib/internal-recruitment-queries";
 import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
 import { applicantVoiceTimezone } from "@/lib/applicant-timezone";
@@ -546,8 +547,8 @@ export async function targetCreateScreeningInvitation(input: { roleId: string; c
   return { invitationId: result.invitation.id, token, expiresAt: result.invitation.expiresAt?.toISOString() || "" };
 }
 
-export async function targetCreateApplication(input: { externalId: string; roleId: string; candidateName: string; email: string; phone: string; preferredMobile: string; applicantCountry: string; source: string; sourceDetail?: string; consentAt?: string; resume?: { fileId: string; fileName: string; mimeType: string; size: number; sha256: string; kind: string; expiresAt: string } }) {
-  const resumeFileId = input.resume ? await registerResumeFile({ storageRef: input.resume.fileId, sha256: input.resume.sha256, filename: input.resume.fileName, mimeType: input.resume.mimeType, size: input.resume.size, kind: input.resume.kind, expiresAt: input.resume.expiresAt }) : null;
+export async function targetCreateApplication(input: { externalId: string; roleId: string; candidateName: string; email: string; phone: string; preferredMobile: string; applicantCountry: string; source: string; sourceDetail?: string; consentAt?: string; resume?: { fileId: string; fileName: string; mimeType: string; size: number; sha256: string; kind: string; expiresAt: string; extractedText?: string } }) {
+  const resumeFileId = input.resume ? await registerResumeFile({ storageRef: input.resume.fileId, sha256: input.resume.sha256, filename: input.resume.fileName, mimeType: input.resume.mimeType, size: input.resume.size, kind: input.resume.kind, expiresAt: input.resume.expiresAt, extractedText: input.resume.extractedText }) : null;
   const result = await createApplication({ externalId: input.externalId, roleExternalId: input.roleId, applicantEmail: input.email, applicantName: input.candidateName, phone: input.phone, preferredMobile: input.preferredMobile, applicantCountry: input.applicantCountry, source: input.source, sourceDetail: input.sourceDetail, consentAt: input.consentAt, resumeFileId: resumeFileId || undefined });
   if (!result.application) throw new Error(result.error || "Unable to create the application.");
   if (input.resume) {
@@ -568,9 +569,12 @@ export async function targetCreateApplication(input: { externalId: string; roleI
       isUat: true,
     });
     if (queued.error) throw new Error(queued.error);
-    return { ...result, screeningQueued: true, screeningQueueCreated: queued.created };
+    const screeningReused = !queued.created && queued.item?.status === "screened" && Boolean(queued.item.applicationId)
+      ? await copyScreeningResult({ sourceApplicationId: queued.item.applicationId as string, targetApplicationId: result.application.id })
+      : false;
+    return { ...result, screeningQueued: queued.created, screeningQueueCreated: queued.created, screeningReused };
   }
-  return { ...result, screeningQueued: false, screeningQueueCreated: false };
+  return { ...result, screeningQueued: false, screeningQueueCreated: false, screeningReused: false };
 }
 
 export async function targetGetScreeningInvitation(token: string) {

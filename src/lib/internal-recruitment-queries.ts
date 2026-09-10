@@ -340,6 +340,29 @@ export async function registerResumeFile(input: { storageRef: string; sha256: st
   return existing?.id || null;
 }
 
+/** Reuse a completed role-scoped screening for a duplicate application. */
+export async function copyScreeningResult(input: { sourceApplicationId: string; targetApplicationId: string }) {
+  if (input.sourceApplicationId === input.targetApplicationId) return false;
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const [source] = await tx.select().from(screeningResults).where(eq(screeningResults.applicationId, input.sourceApplicationId)).limit(1);
+    if (!source) return false;
+    const [copied] = await tx.insert(screeningResults).values({
+      applicationId: input.targetApplicationId,
+      matchScore: source.matchScore,
+      recommendation: source.recommendation,
+      summary: source.summary,
+      strengths: source.strengths,
+      gaps: source.gaps,
+      interviewQuestions: source.interviewQuestions,
+      evaluationScores: source.evaluationScores as object,
+      screenedAt: source.screenedAt,
+      raw: source.raw as object | null,
+    }).onConflictDoNothing({ target: screeningResults.applicationId }).returning({ id: screeningResults.id });
+    return Boolean(copied);
+  });
+}
+
 export async function getApplication(externalId: string) {
   const db = getDb();
   const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, roleTargetHiringDate: roles.targetHiringDate, roleHrCalendarEmail: roles.hrCalendarEmail, roleSetup: roles.setup, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
