@@ -33,6 +33,7 @@ import {
   calendarEventQueue,
   createBookingToken,
   applicationVoiceReview,
+  getApplicationBookingNotification,
   copyScreeningResult,
 } from "@/lib/internal-recruitment-queries";
 import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
@@ -841,6 +842,10 @@ export async function targetApplicantDetails(externalId: string) {
   const resumeFile = row.resumeFile as unknown as Record<string, unknown> | null;
   const slots = await listApplicationSlots(externalId);
   const tokens = await listApplicationBookingTokens(externalId);
+  const [voiceBookingNotification, finalBookingNotification] = await Promise.all([
+    getApplicationBookingNotification(externalId, "voice"),
+    getApplicationBookingNotification(externalId, "final"),
+  ]);
   const voiceSlot = slots.map(({ slot }) => slot as unknown as Record<string, unknown>).find((slot) => text(slot.interviewType) === "voice");
   const finalSlot = slots.map(({ slot }) => slot as unknown as Record<string, unknown>).find((slot) => text(slot.interviewType) === "final");
   const voiceToken = tokens.find((token) => token.kind === "voice");
@@ -915,6 +920,9 @@ export async function targetApplicantDetails(externalId: string) {
     voiceBookingLink: text(voiceToken?.link),
     bookingTokenStatus: text(voiceToken?.status),
     bookingTokenExpiresAt: date(voiceToken?.expiresAt),
+    voiceBookingNotificationStatus: text(voiceBookingNotification?.notificationStatus),
+    voiceBookingNotificationSentAt: date(voiceBookingNotification?.notificationSentAt),
+    voiceBookingNotificationError: text(voiceBookingNotification?.notificationError),
     finalBookingStatus: label(finalToken?.status || finalSlot?.status),
     finalScheduledDate: finalStartsAt.date,
     finalScheduledTime: finalStartsAt.time,
@@ -937,6 +945,9 @@ export async function targetApplicantDetails(externalId: string) {
     } : undefined,
     finalBookingLink: text(finalToken?.link),
     finalBookingTokenExpiresAt: date(finalToken?.expiresAt),
+    finalBookingNotificationStatus: text(finalBookingNotification?.notificationStatus),
+    finalBookingNotificationSentAt: date(finalBookingNotification?.notificationSentAt),
+    finalBookingNotificationError: text(finalBookingNotification?.notificationError),
     finalComments: text(application.finalInterviewComments),
     lastUpdated: date(application.updatedAt),
   };

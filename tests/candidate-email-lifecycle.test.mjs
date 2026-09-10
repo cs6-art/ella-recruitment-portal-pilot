@@ -68,6 +68,9 @@ test("notification queue carries ready-to-send candidate email copy per booking 
   assert.match(labels, /Ella, will call you at your preferred mobile number/);
   assert.match(labels, /cta: "Choose your interview time"/);
   assert.match(labels, /cta: "Schedule final interview"/);
+  assert.match(labels, /includeRawBookingLink: false/);
+  assert.match(labels, /Please use the button below/);
+  assert.doesNotMatch(labels, /Please use the secure link below/);
   // Google Calendar delivers the face-to-face confirmation, so no email here.
   assert.match(labels, /if \(key === "final_booking_confirmation"\) return null/);
   assert.match(query, /email: notificationEmail\(history\.notificationEventType/);
@@ -108,6 +111,19 @@ test("notification state records attempt, sent time, provider ID, and recipient"
   const route = read("src/app/api/internal/recruitment/notifications/route.ts");
   for (const field of ["notificationAttemptedAt", "notificationSentAt", "notificationProviderId", "notificationRecipient"]) assert.match(query, new RegExp(field));
   assert.match(route, /providerMessageId/);
+});
+
+test("HR booking cards expose invitation delivery separately from booking state", () => {
+  const page = read("src/app/applicants/[applicationId]/page.tsx");
+  const target = read("src/lib/recruitment-target-portal.ts");
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(page, /Booking Link Email/);
+  assert.match(page, /Booking link sent/);
+  assert.match(page, /Booking link pending/);
+  assert.match(page, /Booking email failed/);
+  assert.match(target, /getApplicationBookingNotification\(externalId, "final"\)/);
+  assert.match(query, /final_booking_invitation/);
+  assert.match(query, /notificationSentAt/);
 });
 
 test("notification queue claims rows atomically to prevent overlapping duplicate sends", () => {

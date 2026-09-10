@@ -357,11 +357,12 @@ template instead of the raw `notificationEventType` / `newStage` values:**
 | `statusLabel` | `Voice Interview Review` | "Status" line (from `newStage`) |
 | `previousStatusLabel` | `Voice Interview Scheduled` | Optional "from" context (from `previousStage`) |
 | `summary` | `The AI voice interview is complete. Open the applicant record to review…` | Body sentence — the reviewer's comment when present, otherwise a per-event default |
-| `email` | `{ subject, heading, message, cta, ctaLink, signoff }` or `null` | Full candidate-facing email body. Render these fields directly; `cta`/`ctaLink` are empty when there is no button. `null` means **do not send an email** for this event. |
+| `email` | `{ subject, heading, message, cta, ctaLink, includeRawBookingLink, signoff }` or `null` | Full candidate-facing email body. Render these fields directly; `cta`/`ctaLink` are empty when there is no button. `includeRawBookingLink` is always `false`: render `cta` + `ctaLink` as the button only and never append the URL as plaintext. `null` means **do not send an email** for this event. |
 
 `email.message` already contains the greeting and paragraphs (`\n\n`
 between them); append `email.signoff` after it. For booking invitations
-`email.ctaLink` is the secure booking URL; for the AI voice confirmation the
+`email.ctaLink` is the secure booking URL for the CTA button; do not print it
+as a separate `Booking link:` line. For the AI voice confirmation the
 message embeds `Scheduled for: <date> at <time> (<timezone>)` in the
 candidate's timezone and there is no CTA (attach an ICS instead).
 
