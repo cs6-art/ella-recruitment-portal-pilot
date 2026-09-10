@@ -490,7 +490,10 @@ export async function upsertScreeningResult(input: { applicationExternalId: stri
   return db.transaction(async (tx) => {
     const [application] = await tx.select({ id: applications.id, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
     if (!application) return { result: null, error: "unknown_application" as const };
-    const resultValues = { matchScore: input.matchScore ?? null, recommendation: input.recommendation || "", summary: input.summary || "", strengths: input.strengths || "", gaps: input.gaps || "", interviewQuestions: input.interviewQuestions || "", evaluationScores: (input.evaluationScores ?? []) as object, screenedAt: isoOrNull(input.screenedAt), raw: (input.raw ?? null) as object | null };
+    const [existing] = await tx.select({ matchScore: screeningResults.matchScore }).from(screeningResults).where(eq(screeningResults.applicationId, application.id)).limit(1);
+    // A partial or retried callback must never erase a previously persisted
+    // grade just because its score was omitted or encoded as an empty value.
+    const resultValues = { matchScore: input.matchScore ?? existing?.matchScore ?? null, recommendation: input.recommendation || "", summary: input.summary || "", strengths: input.strengths || "", gaps: input.gaps || "", interviewQuestions: input.interviewQuestions || "", evaluationScores: (input.evaluationScores ?? []) as object, screenedAt: isoOrNull(input.screenedAt), raw: (input.raw ?? null) as object | null };
     const [result] = await tx.insert(screeningResults).values({ applicationId: application.id, ...resultValues }).onConflictDoUpdate({ target: screeningResults.applicationId, set: resultValues }).returning();
     await tx.insert(applicationStatusHistory).values({
       applicationId: application.id,

@@ -13,11 +13,38 @@ export type ValidatedScreeningResult = z.infer<typeof screeningResultSchema>;
 
 export function parseScreeningResult(value: unknown): ValidatedScreeningResult {
   const parsed = typeof value === "string" ? JSON.parse(value) as unknown : value;
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const record = parsed as Record<string, unknown>;
+    const rawMatchScore = Object.prototype.hasOwnProperty.call(record, "match_score") ? record.match_score : record.matchScore;
+    const normalized: Record<string, unknown> = { ...record, match_score: normalizeMatchScore(rawMatchScore) };
+    delete normalized.matchScore;
+    return screeningResultSchema.parse(normalized);
+  }
   return screeningResultSchema.parse(parsed);
 }
 
 function text(value: unknown) {
   return String(value ?? "").trim();
+}
+
+/**
+ * Normalize the score shapes used by the n8n and legacy screening payloads.
+ * `undefined` means the field was not supplied or was invalid; `null` means
+ * an explicitly empty score. Callers can therefore reject malformed values
+ * without treating them as a real zero.
+ */
+export function normalizeMatchScore(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value === "string") {
+    const raw = value.trim();
+    if (!raw) return null;
+    const numeric = Number(raw.endsWith("%") ? raw.slice(0, -1).trim() : raw);
+    if (!Number.isFinite(numeric) || numeric < 0 || numeric > 100) return undefined;
+    return Math.trunc(numeric);
+  }
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) return undefined;
+  return Math.trunc(value);
 }
 
 export function buildScreeningPrompt(input: {
