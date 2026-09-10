@@ -1,5 +1,6 @@
 import { createOAuthState } from "@/lib/google-calendar";
 import { deleteMicrosoftDriveConnection, getMicrosoftDriveConnection, saveMicrosoftDriveConnection } from "@/lib/microsoft-drive-tokens";
+import { fetchWithTimeout, timeoutFromEnv } from "@/lib/fetch-with-timeout";
 
 /**
  * Per-HR-user Microsoft OneDrive connection — a wholly separate OAuth flow
@@ -78,12 +79,12 @@ type TokenResponse = {
 
 async function requestToken(body: Record<string, string>, requestOrigin?: string): Promise<TokenResponse> {
   const { clientId, clientSecret, redirectUri } = oauthConfig(requestOrigin);
-  const response = await fetch(`${authorityBase()}/token`, {
+  const response = await fetchWithTimeout(`${authorityBase()}/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, ...body }),
     cache: "no-store",
-  });
+  }, timeoutFromEnv("MICROSOFT_API_TIMEOUT_MS", 15_000));
   const data = (await response.json().catch(() => ({}))) as TokenResponse;
   if (!response.ok || !data.access_token) {
     throw new Error(data.error_description || data.error || `Microsoft token request failed (HTTP ${response.status}).`);
@@ -92,10 +93,10 @@ async function requestToken(body: Record<string, string>, requestOrigin?: string
 }
 
 async function graphMe(accessToken: string): Promise<string> {
-  const response = await fetch(`${GRAPH}/me?$select=mail,userPrincipalName`, {
+  const response = await fetchWithTimeout(`${GRAPH}/me?$select=mail,userPrincipalName`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
-  });
+  }, timeoutFromEnv("MICROSOFT_API_TIMEOUT_MS", 15_000));
   if (!response.ok) return "";
   const data = (await response.json().catch(() => ({}))) as { mail?: string; userPrincipalName?: string };
   return normalizedEmail(data.mail || data.userPrincipalName || "");
@@ -200,10 +201,10 @@ function toItem(raw: Record<string, unknown>): GraphItem {
 }
 
 async function graphGet(token: string, path: string): Promise<Record<string, unknown>> {
-  const response = await fetch(path.startsWith("http") ? path : `${GRAPH}${path}`, {
+  const response = await fetchWithTimeout(path.startsWith("http") ? path : `${GRAPH}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
-  });
+  }, timeoutFromEnv("MICROSOFT_API_TIMEOUT_MS", 15_000));
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
     throw new Error(`Graph ${response.status}: ${detail.slice(0, 300)}`);
@@ -234,8 +235,8 @@ export async function downloadMicrosoftDriveFile(token: string, itemId: string):
   const meta = await graphGet(token, `/me/drive/items/${encodeURIComponent(itemId)}?$select=id,name,@microsoft.graph.downloadUrl`);
   const downloadUrl = typeof meta["@microsoft.graph.downloadUrl"] === "string" ? (meta["@microsoft.graph.downloadUrl"] as string) : "";
   const response = downloadUrl
-    ? await fetch(downloadUrl, { cache: "no-store" })
-    : await fetch(`${GRAPH}/me/drive/items/${encodeURIComponent(itemId)}/content`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", redirect: "follow" });
+    ? await fetchWithTimeout(downloadUrl, { cache: "no-store" }, timeoutFromEnv("MICROSOFT_API_TIMEOUT_MS", 15_000))
+    : await fetchWithTimeout(`${GRAPH}/me/drive/items/${encodeURIComponent(itemId)}/content`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", redirect: "follow" }, timeoutFromEnv("MICROSOFT_API_TIMEOUT_MS", 15_000));
   if (!response.ok) throw new Error(`Unable to download the file from OneDrive (HTTP ${response.status}).`);
   return Buffer.from(await response.arrayBuffer());
 }

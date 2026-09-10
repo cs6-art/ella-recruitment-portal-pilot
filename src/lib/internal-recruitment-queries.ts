@@ -29,6 +29,10 @@ import {
 
 /** Postgres-only target helpers. New entities stay inactive until explicitly enabled. */
 const LIMIT = 100;
+const configuredNotificationClaimLeaseMinutes = Number(process.env.NOTIFICATION_CLAIM_LEASE_MINUTES || "10");
+const NOTIFICATION_CLAIM_LEASE_MINUTES = Number.isFinite(configuredNotificationClaimLeaseMinutes)
+  ? Math.min(Math.max(configuredNotificationClaimLeaseMinutes, 1), 60)
+  : 10;
 // A worker outage must not turn a yesterday's appointment into an unexpected
 // call when the queue comes back. Keep this configurable for environments
 // with a different polling interval, but bound it to a safe operational range.
@@ -271,6 +275,21 @@ export async function listApplications(stage?: string, roleExternalId?: string) 
     .orderBy(desc(applications.updatedAt)).limit(LIMIT);
 }
 
+/** Return only the newest target applicants needed by the notification bell. */
+export async function listRecentApplications(department?: string, limit = 50) {
+  const db = getDb();
+  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles })
+    .from(applications)
+    .innerJoin(roles, eq(roles.id, applications.roleId))
+    .innerJoin(applicants, eq(applicants.id, applications.applicantId))
+    .leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id))
+    .leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId));
+  const departmentWhere = department?.trim()
+    ? sql`lower(trim(${roles.departmentSnapshot})) = lower(trim(${department.trim()}))`
+    : undefined;
+  return query.where(departmentWhere).orderBy(desc(applications.appliedAt)).limit(Math.max(1, Math.min(LIMIT, Math.trunc(limit))));
+}
+
 export async function listRoleStatusHistory(externalId: string) {
   const db = getDb();
   return db.select({ history: roleStatusHistory, roleExternalId: roles.externalId })
@@ -309,11 +328,15 @@ export async function createApplication(input: { externalId: string; applicantEm
   });
 }
 
-export async function registerResumeFile(input: { storageRef: string; sha256: string; filename: string; mimeType: string; size: number; kind: string; expiresAt?: string }) {
+export async function registerResumeFile(input: { storageRef: string; sha256: string; filename: string; mimeType: string; size: number; kind: string; expiresAt?: string; extractedText?: string; candidateName?: string; candidateEmail?: string; preferredMobile?: string; applicantCountry?: string }) {
   const db = getDb();
-  const [row] = await db.insert(resumeFiles).values({ storageRef: input.storageRef, sha256: input.sha256, filename: input.filename, mimeType: input.mimeType, size: input.size, kind: input.kind, textExtracted: false, expiresAt: isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: resumeFiles.storageRef }).returning({ id: resumeFiles.id });
+  const extractedText = input.extractedText || "";
+  const [row] = await db.insert(resumeFiles).values({ storageRef: input.storageRef, sha256: input.sha256, filename: input.filename, mimeType: input.mimeType, size: input.size, kind: input.kind, textExtracted: Boolean(extractedText), extractedText, candidateName: input.candidateName || "", candidateEmail: input.candidateEmail || "", preferredMobile: input.preferredMobile || "", applicantCountry: input.applicantCountry || "", expiresAt: isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: resumeFiles.storageRef }).returning({ id: resumeFiles.id });
   if (row) return row.id;
   const [existing] = await db.select({ id: resumeFiles.id }).from(resumeFiles).where(eq(resumeFiles.storageRef, input.storageRef)).limit(1);
+  if (existing && extractedText) {
+    await db.update(resumeFiles).set({ textExtracted: true, extractedText, candidateName: input.candidateName || "", candidateEmail: input.candidateEmail || "", preferredMobile: input.preferredMobile || "", applicantCountry: input.applicantCountry || "" }).where(eq(resumeFiles.id, existing.id));
+  }
   return existing?.id || null;
 }
 
@@ -491,6 +514,19 @@ export async function listScreening(applicationExternalId?: string) {
   const db = getDb();
   const query = db.select({ result: screeningResults, applicationExternalId: applications.externalId }).from(screeningResults).innerJoin(applications, eq(applications.id, screeningResults.applicationId));
   return (applicationExternalId ? query.where(eq(applications.externalId, applicationExternalId)) : query).orderBy(desc(screeningResults.createdAt)).limit(LIMIT);
+}
+
+/** Batch screening evidence lookup for the bulk status endpoint. */
+export async function listScreeningForApplications(applicationExternalIds: string[]) {
+  const ids = [...new Set(applicationExternalIds.map((value) => value.trim()).filter(Boolean))];
+  if (ids.length === 0) return [];
+  const db = getDb();
+  return db.select({ result: screeningResults, applicationExternalId: applications.externalId })
+    .from(screeningResults)
+    .innerJoin(applications, eq(applications.id, screeningResults.applicationId))
+    .where(inArray(applications.externalId, ids))
+    .orderBy(desc(screeningResults.createdAt))
+    .limit(LIMIT);
 }
 
 export async function createScreeningInvitation(input: { roleExternalId: string; tokenHash: string; email: string; createdBy: string; expiresAt?: string }) {
@@ -808,6 +844,17 @@ export async function listBulkQueueForPortal(statuses: string[] = ["queued", "pr
     .where(and(...conditions))
     .orderBy(desc(bulkScreeningQueueItems.updatedAt))
     .limit(LIMIT);
+}
+
+/** Fast target duplicate check used before resume parsing/upload work. */
+export async function findBulkQueueByRoleAndSha(roleExternalId: string, resumeSha256: string) {
+  const db = getDb();
+  const [row] = await db.select({ id: bulkScreeningQueueItems.id, status: bulkScreeningQueueItems.status })
+    .from(bulkScreeningQueueItems)
+    .innerJoin(roles, eq(roles.id, bulkScreeningQueueItems.roleId))
+    .where(and(eq(roles.externalId, roleExternalId.trim()), eq(bulkScreeningQueueItems.resumeSha256, resumeSha256.trim().toLowerCase())))
+    .limit(1);
+  return row ?? null;
 }
 
 export async function enqueueBulkScreening(input: {
@@ -1223,7 +1270,51 @@ export async function listActiveBookingRoleIds() {
 
 export async function notificationQueue(stage?: string) {
   const db = getDb();
-  const applicationRows = await db.select({
+  const cleanStage = stage?.trim();
+  // Claim rows while holding database locks. A read-then-ack notifier can
+  // otherwise be polled twice by n8n and send the same email twice.
+  const { applicationIds, roleIds } = await db.transaction(async (tx) => {
+    const now = new Date();
+    const leaseCutoff = new Date(now.getTime() - NOTIFICATION_CLAIM_LEASE_MINUTES * 60_000);
+    const applicationCandidates = await tx.select({
+      id: applicationStatusHistory.id,
+      changedAt: applicationStatusHistory.changedAt,
+    }).from(applicationStatusHistory)
+      .where(and(
+        inArray(applicationStatusHistory.notificationStatus, ["", "pending", "failed"]),
+        or(isNull(applicationStatusHistory.notificationAttemptedAt), lte(applicationStatusHistory.notificationAttemptedAt, leaseCutoff)),
+        cleanStage ? eq(applicationStatusHistory.newStage, cleanStage) : undefined,
+      ))
+      .orderBy(asc(applicationStatusHistory.changedAt))
+      .for("update", { skipLocked: true })
+      .limit(LIMIT);
+    const roleCandidates = await tx.select({
+      id: roleStatusHistory.id,
+      changedAt: roleStatusHistory.changedAt,
+    }).from(roleStatusHistory)
+      .where(and(
+        inArray(roleStatusHistory.notificationStatus, ["", "pending", "failed"]),
+        or(isNull(roleStatusHistory.notificationAttemptedAt), lte(roleStatusHistory.notificationAttemptedAt, leaseCutoff)),
+        cleanStage ? eq(roleStatusHistory.newStatus, cleanStage) : undefined,
+      ))
+      .orderBy(asc(roleStatusHistory.changedAt))
+      .for("update", { skipLocked: true })
+      .limit(LIMIT);
+    const selected = [
+      ...applicationCandidates.map((candidate) => ({ ...candidate, domain: "application" as const })),
+      ...roleCandidates.map((candidate) => ({ ...candidate, domain: "role" as const })),
+    ].sort((left, right) => new Date(left.changedAt).valueOf() - new Date(right.changedAt).valueOf()).slice(0, LIMIT);
+    const applicationIds = selected.filter((candidate) => candidate.domain === "application").map((candidate) => candidate.id);
+    const roleIds = selected.filter((candidate) => candidate.domain === "role").map((candidate) => candidate.id);
+    if (applicationIds.length) {
+      await tx.update(applicationStatusHistory).set({ notificationAttemptedAt: now }).where(inArray(applicationStatusHistory.id, applicationIds));
+    }
+    if (roleIds.length) {
+      await tx.update(roleStatusHistory).set({ notificationAttemptedAt: now }).where(inArray(roleStatusHistory.id, roleIds));
+    }
+    return { applicationIds, roleIds };
+  });
+  const applicationRows = applicationIds.length ? await db.select({
     history: applicationStatusHistory,
     applicationExternalId: applications.externalId,
     candidateName: applications.candidateName,
@@ -1236,12 +1327,9 @@ export async function notificationQueue(stage?: string) {
   }).from(applicationStatusHistory)
     .innerJoin(applications, eq(applications.id, applicationStatusHistory.applicationId))
     .leftJoin(roles, eq(roles.id, applications.roleId))
-    .where(and(
-      inArray(applicationStatusHistory.notificationStatus, ["", "pending", "failed"]),
-      stage?.trim() ? eq(applicationStatusHistory.newStage, stage.trim()) : undefined,
-    ))
-    .orderBy(asc(applicationStatusHistory.changedAt)).limit(LIMIT);
-  const roleRows = await db.select({
+    .where(inArray(applicationStatusHistory.id, applicationIds))
+    .orderBy(asc(applicationStatusHistory.changedAt)).limit(LIMIT) : [];
+  const roleRows = roleIds.length ? await db.select({
     history: roleStatusHistory,
     roleExternalId: roles.externalId,
     roleTitle: roles.title,
@@ -1250,11 +1338,8 @@ export async function notificationQueue(stage?: string) {
     requesterEmail: roles.requesterEmail,
   }).from(roleStatusHistory)
     .innerJoin(roles, eq(roles.id, roleStatusHistory.roleId))
-    .where(and(
-      inArray(roleStatusHistory.notificationStatus, ["", "pending", "failed"]),
-      stage?.trim() ? eq(roleStatusHistory.newStatus, stage.trim()) : undefined,
-    ))
-    .orderBy(asc(roleStatusHistory.changedAt)).limit(LIMIT);
+    .where(inArray(roleStatusHistory.id, roleIds))
+    .orderBy(asc(roleStatusHistory.changedAt)).limit(LIMIT) : [];
   const rows = applicationRows;
   const scheduledLabel = (startsAt: string, timezone: string) => {
     const parsed = new Date(startsAt);
@@ -1291,6 +1376,6 @@ export async function markNotification(input: { historyId: string; status: "sent
   const db = getDb();
   const [row] = await db.update(applicationStatusHistory).set({ notificationStatus: input.status, notificationError: input.error || "", notificationAttemptedAt: new Date(), notificationSentAt: input.status === "sent" ? new Date() : undefined, notificationProviderId: input.providerMessageId || "", notificationRecipient: input.recipient || undefined }).where(eq(applicationStatusHistory.id, input.historyId)).returning({ id: applicationStatusHistory.id });
   if (row) return { updated: true };
-  const [roleRow] = await db.update(roleStatusHistory).set({ notificationStatus: input.status, notificationError: input.error || "" }).where(eq(roleStatusHistory.id, input.historyId)).returning({ id: roleStatusHistory.id });
+  const [roleRow] = await db.update(roleStatusHistory).set({ notificationStatus: input.status, notificationError: input.error || "", notificationAttemptedAt: new Date() }).where(eq(roleStatusHistory.id, input.historyId)).returning({ id: roleStatusHistory.id });
   return { updated: Boolean(roleRow) };
 }

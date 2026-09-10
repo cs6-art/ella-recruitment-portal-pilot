@@ -337,6 +337,14 @@ notifier must poll `GET /api/internal/recruitment/notifications` with the
 the history ID with `POST` and `status: sent` (or `failed`). A publish is not
 rolled back because an email attempt is slow or unavailable.
 
+The GET operation atomically claims each returned history row for a short
+lease before returning it. This prevents overlapping notifier polls from
+sending the same email twice. If a workflow crashes before acknowledging a
+row, it becomes retryable after `NOTIFICATION_CLAIM_LEASE_MINUTES` (10 minutes
+by default, bounded to 1–60 minutes). Only one Pilot notifier should consume
+this endpoint; legacy Sheet-based notification workflows must remain disabled
+for Postgres-target Pilot events.
+
 ### Notification queue display fields
 
 Every application item from `GET /api/internal/recruitment/notifications`

@@ -66,7 +66,7 @@ test("voice attempt migration matches the provider dispatch state machine", () =
 });
 
 test("the migration runner will accept the new files (no functions / DO blocks / dollar-quoting)", () => {
-  for (const f of ["drizzle/0002_payments.sql", "drizzle/0003_recruitment_core.sql", "drizzle/0004_voice_call_logs.sql", "drizzle/0005_candidate_email_events.sql", "drizzle/0006_voice_attempt_dispatch_states.sql"]) {
+  for (const f of ["drizzle/0002_payments.sql", "drizzle/0003_recruitment_core.sql", "drizzle/0004_voice_call_logs.sql", "drizzle/0005_candidate_email_events.sql", "drizzle/0006_voice_attempt_dispatch_states.sql", "drizzle/0007_resume_extraction_cache.sql", "drizzle/0008_notification_claim_leases.sql"]) {
     const sql = read(f);
     assert.doesNotMatch(sql, /\$\$|CREATE (OR REPLACE )?FUNCTION|DO \$/i);
   }
@@ -78,6 +78,14 @@ test("candidate email events extend application history without changing credit/
     assert.match(sql, new RegExp(`ADD COLUMN IF NOT EXISTS \\"${field}\\"`, "i"), `missing ${field}`);
   }
   assert.doesNotMatch(sql, /DROP|TRUNCATE|DELETE FROM|credit_balance|credit_ledger|payments/i);
+});
+
+test("notification claim migration adds retry leases and queue indexes without destructive DDL", () => {
+  const sql = read("drizzle/0008_notification_claim_leases.sql");
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS "notification_attempted_at"/i);
+  assert.match(sql, /role_status_history_notification_queue_idx/i);
+  assert.match(sql, /application_status_history_notification_queue_idx/i);
+  assert.doesNotMatch(sql, /DROP|TRUNCATE|DELETE FROM/i);
 });
 
 test("the migration runner requires an explicit target and cannot leap to a later file", () => {

@@ -5,6 +5,8 @@ import { canManagePipeline } from "@/lib/access-control";
 import { getBulkResumeQueue, getBulkResumeQueueTotals, getBulkResumeScreeningEvidence } from "@/lib/candidate-applications";
 import { bulkResumeEnvironment, bulkResumeIsUatMarked, productionUatBatchId, STALE_PROCESSING_MS } from "@/lib/bulk-resume-config";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { logServerTiming, measureServerOperation } from "@/lib/server-timing";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +15,11 @@ function errorResponse(error: string, status: number) {
 }
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
+  const timings: Record<string, number> = {};
+  let roleCount = 0;
+  let queueCount = 0;
+  let evidenceCount = 0;
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return errorResponse("Authentication required.", 401);
   if (!canManagePipeline(user)) return errorResponse("Only HR reviewers can view bulk screening status.", 403);
@@ -20,7 +27,8 @@ export async function GET(request: Request) {
   const roleId = new URL(request.url).searchParams.get("roleId")?.trim() || "";
   try {
     const configuredProductionUatBatchId = productionUatBatchId();
-    const roles = await getRoleRequests({ liveOnly: true });
+    const roles = await measureServerOperation(timings, "roles", () => getRoleRequests({ liveOnly: true }));
+    roleCount = roles.length;
     const publishedRoleIds = new Set(
       roles
         .filter(isPublishedRoleForIntake)
@@ -32,16 +40,24 @@ export async function GET(request: Request) {
     // screening for the entire 20-second Sheets cache TTL. This endpoint is
     // polled while work is active; read the queue fresh so the UI never turns
     // a stale snapshot into a misleading completion state.
-    const queueItems = (await getBulkResumeQueue(roleId, { fresh: true })).filter((item) => publishedRoleIds.has(item.roleId.toLowerCase()));
+    const queueItems = (await measureServerOperation(timings, "queue", () => getBulkResumeQueue(roleId, { fresh: true }))).filter((item) => publishedRoleIds.has(item.roleId.toLowerCase()));
+    queueCount = queueItems.length;
     // Keep the table on the latest state per resume, but count every saved
     // queue event separately so retries and repeated failed batches are not
     // silently collapsed into one historical total.
-    const historicalTotals = await getBulkResumeQueueTotals(roleId, { fresh: true });
+    const historicalTotals = isPostgresRecruitmentTarget()
+      ? queueItems.reduce<Record<string, number>>((result, item) => {
+        const status = ["Screened", "Failed", "Skipped", "Processing", "Queued"].includes(item.status) ? item.status : "Queued";
+        result[status] = (result[status] || 0) + 1;
+        return result;
+      }, {})
+      : await measureServerOperation(timings, "historicalTotals", () => getBulkResumeQueueTotals(roleId, { fresh: true }));
     // Reconcile every current queue item, including historical rows that were
     // written before jobId existed. The evidence matcher falls back through
     // application ID, SHA, Drive file ID, role-scoped filename, and unique
     // candidate identifiers without allowing cross-role matches.
-    const screeningEvidence = await getBulkResumeScreeningEvidence(queueItems);
+    const screeningEvidence = await measureServerOperation(timings, "screeningEvidence", () => getBulkResumeScreeningEvidence(queueItems));
+    evidenceCount = screeningEvidence.size;
     const now = Date.now();
     const queueAge = (item: (typeof queueItems)[number]) => {
       const timestamp = Date.parse(item.lastUpdated || item.processedAt || item.processingStartedAt || item.discoveredAt);
@@ -73,6 +89,7 @@ export async function GET(request: Request) {
       return result;
     }, {});
 
+    logServerTiming(new URL(request.url).pathname, startedAt, timings, { dbOperations: isPostgresRecruitmentTarget() ? 3 : 0, roleCount, queueCount, evidenceCount });
     return NextResponse.json({
       success: true,
       configured: true,
@@ -94,6 +111,7 @@ export async function GET(request: Request) {
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {
+    logServerTiming(new URL(request.url).pathname, startedAt, timings, { dbOperations: isPostgresRecruitmentTarget() ? 3 : 0, roleCount, queueCount, evidenceCount });
     const message = error instanceof Error ? error.message : "Bulk screening status is not configured.";
     const configured = !message.toLowerCase().includes("bulk_resume_queue") && !message.toLowerCase().includes("unable to parse range");
     return NextResponse.json({

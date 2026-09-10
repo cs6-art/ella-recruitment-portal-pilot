@@ -1,16 +1,19 @@
 import { internalJson, readInternalJson, withInternalAuth } from "@/lib/internal-api-http";
 import { record, requiredString } from "@/lib/internal-recruitment-http";
 import { markNotification, notificationQueue } from "@/lib/internal-recruitment-queries";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const GET = withInternalAuth("notifications", async (request) => {
+  if (!isPostgresRecruitmentTarget()) return internalJson({ ok: false, error: "recruitment_target_not_enabled" }, 404);
   const stage = new URL(request.url).searchParams.get("stage") || undefined;
   return internalJson({ ok: true, migrated: true, items: await notificationQueue(stage) });
 });
 
 export const POST = withInternalAuth("notifications", async (request) => {
+  if (!isPostgresRecruitmentTarget()) return internalJson({ ok: false, error: "recruitment_target_not_enabled" }, 404);
   const body = await readInternalJson(request, (value): value is Record<string, unknown> => {
     const item = record(value);
     return Boolean(item && requiredString(item.historyId) && requiredString(item.status));

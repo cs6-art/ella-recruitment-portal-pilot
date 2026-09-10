@@ -5,6 +5,9 @@ import { getCalendarConnection, saveCalendarConnection } from "@/lib/calendar-to
 import { getFinalInterviewCalendarConfig } from "@/lib/google-sheets";
 import { scheduledInstant } from "@/lib/interview-time";
 import { isDemoMode } from "@/lib/demo-mode";
+import { configureGoogleApiTimeout } from "@/lib/google-api-options";
+
+configureGoogleApiTimeout();
 
 const CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",

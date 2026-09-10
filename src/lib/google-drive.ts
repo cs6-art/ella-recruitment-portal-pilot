@@ -2,6 +2,9 @@ import { google } from "googleapis";
 
 import { createOAuthState } from "@/lib/google-calendar";
 import { deleteDriveConnection, getDriveConnection, saveDriveConnection } from "@/lib/drive-tokens";
+import { configureGoogleApiTimeout } from "@/lib/google-api-options";
+
+configureGoogleApiTimeout();
 
 /**
  * Per-HR-user Google Drive connection — a separate OAuth flow from the shared

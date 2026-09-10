@@ -110,6 +110,18 @@ test("notification state records attempt, sent time, provider ID, and recipient"
   assert.match(route, /providerMessageId/);
 });
 
+test("notification queue claims rows atomically to prevent overlapping duplicate sends", () => {
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  const route = read("src/app/api/internal/recruitment/notifications/route.ts");
+  assert.match(query, /db\.transaction\(async \(tx\) =>/);
+  assert.match(query, /\.for\("update", \{ skipLocked: true \}\)/);
+  assert.match(query, /notificationAttemptedAt/);
+  assert.match(query, /leaseCutoff/);
+  assert.match(query, /NOTIFICATION_CLAIM_LEASE_MINUTES/);
+  assert.match(route, /isPostgresRecruitmentTarget\(\)/);
+  assert.match(route, /recruitment_target_not_enabled/);
+});
+
 test("Pilot target notifier is candidate-event allowlisted and never sends to an arbitrary mailbox", () => {
   const safety = read("src/lib/pilot-test-safety.ts");
   assert.match(safety, /PILOT_TEST_EMAIL = "cs6@mclinkgroup\.com"/);

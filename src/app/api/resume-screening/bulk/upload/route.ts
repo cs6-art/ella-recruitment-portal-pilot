@@ -7,6 +7,7 @@ import { intakeResumeBatch, MAX_BULK_REQUEST_BYTES, MAX_FILES_PER_SUBMISSION } f
 import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { logServerTiming } from "@/lib/server-timing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,9 @@ function responseError(error: string, status: number, extra: Record<string, unkn
 }
 
 export async function POST(request: Request) {
+  const startedAt = performance.now();
+  let fileCount = 0;
+  let submittedCount = 0;
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return responseError("Authentication required.", 401);
   if (!canManagePipeline(user)) return responseError("Only HR reviewers can upload bulk resumes.", 403);
@@ -30,6 +34,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const roleId = String(formData.get("roleId") || "").trim();
     const files = formData.getAll("resumes").filter((value): value is File => value instanceof File);
+    fileCount = files.length;
     if (!roleId) return responseError("Select a published role before uploading resumes.", 422);
     if (!files.length) return responseError("Choose at least one PDF, DOC, or DOCX resume.", 422);
     if (files.length > MAX_FILES_PER_SUBMISSION) return responseError(`Upload up to ${MAX_FILES_PER_SUBMISSION} resumes per batch.`, 422);
@@ -52,8 +57,11 @@ export async function POST(request: Request) {
       })),
     });
 
+    submittedCount = intake.submitted;
+    logServerTiming(new URL(request.url).pathname, startedAt, { }, { dbOperations: 0, fileCount, submittedCount });
     return NextResponse.json({ success: true, roleId, ...intake }, { status: 202 });
   } catch (error) {
+    logServerTiming(new URL(request.url).pathname, startedAt, { }, { dbOperations: 0, fileCount, submittedCount });
     if (error instanceof EllaCreditsError) {
       return responseError("Not enough Ella Credits to screen this batch. Top up Ella Credits to continue.", 402, {
         code: error.code,
