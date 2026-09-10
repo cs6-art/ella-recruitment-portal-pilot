@@ -162,7 +162,7 @@ export default function CandidateApplicationForm({
 
   async function prepareElla() {
     if (!form.candidateName.trim() || !resumeFile) {
-      setError("Enter your name and choose a resume before meeting Ella.");
+      setError("Enter the candidate name and choose a resume before meeting Ella.");
       return;
     }
     setSaving(true);
@@ -307,7 +307,7 @@ export default function CandidateApplicationForm({
             </label>
             <small>PDF, DOC, or DOCX · up to 10 MB</small>
             {readFieldError(fieldErrors, "resumeFile") && <small>{readFieldError(fieldErrors, "resumeFile")}</small>}
-            {enableLiveAvatar && <div className="resume-avatar-action"><div><strong>Want to meet Ella now?</strong><small>She will analyze this resume, prepare one relevant question, and show you a response summary.</small></div><button type="button" className="btn btn-secondary" disabled={saving || !form.candidateName.trim() || !resumeFile} onClick={() => void prepareElla()}>{saving ? "Analyzing resume..." : liveAvatarPreparation ? "Re-analyze resume" : "Analyze resume & prepare Ella"}</button></div>}
+            {enableLiveAvatar && <div className="resume-avatar-action"><div><strong>Run Ella's resume-led screen</strong><small>Ella will analyze the candidate's resume, prepare one relevant question, and show you a response summary.</small></div><button type="button" className="btn btn-secondary" disabled={saving || !form.candidateName.trim() || !resumeFile} onClick={() => void prepareElla()}>{saving ? "Analyzing resume..." : liveAvatarPreparation ? "Re-analyze resume" : "Analyze resume & prepare Ella"}</button></div>}
           </div>
         </div>
 
