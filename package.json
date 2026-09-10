@@ -14,6 +14,7 @@
     "db:seed:recruitment:pilot": "node --env-file-if-exists=.env.local src/db/seed-pilot-dummy-recruitment.mjs",
     "db:backfill:credits": "node --env-file-if-exists=.env.local src/db/backfill-credits.mjs",
     "db:check:credits": "node --env-file-if-exists=.env.local src/db/check-credit-parity.mjs",
+    "db:reconcile:credits:mirror": "node --env-file-if-exists=.env.local src/db/reconcile-credit-sheet-mirror.mjs",
     "db:backfill:recruitment": "node --env-file-if-exists=.env.local src/db/backfill-recruitment.mjs",
     "db:check:recruitment": "node --env-file-if-exists=.env.local src/db/check-recruitment-parity.mjs",
     "db:check:recruitment:integrity": "node --env-file-if-exists=.env.local src/db/check-recruitment-integrity.mjs"

@@ -56,7 +56,16 @@ async function mirrorToPostgres(entry: LedgerAppend): Promise<void> {
     const { applied } = await appendPostgresLedgerEntry(entry, { guard: false });
     if (!applied) return; // idempotent replay — already mirrored
   } catch (error) {
-    console.error("[Credits] Postgres mirror write failed (Sheets remains authoritative):", error);
+    // Sheets stays authoritative, so no credits are lost. The mismatch is
+    // detectable (`npm run db:check:credits` assertion H1 flags a Sheet row
+    // with no Postgres row) and safely replayable: the append is idempotent on
+    // this exact `sourceEntryId`, so re-running the operation — or
+    // `npm run db:backfill:credits` — closes the gap without double-charging.
+    console.error(
+      `[Credits][mirror-miss] Postgres mirror write failed for ${entry.sourceEntryId} ` +
+        `(${entry.type}/${entry.event} ${entry.creditsDelta}); Sheets remains authoritative:`,
+      error,
+    );
   }
 }
 

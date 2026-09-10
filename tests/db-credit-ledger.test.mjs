@@ -38,7 +38,8 @@ test("CREDITS_BACKEND defaults to sheets and needs DATABASE_URL for the others",
   assert.match(dispatcher, /process\.env\.CREDITS_BACKEND \|\| "sheets"/);
   assert.match(dispatcher, /if \(!isDatabaseConfigured\(\)\) \{[\s\S]*?return "sheets";/);
   // dual mirrors best-effort and never lets a Postgres failure break the request
-  assert.match(dispatcher, /Postgres mirror write failed \(Sheets remains authoritative\)/);
+  assert.match(dispatcher, /\[Credits\]\[mirror-miss\] Postgres mirror write failed/);
+  assert.match(dispatcher, /Sheets remains authoritative/);
   assert.match(dispatcher, /appendPostgresLedgerEntry\(entry, \{ guard: false \}\)/);
 });
 

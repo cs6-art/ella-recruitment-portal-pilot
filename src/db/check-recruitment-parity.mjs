@@ -1,10 +1,47 @@
 // Read-only parity for recruitment entities. No writes, no reconciliation.
-// Default scope is the migration gate's three core domains; use --only=all
-// after the corresponding backfill domains have been reviewed.
+//
+// This is a MIGRATION-ERA aid: it compares the legacy Google Sheets recruitment
+// tabs against Postgres. Once the Pilot has cut over (`RECRUITMENT_BACKEND=postgres`),
+// the portal no longer writes those Sheets — n8n and manual edits do — so a
+// full Sheets<->Postgres row/field comparison is no longer a meaningful signal.
+// Ongoing structural + referential integrity is enforced by
+// `npm run db:check:recruitment:integrity`, which is the authoritative check.
+//
+// Default behaviour: the Pilot recruitment portal has moved to a Postgres
+// authoritative store (see docs/N8N-SHEETS-TO-API-MIGRATION.md and the
+// target-stack suite), so this check prints a SUPERSEDED notice and exits 0,
+// pointing at db:check:recruitment:integrity.
+//   * --legacy-parity forces the raw Sheets<->Postgres comparison to run
+//     (for auditing a pre-cutover backfill).
+//
+// The legacy comparison resolves each Sheet tab to whichever configured
+// workbook actually contains it (GOOGLE_SHEETS_SPREADSHEET_ID and
+// GOOGLE_CANDIDATE_SPREADSHEET_ID), so it does not depend on a fixed tab->file
+// map that silently breaks when a workbook is reorganised.
 
 import crypto from "node:crypto";
 import { google } from "googleapis";
 import { neon } from "@neondatabase/serverless";
+
+const forceLegacy = process.argv.includes("--legacy-parity");
+
+if (!forceLegacy) {
+  console.log("Recruitment parity check — SUPERSEDED");
+  console.log("");
+  console.log(`  RECRUITMENT_BACKEND=${process.env.RECRUITMENT_BACKEND ?? "(unset)"}`);
+  console.log("  The Pilot recruitment portal is Postgres-authoritative. The legacy Google");
+  console.log("  Sheets recruitment tabs are no longer written by the portal, so a full");
+  console.log("  Sheets<->Postgres comparison is not a meaningful parity signal.");
+  console.log("");
+  console.log("  Ongoing integrity is enforced by:");
+  console.log("    npm run db:check:recruitment:integrity   (tables, FKs, constraints, orphans)");
+  console.log("");
+  console.log("  To run the legacy comparison anyway (e.g. auditing a pre-cutover backfill):");
+  console.log("    node src/db/check-recruitment-parity.mjs --legacy-parity");
+  console.log("");
+  console.log("OVERALL: SUPERSEDED — not a blocker. Use db:check:recruitment:integrity.");
+  process.exit(0);
+}
 
 const onlyArg = process.argv.find((a) => a.startsWith("--only="));
 const requested = onlyArg ? onlyArg.slice(7).split(",").map((s) => s.trim()).filter(Boolean) : ["roles", "applicants", "applications"];
@@ -46,8 +83,39 @@ const sourceMap = {
 const dbColumns = { users: "email", roles: "external_id", role_history: "action_request_id", applicants: "primary_email", applicant_aliases: "kind || ':' || value", resume_files: "storage_ref", applications: "external_id", application_history: "action_request_id", screening_results: "application_id", screening_invitations: "token_hash", bulk_queue: "dedupe_key", interview_slots: "slot_code", voice_attempts: "id", voice_results: "id", booking_tokens: "token_hash", portal_settings: "key" };
 const tableNames = { role_history: '"role_status_history"', application_history: '"application_status_history"', bulk_queue: '"bulk_screening_queue_items"', voice_attempts: '"voice_call_attempts"', voice_results: '"voice_interview_results"' };
 
+// Resolve each Sheet tab to whichever configured workbook actually contains it.
+// The two workbooks (GOOGLE_SHEETS_SPREADSHEET_ID and GOOGLE_CANDIDATE_SPREADSHEET_ID)
+// have been reorganised over the project's life; a fixed tab->file map goes stale
+// silently and produces "Unable to parse range" errors. Probing is resilient.
+const workbookCandidates = [...new Set([mainId, rolesId].filter(Boolean))];
+let tabIndexPromise = null;
+async function tabIndex() {
+  if (!tabIndexPromise) {
+    tabIndexPromise = (async () => {
+      const index = new Map();
+      for (const spreadsheetId of workbookCandidates) {
+        const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties.title" });
+        for (const s of meta.data.sheets ?? []) {
+          const title = s.properties?.title;
+          if (title && !index.has(title)) index.set(title, spreadsheetId);
+        }
+      }
+      return index;
+    })();
+  }
+  return tabIndexPromise;
+}
+
 async function readTab(workbook, tab) {
-  const id = workbook === "main" ? mainId : rolesId;
+  const index = await tabIndex();
+  const id = index.get(tab);
+  if (!id) {
+    throw new Error(
+      `tab '${tab}' was not found in any configured workbook (${workbookCandidates.join(", ") || "none"}). ` +
+        `It may have been renamed or removed by the Sheets->Postgres migration; ` +
+        `run 'npm run db:check:recruitment:integrity' for the authoritative check.`,
+    );
+  }
   const range = `'${tab.replaceAll("'", "''")}'!A:ZZ`;
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: id, range });
   const values = res.data.values || []; const headers = values[0] || [];
