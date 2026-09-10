@@ -150,8 +150,7 @@ let pgRowCount = 0;
 let pgDeltaSum = 0;
 let pgLatest = null;
 let pgIds = [];
-let pgTargetOnlyIds = [];
-let pgTargetOnlyDelta = 0;
+let pgRowDetail = new Map();
 let pgNullIdCount = 0;
 let pgDuplicateRows = [];
 try {
@@ -172,21 +171,19 @@ try {
   pgDeltaSum = toInt(aggregate[0].delta_sum);
   pgLatest = aggregate[0].latest;
 
-  const idRows = await sql`select source_entry_id from credit_ledger where source_entry_id is not null`;
-  pgIds = idRows.map((row) => String(row.source_entry_id));
-
-  // Postgres-target (Scenario C) ledger entries are committed atomically in
-  // Postgres by the internal API and never dual-written to the sheet — the
-  // sheet is legitimately stale for exactly these rows. They are identified by
-  // the target worker actor or the target note, and excluded from the
-  // sheet-equality assertions below the same way SHEET-* synthetic keys are.
-  const targetOnlyRows = await sql`
-    select source_entry_id, coalesce(credits_delta, 0)::int as credits_delta
+  const idRows = await sql`
+    select source_entry_id,
+           type,
+           event,
+           coalesce(credits_delta, 0)::int as credits_delta,
+           coalesce(actor_email, '')       as actor_email,
+           coalesce(note, '')              as note,
+           entry_time
     from credit_ledger
     where source_entry_id is not null
-      and (actor_email = 'pilot-target-worker' or note ilike 'Postgres target %')`;
-  pgTargetOnlyIds = targetOnlyRows.map((row) => String(row.source_entry_id));
-  pgTargetOnlyDelta = targetOnlyRows.reduce((total, row) => total + toInt(row.credits_delta), 0);
+    order by entry_time`;
+  pgIds = idRows.map((row) => String(row.source_entry_id));
+  pgRowDetail = new Map(idRows.map((row) => [String(row.source_entry_id), row]));
 
   const nullRows = await sql`select count(*)::int as n from credit_ledger where source_entry_id is null`;
   pgNullIdCount = toInt(nullRows[0].n);
@@ -203,23 +200,38 @@ try {
 
 const pgIdSet = new Set(pgIds);
 const pgSyntheticKeys = pgIds.filter((id) => id.startsWith(SYNTHETIC_PREFIX));
-const pgTargetOnlyIdSet = new Set(pgTargetOnlyIds);
-// "real" = expected to have a matching sheet row: not a SHEET-* synthetic key
-// and not a Postgres-target-only (Scenario C) entry.
-const pgRealIds = pgIds.filter((id) => !id.startsWith(SYNTHETIC_PREFIX) && !pgTargetOnlyIdSet.has(id));
-const pgRealIdSet = new Set(pgRealIds);
+
+// A Postgres row is a "Scenario C" target-only entry — committed atomically
+// inside a Postgres transaction by the internal API, with n8n/Sheets outside
+// that transaction — when the worker actor or the target note says so. These
+// are Sheets-absent BY DESIGN and are only ever expected on the Postgres side.
+const isScenarioC = (row) =>
+  row && (String(row.actor_email) === "pilot-target-worker" || /^Postgres target /i.test(String(row.note ?? "")));
 
 // ---------------------------------------------------------------------------
-// Compare
+// Compare — Postgres is the immutable source of truth; the Sheet is a mirror.
 // ---------------------------------------------------------------------------
-const idsMissingInPostgres = sheetEntryIds.filter((id) => !pgIdSet.has(id));
-const idsMissingInSheet = pgRealIds.filter((id) => !sheetEntryIdSet.has(id)); // SHEET-* + target-only keys excluded by construction
 const pgDuplicateIds = pgDuplicateRows.map((row) => `${row.source_entry_id} x${row.n}`);
 
-// Postgres leads the sheet by exactly the target-only entries: balance and row
-// count parity is asserted after adding those back to the sheet side.
-const balancesEqual = pgBalance === pgDeltaSum && pgBalance === sheetSum + pgTargetOnlyDelta;
-const rowCountsEqual = sheetRowCount + pgTargetOnlyIds.length === pgRowCount;
+// Direction A — a Sheet row with no Postgres row. This is the dangerous
+// direction: the immutable ledger is missing an authoritative write. Always FAIL.
+const idsMissingInPostgres = sheetEntryIds.filter((id) => !pgIdSet.has(id));
+
+// Direction B — a Postgres row not mirrored to the Sheet. SHEET-* synthetic
+// keys correspond to blank-Entry_ID Sheet rows (already in the Sheet totals),
+// so they are not "missing". Everything else splits into Scenario C (by design)
+// and rows that still need a Sheet mirror.
+const pgOnlyIds = pgIds.filter((id) => !sheetEntryIdSet.has(id) && !id.startsWith(SYNTHETIC_PREFIX));
+const pgOnlyScenarioC = pgOnlyIds.filter((id) => isScenarioC(pgRowDetail.get(id)));
+const pgOnlyUnmirrored = pgOnlyIds.filter((id) => !isScenarioC(pgRowDetail.get(id)));
+const deltaOf = (ids) => ids.reduce((total, id) => total + toInt(pgRowDetail.get(id)?.credits_delta), 0);
+const pgOnlyDelta = deltaOf(pgOnlyIds);
+
+// Balance integrity — no credits invented or lost. The Sheet sum plus every
+// Postgres-only delta (Scenario C + not-yet-mirrored alike) must equal both the
+// Postgres running balance and the Postgres ledger sum.
+const balancesReconcile = pgBalance === pgDeltaSum && pgDeltaSum === sheetSum + pgOnlyDelta;
+const rowCountsReconcile = sheetRowCount + pgOnlyIds.length + pgSyntheticKeys.length === pgRowCount;
 const blanksReconcile = pgNullIdCount === 0 && pgSyntheticKeys.length === sheetBlankIdCount;
 
 const latestText = pgLatest instanceof Date ? pgLatest.toISOString() : String(pgLatest ?? "n/a");
@@ -233,31 +245,61 @@ console.log(`   3  Postgres ledger Σ credits_delta ......... ${pgDeltaSum}`);
 console.log(`   4  Sheets ledger row count ................. ${sheetRowCount}`);
 console.log(`   5  Postgres ledger row count .............. ${pgRowCount}`);
 console.log(`   6  Sheet Entry_ID set size ................ ${sheetEntryIdSet.size}  (blank Entry_ID rows: ${sheetBlankIdCount})`);
-console.log(`   7  Postgres source_entry_id set size ...... ${pgIdSet.size}  (real ${pgRealIdSet.size}, synthetic ${pgSyntheticKeys.length}, target-only ${pgTargetOnlyIds.length}, NULL ${pgNullIdCount})`);
-console.log(`      Postgres-target-only entries (Scenario C, sheet-absent by design): ${pgTargetOnlyIds.length}, Σ delta ${pgTargetOnlyDelta}`);
+console.log(`   7  Postgres source_entry_id set size ...... ${pgIdSet.size}  (synthetic ${pgSyntheticKeys.length}, NULL ${pgNullIdCount})`);
+console.log(`      Postgres-only rows ................... ${pgOnlyIds.length}  (Scenario C by design ${pgOnlyScenarioC.length}, awaiting Sheet mirror ${pgOnlyUnmirrored.length}), Σ delta ${pgOnlyDelta}`);
 console.log(`      Sheet last Balance_After ............... ${sheetLastBalanceAfter ?? "n/a"}`);
 console.log(`      Postgres latest entry_time ............ ${latestText}`);
 console.log("");
 
-const assertions = [
-  ["8  no Sheet Entry_IDs missing in Postgres", idsMissingInPostgres.length === 0, preview(idsMissingInPostgres)],
-  ["9  no Postgres source_entry_ids missing in Sheet (excl. synthetic + target-only)", idsMissingInSheet.length === 0, preview(idsMissingInSheet)],
-  ["10 no duplicate IDs (Sheet or Postgres)", sheetDuplicateIds.length === 0 && pgDuplicateIds.length === 0, `sheet ${preview(sheetDuplicateIds)} / pg ${preview(pgDuplicateIds)}`],
-  ["11 no NULL source_entry_id; blank Entry_IDs reconcile to synthetic keys", blanksReconcile, `pg NULL ${pgNullIdCount}; sheet blank ${sheetBlankIdCount} vs pg synthetic ${pgSyntheticKeys.length}`],
-  ["12 balances equal (PG balance == PG sum == Sheet sum + target-only delta)", balancesEqual, `${pgBalance} / ${pgDeltaSum} / ${sheetSum} + ${pgTargetOnlyDelta}`],
-  ["13 row counts equal (Sheet + target-only == Postgres)", rowCountsEqual, `${sheetRowCount} + ${pgTargetOnlyIds.length} vs ${pgRowCount}`],
+// --- Categorised reconciliation report ------------------------------------
+console.log("Reconciliation report");
+console.log(`   A  Sheet rows missing from the Postgres ledger .. ${idsMissingInPostgres.length}  ${preview(idsMissingInPostgres)}`);
+console.log(`   B  Postgres rows missing from the Sheet mirror .. ${pgOnlyIds.length}`);
+console.log(`        - Scenario C (target-only, by design) ...... ${pgOnlyScenarioC.length}  ${preview(pgOnlyScenarioC)}`);
+console.log(`        - awaiting Sheet mirror (needs review) ..... ${pgOnlyUnmirrored.length}  ${preview(pgOnlyUnmirrored)}`);
+for (const id of pgOnlyUnmirrored) {
+  const row = pgRowDetail.get(id) ?? {};
+  console.log(`             ${id}  ${row.type}/${row.event}  ${toInt(row.credits_delta) >= 0 ? "+" : ""}${toInt(row.credits_delta)}  "${String(row.note ?? "").slice(0, 80)}"`);
+}
+console.log(`   C  Balance differences .......................... Sheet Σ ${sheetSum}  +  Postgres-only Σ ${pgOnlyDelta}  =  ${sheetSum + pgOnlyDelta}  (Postgres balance ${pgBalance}, ledger Σ ${pgDeltaSum})`);
+console.log(`   D  Duplicate source ids ........................ sheet ${preview(sheetDuplicateIds)} / pg ${preview(pgDuplicateIds)}`);
+console.log(`   E  Unresolved partial writes (NULL source id) .. ${pgNullIdCount}`);
+console.log("");
+
+const hardChecks = [
+  ["H1 no Sheet rows missing from the immutable Postgres ledger", idsMissingInPostgres.length === 0, preview(idsMissingInPostgres)],
+  ["H2 no duplicate source ids (Sheet or Postgres)", sheetDuplicateIds.length === 0 && pgDuplicateIds.length === 0, `sheet ${preview(sheetDuplicateIds)} / pg ${preview(pgDuplicateIds)}`],
+  ["H3 no NULL source_entry_id; blank Entry_IDs reconcile to synthetic keys", blanksReconcile, `pg NULL ${pgNullIdCount}; sheet blank ${sheetBlankIdCount} vs pg synthetic ${pgSyntheticKeys.length}`],
+  ["H4 balances reconcile (PG balance == PG Σ == Sheet Σ + all Postgres-only Σ)", balancesReconcile, `${pgBalance} / ${pgDeltaSum} / ${sheetSum} + ${pgOnlyDelta}`],
+  ["H5 row counts reconcile (Sheet + Postgres-only + synthetic == Postgres)", rowCountsReconcile, `${sheetRowCount} + ${pgOnlyIds.length} + ${pgSyntheticKeys.length} vs ${pgRowCount}`],
 ];
 
-console.log("Parity assertions");
+console.log("Integrity assertions (a failure here blocks sign-off)");
 let failed = 0;
-for (const [label, pass, detail] of assertions) {
+for (const [label, pass, detail] of hardChecks) {
   if (!pass) failed += 1;
   console.log(`   ${pass ? "PASS" : "FAIL"}  ${label}  →  ${detail}`);
 }
 console.log("");
 
+const warn = pgOnlyUnmirrored.length > 0;
+if (warn) {
+  console.log(`WARNING — ${pgOnlyUnmirrored.length} Postgres ledger entr${pgOnlyUnmirrored.length === 1 ? "y is" : "ies are"} not yet mirrored to the Sheet.`);
+  console.log("  The balances still reconcile (no credits lost or invented), but the Sheet");
+  console.log("  audit trail is incomplete. Review the rows listed above, then run:");
+  console.log("    node src/db/reconcile-credit-sheet-mirror.mjs            (dry run — review)");
+  console.log("    node src/db/reconcile-credit-sheet-mirror.mjs --commit   (append the missing rows; never re-charges)");
+  console.log("");
+}
+
 const ok = failed === 0;
-console.log(`   14 OVERALL: ${ok ? "PASS — Sheets and Postgres credit ledgers are in parity." : `FAIL — ${failed} check(s) failed. Do NOT reconcile automatically; investigate the cause first.`}`);
+if (!ok) {
+  console.log(`OVERALL: FAIL — ${failed} integrity assertion(s) failed. Do NOT reconcile automatically; investigate the cause first.`);
+} else if (warn) {
+  console.log("OVERALL: PASS WITH WARNINGS — ledger integrity holds; Sheet mirror has a documented, reconcilable gap.");
+} else {
+  console.log("OVERALL: PASS — Sheets and Postgres credit ledgers reconcile with no outstanding mirror gap.");
+}
 console.log("");
 console.log("This script made no writes to Postgres, Google Sheets, or anything else.");
 process.exit(ok ? 0 : 1);

@@ -30,18 +30,21 @@ test("the parity checker gives an explicit BLOCKED message instead of an opaque 
   assert.match(script, /Set GOOGLE_CREDITS_SPREADSHEET_ID to the workbook/);
   // still read-only, still does the full parity set
   assert.match(script, /This script made no writes/);
-  assert.match(script, /no Sheet Entry_IDs missing in Postgres/);
-  assert.match(script, /no duplicate IDs/);
-  assert.match(script, /balances equal/);
+  assert.match(script, /no Sheet rows missing from the immutable Postgres ledger/);
+  assert.match(script, /no duplicate source ids/);
+  assert.match(script, /balances reconcile/);
 });
 
 test("the parity checker excludes Postgres-target-only (Scenario C) entries from sheet equality", () => {
   const script = read("src/db/check-credit-parity.mjs");
   // Target-only rows are matched by the worker actor or the target note prefix.
-  assert.match(script, /actor_email = 'pilot-target-worker' or note ilike 'Postgres target %'/);
-  // ...and reconciled as "Postgres leads the sheet by exactly those rows".
-  assert.match(script, /pgBalance === sheetSum \+ pgTargetOnlyDelta/);
-  assert.match(script, /sheetRowCount \+ pgTargetOnlyIds\.length === pgRowCount/);
+  assert.match(script, /actor_email\) === "pilot-target-worker"/);
+  assert.match(script, /Postgres target \/i/);
+  // ...and included in the balance/row-count reconciliation, while still
+  // being reported separately from a real mirror gap.
+  assert.match(script, /pgOnlyScenarioC/);
+  assert.match(script, /pgDeltaSum === sheetSum \+ pgOnlyDelta/);
+  assert.match(script, /sheetRowCount \+ pgOnlyIds\.length \+ pgSyntheticKeys\.length === pgRowCount/);
   // ...never by mutating the ledger.
   assert.doesNotMatch(script, /\b(update|insert into|delete from)\b\s+"?credit_ledger/i);
   assert.match(script, /This script made no writes/);
