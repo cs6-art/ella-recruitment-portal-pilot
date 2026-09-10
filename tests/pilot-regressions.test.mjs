@@ -61,6 +61,15 @@ test("failed or invalid bulk screening has no credit boundary", () => {
   assert.match(executor, /finalizeBulkScreening/);
 });
 
+test("bulk frontend matches Pilot queue status by job identity, not storage identity", () => {
+  const panel = read("src/components/BulkResumeScreeningPanel.tsx");
+  const target = read("src/lib/recruitment-target-portal.ts");
+  assert.match(panel, /function queueIdentity/);
+  assert.match(panel, /return item\.jobId \|\| item\.driveFileId/);
+  assert.doesNotMatch(panel, /items\.find\(\(entry\) => entry\.driveFileId === queueId\)/);
+  assert.match(target, /jobId: text\(item\.jobId\)/);
+});
+
 test("stale or terminal voice attempts cannot receive a result or call log", () => {
   const source = read("src/lib/internal-recruitment-queries.ts");
   const resultPath = source.slice(source.indexOf("export async function ingestVoiceResult"), source.indexOf("export async function createVoiceCallLog"));
