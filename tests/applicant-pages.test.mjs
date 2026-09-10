@@ -80,7 +80,7 @@ test("applicant stage labels are presentation-only and used consistently", () =>
   assert.match(detail, /applicantStageLabel\(applicant\.currentStage\)/);
   assert.match(detail, /applicantStageLabel\(entry\.newStatus\)/);
   assert.match(detail, /applicantDecisionLabel\(applicant\.resumeStatus\)/);
-  assert.match(detail, /applicantStageLabel\(applicant\.voiceStatus\)/);
+  assert.match(detail, /applicantStageLabel\(applicant\.voiceCallStatus \|\| applicant\.voiceStatus\)/);
   // Canonical keys remain the values used for filters and database/API work.
   assert.match(list, /applicant\.currentStage === stageFilter/);
   assert.match(labels, /must continue to\n\s*\* send and persist the canonical status key/);
@@ -185,6 +185,19 @@ test("applicant routes are protected and render populated sheet data", () => {
   // UTC values from Sheets never appear shifted in the reviewer UI.
   assert.match(detail, /formatPortalDateTime/);
   assert.match(detail, /ApplicantLiveRefresh/);
+});
+
+test("Pilot detail pages expose live voice-attempt status and refresh active calls promptly", () => {
+  const target = read("src/lib/recruitment-target-portal.ts");
+  const detail = read("src/app/applicants/[applicationId]/page.tsx");
+  const refresh = read("src/components/ApplicantLiveRefresh.tsx");
+  assert.match(target, /const voiceAttemptStatus = text\(voiceAttempt\?\.status\)\.toLowerCase\(\)/);
+  assert.match(target, /\["calling", "dispatching"\]\.includes\(voiceAttemptStatus\)/);
+  assert.match(target, /\["initiated", "in_progress"\]\.includes\(voiceAttemptStatus\)/);
+  assert.match(target, /\["scheduled", "queued", "retry_scheduled"\]\.includes\(voiceAttemptStatus\)/);
+  assert.match(detail, /intervalMs=\{applicant\.currentStage\.trim\(\)\.toLowerCase\(\) === "voice_scheduled" \? 30_000 : undefined\}/);
+  assert.match(refresh, /intervalMs = 5 \* 60_000/);
+  assert.match(refresh, /window\.setInterval\(refresh, intervalMs \|\| REFRESH_MS\)/);
 });
 
 test("applicants are reachable from the reviewer shell and role detail", () => {
