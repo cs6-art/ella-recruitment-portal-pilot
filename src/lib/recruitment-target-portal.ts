@@ -850,6 +850,7 @@ export async function targetApplicantDetails(externalId: string) {
   const finalSlotTimezone = text(finalSlot?.timezone) || "Asia/Singapore";
   const voiceStartsAt = voiceSlot ? slotDateTime(voiceSlot.startsAt, voiceTimezone) : { date: "", time: "" };
   const finalStartsAt = finalSlot ? slotDateTime(finalSlot.startsAt, finalSlotTimezone) : { date: "", time: "" };
+  const finalEndsAt = finalSlot ? slotDateTime(finalSlot.endsAt, finalSlotTimezone) : { date: "", time: "" };
   const voiceReview = await applicationVoiceReview(externalId);
   const voiceResult = voiceReview?.result ?? null;
   const voiceLog = voiceReview?.log ?? null;
@@ -918,6 +919,22 @@ export async function targetApplicantDetails(externalId: string) {
     finalScheduledDate: finalStartsAt.date,
     finalScheduledTime: finalStartsAt.time,
     finalTimezone: finalSlot ? finalSlotTimezone : "",
+    // The applicant profile card consumes the legacy-shaped slot object. Keep
+    // the canonical Postgres booking data visible there so a booked final
+    // interview is not rendered as "Not Started" or "Not provided".
+    finalInterviewSlot: finalSlot ? {
+      status: label(finalSlot.status),
+      date: finalStartsAt.date,
+      start_time: finalStartsAt.time,
+      end_time: finalEndsAt.time,
+      timezone: finalSlotTimezone,
+      interviewer_name: text(finalSlot.interviewerName),
+      interviewer_email: text(finalSlot.interviewerEmail),
+      hod_name: text(finalSlot.hodName),
+      hod_email: text(finalSlot.hodEmail),
+      google_calendar_event_status: text(finalSlot.calendarEventStatus),
+      google_calendar_event_error: text(finalSlot.calendarEventError),
+    } : undefined,
     finalBookingLink: text(finalToken?.link),
     finalBookingTokenExpiresAt: date(finalToken?.expiresAt),
     finalComments: text(application.finalInterviewComments),

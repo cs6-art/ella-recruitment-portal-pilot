@@ -63,3 +63,10 @@ test("Pilot applicant booking hides calendar-busy final slots and rechecks persi
   assert.match(targetPortal, /if \(kind === "final" && persistedSlot\)/);
   assert.match(targetPortal, /calendar_conflict/);
 });
+
+test("Pilot applicant details pass booked final slot timezone and calendar metadata to the profile card", () => {
+  assert.match(targetPortal, /const finalEndsAt = finalSlot/);
+  assert.match(targetPortal, /finalInterviewSlot: finalSlot \?/);
+  assert.match(targetPortal, /timezone: finalSlotTimezone/);
+  assert.match(targetPortal, /google_calendar_event_status/);
+});
