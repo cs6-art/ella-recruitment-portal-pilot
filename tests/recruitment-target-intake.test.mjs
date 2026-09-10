@@ -22,3 +22,14 @@ test("target intake creates the queue only after target storage and application 
   assert.match(source, /status: "queued"/);
   assert.doesNotMatch(source, /recordDeduction/);
 });
+
+test("duplicate completed role screening is reused for the new application without a second charge", () => {
+  const portal = read("src/lib/recruitment-target-portal.ts");
+  const applicants = read("src/app/api/applicants/route.ts");
+  const queries = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(portal, /copyScreeningResult/);
+  assert.match(portal, /screeningReused/);
+  assert.match(queries, /export async function copyScreeningResult/);
+  assert.match(applicants, /if \(!created\.screeningReused\) await recordDeduction/);
+  assert.match(applicants, /creditsCharged: created\.screeningReused \? 0/);
+});
