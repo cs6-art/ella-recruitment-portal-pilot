@@ -118,6 +118,7 @@ test("notification queue claims rows atomically to prevent overlapping duplicate
   assert.match(query, /notificationAttemptedAt/);
   assert.match(query, /leaseCutoff/);
   assert.match(query, /NOTIFICATION_CLAIM_LEASE_MINUTES/);
+  assert.match(query, /not\(eq\(applicationStatusHistory\.notificationEventType, ""\)\)/);
   assert.match(route, /isPostgresRecruitmentTarget\(\)/);
   assert.match(route, /recruitment_target_not_enabled/);
 });
