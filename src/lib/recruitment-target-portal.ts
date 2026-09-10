@@ -815,13 +815,19 @@ export async function targetApplicantDetails(externalId: string) {
         transcript: text(voiceResult?.transcript || voiceLog?.transcript),
       })
     : null;
+  const voiceAttemptStatus = text(voiceAttempt?.status).toLowerCase();
+  const liveVoiceAttemptStatus = ["calling", "dispatching"].includes(voiceAttemptStatus)
+    ? "calling"
+    : ["initiated", "in_progress"].includes(voiceAttemptStatus)
+      ? "in_progress"
+      : ["scheduled", "queued", "retry_scheduled"].includes(voiceAttemptStatus)
+        ? "scheduled"
+        : text(voiceAttempt?.status);
   const voiceCallStatus = voiceOutcome
     ? VOICE_OUTCOME_LABELS[voiceOutcome]
     : voiceResult
       ? "Completed"
-      : summary.currentStage === "voice_review_pending"
-        ? "Awaiting Review"
-        : "";
+      : liveVoiceAttemptStatus || (summary.currentStage === "voice_review_pending" ? "Awaiting Review" : "");
   const resumeText = await storedResumeText(resumeFile);
   return {
     ...summary,

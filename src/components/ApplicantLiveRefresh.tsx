@@ -7,7 +7,7 @@ const REFRESH_MS = 5 * 60_000;
 const EVENT_REFRESH_THROTTLE_MS = 30_000;
 
 /** Keep server-rendered applicant status and booking details current. */
-export default function ApplicantLiveRefresh({ enabled = true }: { enabled?: boolean }) {
+export default function ApplicantLiveRefresh({ enabled = true, intervalMs = 5 * 60_000 }: { enabled?: boolean; intervalMs?: number }) {
   const router = useRouter();
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export default function ApplicantLiveRefresh({ enabled = true }: { enabled?: boo
       lastRefreshAt = now;
       router.refresh();
     };
-    const timer = window.setInterval(refresh, REFRESH_MS);
+    const timer = window.setInterval(refresh, intervalMs || REFRESH_MS);
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
@@ -28,7 +28,7 @@ export default function ApplicantLiveRefresh({ enabled = true }: { enabled?: boo
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [enabled, router]);
+  }, [enabled, intervalMs, router]);
 
   return null;
 }
