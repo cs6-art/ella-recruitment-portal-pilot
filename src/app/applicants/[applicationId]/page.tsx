@@ -134,6 +134,7 @@ function FinalInterviewCard({ applicant, role }: { applicant: ApplicantDetails; 
 
 function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails }) {
   const voiceCallStatus = applicant.voiceCallStatus?.trim() || "";
+  const voiceBookingLink = externalUrl(applicant.voiceBookingLink);
   const voiceNotConducted = /no answer|no[- ]?show|incomplete|not connected|voicemail|busy|declined|cancell?ed/i.test(voiceCallStatus);
   const voiceScorePending = voiceNotConducted ? "Not evaluated — no completed interview" : "Awaiting AI evaluation";
   return <section className="card applicant-detail-card applicant-screening-evidence-card">
@@ -161,6 +162,7 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
           <DetailField label="Voice AI Score" value={applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : voiceScorePending} />
           <DetailField label="AI Recommendation" value={applicant.voiceRecommendation || voiceScorePending} />
         </div>
+        {voiceBookingLink && <div className="applicant-copy-block"><span>Candidate booking page</span><p><Link href={voiceBookingLink} target="_blank" rel="noreferrer">Open the candidate booking page</Link></p></div>}
         <div className="applicant-copy-block"><span>AI Summary</span><p>{applicant.voiceSummary || (voiceNotConducted ? "No interview took place, so there is no AI summary." : "No AI summary is available.")}</p></div>
         <div className="applicant-copy-columns"><div><span>Strengths</span><ReadableList value={applicant.voiceStrengths} empty="No strengths recorded." /></div><div><span>Concerns</span><ReadableList value={applicant.voiceConcerns} empty="No concerns recorded." /></div></div>
         <div className="applicant-copy-columns"><div><span>Communication Quality</span><p>{applicant.voiceCommunicationQuality || "Not provided."}</p></div><div><span>Answer Completeness</span><p>{applicant.voiceAnswerCompleteness || "Not provided."}</p></div></div>
