@@ -81,6 +81,7 @@ export type NotificationEmailContext = {
   candidateName?: string | null;
   roleTitle?: string | null;
   bookingLink?: string | null;
+  avatarLink?: string | null;
   /** Human date/time already formatted with its timezone, for confirmations. */
   scheduledLabel?: string | null;
 };
@@ -93,6 +94,8 @@ export type NotificationEmailCopy = {
   ctaLink: string;
   /** n8n should render the CTA as a button and never append this URL as text. */
   includeRawBookingLink: false;
+  secondaryCta: string;
+  secondaryCtaLink: string;
   signoff: string;
 };
 
@@ -110,18 +113,21 @@ export function notificationEmail(eventType: string | null | undefined, context:
   const role = String(context.roleTitle || "").trim();
   const rolePhrase = role ? `the ${role} position` : "this position";
   const link = String(context.bookingLink || "").trim();
+  const avatarLink = String(context.avatarLink || "").trim();
   const scheduled = String(context.scheduledLabel || "").trim();
 
-  const base = { subject: EMAIL_SUBJECTS[key] || notificationEventLabel(key), signoff: SIGNOFF, cta: "", ctaLink: "", includeRawBookingLink: false as const };
+  const base = { subject: EMAIL_SUBJECTS[key] || notificationEventLabel(key), signoff: SIGNOFF, cta: "", ctaLink: "", secondaryCta: "", secondaryCtaLink: "", includeRawBookingLink: false as const };
 
   switch (key) {
     case "voice_booking_invitation":
       return {
         ...base,
         heading: "Schedule your AI voice interview",
-        message: `Dear ${name},\n\nWe are pleased to invite you to schedule your AI voice interview for ${rolePhrase}. Please use the button below to select an available interview time. This invitation expires automatically.\n\nWe look forward to speaking with you.`,
-        cta: "Choose your interview time",
+        message: `Dear ${name},\n\nWe are pleased to invite you to the next interview step for ${rolePhrase}. Choose one of the secure options below. Each link expires automatically and can be used once.\n\nWe look forward to speaking with you.`,
+        cta: "Schedule a call",
         ctaLink: link,
+        secondaryCta: avatarLink ? "Interview with our Avatar now" : "",
+        secondaryCtaLink: avatarLink,
       };
     case "voice_booking_confirmation":
       return {

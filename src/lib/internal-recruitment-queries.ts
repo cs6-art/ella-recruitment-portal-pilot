@@ -9,6 +9,8 @@ import { recordVoiceInterviewDeduction } from "@/lib/ella-credits";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
 import { notificationEmail, notificationEventLabel, notificationStatusLabel, notificationSummary } from "@/lib/notification-labels";
+import { avatarInterviewLink } from "@/lib/public-url";
+import type { LiveAvatarEvaluation, LiveAvatarTranscriptTurn } from "@/lib/live-avatar-screening";
 import {
   applicants,
   applicantAliases,
@@ -65,6 +67,7 @@ const VOICE_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
 };
 const ROLE_STATUSES = ["draft", "pending_hr_discussion", "approved", "recruitment_setup", "job_posted", "returned_for_revision", "on_hold", "rejected"] as const;
 const RECRUITMENT_SETUP_STATUSES = ["draft", "recruitment_ready", "ready_for_publishing", "published"] as const;
+export type BookingTokenKind = "voice" | "final" | "avatar";
 
 function normalizedKey(value: unknown) {
   return String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
@@ -367,6 +370,134 @@ export async function getApplication(externalId: string) {
   const db = getDb();
   const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, roleTargetHiringDate: roles.targetHiringDate, roleHrCalendarEmail: roles.hrCalendarEmail, roleSetup: roles.setup, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
   return row ?? null;
+}
+
+export type AvatarInterviewContext = {
+  applicationId: string;
+  candidateName: string;
+  roleId: string;
+  roleTitle: string;
+  roleDescription: string;
+  resumeSummary: string;
+  screeningQuestion: string;
+  expiresAt: string;
+  tokenStatus: string;
+};
+
+function firstInterviewQuestion(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  return raw
+    .split(/\r?\n/)
+    .flatMap((line) => line.split(/\?\s+/).map((part, index, parts) => index < parts.length - 1 ? `${part}?` : part))
+    .map((part) => part.replace(/^[-*\d.)\s]+/, "").trim())
+    .find((part) => part.length >= 12) || "";
+}
+
+async function avatarInterviewContextByHash(tokenHash: string, allowedStatuses: string[]) {
+  const db = getDb();
+  const [row] = await db.select({
+    token: bookingTokens,
+    application: applications,
+    roleExternalId: roles.externalId,
+    roleTitle: roles.title,
+    roleSetup: roles.setup,
+    screeningResult: screeningResults,
+  }).from(bookingTokens)
+    .innerJoin(applications, eq(applications.id, bookingTokens.applicationId))
+    .innerJoin(roles, eq(roles.id, applications.roleId))
+    .leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id))
+    .where(and(eq(bookingTokens.tokenHash, tokenHash), eq(bookingTokens.kind, "avatar"), inArray(bookingTokens.status, allowedStatuses)))
+    .limit(1);
+  if (!row) return null;
+  if (row.token.expiresAt && row.token.expiresAt.getTime() <= Date.now()) return null;
+  if (!["resume_approved", "voice_booking_pending"].includes(row.application.currentStage)) return null;
+  const roleSetup = row.roleSetup && typeof row.roleSetup === "object" ? row.roleSetup as Record<string, unknown> : {};
+  const screening = row.screeningResult as Record<string, unknown> | null;
+  const screeningQuestion = firstInterviewQuestion(screening?.interviewQuestions)
+    || String(roleSetup.requiredInterviewQuestion1 || "").trim()
+    || "Please tell us about the experience that best prepares you for this role and the outcome you achieved.";
+  return {
+    applicationId: row.application.externalId,
+    candidateName: row.application.candidateName,
+    roleId: row.roleExternalId,
+    roleTitle: row.roleTitle,
+    roleDescription: String(roleSetup.jobDescription || "").trim(),
+    resumeSummary: String(screening?.summary || screening?.strengths || "").trim(),
+    screeningQuestion,
+    expiresAt: row.token.expiresAt?.toISOString() || "",
+    tokenStatus: row.token.status,
+  } satisfies AvatarInterviewContext;
+}
+
+export async function getAvatarInterviewContext(rawToken: string, options: { allowActive?: boolean } = {}) {
+  const tokenHash = crypto.createHash("sha256").update(rawToken.trim()).digest("hex");
+  return avatarInterviewContextByHash(tokenHash, options.allowActive ? ["active"] : ["pending"]);
+}
+
+/** Atomically claims the candidate's one-time avatar link before starting a session. */
+export async function startAvatarInterview(rawToken: string) {
+  const db = getDb();
+  const tokenHash = crypto.createHash("sha256").update(rawToken.trim()).digest("hex");
+  const [claimed] = await db.update(bookingTokens).set({ status: "active" }).where(and(
+    eq(bookingTokens.tokenHash, tokenHash),
+    eq(bookingTokens.kind, "avatar"),
+    eq(bookingTokens.status, "pending"),
+    or(isNull(bookingTokens.expiresAt), gte(bookingTokens.expiresAt, new Date())),
+  )).returning({ applicationId: bookingTokens.applicationId });
+  if (!claimed) return null;
+  // Choosing Ella is the candidate's alternative to scheduling the call.
+  // Disable the unused phone-call link once the avatar interview starts.
+  await db.update(bookingTokens).set({ status: "revoked" }).where(and(
+    eq(bookingTokens.applicationId, claimed.applicationId),
+    eq(bookingTokens.kind, "voice"),
+    inArray(bookingTokens.status, ["pending", "active"]),
+  ));
+  return avatarInterviewContextByHash(tokenHash, ["active"]);
+}
+
+export async function completeAvatarInterview(input: { rawToken: string; sessionId: string; evaluation: LiveAvatarEvaluation; transcript: LiveAvatarTranscriptTurn[] }) {
+  const db = getDb();
+  const tokenHash = crypto.createHash("sha256").update(input.rawToken.trim()).digest("hex");
+  const transcript = input.transcript.map((turn) => `${String(turn.role || "unknown")}: ${String(turn.transcript || "").trim()}`).filter((line) => !line.endsWith(": ")).join("\n");
+  return db.transaction(async (tx) => {
+    const [token] = await tx.select({ id: bookingTokens.id, applicationId: bookingTokens.applicationId }).from(bookingTokens).where(and(eq(bookingTokens.tokenHash, tokenHash), eq(bookingTokens.kind, "avatar"), eq(bookingTokens.status, "active"))).for("update").limit(1);
+    if (!token) return { completed: false, error: "avatar_link_already_used" as const };
+    const now = new Date();
+    await tx.insert(voiceInterviewResults).values({
+      applicationId: token.applicationId,
+      attemptId: null,
+      score: input.evaluation.score,
+      recommendation: input.evaluation.recommendation,
+      strengths: input.evaluation.strengths.join("; "),
+      concerns: input.evaluation.focusAreas.join("; "),
+      summary: input.evaluation.summary,
+      transcript,
+      evaluationScores: input.evaluation as unknown as object,
+      callStatus: "completed",
+      callFinalStatus: "completed",
+      providerEventType: "live_avatar_interview",
+      resultReceivedAt: now,
+      callCompletedAt: now,
+      raw: { sessionId: input.sessionId, source: "live_avatar" },
+    });
+    await tx.update(bookingTokens).set({ status: "used", usedAt: now }).where(eq(bookingTokens.id, token.id));
+    const [application] = await tx.update(applications).set({ currentStage: "voice_review_pending", updatedAt: now }).where(eq(applications.id, token.applicationId)).returning({ externalId: applications.externalId, currentStage: applications.currentStage });
+    await tx.insert(applicationStatusHistory).values({
+      applicationId: token.applicationId,
+      stage: "voice",
+      previousStage: "voice_booking_pending",
+      newStage: "voice_review_pending",
+      decision: "",
+      source: "live_avatar",
+      actionRequestId: `live-avatar:${tokenHash}`,
+      notificationStatus: "",
+      notificationEventType: "",
+      notificationRecipient: "",
+      notificationIntendedRecipient: "",
+    }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
+    return { completed: true, error: null, applicationId: application?.externalId || "" } as const;
+  });
 }
 
 export async function updateApplicationProfile(input: {
@@ -1228,7 +1359,7 @@ export async function markInterviewCalendarEvent(input: {
   });
 }
 
-export async function createBookingToken(input: { applicationExternalId: string; kind: "voice" | "final"; tokenHash?: string; link?: string; expiresAt?: string }) {
+export async function createBookingToken(input: { applicationExternalId: string; kind: BookingTokenKind; tokenHash?: string; link?: string; expiresAt?: string; notify?: boolean }) {
   const db = getDb();
   return db.transaction(async (tx) => {
     // Lock before the lookup so concurrent workflow retries cannot create two
@@ -1250,7 +1381,9 @@ export async function createBookingToken(input: { applicationExternalId: string;
     const rawToken = suppliedTokenHash ? "" : crypto.randomBytes(32).toString("hex");
     const tokenHash = suppliedTokenHash || crypto.createHash("sha256").update(rawToken).digest("hex");
     const portalOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.APP_URL?.trim() || (process.env.VERCEL_URL?.trim() ? `https://${process.env.VERCEL_URL.trim()}` : "https://ella-recruitment-portal-pilot.vercel.app");
-    const link = input.link || `${portalOrigin.replace(/\/$/, "")}/book/${input.kind}/${rawToken || tokenHash}`;
+    const link = input.link || (input.kind === "avatar"
+      ? avatarInterviewLink(portalOrigin, rawToken || tokenHash)
+      : `${portalOrigin.replace(/\/$/, "")}/book/${input.kind}/${rawToken || tokenHash}`);
     const [token] = await tx.insert(bookingTokens).values({ applicationId: application.id, kind: input.kind, tokenHash, link, expiresAt: isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: bookingTokens.tokenHash }).returning();
     if (!token) {
       const [existing] = await tx.select().from(bookingTokens).where(eq(bookingTokens.tokenHash, tokenHash)).limit(1);
@@ -1261,6 +1394,9 @@ export async function createBookingToken(input: { applicationExternalId: string;
       : application.currentStage;
     if (nextStage !== application.currentStage) {
       await tx.update(applications).set({ currentStage: nextStage, updatedAt: new Date() }).where(eq(applications.id, application.id));
+    }
+    if (input.notify === false || input.kind === "avatar") {
+      return { token, created: true, notificationHistoryId: null, error: null };
     }
     const [history] = await tx.insert(applicationStatusHistory).values({
       applicationId: application.id,
@@ -1365,6 +1501,7 @@ export async function notificationQueue(stage?: string) {
     candidateName: applications.candidateName,
     candidateEmail: applications.email,
     notificationLink: sql<string>`COALESCE((SELECT bt.link FROM booking_tokens bt WHERE bt.application_id = ${applications.id} AND bt.kind = CASE WHEN ${applicationStatusHistory.notificationEventType} = 'voice_booking_invitation' THEN 'voice' WHEN ${applicationStatusHistory.notificationEventType} = 'final_booking_invitation' THEN 'final' ELSE '' END ORDER BY bt.created_at DESC LIMIT 1), '')`,
+    avatarLink: sql<string>`COALESCE((SELECT bt.link FROM booking_tokens bt WHERE bt.application_id = ${applications.id} AND bt.kind = 'avatar' AND bt.status IN ('pending', 'active') ORDER BY bt.created_at DESC LIMIT 1), '')`,
     bookedSlotStartsAt: sql<string>`COALESCE((SELECT to_char(s.starts_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM interview_slots s WHERE s.application_id = ${applications.id} AND s.interview_type = CASE WHEN ${applicationStatusHistory.notificationEventType} = 'voice_booking_confirmation' THEN 'voice' WHEN ${applicationStatusHistory.notificationEventType} = 'final_booking_confirmation' THEN 'final' ELSE '' END AND s.status IN ('booked', 'completed') ORDER BY s.booked_at DESC NULLS LAST LIMIT 1), '')`,
     bookedSlotTimezone: sql<string>`COALESCE((SELECT s.timezone FROM interview_slots s WHERE s.application_id = ${applications.id} AND s.interview_type = CASE WHEN ${applicationStatusHistory.notificationEventType} = 'voice_booking_confirmation' THEN 'voice' WHEN ${applicationStatusHistory.notificationEventType} = 'final_booking_confirmation' THEN 'final' ELSE '' END AND s.status IN ('booked', 'completed') ORDER BY s.booked_at DESC NULLS LAST LIMIT 1), '')`,
     roleExternalId: roles.externalId,
@@ -1407,6 +1544,7 @@ export async function notificationQueue(stage?: string) {
         candidateName: context.candidateName,
         roleTitle: context.roleTitle,
         bookingLink: context.notificationLink,
+        avatarLink: context.avatarLink,
         scheduledLabel: scheduledLabel(context.bookedSlotStartsAt, context.bookedSlotTimezone),
       }),
     }));

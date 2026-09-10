@@ -11,6 +11,7 @@ type Props = {
   roleTitle: string;
   candidateName: string;
   preparation: LiveAvatarPreparation;
+  accessToken?: string;
 };
 
 type LiveAvatarSessionInstance = {
@@ -28,7 +29,7 @@ function eventText(args: unknown[]) {
   return typeof text === "string" ? text.trim() : "";
 }
 
-export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, preparation }: Props) {
+export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, preparation, accessToken = "" }: Props) {
   const [state, setState] = useState<WidgetState>("idle");
   const [error, setError] = useState("");
   const [evaluation, setEvaluation] = useState<LiveAvatarEvaluation | null>(null);
@@ -55,7 +56,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       const tokenResponse = await fetch("/api/live-avatar/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roleId, candidateName, resumeSummary: preparation.resumeSummary, screeningQuestion: preparation.screeningQuestion }),
+        body: JSON.stringify({ roleId, candidateName, resumeSummary: preparation.resumeSummary, screeningQuestion: preparation.screeningQuestion, avatarToken: accessToken || undefined }),
       });
       const tokenBody = await tokenResponse.json().catch(() => ({}));
       if (!tokenResponse.ok || !tokenBody?.success) throw new Error(tokenBody?.error || "Ella isn't available right now.");
@@ -106,7 +107,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
         response = await fetch("/api/live-avatar/evaluate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, roleId, screeningQuestion: preparation.screeningQuestion }),
+          body: JSON.stringify({ sessionId, roleId, screeningQuestion: preparation.screeningQuestion, avatarToken: accessToken || undefined }),
         });
         result = await response.json().catch(() => ({}));
         if (response.ok && result.success === true) break;
@@ -163,12 +164,12 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
             {evaluation.strengths.length > 0 && <div><span className="live-avatar-result-label">What came through</span><ul>{evaluation.strengths.map((item) => <li key={item}>{item}</li>)}</ul></div>}
             <div><span className="live-avatar-result-label">Useful follow-up</span><ul>{evaluation.focusAreas.map((item) => <li key={item}>{item}</li>)}</ul></div>
             <p className="live-avatar-disclosure">This is an interview aid, not an automated hiring decision. The recruitment team reviews the full application.</p>
-            <button type="button" className="btn btn-secondary" onClick={() => { setState("idle"); setEvaluation(null); }}>Run again</button>
+            {!accessToken && <button type="button" className="btn btn-secondary" onClick={() => { setState("idle"); setEvaluation(null); }}>Run again</button>}
           </div>
         )}
 
-        {state === "ended" && <><p>Ella has ended the session. You can try the question again or return to the screening record.</p><button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button></>}
-        {state === "error" && <><p className="error-box">{error}</p><button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button></>}
+        {state === "ended" && <><p>Ella has ended the session. {accessToken ? "This one-time invitation is now closed." : "You can try the question again or return to the screening record."}</p>{!accessToken && <button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button>}</>}
+        {state === "error" && <><p className="error-box">{error}</p>{accessToken ? <p>This secure invitation can only be used once. Please contact the recruitment team if you need help.</p> : <button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button>}</>}
       </div>
     </section>
   );
