@@ -137,9 +137,9 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       <div className="live-avatar-body">
         {state === "idle" && (
           <>
-            <p>Ella has reviewed your resume for the <strong>{roleTitle}</strong> role and prepared a question about the experience most relevant to it.</p>
+            <p>Ella has reviewed the candidate's resume for the <strong>{roleTitle}</strong> role and prepared a question about the experience most relevant to it.</p>
             <div className="live-avatar-question"><span>Ella will ask</span><strong>{preparation.screeningQuestion}</strong></div>
-            <p className="live-avatar-disclosure">This is an AI interview. Your response will be transcribed and summarized for the recruitment team. You can stop at any time.</p>
+            <p className="live-avatar-disclosure">This is an AI interview aid. The candidate's response will be transcribed and summarized for the recruitment team. You can stop at any time.</p>
             <button type="button" className="btn btn-primary" onClick={() => void startInterview()}>Start with Ella</button>
           </>
         )}
@@ -152,7 +152,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
           </div>
         )}
 
-        {lastResponse && active && <div className="live-avatar-transcript"><span>Your latest response</span><p>{lastResponse}</p></div>}
+        {lastResponse && active && <div className="live-avatar-transcript"><span>Candidate's latest response</span><p>{lastResponse}</p></div>}
         {active && <button type="button" className="btn btn-secondary" onClick={() => void processResponse()}>Finish and see results</button>}
         {(state === "ending" || state === "evaluating") && <p className="live-avatar-status" aria-live="polite">{state === "ending" ? "Closing the session…" : "Processing your response…"}</p>}
 
@@ -167,7 +167,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
           </div>
         )}
 
-        {state === "ended" && <><p>Ella has ended the session. You can try the question again, or continue with your application below.</p><button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button></>}
+        {state === "ended" && <><p>Ella has ended the session. You can try the question again or return to the screening record.</p><button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button></>}
         {state === "error" && <><p className="error-box">{error}</p><button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button></>}
       </div>
     </section>
