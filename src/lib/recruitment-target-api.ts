@@ -8,6 +8,8 @@
 
 type TargetRequestOptions = Omit<RequestInit, "body"> & { body?: unknown };
 
+import { fetchWithTimeout, timeoutFromEnv } from "@/lib/fetch-with-timeout";
+
 function targetOrigin(): string {
   const origin = process.env.INTERNAL_API_ORIGIN?.trim() || process.env.APP_URL?.trim() || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.trim()}` : "");
   if (!origin) throw new Error("INTERNAL_API_ORIGIN is not configured");
@@ -18,12 +20,12 @@ function targetOrigin(): string {
 export async function targetRecruitmentRequest<T>(path: string, options: TargetRequestOptions = {}): Promise<T> {
   const secret = process.env.INTERNAL_API_SECRET?.trim();
   if (!secret) throw new Error("INTERNAL_API_SECRET is not configured");
-  const response = await fetch(`${targetOrigin()}${path.startsWith("/") ? path : `/${path}`}`, {
+  const response = await fetchWithTimeout(`${targetOrigin()}${path.startsWith("/") ? path : `/${path}`}`, {
     ...options,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${secret}`, ...(options.headers || {}) },
     cache: "no-store",
-  });
+  }, timeoutFromEnv("INTERNAL_API_TIMEOUT_MS", 15_000));
   const payload = await response.json().catch(() => null) as T | { error?: string } | null;
   if (!response.ok) throw new Error(`Target recruitment API ${response.status}: ${payload && typeof payload === "object" && "error" in payload ? payload.error : "request_failed"}`);
   return payload as T;

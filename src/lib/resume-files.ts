@@ -11,6 +11,9 @@ import { requireBulkResumeUatConfig, type BulkResumeEnvironment } from "@/lib/bu
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { createPdfTextParser } from "@/lib/pdf-text-parser";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { configureGoogleApiTimeout } from "@/lib/google-api-options";
+
+configureGoogleApiTimeout();
 
 // This module is the single server-side boundary for resume validation,
 // extraction, private storage, download tokens, and retention cleanup.
@@ -43,6 +46,7 @@ export type ResumeFileRecord = {
   uploadedAt: string;
   expiresAt: string;
   kind: ResumeFileKind;
+  extractedText?: string;
 };
 
 export type StoredResume = {
@@ -231,26 +235,10 @@ export async function cleanupExpiredResumeFiles(now = Date.now()) {
   return { deleted, scanned };
 }
 
-let lastCleanupAt = 0;
-let cleanupInFlight: Promise<unknown> | null = null;
-const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
-
-async function cleanupIfDue() {
-  // Preview deployments must never mutate the shared production Drive folder
-  // as a side effect of a user upload.
-  if (process.env.VERCEL_ENV === "preview") return;
-  const now = Date.now();
-  if (cleanupInFlight) return cleanupInFlight;
-  if (lastCleanupAt + CLEANUP_INTERVAL_MS > now) return;
-  lastCleanupAt = now;
-  cleanupInFlight = cleanupExpiredResumeFiles(now)
-    .catch((error) => console.warn("[Resume Cleanup] Unable to remove expired files:", error))
-    .finally(() => { cleanupInFlight = null; });
-  return cleanupInFlight;
-}
+/** The isolated cron route owns cleanup; uploads must never scan Drive. */
+export const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 export async function storeResumeFile(file: File, options: { environment?: BulkResumeEnvironment } = {}): Promise<StoredResume> {
-  await cleanupIfDue().catch(() => undefined);
   const fileName = safeFileName(file.name || "resume");
   const kind = detectKind(fileName, file.type);
   if (!kind) throw new Error("Only PDF, DOC, and DOCX resume files are supported.");
@@ -338,6 +326,7 @@ export async function readResumeFile(record: ResumeFileRecord) {
 
 /** Read and validate a stored resume for the Postgres screening worker. */
 export async function extractStoredResumeText(record: ResumeFileRecord) {
+  if (record.extractedText?.trim()) return record.extractedText.trim();
   const buffer = await readResumeFile(record);
   assertSignature(buffer, record.kind);
   return extractText(buffer, record.kind);

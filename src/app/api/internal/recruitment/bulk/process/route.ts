@@ -3,6 +3,7 @@ import { internalJson, readInternalJson, withInternalAuth } from "@/lib/internal
 import { record, requiredString } from "@/lib/internal-recruitment-http";
 import { getBulkScreeningContext } from "@/lib/internal-recruitment-queries";
 import { processTargetBulkScreening } from "@/lib/recruitment-target-screening";
+import { logServerTiming, measureServerOperation } from "@/lib/server-timing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,18 +23,25 @@ function storedResumeRecord(value: Record<string, unknown>): ResumeFileRecord {
     fileId: text(value.storageRef), fileName: text(value.filename), mimeType: text(value.mimeType),
     size: Number(value.size) || 0, sha256: text(value.sha256), uploadedAt: dateText(value.uploadedAt),
     expiresAt: dateText(value.expiresAt), kind: kind as ResumeFileKind,
+    extractedText: text(value.extractedText),
   };
 }
 
 /** Return the claimed item's role and resume context to the n8n AI worker. */
 export const GET = withInternalAuth("bulk_queue", async (request) => {
+  const startedAt = performance.now();
+  const timings: Record<string, number> = {};
+  let reusedExtractedText = false;
   const dedupeKey = new URL(request.url).searchParams.get("dedupeKey")?.trim() || "";
   if (!dedupeKey) return internalJson({ ok: false, error: "dedupeKey_required" }, 422);
-  const context = await getBulkScreeningContext(dedupeKey);
+  const context = await measureServerOperation(timings, "context", () => getBulkScreeningContext(dedupeKey));
   if (!context) return internalJson({ ok: false, error: "unknown_queue" }, 404);
   if (!context.application || !context.resumeFile) return internalJson({ ok: false, error: "missing_application_or_resume" }, 409);
-  const resumeText = await extractStoredResumeText(storedResumeRecord(context.resumeFile as unknown as Record<string, unknown>));
+  const storedText = String((context.resumeFile as unknown as Record<string, unknown>).extractedText || "").trim();
+  reusedExtractedText = Boolean(storedText);
+  const resumeText = await measureServerOperation(timings, "resumeText", () => extractStoredResumeText(storedResumeRecord(context.resumeFile as unknown as Record<string, unknown>)));
   const setup = context.role.setup && typeof context.role.setup === "object" && !Array.isArray(context.role.setup) ? context.role.setup as Record<string, unknown> : {};
+  logServerTiming(new URL(request.url).pathname, startedAt, timings, { dbOperations: 1, itemCount: 1, reusedExtractedText });
   return internalJson({
     ok: true,
     context: {

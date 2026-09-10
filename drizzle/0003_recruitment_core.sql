@@ -169,6 +169,11 @@ CREATE TABLE IF NOT EXISTS "resume_files" (
   "size"           integer NOT NULL DEFAULT 0,
   "kind"           text NOT NULL DEFAULT '' CHECK ("kind" IN ('','pdf','docx','doc')),
   "text_extracted" boolean NOT NULL DEFAULT false,
+  "extracted_text" text NOT NULL DEFAULT '',
+  "candidate_name" text NOT NULL DEFAULT '',
+  "candidate_email" text NOT NULL DEFAULT '',
+  "preferred_mobile" text NOT NULL DEFAULT '',
+  "applicant_country" text NOT NULL DEFAULT '',
   "uploaded_at"    timestamptz NOT NULL DEFAULT now(),
   "expires_at"     timestamptz
 );

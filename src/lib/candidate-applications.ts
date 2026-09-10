@@ -927,10 +927,13 @@ export async function getBulkResumeScreeningEvidence(queueItems: BulkResumeQueue
   if (queueItems.length === 0) return new Set();
   if (isPostgresRecruitmentTarget()) {
     const applicationIds = queueItems.map((item) => item.applicationId).filter(Boolean);
-    const { listScreening } = await import("@/lib/internal-recruitment-queries");
-    const rows = await Promise.all(applicationIds.map((applicationId) => listScreening(applicationId)));
+    const { listScreeningForApplications } = await import("@/lib/internal-recruitment-queries");
+    const rows = await listScreeningForApplications(applicationIds);
     const evidence = new Set<string>();
-    rows.forEach((results, index) => { if (results.length > 0) evidence.add(bulkQueueKey(queueItems[index])); });
+    const evidenceByApplication = new Set(rows.map((row) => row.applicationExternalId.toLowerCase()));
+    queueItems.forEach((item) => {
+      if (item.applicationId && evidenceByApplication.has(item.applicationId.toLowerCase())) evidence.add(bulkQueueKey(item));
+    });
     return evidence;
   }
   const { rows } = await readTab("High_Match_Profile", "CZ", { fresh: true, spreadsheetId: bulkResumeSpreadsheetId() });

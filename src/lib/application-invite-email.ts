@@ -1,5 +1,6 @@
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
+import { fetchWithTimeout, timeoutFromEnv } from "@/lib/fetch-with-timeout";
 
 export type ApplicationInviteEmailStatus = "sent" | "failed" | "not_configured";
 
@@ -23,7 +24,7 @@ export async function sendApplicationInviteEmail(input: {
 
   try {
     const recipient = pilotEmailRecipient(input.candidateEmail);
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -50,7 +51,7 @@ export async function sendApplicationInviteEmail(input: {
         },
       }),
       cache: "no-store",
-    });
+    }, timeoutFromEnv("N8N_APPLICATION_INVITE_EMAIL_TIMEOUT_MS", 15_000));
     const result = await response.json().catch(() => ({})) as Record<string, unknown>;
     if (!response.ok || result.success === false) {
       return { status: "failed", error: String(result.error || `Email sender returned HTTP ${response.status}.`) };

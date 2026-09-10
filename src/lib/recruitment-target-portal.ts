@@ -15,6 +15,7 @@ import {
   listApplicationSlots,
   listApplicationBookingTokens,
   listApplications,
+  listRecentApplications,
   listBulkQueueForPortal,
   listBookingSlots,
   listRoleStatusHistory,
@@ -88,6 +89,7 @@ function storedResumeRecord(value: Record<string, unknown> | null | undefined): 
     uploadedAt: value.uploadedAt instanceof Date ? value.uploadedAt.toISOString() : text(value.uploadedAt),
     expiresAt: value.expiresAt instanceof Date ? value.expiresAt.toISOString() : text(value.expiresAt),
     kind: kind as ResumeFileKind,
+    extractedText: text(value.extractedText),
   };
 }
 
@@ -714,11 +716,17 @@ function targetApplicantSummary(row: TargetApplicationRow) {
       finalStatus: label(application.currentStage),
       currentStage: text(application.currentStage),
       nextAction: label(application.currentStage),
+      isHistoricalDemo: false,
     };
 }
 
 export async function targetApplicantSummaries() {
   const rows = await listApplications();
+  return rows.map(targetApplicantSummary);
+}
+
+export async function targetRecentApplicantSummaries(department = "") {
+  const rows = await listRecentApplications(department || undefined, 50);
   return rows.map(targetApplicantSummary);
 }
 

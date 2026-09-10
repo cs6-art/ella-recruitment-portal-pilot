@@ -10,6 +10,7 @@ import { normalizeDateOnly } from "@/lib/date-only";
 import { PORTAL_CONFIG_CATALOG } from "@/lib/portal-config-catalog";
 import { isPublishedRoleForIntake as isPublishedRoleForIntakeShared } from "@/lib/recruitment-role-eligibility";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { configureGoogleApiTimeout } from "@/lib/google-api-options";
 import { targetRoleDetails, targetRoleStatusHistory, targetRoleSummaries, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 
 const spreadsheetId =
@@ -45,6 +46,8 @@ const auth = new google.auth.JWT({
     "https://www.googleapis.com/auth/spreadsheets",
   ],
 });
+
+configureGoogleApiTimeout();
 
 const sheets = google.sheets({
   version: "v4",

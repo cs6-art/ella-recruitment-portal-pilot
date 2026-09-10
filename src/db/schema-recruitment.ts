@@ -124,8 +124,12 @@ export const roleStatusHistory = pgTable(
     department: text("department").notNull().default(""),
     notificationStatus: text("notification_status").notNull().default(""),
     notificationError: text("notification_error").notNull().default(""),
+    notificationAttemptedAt: ts("notification_attempted_at"),
   },
-  (t) => [index("role_status_history_role_id_changed_at_idx").on(t.roleId, t.changedAt)],
+  (t) => [
+    index("role_status_history_role_id_changed_at_idx").on(t.roleId, t.changedAt),
+    index("role_status_history_notification_queue_idx").on(t.notificationStatus, t.notificationAttemptedAt, t.changedAt),
+  ],
 );
 
 export const applicants = pgTable(
@@ -164,6 +168,11 @@ export const resumeFiles = pgTable(
     size: integer("size").notNull().default(0),
     kind: text("kind").notNull().default(""),
     textExtracted: boolean("text_extracted").notNull().default(false),
+    extractedText: text("extracted_text").notNull().default(""),
+    candidateName: text("candidate_name").notNull().default(""),
+    candidateEmail: text("candidate_email").notNull().default(""),
+    preferredMobile: text("preferred_mobile").notNull().default(""),
+    applicantCountry: text("applicant_country").notNull().default(""),
     uploadedAt: ts("uploaded_at").notNull().defaultNow(),
     expiresAt: ts("expires_at"),
   },
@@ -436,5 +445,8 @@ export const applicationStatusHistory = pgTable(
     notificationRecipient: text("notification_recipient").notNull().default(""),
     notificationIntendedRecipient: text("notification_intended_recipient").notNull().default(""),
   },
-  (t) => [index("application_status_history_application_id_changed_at_idx").on(t.applicationId, t.changedAt)],
+  (t) => [
+    index("application_status_history_application_id_changed_at_idx").on(t.applicationId, t.changedAt),
+    index("application_status_history_notification_queue_idx").on(t.notificationStatus, t.notificationAttemptedAt, t.changedAt),
+  ],
 );

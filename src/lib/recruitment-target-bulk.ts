@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { extractResumeContactDetails } from "@/lib/resume-contact-extraction";
 import { bulkResumeEnvironment, bulkResumeIsUatMarked, productionUatBatchId } from "@/lib/bulk-resume-config";
 import { deleteResumeFile, MAX_RESUME_FILE_BYTES, storeResumeFile } from "@/lib/resume-files";
-import { createApplication, enqueueBulkScreening, registerResumeFile, updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
+import { createApplication, enqueueBulkScreening, findBulkQueueByRoleAndSha, registerResumeFile, updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
 import type { IntakeResult, IntakeSource } from "@/lib/bulk-resume-intake";
 
 function queueIdForHash(roleId: string, sha256: string) {
@@ -45,6 +45,12 @@ export async function intakeTargetResumeBatch(input: {
     try {
       const bytes = await source.getBytes();
       if (bytes.length > MAX_RESUME_FILE_BYTES) throw new Error("Resume files must be 10 MB or smaller.");
+      const sourceSha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+      const existingQueue = await findBulkQueueByRoleAndSha(input.roleId, sourceSha256);
+      if (existingQueue) {
+        results.push({ fileName: source.name, status: "Skipped", skipped: true, message: "This resume is already queued or processed for this role." });
+        continue;
+      }
       const file = new File([new Uint8Array(bytes)], source.name || "resume", { type: source.mimeType || "application/octet-stream" });
       stage = "destination_storage";
       stored = await storeResumeFile(file, { environment });
@@ -64,6 +70,11 @@ export async function intakeTargetResumeBatch(input: {
         size: stored.record.size,
         kind: stored.record.kind,
         expiresAt: stored.record.expiresAt,
+        extractedText: stored.extractedText,
+        candidateName: contact.candidateName,
+        candidateEmail: contact.candidateEmail,
+        preferredMobile: contact.preferredMobile,
+        applicantCountry: contact.applicantCountry,
       });
       const application = await createApplication({
         externalId: applicationId,
