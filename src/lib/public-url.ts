@@ -53,3 +53,7 @@ export function getPublicAppBaseUrl(request: Request) {
 export function bookingLink(baseUrl: string, kind: "voice" | "final", token: string) {
   return `${baseUrl.replace(/\/$/, "")}/book/${kind}/${encodeURIComponent(token)}`;
 }
+
+export function avatarInterviewLink(baseUrl: string, token: string) {
+  return `${baseUrl.replace(/\/$/, "")}/avatar/${encodeURIComponent(token)}`;
+}

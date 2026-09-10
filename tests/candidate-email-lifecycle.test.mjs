@@ -43,6 +43,18 @@ test("resume approval queues the voice booking invitation immediately and safely
   assert.match(query, /newStage: nextStage/);
 });
 
+test("resume approval creates a separate one-time avatar invitation with the same expiry", () => {
+  const target = read("src/lib/recruitment-target-portal.ts");
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  const labels = read("src/lib/notification-labels.ts");
+  assert.match(target, /kind: "avatar"/);
+  assert.match(target, /avatarInterviewInvitationQueued: true/);
+  assert.match(query, /input\.kind === "avatar"/);
+  assert.match(query, /status: "active"/);
+  assert.match(query, /status: "used", usedAt/);
+  assert.match(labels, /secondaryCta: avatarLink/);
+});
+
 test("voice approval invites the candidate to book the face-to-face interview", () => {
   const target = read("src/lib/recruitment-target-portal.ts");
   assert.match(target, /input\.stage === "voice" && input\.decision === "Approve"/);
@@ -66,7 +78,8 @@ test("notification queue carries ready-to-send candidate email copy per booking 
   assert.match(labels, /voice_booking_invitation: "Schedule your AI voice interview with McLink Group"/);
   assert.match(labels, /voice_booking_confirmation: "Your AI voice interview is confirmed"/);
   assert.match(labels, /Ella, will call you at your preferred mobile number/);
-  assert.match(labels, /cta: "Choose your interview time"/);
+  assert.match(labels, /cta: "Schedule a call"/);
+  assert.match(labels, /secondaryCta: avatarLink \? "Interview with our Avatar now"/);
   assert.match(labels, /cta: "Schedule final interview"/);
   assert.match(labels, /includeRawBookingLink: false/);
   assert.match(labels, /Please use the button below/);

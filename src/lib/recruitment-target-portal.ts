@@ -45,6 +45,7 @@ import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { generateRoleId } from "@/lib/role-id";
 import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows } from "@/lib/google-calendar";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isStandardFinalInterviewSlot, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
+import { getPortalConfigNumber } from "@/lib/portal-config";
 
 function text(value: unknown) {
   return String(value ?? "").trim();
@@ -564,13 +565,22 @@ export async function targetRecordApplicantDecision(input: { applicationId: stri
   // n8n poller remains a recovery path, while this idempotent write removes
   // the race where approval and the five-minute poll run at the same time.
   if (input.stage === "resume" && input.decision === "Approve") {
+    const expiryDays = await getPortalConfigNumber("Booking_Link_Expiry_Days", 7);
+    const expiresAt = new Date(Date.now() + Math.max(1, Math.min(30, expiryDays)) * 24 * 60 * 60 * 1000).toISOString();
     const invitation = await createBookingToken({
       applicationExternalId: input.applicationId,
       kind: "voice",
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      expiresAt,
     });
     if (!invitation.token) throw new Error(invitation.error || "Unable to create the voice interview booking invitation.");
-    return { ...result, voiceBookingInvitationQueued: true, voiceBookingNotificationHistoryId: invitation.notificationHistoryId };
+    const avatarInvitation = await createBookingToken({
+      applicationExternalId: input.applicationId,
+      kind: "avatar",
+      expiresAt,
+      notify: false,
+    });
+    if (!avatarInvitation.token) throw new Error(avatarInvitation.error || "Unable to create the avatar interview invitation.");
+    return { ...result, voiceBookingInvitationQueued: true, voiceBookingNotificationHistoryId: invitation.notificationHistoryId, avatarInterviewInvitationQueued: true };
   }
   // Approving the voice interview must invite the candidate to book the
   // face-to-face (HR) interview, the same way resume approval invites the
