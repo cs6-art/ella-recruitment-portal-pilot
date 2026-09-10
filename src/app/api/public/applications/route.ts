@@ -11,9 +11,9 @@ import {
 import { candidateBodyForValidation, readCandidateIntakeRequest } from "@/lib/candidate-intake";
 import { assertCreditsAvailable, EllaCreditsError, recordDeduction } from "@/lib/ella-credits";
 import { getPortalConfigValue } from "@/lib/portal-config";
-import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { publicCorsOptionsResponse, withPublicCors } from "@/lib/public-cors";
 import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
+import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { deleteResumeFile, MAX_RESUME_REQUEST_BYTES, storeResumeFile } from "@/lib/resume-files";
 import { getResumeScreeningInvitationByToken, markResumeScreeningInvitationUsed } from "@/lib/resume-screening-invite";
@@ -91,8 +91,8 @@ export async function POST(request: Request) {
     }
 
     const roleId = parsed.data.roleId.trim();
-    const role = roleId ? await getRoleRequestById(roleId) : null;
-    if (!role || !isPublishedRoleForIntake(role)) {
+    const role = roleId ? await resolvePublishedRecruitmentRole(roleId) : null;
+    if (!role) {
       return responseError(request, "This role is not accepting applications.", 404);
     }
 
