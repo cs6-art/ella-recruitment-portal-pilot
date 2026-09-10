@@ -24,6 +24,7 @@ test("Postgres target role resolution does not statically load the Sheets reposi
 
 test("Postgres intake routes do not perform a direct Sheets role lookup", () => {
   for (const file of [
+    "src/app/api/public/applications/route.ts",
     "src/app/api/resume-screening/bulk/upload/route.ts",
     "src/app/api/resume-screening/drive/import/route.ts",
     "src/app/api/resume-screening/onedrive/import/route.ts",
