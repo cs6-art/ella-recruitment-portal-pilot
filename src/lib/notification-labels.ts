@@ -91,6 +91,8 @@ export type NotificationEmailCopy = {
   message: string;
   cta: string;
   ctaLink: string;
+  /** n8n should render the CTA as a button and never append this URL as text. */
+  includeRawBookingLink: false;
   signoff: string;
 };
 
@@ -110,14 +112,14 @@ export function notificationEmail(eventType: string | null | undefined, context:
   const link = String(context.bookingLink || "").trim();
   const scheduled = String(context.scheduledLabel || "").trim();
 
-  const base = { subject: EMAIL_SUBJECTS[key] || notificationEventLabel(key), signoff: SIGNOFF, cta: "", ctaLink: "" };
+  const base = { subject: EMAIL_SUBJECTS[key] || notificationEventLabel(key), signoff: SIGNOFF, cta: "", ctaLink: "", includeRawBookingLink: false as const };
 
   switch (key) {
     case "voice_booking_invitation":
       return {
         ...base,
         heading: "Schedule your AI voice interview",
-        message: `Dear ${name},\n\nWe are pleased to invite you to schedule your AI voice interview for ${rolePhrase}. Please use the secure link below to select an available interview time. This link expires automatically.\n\nWe look forward to speaking with you.`,
+        message: `Dear ${name},\n\nWe are pleased to invite you to schedule your AI voice interview for ${rolePhrase}. Please use the button below to select an available interview time. This invitation expires automatically.\n\nWe look forward to speaking with you.`,
         cta: "Choose your interview time",
         ctaLink: link,
       };
@@ -133,7 +135,7 @@ export function notificationEmail(eventType: string | null | undefined, context:
       return {
         ...base,
         heading: "Schedule your final interview",
-        message: `Hi ${name},\n\nThank you for completing your AI voice interview. We are pleased to invite you to the final interview stage for ${rolePhrase}. Please use the secure link below to select your preferred interview time. This link expires automatically.`,
+        message: `Hi ${name},\n\nThank you for completing your AI voice interview. We are pleased to invite you to the final interview stage for ${rolePhrase}. Please use the button below to select your preferred interview time. This invitation expires automatically.`,
         cta: "Schedule final interview",
         ctaLink: link,
       };

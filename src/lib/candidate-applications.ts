@@ -99,11 +99,17 @@ export type ApplicantDetails = ApplicantSummary & {
   bookingTokenStatus: string;
   bookingTokenExpiresAt: string;
   finalBookingStatus: string;
+  voiceBookingNotificationStatus: string;
+  voiceBookingNotificationSentAt: string;
+  voiceBookingNotificationError: string;
   finalScheduledDate: string;
   finalScheduledTime: string;
   finalTimezone: string;
   finalBookingLink: string;
   finalBookingTokenExpiresAt: string;
+  finalBookingNotificationStatus: string;
+  finalBookingNotificationSentAt: string;
+  finalBookingNotificationError: string;
   finalComments: string;
   lastUpdated: string;
   voiceInterviewResult?: Record<string, string>;
@@ -1125,12 +1131,18 @@ export async function getApplicantById(id: string): Promise<ApplicantDetails | n
     voiceBookingLink: field(record, "Voice_Interview_Booking_Link"),
     bookingTokenStatus: field(record, "Booking_Token_Status"),
     bookingTokenExpiresAt: field(record, "Booking_Token_Expires_At"),
+    voiceBookingNotificationStatus: "",
+    voiceBookingNotificationSentAt: "",
+    voiceBookingNotificationError: "",
     finalBookingStatus: field(record, "Final_Interview_Booking_Token_Status"),
     finalScheduledDate: field(record, "Final_Interview_Scheduled_Date"),
     finalScheduledTime: field(record, "Final_Interview_Scheduled_Time"),
     finalTimezone: field(record, "Final_Interview_Timezone"),
     finalBookingLink: field(record, "Final_Interview_Booking_Link"),
     finalBookingTokenExpiresAt: field(record, "Final_Interview_Booking_Token_Expires_At"),
+    finalBookingNotificationStatus: "",
+    finalBookingNotificationSentAt: "",
+    finalBookingNotificationError: "",
     finalComments: field(record, "Final_Interview_Comments", "Final Interview Comments"),
     lastUpdated: field(record, "Last_Updated") || finalInterviewSlot?.last_updated || voiceInterviewSlot?.last_updated || summary.appliedAt,
     voiceInterviewResult: voiceResult,

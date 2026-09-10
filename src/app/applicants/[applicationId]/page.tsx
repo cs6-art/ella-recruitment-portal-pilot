@@ -53,6 +53,17 @@ function externalUrl(value: string) {
   }
 }
 
+function bookingInvitationStatus(input: { tokenLink: string; notificationStatus: string; isScheduled: boolean }) {
+  if (input.isScheduled) return "Booking link used";
+  switch (input.notificationStatus.trim().toLowerCase()) {
+    case "sent": return "Booking link sent";
+    case "pending": return "Booking link pending";
+    case "failed": return "Booking email failed — retry pending";
+    case "not_configured": return "Booking email not configured";
+    default: return input.tokenLink ? "Booking link not sent" : "Booking link not created";
+  }
+}
+
 function latestDecisionComment(history: CandidateStatusHistoryEntry[], stage: CandidateStatusHistoryEntry["stage"]) {
   return history.find((entry) => entry.stage === stage && entry.comments.trim())?.comments || "";
 }
@@ -89,6 +100,7 @@ function FinalInterviewCard({ applicant, role }: { applicant: ApplicantDetails; 
   const slotStatus = recordValue(slot, "Status").toLowerCase();
   const isScheduled = slotStatus === "booked" || (!/(awaiting schedule|not started|pending)/i.test(statusLower) && /(scheduled|booked)/i.test(statusLower));
   const bookingStatus = slot ? recordValue(slot, "Status") || (isScheduled ? "Booked" : "Not Booked") : isScheduled ? applicant.finalBookingStatus || "Booked" : "Not Booked";
+  const bookingLinkStatus = bookingInvitationStatus({ tokenLink: applicant.finalBookingLink, notificationStatus: applicant.finalBookingNotificationStatus, isScheduled });
   const scheduledDate = recordValue(slot, "Date") || (isScheduled ? applicant.finalScheduledDate || recordValue(finalInterview, "Final_Interview_Date", "Date") : "");
   const scheduledTime = recordValue(slot, "Start_Time", "Start Time", "Time") || (isScheduled ? applicant.finalScheduledTime : "");
   const timezone = recordValue(slot, "Timezone", "Time Zone") || (isScheduled ? applicant.finalTimezone : "");
@@ -121,6 +133,7 @@ function FinalInterviewCard({ applicant, role }: { applicant: ApplicantDetails; 
         <DetailField label="Role" value={applicant.selectedRole} />
         <DetailField label="Status" value={displayedStatus} />
         <DetailField label="Booking Status" value={bookingStatus} />
+        <DetailField label="Booking Link Email" value={bookingLinkStatus} />
         <DetailField label="Scheduled" value={scheduledValue(scheduledDate, scheduledTime)} />
         <DetailField label="Timezone" value={timezone || "Not provided"} />
         <DetailField label="Interviewer" value={interviewer} className="applicant-final-interviewer-field" />
@@ -157,6 +170,7 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
         <div className="applicant-detail-inline-fields">
           <DetailField label="Status" value={applicantStageLabel(voiceCallStatus) || applicantStageLabel(applicant.voiceStatus) || "Not Started"} />
           <DetailField label="Booking Status" value={applicant.voiceBookingStatus || "Not Booked"} />
+          <DetailField label="Booking Link Email" value={bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "completed"].includes(voiceCallStatus.toLowerCase()) })} />
           <DetailField label="Scheduled" value={scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />
           <DetailField label="Timezone" value={recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || applicant.voiceTimezone || "Not provided"} />
           <DetailField label="Voice AI Score" value={applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : voiceScorePending} />

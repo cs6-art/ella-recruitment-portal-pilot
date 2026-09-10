@@ -839,6 +839,21 @@ export async function listApplicationHistory(externalId?: string) {
   return (externalId ? query.where(eq(applications.externalId, externalId)) : query).orderBy(desc(applicationStatusHistory.changedAt)).limit(LIMIT);
 }
 
+export async function getApplicationBookingNotification(externalId: string, kind: "voice" | "final") {
+  const db = getDb();
+  const eventType = kind === "voice" ? "voice_booking_invitation" : "final_booking_invitation";
+  const [row] = await db.select({
+    notificationStatus: applicationStatusHistory.notificationStatus,
+    notificationSentAt: applicationStatusHistory.notificationSentAt,
+    notificationError: applicationStatusHistory.notificationError,
+  }).from(applicationStatusHistory)
+    .innerJoin(applications, eq(applications.id, applicationStatusHistory.applicationId))
+    .where(and(eq(applications.externalId, externalId.trim()), eq(applicationStatusHistory.notificationEventType, eventType)))
+    .orderBy(desc(applicationStatusHistory.changedAt))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function updateApplicationStage(input: { applicationExternalId: string; newStage: string; actorEmail?: string; actorName?: string; comments?: string; actionRequestId: string }) {
   const db = getDb();
   if (!isValidStage(input.newStage)) return { updated: false, error: "invalid_stage" as const };
