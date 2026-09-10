@@ -20,10 +20,14 @@ export async function POST(request: NextRequest) {
 
   let roleId: unknown;
   let candidateName: unknown;
+  let resumeSummary: unknown;
+  let screeningQuestion: unknown;
   try {
     const body = await request.json();
     roleId = body?.roleId;
     candidateName = body?.candidateName;
+    resumeSummary = body?.resumeSummary;
+    screeningQuestion = body?.screeningQuestion;
   } catch {
     return NextResponse.json({ success: false, error: "Invalid request body." }, { status: 400 });
   }
@@ -42,6 +46,8 @@ export async function POST(request: NextRequest) {
       roleTitle: role.jobTitle,
       jobDescription: role.jobDescription || "",
       candidateName: typeof candidateName === "string" ? candidateName : undefined,
+      resumeSummary: typeof resumeSummary === "string" ? resumeSummary : undefined,
+      screeningQuestion: typeof screeningQuestion === "string" ? screeningQuestion : undefined,
     });
 
     return NextResponse.json(

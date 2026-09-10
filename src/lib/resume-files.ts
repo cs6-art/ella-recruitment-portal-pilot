@@ -164,6 +164,19 @@ async function extractText(buffer: Buffer, kind: ResumeFileKind) {
   return text;
 }
 
+/** Extract a resume for live screening preparation without storing it. */
+export async function extractResumeText(file: File) {
+  const fileName = safeFileName(file.name || "resume");
+  const kind = detectKind(fileName, file.type);
+  if (!kind) throw new Error("Only PDF, DOC, and DOCX resume files are supported.");
+  if (!file.size) throw new Error("The uploaded resume is empty.");
+  if (file.size > MAX_RESUME_FILE_BYTES) throw new Error("Resume files must be 10 MB or smaller.");
+  const buffer = Buffer.from(await file.arrayBuffer());
+  if (buffer.length !== file.size) throw new Error("The uploaded resume could not be read completely.");
+  assertSignature(buffer, kind);
+  return extractText(buffer, kind);
+}
+
 function retentionExpiry(uploadedAt: Date) {
   const expiresAt = new Date(uploadedAt);
   expiresAt.setUTCDate(expiresAt.getUTCDate() + RESUME_RETENTION_DAYS);

@@ -2,17 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type WidgetState = "idle" | "starting" | "connecting" | "live" | "ended" | "error";
+import type { LiveAvatarEvaluation, LiveAvatarPreparation } from "@/lib/live-avatar-screening";
+
+type WidgetState = "idle" | "starting" | "connecting" | "live" | "ending" | "evaluating" | "ended" | "error" | "results";
 
 type Props = {
   roleId: string;
   roleTitle: string;
+  candidateName: string;
+  preparation: LiveAvatarPreparation;
 };
 
-// Minimal typing for the parts of @heygen/liveavatar-web-sdk this widget
-// uses. Kept local (rather than importing the package's own types at module
-// scope) so the SDK — and the WebRTC/LiveKit code it pulls in — is only ever
-// loaded in the browser, on demand, after the candidate opts in.
 type LiveAvatarSessionInstance = {
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -21,149 +21,155 @@ type LiveAvatarSessionInstance = {
   off: (event: string, handler: (...args: unknown[]) => void) => void;
 };
 
-/**
- * "Meet Ella now" — an opt-in, in-browser live video interview, powered by
- * LiveAvatar (HeyGen). This is additive to the existing phone-call (Vapi)
- * interview later in the pipeline; nothing here changes that flow.
- *
- * Ella's greeting and screening questions are generated for this specific
- * role: the session-token request (src/app/api/live-avatar/session) sends
- * this role's published title and job description to LiveAvatar as
- * dynamic_variables, which the "McLink AI Interviewer" context substitutes
- * into its ${role_title} / ${job_description} placeholders.
- */
-export default function LiveAvatarInterview({ roleId, roleTitle }: Props) {
+function eventText(args: unknown[]) {
+  const value = args[0];
+  if (!value || typeof value !== "object") return "";
+  const text = (value as { text?: unknown }).text;
+  return typeof text === "string" ? text.trim() : "";
+}
+
+export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, preparation }: Props) {
   const [state, setState] = useState<WidgetState>("idle");
-  const [error, setError] = useState<string>("");
+  const [error, setError] = useState("");
+  const [evaluation, setEvaluation] = useState<LiveAvatarEvaluation | null>(null);
+  const [lastResponse, setLastResponse] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const sessionRef = useRef<LiveAvatarSessionInstance | null>(null);
+  const sessionIdRef = useRef("");
+  const endingRef = useRef(false);
 
   useEffect(() => {
     return () => {
       sessionRef.current?.stop().catch(() => {});
+      sessionRef.current = null;
     };
   }, []);
 
   async function startInterview() {
     setError("");
+    setEvaluation(null);
+    setLastResponse("");
+    endingRef.current = false;
     setState("starting");
     try {
       const tokenResponse = await fetch("/api/live-avatar/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roleId }),
+        body: JSON.stringify({ roleId, candidateName, resumeSummary: preparation.resumeSummary, screeningQuestion: preparation.screeningQuestion }),
       });
       const tokenBody = await tokenResponse.json().catch(() => ({}));
-      if (!tokenResponse.ok || !tokenBody?.success) {
-        throw new Error(tokenBody?.error || "Ella isn't available right now.");
-      }
+      if (!tokenResponse.ok || !tokenBody?.success) throw new Error(tokenBody?.error || "Ella isn't available right now.");
 
-      const { LiveAvatarSession, SessionEvent } = await import("@heygen/liveavatar-web-sdk");
-      const session = new LiveAvatarSession(tokenBody.sessionToken, {
-        voiceChat: true,
-      }) as unknown as LiveAvatarSessionInstance;
+      const { LiveAvatarSession, SessionEvent, AgentEventsEnum } = await import("@heygen/liveavatar-web-sdk");
+      const session = new LiveAvatarSession(tokenBody.sessionToken, { voiceChat: true }) as unknown as LiveAvatarSessionInstance;
       sessionRef.current = session;
+      sessionIdRef.current = typeof tokenBody.sessionId === "string" ? tokenBody.sessionId : "";
 
-      session.on(SessionEvent.SESSION_STATE_CHANGED, (...args: unknown[]) => {
-        const nextState = args[0] as string;
+      const stateChanged = (...args: unknown[]) => {
+        const nextState = String(args[0] || "");
         if (nextState === "CONNECTING") setState("connecting");
-        if (nextState === "DISCONNECTED") setState((current) => (current === "error" ? current : "ended"));
-      });
-      session.on(SessionEvent.SESSION_STREAM_READY, () => {
+        if (nextState === "DISCONNECTED" && !endingRef.current) setState((current) => current === "error" ? current : "ended");
+      };
+      const streamReady = () => {
         setState("live");
         if (videoRef.current) session.attach(videoRef.current);
-      });
+      };
+      const userTranscription = (...args: unknown[]) => {
+        const text = eventText(args);
+        if (text) setLastResponse(text);
+      };
+      session.on(SessionEvent.SESSION_STATE_CHANGED, stateChanged);
+      session.on(SessionEvent.SESSION_STREAM_READY, streamReady);
+      session.on(AgentEventsEnum.USER_TRANSCRIPTION, userTranscription);
 
       setState("connecting");
       await session.start();
-    } catch (err) {
-      console.error("[LiveAvatarInterview] Failed to start session:", err);
-      setError(err instanceof Error ? err.message : "Ella isn't available right now.");
+    } catch (caught) {
+      console.error("[LiveAvatarInterview] Failed to start session:", caught);
+      setError(caught instanceof Error ? caught.message : "Ella isn't available right now.");
       setState("error");
       sessionRef.current = null;
     }
   }
 
-  async function endInterview() {
+  async function processResponse() {
+    const sessionId = sessionIdRef.current;
+    endingRef.current = true;
+    setState("ending");
     try {
       await sessionRef.current?.stop();
-    } catch (err) {
-      console.error("[LiveAvatarInterview] Failed to stop session:", err);
+      if (!sessionId) throw new Error("The interview session did not return an id.");
+      setState("evaluating");
+      let response: Response | null = null;
+      let result: Record<string, unknown> = {};
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        response = await fetch("/api/live-avatar/evaluate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, roleId, screeningQuestion: preparation.screeningQuestion }),
+        });
+        result = await response.json().catch(() => ({}));
+        if (response.ok && result.success === true) break;
+        if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 700));
+      }
+      if (!response?.ok || result.success !== true) throw new Error(typeof result.error === "string" ? result.error : "Ella could not process the response yet.");
+      setEvaluation(result.evaluation as LiveAvatarEvaluation);
+      setState("results");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to process the interview response.");
+      setState("error");
     } finally {
       sessionRef.current = null;
-      setState("ended");
     }
   }
 
-  const isVideoVisible = state === "connecting" || state === "live";
+  const active = state === "connecting" || state === "live";
 
   return (
-    <section className="card live-avatar-card">
+    <section className="card live-avatar-card" aria-labelledby="live-avatar-title">
       <div className="card-header">
-        <h2>Meet Ella now</h2>
+        <div>
+          <span className="form-eyebrow">STEP 2 · LIVE SCREENING</span>
+          <h2 id="live-avatar-title">Meet Ella for one focused question</h2>
+        </div>
         {state === "live" && <span className="live-avatar-live-pill">Live</span>}
       </div>
       <div className="live-avatar-body">
         {state === "idle" && (
           <>
-            <p>
-              Prefer talking instead of waiting for a call back? Ella, McLink&apos;s AI interview
-              assistant, can meet you right now over live video for a quick, {roleTitle} focused
-              chat — about one minute in the sandbox.
-            </p>
-            <p className="live-avatar-disclosure">
-              Ella is an AI interviewer, not a person. This is optional and separate from the
-              rest of your application.
-            </p>
-            <button type="button" className="btn btn-primary" onClick={startInterview}>
-              Start live interview with Ella
-            </button>
+            <p>Ella has reviewed your resume for the <strong>{roleTitle}</strong> role and prepared a question about the experience most relevant to it.</p>
+            <div className="live-avatar-question"><span>Ella will ask</span><strong>{preparation.screeningQuestion}</strong></div>
+            <p className="live-avatar-disclosure">This is an AI interview. Your response will be transcribed and summarized for the recruitment team. You can stop at any time.</p>
+            <button type="button" className="btn btn-primary" onClick={() => void startInterview()}>Start with Ella</button>
           </>
         )}
 
-        {(state === "starting" || isVideoVisible) && (
+        {(state === "starting" || active) && (
           <div className="live-avatar-stage">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              className={`live-avatar-video ${state === "live" ? "is-ready" : ""}`}
-            />
-            {!isVideoVisible && (
-              <div className="live-avatar-stage-overlay">Connecting you with Ella…</div>
-            )}
-            {state === "connecting" && (
-              <div className="live-avatar-stage-overlay">Waiting for Ella to join…</div>
-            )}
+            <video ref={videoRef} autoPlay playsInline className={`live-avatar-video ${state === "live" ? "is-ready" : ""}`} />
+            {state === "starting" && <div className="live-avatar-stage-overlay">Preparing your private interview…</div>}
+            {state === "connecting" && <div className="live-avatar-stage-overlay">Waiting for Ella to join…</div>}
           </div>
         )}
 
-        {isVideoVisible && (
-          <button type="button" className="btn btn-secondary" onClick={endInterview}>
-            End interview
-          </button>
+        {lastResponse && active && <div className="live-avatar-transcript"><span>Your latest response</span><p>{lastResponse}</p></div>}
+        {active && <button type="button" className="btn btn-secondary" onClick={() => void processResponse()}>Finish and see results</button>}
+        {(state === "ending" || state === "evaluating") && <p className="live-avatar-status" aria-live="polite">{state === "ending" ? "Closing the session…" : "Processing your response…"}</p>}
+
+        {state === "results" && evaluation && (
+          <div className="live-avatar-results" aria-live="polite">
+            <div className="live-avatar-score"><span>Response signal</span><strong>{evaluation.score}%</strong></div>
+            <div><strong>{evaluation.recommendation}</strong><p>{evaluation.summary}</p></div>
+            {evaluation.strengths.length > 0 && <div><span className="live-avatar-result-label">What came through</span><ul>{evaluation.strengths.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+            <div><span className="live-avatar-result-label">Useful follow-up</span><ul>{evaluation.focusAreas.map((item) => <li key={item}>{item}</li>)}</ul></div>
+            <p className="live-avatar-disclosure">This is an interview aid, not an automated hiring decision. The recruitment team reviews the full application.</p>
+            <button type="button" className="btn btn-secondary" onClick={() => { setState("idle"); setEvaluation(null); }}>Run again</button>
+          </div>
         )}
 
-        {state === "ended" && (
-          <>
-            <p>Thanks for chatting with Ella. Your application below is unaffected — go ahead and submit it whenever you&apos;re ready.</p>
-            <button type="button" className="btn btn-secondary" onClick={startInterview}>
-              Talk to Ella again
-            </button>
-          </>
-        )}
-
-        {state === "error" && (
-          <>
-            <p className="error-box">{error}</p>
-            <button type="button" className="btn btn-secondary" onClick={startInterview}>
-              Try again
-            </button>
-          </>
-        )}
+        {state === "ended" && <><p>Ella has ended the session. You can try the question again, or continue with your application below.</p><button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button></>}
+        {state === "error" && <><p className="error-box">{error}</p><button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button></>}
       </div>
     </section>
   );
 }
-
-

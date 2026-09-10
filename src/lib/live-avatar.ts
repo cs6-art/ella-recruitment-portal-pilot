@@ -19,6 +19,8 @@ export type LiveAvatarRoleContext = {
   roleTitle: string;
   jobDescription: string;
   candidateName?: string;
+  resumeSummary?: string;
+  screeningQuestion?: string;
 };
 
 export type LiveAvatarSessionResult = {
@@ -78,6 +80,8 @@ export async function createLiveAvatarSession(
   if (role.candidateName) {
     dynamicVariables.candidate_name = clampVariable(role.candidateName, 200);
   }
+  if (role.resumeSummary) dynamicVariables.resume_summary = clampVariable(role.resumeSummary);
+  if (role.screeningQuestion) dynamicVariables.screening_question = clampVariable(role.screeningQuestion, 500);
 
   const response = await fetch(`${LIVEAVATAR_API_URL}/v1/sessions/token`, {
     method: "POST",
