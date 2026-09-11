@@ -21,12 +21,13 @@ test("the OpenAI key is server-only — never a NEXT_PUBLIC var, never sent to t
   }
 });
 
-test("HelpBot stays hidden unless explicitly enabled and OpenAI is configured", () => {
+test("HelpBot stays visible while safely disabled until OpenAI is configured", () => {
   const route = read("src/app/api/help-bot/route.ts");
-  assert.match(route, /HELP_BOT_ENABLED !== "false" && Boolean\(process\.env\.OPENAI_API_KEY\)/);
+  assert.match(route, /HELP_BOT_ENABLED !== "false"/);
+  assert.doesNotMatch(route, /HELP_BOT_ENABLED !== "false" && Boolean\(process\.env\.OPENAI_API_KEY\)/);
   assert.match(route, /function isConfigured\(\)/);
   assert.match(route, /Boolean\(process\.env\.OPENAI_API_KEY\)/);
-  // not-enabled -> 503 and no OpenAI call when the key is absent
+  // The UI may be visible, but POST remains a safe 503 and makes no OpenAI call.
   assert.match(route, /status: 503/);
 });
 

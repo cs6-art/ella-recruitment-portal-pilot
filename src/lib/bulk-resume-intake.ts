@@ -95,6 +95,7 @@ export async function intakeResumeBatch(input: {
   roleTitle: string;
   actorName: string;
   actorEmail: string;
+  organizationId: string;
   submittedByEmail: string;
   sources: IntakeSource[];
   /** e.g. "Portal Bulk Upload" or "Portal Drive Import". */
@@ -139,7 +140,7 @@ export async function intakeResumeBatch(input: {
   // Pre-check the whole batch so an under-funded intake is refused before any
   // file is sent downstream. Callers map EllaCreditsError to a 402.
   if (toProcess.length > 0) {
-    await assertCreditsAvailable(toProcess.length, "cv_analysis");
+    await assertCreditsAvailable(toProcess.length, "cv_analysis", { organizationId: input.organizationId, ownerEmail: input.actorEmail });
   }
 
   async function processItem(item: (typeof hashed)[number]) {
@@ -261,6 +262,7 @@ export async function intakeResumeBatch(input: {
           roleId,
           actorName,
           actorEmail,
+          organizationId: input.organizationId,
           note: "Bulk resume screening",
         });
         creditedFiles += 1;

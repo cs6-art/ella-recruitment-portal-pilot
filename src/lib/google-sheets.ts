@@ -72,6 +72,7 @@ export type DirectoryUser = {
 
 export type RoleRequestSummary = {
   roleId: string;
+  organizationId?: string;
   createdAt: string;
   requesterEmail: string;
   targetHiringDate: string;
@@ -99,6 +100,7 @@ export type RoleRequestSummary = {
 
 export type RoleRequestDetails = {
   roleId: string;
+  organizationId?: string;
   createdAt: string;
 
   submittedByEmail: string;

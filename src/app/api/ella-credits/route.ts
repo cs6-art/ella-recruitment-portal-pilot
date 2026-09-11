@@ -33,7 +33,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   if (!canManageCredits(user)) return NextResponse.json({ success: false, error: "Ella Credits permission required." }, { status: 403 });
   try {
-    const [{ balance, totals, entries }, pricing] = await Promise.all([getCreditBalance(), getCreditPricing()]);
+    const [{ balance, totals, entries }, pricing] = await Promise.all([getCreditBalance({ organizationId: user.organizationId, ownerEmail: user.email }), getCreditPricing()]);
     return NextResponse.json({
       success: true,
       balance,
@@ -78,6 +78,7 @@ export async function POST(request: Request) {
       idempotencyKey,
       actorName: user.name,
       actorEmail: user.email,
+      organizationId: user.organizationId,
     });
     const message = bonus > 0
       ? `Added ${parsed.data.amount} credits plus a ${bonus}-credit volume discount. Balance is now ${balance}.`

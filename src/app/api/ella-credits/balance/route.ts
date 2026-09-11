@@ -14,7 +14,7 @@ export async function GET() {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   try {
-    const [{ balance }, pricing] = await Promise.all([getCreditBalance(), getCreditPricing()]);
+    const [{ balance }, pricing] = await Promise.all([getCreditBalance({ organizationId: user.organizationId, ownerEmail: user.email }), getCreditPricing()]);
     return NextResponse.json({ success: true, balance, pricing }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API Ella Credits Balance] GET failed:", error);

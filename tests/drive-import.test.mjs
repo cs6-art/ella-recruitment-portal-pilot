@@ -54,7 +54,7 @@ test("both intake sources use one shared helper with unchanged behaviour", () =>
   assert.match(helper, /appendBulkResumeQueueEvent/);
   assert.match(helper, /eventType: "bulk_resume_uploaded"/);
   assert.match(helper, /recordDeduction/);
-  assert.match(helper, /assertCreditsAvailable\(toProcess\.length, "cv_analysis"\)/);
+  assert.match(helper, /assertCreditsAvailable\(toProcess\.length, "cv_analysis", \{ organizationId: input\.organizationId/);
   // the upload route keeps its exact contract
   assert.match(upload, /sourceLabel: "Portal Bulk Upload"/);
   assert.match(upload, /status: 202/);

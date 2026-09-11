@@ -50,7 +50,7 @@ test("dual-mode divergence check runs fresh-vs-fresh only (no false positives fr
   assert.match(dispatcher, /\[Credits\] Divergence: sheets balance/);
   // assertCreditsAvailable / recordTopUp still read fresh, so real divergence
   // is caught on every deduction batch and every top-up
-  assert.match(dispatcher, /getCreditBalance\(\{ fresh: true \}\)/);
+  assert.match(dispatcher, /getCreditBalance\(\{ fresh: true, \.\.\.scope \}\)/);
 });
 
 test("the public credits API surface is unchanged", () => {

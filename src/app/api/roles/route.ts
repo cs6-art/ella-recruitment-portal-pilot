@@ -365,6 +365,7 @@ export async function POST(request: Request) {
         status: "pending_hr_discussion", recruitmentSetupStatus: "Draft", setup, evaluationFields: setupDraft.customEvaluationFields || [], hrCalendarEmail: finalInterviewCalendar.email,
         source: "portal", requesterEmail: sessionEmail, requesterName: user.name, submittedByEmail: sessionEmail,
         actionRequestId: submissionId, actorEmail: sessionEmail, actorName: user.name,
+        organizationId: user.organizationId,
       });
       if (!created.role) return NextResponse.json({ success: false, error: "The role request could not be saved." }, { status: 502 });
       return NextResponse.json({ success: true, roleId, status: "Pending HR Discussion", notificationStatus: "pending", notificationError: "", message: "Role request submitted successfully." }, { status: 201 });

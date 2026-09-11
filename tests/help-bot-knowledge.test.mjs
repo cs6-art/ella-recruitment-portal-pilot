@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { retrieveContext, knowledgeHeadings } from "../src/lib/help-bot/knowledge.ts";
-import { buildUserPrompt, HELP_BOT_STARTER_QUESTIONS } from "../src/lib/help-bot/prompt.ts";
+import { buildUserPrompt, directHelpAnswer, HELP_BOT_STARTER_QUESTIONS } from "../src/lib/help-bot/prompt.ts";
 
 test("knowledge base parses into sections", () => {
   const headings = knowledgeHeadings();
@@ -18,6 +18,36 @@ test("retrieval surfaces the relevant section for a question", () => {
   assert.ok(headings.includes("How bulk resume upload works"));
   // Framing sections are always included.
   assert.ok(headings.includes("Overview: what the portal is for"));
+});
+
+test("retrieval explains all three HR resume screening options", () => {
+  const context = retrieveContext("what are the three ways to screen resumes");
+  assert.equal(context.hasMatch, true);
+  const headings = context.sections.map((section) => section.heading);
+  assert.ok(headings.includes("The three HR ways to screen resumes"));
+  assert.match(context.text, /computer/);
+  assert.match(context.text, /Google Drive/);
+  assert.match(context.text, /OneDrive/);
+});
+
+test("retrieval understands common CV and score wording", () => {
+  const context = retrieveContext("why is my CV grading score blank");
+  assert.equal(context.hasMatch, true);
+  assert.ok(context.sections.some((section) => section.heading === "How resume screening works"));
+});
+
+test("Ella answers common orientation questions clearly", () => {
+  assert.match(directHelpAnswer("who are you?") || "", /I'm Ella/);
+  assert.match(directHelpAnswer("what can you do?") || "", /guide you through using the portal/);
+  assert.equal(directHelpAnswer("what is my applicant score?"), null);
+});
+
+test("Ella directly lists the three HR resume screening options", () => {
+  const answer = directHelpAnswer("How many ways are there to screen resumes?") || "";
+  assert.match(answer, /computer/);
+  assert.match(answer, /Google Drive/);
+  assert.match(answer, /OneDrive/);
+  assert.match(answer, /same queue/);
 });
 
 test("retrieval matches voice interview scheduling", () => {

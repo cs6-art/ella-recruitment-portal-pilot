@@ -25,6 +25,7 @@ export async function intakeTargetResumeBatch(input: {
   roleTitle: string;
   actorName: string;
   actorEmail: string;
+  organizationId: string;
   submittedByEmail: string;
   sources: IntakeSource[];
   sourceLabel: string;
@@ -75,6 +76,7 @@ export async function intakeTargetResumeBatch(input: {
         candidateEmail: contact.candidateEmail,
         preferredMobile: contact.preferredMobile,
         applicantCountry: contact.applicantCountry,
+        organizationId: input.organizationId,
       });
       const application = await createApplication({
         externalId: applicationId,
@@ -87,6 +89,7 @@ export async function intakeTargetResumeBatch(input: {
         source: input.sourceLabel.toLowerCase().includes("drive") ? "drive_import" : "bulk_upload",
         sourceDetail: `${source.driveFileId || stored.record.fileId}|${stored.record.sha256}`,
         resumeFileId: resumeFileId || undefined,
+        creditOwnerEmail: input.actorEmail,
       });
       if (!application.application) {
         throw new Error(application.error || "Unable to create the application.");

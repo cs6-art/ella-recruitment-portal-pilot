@@ -1,4 +1,26 @@
-import { boolean, integer, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, index, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+
+export const organizations = pgTable("organizations", {
+  id: uuid("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const organizationMemberships = pgTable(
+  "organization_memberships",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    email: text("email").notNull(),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("organization_memberships_email_idx").on(table.email, table.active), unique("organization_memberships_org_email_key").on(table.organizationId, table.email)],
+);
 
 /**
  * Phase 2 backend migration — first pilot table.
@@ -40,6 +62,40 @@ export const creditBalance = pgTable("credit_balance", {
   balance: integer("balance").notNull().default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const creditAccounts = pgTable(
+  "credit_accounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    ownerEmail: text("owner_email").notNull(),
+    balance: integer("balance").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("credit_accounts_owner_email_idx").on(table.ownerEmail, table.organizationId), unique("credit_accounts_org_owner_key").on(table.organizationId, table.ownerEmail)],
+);
+
+export const creditAccountLedger = pgTable(
+  "credit_account_ledger",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    accountId: uuid("account_id").notNull().references(() => creditAccounts.id),
+    entryTime: timestamp("entry_time", { withTimezone: true }).notNull().defaultNow(),
+    type: text("type").notNull(),
+    event: text("event").notNull(),
+    units: integer("units").notNull(),
+    creditsDelta: integer("credits_delta").notNull(),
+    balanceAfter: integer("balance_after").notNull(),
+    reference: text("reference").notNull().default(""),
+    roleId: text("role_id").notNull().default(""),
+    actorName: text("actor_name").notNull().default(""),
+    actorEmail: text("actor_email").notNull().default(""),
+    note: text("note").notNull().default(""),
+    sourceEntryId: text("source_entry_id").notNull(),
+  },
+  (table) => [index("credit_account_ledger_account_time_idx").on(table.accountId, table.entryTime), unique("credit_account_ledger_account_source_key").on(table.accountId, table.sourceEntryId)],
+);
 
 export type CreditLedgerRow = typeof creditLedger.$inferSelect;
 export type NewCreditLedgerRow = typeof creditLedger.$inferInsert;

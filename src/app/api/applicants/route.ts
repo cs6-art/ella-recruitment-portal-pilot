@@ -59,15 +59,15 @@ export async function POST(request: Request) {
 
     if (isPostgresRecruitmentTarget()) {
       try {
-        await assertCreditsAvailable(1, "cv_analysis");
+        await assertCreditsAvailable(1, "cv_analysis", { organizationId: user.organizationId, ownerEmail: user.email });
       } catch (creditError) {
         if (creditError instanceof EllaCreditsError) return responseError("Not enough Ella Credits to screen this candidate.", 402, { code: creditError.code, required: creditError.required, available: creditError.available });
         throw creditError;
       }
       const applicationId = `APP-${crypto.randomUUID()}`;
       if (intake.resumeFile) storedResume = await storeResumeFile(intake.resumeFile);
-      const created = await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: "direct", sourceDetail: "hr_manual", consentAt: new Date().toISOString(), resume: storedResume ? { ...storedResume.record } : undefined });
-      if (!created.screeningReused) await recordDeduction({ event: "cv_analysis", units: 1, reference: applicationId, idempotencyKey: `cv:${applicationId}`, roleId, actorName: user.name, actorEmail: user.email, note: "Postgres target HR manual intake screening" });
+      const created = await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: "direct", sourceDetail: "hr_manual", consentAt: new Date().toISOString(), creditOwnerEmail: user.email, organizationId: user.organizationId, resume: storedResume ? { ...storedResume.record, extractedText: storedResume.extractedText } : undefined });
+      if (!created.screeningReused) await recordDeduction({ event: "cv_analysis", units: 1, reference: applicationId, idempotencyKey: `cv:${applicationId}`, roleId, actorName: user.name, actorEmail: user.email, organizationId: user.organizationId, note: "Postgres target HR manual intake screening" });
       return NextResponse.json({ success: true, applicationId, roleId, message: "Candidate added successfully.", creditsCharged: created.screeningReused ? 0 : await creditCostFor("cv_analysis") }, { status: 201 });
     }
 
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     // Screening this candidate costs 1 Ella Credit. Refuse before storing the
     // resume or invoking the workflow if the balance can't cover it.
     try {
-      await assertCreditsAvailable(1, "cv_analysis");
+      await assertCreditsAvailable(1, "cv_analysis", { organizationId: user.organizationId, ownerEmail: user.email });
     } catch (creditError) {
       if (creditError instanceof EllaCreditsError) {
         return responseError("Not enough Ella Credits to screen this candidate. Top up Ella Credits in Settings.", 402, { code: creditError.code, required: creditError.required, available: creditError.available });
@@ -127,6 +127,7 @@ export async function POST(request: Request) {
       roleId,
       actorName: user.name,
       actorEmail: user.email,
+      organizationId: user.organizationId,
       note: "HR manual intake screening",
     }).catch((error) => console.error("[API Applicants] Could not record credit deduction:", error));
 
@@ -140,6 +141,6 @@ export async function POST(request: Request) {
   } catch (error) {
     if (storedResume) await deleteResumeFile(storedResume.record).catch(() => undefined);
     console.error("[API Applicants] POST failed:", error);
-    return responseError(error instanceof Error ? error.message : "Unable to add the candidate.", 400);
+    return responseError("Unable to save the candidate screening. Please try again.", 400);
   }
 }

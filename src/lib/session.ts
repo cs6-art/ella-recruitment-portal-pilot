@@ -4,6 +4,7 @@ export type SessionUser = {
   sub: string;
   name: string;
   email: string;
+  organizationId: string;
   picture?: string;
   active?: boolean;
   exp: number;
@@ -66,6 +67,7 @@ export function verifySessionToken(token?: string | null): SessionUser | null {
     const user = JSON.parse(decode(payload)) as SessionUser;
     if (!user.exp || user.exp <= Math.floor(Date.now() / 1000)) return null;
     if (user.active === false) return null;
+    if (!user.organizationId || typeof user.organizationId !== "string") return null;
     return user;
   } catch {
     return null;

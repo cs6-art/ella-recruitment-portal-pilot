@@ -4,7 +4,7 @@ import OpenAI from "openai";
 
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { retrieveContext } from "@/lib/help-bot/knowledge";
-import { HELP_BOT_SYSTEM_PROMPT, buildUserPrompt } from "@/lib/help-bot/prompt";
+import { directHelpAnswer, HELP_BOT_SYSTEM_PROMPT, buildUserPrompt } from "@/lib/help-bot/prompt";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -20,11 +20,11 @@ const MAX_HISTORY_CHARS = 1200;
 
 type ClientMessage = { role: "user" | "assistant"; content: string };
 
-// The widget is available only when explicitly enabled and its provider key is
-// present. This prevents a deployment with missing OpenAI configuration from
-// presenting an apparently operational assistant.
+// Keep the widget visible unless an administrator explicitly disables it. The
+// provider key controls readiness, not whether the UI is discoverable; the
+// POST guard below remains fail-closed while the key is absent.
 function isEnabled() {
-  return process.env.HELP_BOT_ENABLED !== "false" && Boolean(process.env.OPENAI_API_KEY);
+  return process.env.HELP_BOT_ENABLED !== "false";
 }
 
 function isConfigured() {
@@ -99,6 +99,14 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { success: false, error: `Please keep your question under ${MAX_QUESTION_LENGTH} characters.` },
       { status: 400 },
+    );
+  }
+
+  const directAnswer = directHelpAnswer(question);
+  if (directAnswer) {
+    return NextResponse.json(
+      { success: true, answer: directAnswer, sources: ["About Ella"] },
+      { headers: { "Cache-Control": "no-store" } },
     );
   }
 

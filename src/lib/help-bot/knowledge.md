@@ -23,9 +23,11 @@ depends on their assigned access. The short version of the process:
 
 1. Someone submits a role request (requisition).
 2. HR reviews the details and discusses any changes.
-3. Management approves, returns, holds, or rejects the request.
+3. HR reviews the request and makes the recruitment decision according to the
+   organisation's access rules.
 4. HR prepares the hiring details in Recruitment Setup and publishes the role.
-5. Candidates are screened (resume, then AI voice interview) and interviewed by HR.
+5. Candidates are screened by resume and, when enabled, an AI voice interview;
+   HR reviews the evidence and makes the hiring decisions.
 
 The main menu items are Dashboard, Role Requests, Resume Screening, Applicants,
 Bookings, Settings, User Accounts, and Profile. Menu items you are not allowed to
@@ -90,9 +92,12 @@ the request changed since you opened it, refresh and review again before retryin
 the action — an "HTTP 409" or "someone else changed the record" message means
 exactly this.
 
-The typical flow is: the requester submits → **Pending HR Discussion** (HR checks
-details) → **Pending Management Approval** (Management decides) → **Approved**.
-From there HR does Recruitment Setup and publishing.
+The current Pilot flow is: the requester submits → **Pending HR Discussion** →
+HR reviews the request and approves, returns, holds, or rejects it → HR completes
+Recruitment Setup and publishing. Historical records may still show a management
+approval status. In the Pilot, Management is view-only for operational recruitment
+tools: it does not edit setup, screen resumes, schedule interviews, or change
+applicant records.
 
 Important: approving a role is not the same as publishing a job. HR still has to
 complete Recruitment Setup and publish the role before candidates can apply.
@@ -104,8 +109,9 @@ complete Recruitment Setup and publish the role before candidates can apply.
 - **Draft** — still being prepared. Complete and submit it.
 - **Pending HR Discussion** — HR needs to review the request and discuss any
   changes.
-- **Pending Management Approval** — Management needs to decide: approve, return,
-  hold, or reject.
+- **Pending Management Approval** — a historical or organisation-specific status
+  where Management must decide. If it appears unexpectedly in the Pilot, ask the
+  administrator to confirm the workflow configuration.
 - **Returned for Revision** — more information or changes are needed from the
   requester or HR.
 - **On Hold** — the request is paused; resume it when the business is ready.
@@ -178,6 +184,28 @@ application number) and the role/stage filters, then select **View** beside a
 candidate. The record brings together contact information, role, resume
 information, the screening result, interview activity, and history.
 
+The AI result is advisory. It compares the resume with the selected role's job
+description, screening criteria, keywords, experience requirement, transferable
+skills, and license or certificate requirement. A score is not an approval or
+rejection. HR must review the evidence and record the decision.
+
+## The three HR ways to screen resumes
+
+From **Resume Screening**, HR can choose one of three intake options:
+
+1. **Upload from your computer** — select up to 8 PDF, DOC, or DOCX resumes for
+   one published role and start screening.
+2. **Import from Google Drive** — connect Google Drive, choose files from the
+   folder browser, and import them for the selected published role.
+3. **Import from OneDrive** — connect OneDrive and choose files from the folder
+   browser. This option is shown only after the Microsoft Entra setup is complete.
+
+All three options use the same screening queue, duplicate detection, status
+updates, and credit rules. A duplicate for the same role is skipped and is not
+charged. A successful screening is charged once; a failed or invalid file is not
+charged. Candidates can also submit one resume through an application page, but
+that is a separate candidate-intake route rather than a fourth HR bulk option.
+
 ---
 
 ## How bulk resume upload works
@@ -188,7 +216,7 @@ Upload from your computer:
 
 1. Choose the published role that matches every resume in the batch.
 2. Add the files — drag them in or click the box. PDF, DOC, and DOCX are
-   accepted, up to 25 files at a time, 10 MB per file.
+   accepted, up to 8 files at a time, 10 MB per file.
 3. Select **Start screening**. The portal queues each file for processing.
 4. Watch progress — the list updates automatically, or choose **Refresh status**.
 5. When processing is complete, choose **View Processed Applicants** to begin the
@@ -216,7 +244,19 @@ directly in the role's top-level folder. From there the files go through the sam
 screening queue as a computer upload (Queued → Processing → Completed / Screened,
 with Skipped and Failed as above).
 
-OneDrive import works the same way when it is configured for your organization.
+## How OneDrive import works
+
+OneDrive is the third cloud option for HR resume screening. It uses a separate
+Microsoft 365 connection and read-only file access; it does not use Google Drive
+credentials. In **Resume Screening**, select **Connect OneDrive**, complete the
+Microsoft sign-in, then choose **Choose from OneDrive** and import the files for a
+published role. The same 8-file limit, 10 MB limit, accepted file types, queue,
+duplicate handling, statuses, and one-credit-per-successful-file rule apply.
+
+If the OneDrive buttons are hidden, Microsoft Entra configuration has not been
+completed or the connection is not available. Ask the portal administrator to
+finish the setup or reconnect it. Do not upload the same files repeatedly while
+waiting for a cloud connection.
 
 ---
 
@@ -385,7 +425,18 @@ step. HR must complete the Recruitment Setup checklist and publish the role.
 
 **"A resume failed to screen."** Make sure it is a readable, unlocked PDF, DOC, or
 DOCX no larger than 10 MB, then use the retry option. If it still fails, ask HR to
-check the file or enter the candidate another way.
+check the file or enter the candidate another way. Failed or invalid screening is
+not charged.
+
+**"What are the three ways to screen resumes?"** From **Resume Screening**, HR can
+upload from a computer, import from Google Drive, or import from OneDrive when it
+is configured. These use the same queue and credit rules. A candidate application
+with one attached resume is a separate intake route.
+
+**"What does the screening score mean?"** It is an automated comparison with the
+selected role's criteria and resume evidence. It helps HR prioritize review; it is
+not a hiring decision. Open the applicant record to review the score, summary,
+strengths, gaps, and interview questions, then make the human decision.
 
 **"The calendar shows no times."** Check the role and interview-type filters,
 choose the correct month, and refresh. If there are still none, ask the calendar

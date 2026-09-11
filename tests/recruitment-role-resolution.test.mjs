@@ -10,7 +10,7 @@ const read = (file) => readFileSync(path.join(root, file), "utf8");
 test("intake role resolution selects Postgres before applying published-role validation", () => {
   const resolver = read("src/lib/recruitment-role-resolution.ts");
   assert.match(resolver, /isPostgresRecruitmentTarget\(\)/);
-  assert.match(resolver, /targetRoleDetails\(normalizedRoleId\)/);
+  assert.match(resolver, /targetPublicRoleDetails\(normalizedRoleId\)/);
   assert.match(resolver, /import\("@\/lib\/google-sheets"\)/);
   assert.match(resolver, /isPublishedRoleForIntake\(role\)/);
   assert.match(resolver, /return role && isPublishedRoleForIntake\(role\) \? role : null/);
