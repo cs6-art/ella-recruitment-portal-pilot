@@ -101,6 +101,27 @@ test("a dispatch failure/block reason is never dropped by the terminal-attempt g
   assert.match(blockFn, /allowTerminalAttempt:\s*true/);
 });
 
+test("the n8n dispatch worker's own failure reason (e.g. a Vapi rejection) can reach voice_call_logs", () => {
+  // Regression: the pilot n8n voice-calling worker calls Vapi itself and is
+  // the only place that ever sees why a dispatch actually failed (e.g. Vapi's
+  // "customer.number must be a valid phone number in E.164 format" rejection,
+  // execution 1410444, workflow sJM0djTE8oIjpPvo, 2026-09-11). But
+  // POST /voice/attempts/status — the only endpoint that worker calls on
+  // failure — had no field for a reason and never logged one, so every such
+  // failure landed as a bare status="failed" with zero trace of the cause.
+  const route = read("src/app/api/internal/recruitment/voice/attempts/status/route.ts");
+  assert.match(route, /reason:\s*typeof body\.reason === "string"/);
+
+  const source = read("src/lib/internal-recruitment-queries.ts");
+  const fn = source.slice(source.indexOf("export async function updateVoiceAttemptStatus"), source.indexOf("export async function scheduleVoiceRetry"));
+  assert.match(fn, /reason\?:\s*string/);
+  assert.match(fn, /createVoiceCallLog\(/);
+  assert.match(fn, /allowTerminalAttempt:\s*true/);
+  // Only a terminal-negative status carries a reason worth logging; a
+  // reason on an unrelated status update must not be misfiled as a failure.
+  assert.match(fn, /input\.status === "failed" \|\| input\.status === "cancelled"/);
+});
+
 test("voice queue expires late scheduled work before claiming it", () => {
   const source = read("src/lib/internal-recruitment-queries.ts");
   const claim = source.slice(source.indexOf("export async function claimVoiceCalls"), source.indexOf("export async function pendingVoiceCalls"));

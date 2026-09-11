@@ -823,12 +823,33 @@ export async function voiceAttemptContext(attemptId: string) {
   return row ?? null;
 }
 
-export async function updateVoiceAttemptStatus(input: { attemptId: string; status: string; outcome?: string; providerCallId?: string; retryAfter?: string }) {
+export async function updateVoiceAttemptStatus(input: { attemptId: string; status: string; outcome?: string; providerCallId?: string; retryAfter?: string; reason?: string }) {
   if (!Object.prototype.hasOwnProperty.call(VOICE_STATUS_TRANSITIONS, input.status)) return { updated: false, error: "invalid_status" as const };
   const db = getDb();
   const previousStatuses = Object.entries(VOICE_STATUS_TRANSITIONS).filter(([, next]) => next.includes(input.status)).map(([status]) => status);
   const allowedWhere = previousStatuses.length > 0 ? sql`status IN (${sql.join(previousStatuses.map((status) => sql`${status}`), sql`, `)})` : sql`false`;
   const result = await db.execute(sql`UPDATE voice_call_attempts SET status = ${input.status}, outcome = ${input.outcome || null}, provider_call_id = COALESCE(NULLIF(${input.providerCallId || ""}, ''), provider_call_id), retry_after = ${isoOrNull(input.retryAfter)}, updated_at = now() WHERE id = ${input.attemptId} AND (status = ${input.status} OR ${allowedWhere}) RETURNING id`);
+  const updated = rowsOf(result).length > 0;
+  // The n8n dispatch worker calls Vapi itself and is the only place that ever
+  // sees *why* a dispatch failed (a rejected phone number, a provider error,
+  // ...). Without this, "failed"/"system_failure" reached the attempt with no
+  // trace of the actual cause. allowTerminalAttempt is required: this call
+  // updates the attempt to "failed" moments before logging it.
+  if (updated && input.reason && (input.status === "failed" || input.status === "cancelled")) {
+    const context = await voiceAttemptContext(input.attemptId);
+    if (context) {
+      await createVoiceCallLog({
+        applicationExternalId: context.applicationExternalId,
+        voiceCallAttemptId: input.attemptId,
+        provider: "vapi",
+        sourceEventKey: `attempt-status-${input.status}:${input.attemptId}`,
+        callStatus: input.status,
+        errorDetails: input.reason,
+        rawResult: { attemptStatusReason: true, outcome: input.outcome || null },
+        allowTerminalAttempt: true,
+      }).catch(() => undefined);
+    }
+  }
   // A status update alone cannot prove a completed or incomplete interview;
   // those outcomes are billed from the terminal Vapi result/log. No-answer is
   // safe to settle here because it is itself the terminal call outcome.
@@ -839,7 +860,7 @@ export async function updateVoiceAttemptStatus(input: { attemptId: string; statu
     const context = await voiceAttemptContext(input.attemptId);
     if (context) chargedCredits = await recordVoiceInterviewDeduction({ applicationId: context.applicationExternalId, attemptId: input.attemptId, outcome, actorEmail: context.creditOwnerEmail, organizationId: context.organizationId });
   }
-  return { updated: rowsOf(result).length > 0, chargedCredits, billingOutcome: outcome, error: null };
+  return { updated, chargedCredits, billingOutcome: outcome, error: null };
 }
 
 export async function scheduleVoiceRetry(input: { attemptId: string; retryAfter: string }) {
