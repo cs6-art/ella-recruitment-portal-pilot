@@ -88,7 +88,7 @@ test("terminal billing is owned by voice result ingestion and remains idempotent
 
 test("dispatch retains the maximum voice charge preflight", () => {
   const dispatch = readFileSync(new URL("../src/app/api/internal/recruitment/voice/dispatch/route.ts", import.meta.url), "utf8");
-  assert.match(dispatch, /assertCreditsAvailable\(1, "phone_interview"\)/);
+  assert.match(dispatch, /assertCreditsAvailable\(1, "phone_interview", \{ organizationId: context\.organizationId/);
 });
 
 test("voice result and log routes expose outcome billing fields", () => {

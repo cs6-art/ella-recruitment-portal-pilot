@@ -53,7 +53,7 @@ export const POST = withInternalAuth("voice_attempts", async (request) => {
   if (!/^\+[1-9]\d{7,14}$/.test(phoneNumber)) return block("valid_applicant_phone_required", 422);
 
   try {
-    await assertCreditsAvailable(1, "phone_interview");
+    await assertCreditsAvailable(1, "phone_interview", { organizationId: context.organizationId, ownerEmail: context.creditOwnerEmail });
   } catch (error) {
     if (error instanceof EllaCreditsError) {
       await blockVoiceAttempt(attemptId, "insufficient_voice_credits").catch(() => undefined);

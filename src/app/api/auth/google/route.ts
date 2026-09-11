@@ -2,6 +2,7 @@ import { OAuth2Client } from "google-auth-library";
 import { NextResponse } from "next/server";
 
 import { findDirectoryUser } from "@/lib/google-sheets";
+import { resolveOrganizationForLogin, syncOrganizationMembership } from "@/lib/organization-accounts";
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, createSessionToken } from "@/lib/session";
@@ -86,7 +87,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (String(payload.hd || "").trim().toLowerCase() !== allowedDomain.trim().toLowerCase()) {
+    const normalizedEmail = payload.email.trim().toLowerCase();
+    const organizationId = await resolveOrganizationForLogin(normalizedEmail, allowedDomain);
+    if (!organizationId) {
       console.log("[Login] Rejected: invalid Workspace domain", {
         receivedDomain: payload.hd,
         expectedDomain: allowedDomain,
@@ -99,8 +102,6 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     }
-
-    const normalizedEmail = payload.email.trim().toLowerCase();
 
     console.log("[Login] Looking up User_Directory:", normalizedEmail);
 
@@ -143,6 +144,11 @@ export async function POST(request: Request) {
       );
     }
 
+    // Provision the tenant membership and isolated zero-balance account on
+    // first successful login. Existing seeded balances are preserved by the
+    // conflict-safe account insert.
+    await syncOrganizationMembership({ organizationId, email: normalizedEmail, active: true });
+
     console.log("[Login] Creating session for:", normalizedEmail);
 
     const token = createSessionToken({
@@ -152,6 +158,7 @@ export async function POST(request: Request) {
         payload.name ||
         normalizedEmail,
       email: normalizedEmail,
+      organizationId,
       picture: payload.picture,
       active: directoryUser.active,
 

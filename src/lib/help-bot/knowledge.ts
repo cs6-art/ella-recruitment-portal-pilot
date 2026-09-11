@@ -71,8 +71,30 @@ const ALWAYS_INCLUDE = new Set([
   "Who can access what: HR, Management, HOD, and Creator",
 ]);
 
+// Users do not always use the labels shown in the portal. Expand common terms
+// before scoring so questions such as "CV grading", "local upload", and
+// "phone interview" reach the same grounded sections as "resume screening",
+// "computer upload", and "voice interview". This changes retrieval only; it
+// does not add any knowledge that is absent from knowledge.md.
+const QUERY_ALIASES: Array<[RegExp, string]> = [
+  [/\b(?:cv|curriculum vitae)\b/, "resume"],
+  [/\b(?:grade|grading|score|scoring|match)\b/, "screening"],
+  [/\b(?:local|desktop|computer)\b/, "upload"],
+  [/\b(?:cloud|m365|microsoft 365)\b/, "import"],
+  [/\b(?:microsoft|ms)\b/, "onedrive"],
+  [/\b(?:phone|call)\b/, "voice interview"],
+  [/\b(?:f2f|face to face|in person)\b/, "face-to-face"],
+  [/\b(?:credit|credits|balance|charge|charged|deduct|deduction)\b/, "credits"],
+  [/\b(?:permission|permissions|account|accounts|user|users)\b/, "access"],
+];
+
 function tokenize(value: string): string[] {
-  return (value.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter(
+  const lowered = value.toLowerCase();
+  const expanded = [
+    lowered,
+    ...QUERY_ALIASES.filter(([pattern]) => pattern.test(lowered)).map(([, replacement]) => replacement),
+  ].join(" ");
+  return (expanded.match(/[a-z0-9]+/g) ?? []).filter(
     (token) => token.length > 2 && !STOP_WORDS.has(token),
   );
 }

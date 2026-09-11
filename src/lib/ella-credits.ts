@@ -5,6 +5,7 @@ import { getPortalConfig } from "@/lib/portal-config";
 import { isDatabaseConfigured } from "@/db/client";
 import { appendSheetLedgerEntry, getSheetCreditBalance } from "@/lib/ella-credits-sheets";
 import { appendPostgresLedgerEntry, getPostgresCreditBalance } from "@/lib/ella-credits-postgres";
+import { appendAccountLedgerEntry, perUserCreditsEnabled, getAccountCreditBalance } from "@/lib/ella-credits-accounts";
 import type { CreditBalance, LedgerAppend } from "@/lib/ella-credits-store";
 
 export { CREDIT_COST, EllaCreditsError } from "@/lib/ella-credit-math";
@@ -71,7 +72,19 @@ async function mirrorToPostgres(entry: LedgerAppend): Promise<void> {
 
 // --- Reads --------------------------------------------------------------------
 
-export async function getCreditBalance(options: { fresh?: boolean } = {}): Promise<CreditBalance> {
+type CreditScope = { organizationId?: string; ownerEmail?: string };
+
+function accountScope(scope: CreditScope) {
+  if (!perUserCreditsEnabled()) return null;
+  const organizationId = scope.organizationId?.trim();
+  const ownerEmail = scope.ownerEmail?.trim().toLowerCase();
+  if (!organizationId || !ownerEmail) throw new Error("An organization and owner are required for per-user credits.");
+  return { organizationId, ownerEmail };
+}
+
+export async function getCreditBalance(options: { fresh?: boolean } & CreditScope = {}): Promise<CreditBalance> {
+  const account = accountScope(options);
+  if (account) return getAccountCreditBalance(account);
   const backend = creditsBackend();
   if (backend === "postgres") return getPostgresCreditBalance();
   const balance = await getSheetCreditBalance(options);
@@ -144,12 +157,17 @@ export async function volumeDiscountBonus(amount: number): Promise<{ bonus: numb
  * postgres mode the authoritative guard is the atomic `recordDeduction`; this
  * is still used up front (e.g. to fail a whole bulk batch before any work).
  */
-export async function assertCreditsAvailable(units: number, event: CreditEvent): Promise<number> {
-  const [{ balance }, cost] = await Promise.all([getCreditBalance({ fresh: true }), creditCostFor(event)]);
+export async function assertCreditsAvailable(units: number, event: CreditEvent, scope: CreditScope = {}): Promise<number> {
+  const [{ balance }, cost] = await Promise.all([getCreditBalance({ fresh: true, ...scope }), creditCostFor(event)]);
   return assertBalanceCovers(balance, units, cost);
 }
 
-async function append(entry: LedgerAppend, opts: { guard: boolean }): Promise<{ balanceAfter: number }> {
+async function append(entry: LedgerAppend, opts: { guard: boolean }, scope: CreditScope = {}): Promise<{ balanceAfter: number }> {
+  const account = accountScope(scope);
+  if (account) {
+    const { balanceAfter } = await appendAccountLedgerEntry({ ...account, entry }, opts);
+    return { balanceAfter };
+  }
   const backend = creditsBackend();
   if (backend === "postgres") {
     const { balanceAfter } = await appendPostgresLedgerEntry(entry, opts);
@@ -168,6 +186,7 @@ export async function recordDeduction(input: {
   actorName?: string;
   actorEmail?: string;
   note?: string;
+  organizationId?: string;
   /**
    * Stable caller-level idempotency key. When set, retrying the same logical
    * charge (same key) does not create a second billing identity — the write
@@ -194,6 +213,7 @@ export async function recordDeduction(input: {
     // Only postgres mode enforces the guard; sheets/dual keep the Sheets
     // "append and only log on failure" posture.
     { guard: true },
+    { organizationId: input.organizationId, ownerEmail: input.actorEmail },
   );
 }
 
@@ -207,6 +227,7 @@ export async function recordVoiceInterviewDeduction(input: {
   attemptId: string;
   outcome: VoiceInterviewBillingOutcome;
   actorEmail?: string;
+  organizationId?: string;
 }): Promise<number> {
   const event = input.outcome === "completed"
     ? "phone_interview"
@@ -220,6 +241,7 @@ export async function recordVoiceInterviewDeduction(input: {
     reference: input.applicationId,
     idempotencyKey: `voice-attempt:${input.attemptId}`,
     actorEmail: input.actorEmail,
+    organizationId: input.organizationId,
     note: `AI voice interview outcome: ${input.outcome}`,
   });
   return cost;
@@ -239,6 +261,7 @@ export async function recordTopUp(input: {
    * any, is keyed deterministically off the same key.
    */
   idempotencyKey?: string;
+  organizationId?: string;
 }): Promise<CreditBalance & { bonus: number }> {
   const amount = Math.trunc(input.amount);
   if (!Number.isFinite(amount) || amount === 0) throw new Error("Top-up amount must be a non-zero whole number.");
@@ -257,6 +280,7 @@ export async function recordTopUp(input: {
       sourceEntryId: newSourceEntryId(input.idempotencyKey),
     },
     { guard: false },
+    { organizationId: input.organizationId, ownerEmail: input.actorEmail },
   );
 
   const { bonus, percent } = await volumeDiscountBonus(amount);
@@ -274,8 +298,9 @@ export async function recordTopUp(input: {
         sourceEntryId: newSourceEntryId(input.idempotencyKey ? `${input.idempotencyKey}:bonus` : undefined),
       },
       { guard: false },
+      { organizationId: input.organizationId, ownerEmail: input.actorEmail },
     );
   }
 
-  return { ...(await getCreditBalance({ fresh: true })), bonus };
+  return { ...(await getCreditBalance({ fresh: true, organizationId: input.organizationId, ownerEmail: input.actorEmail })), bonus };
 }

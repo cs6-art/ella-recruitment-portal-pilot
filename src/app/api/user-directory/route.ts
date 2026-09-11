@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getDirectoryUsers, updateDirectoryUser, upsertDirectoryUser, type DirectoryUser } from "@/lib/google-sheets";
+import { syncOrganizationMembership } from "@/lib/organization-accounts";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -103,6 +104,7 @@ async function saveAccount(request: Request, originalEmail?: string) {
 
     if (normalizedOriginalEmail) await updateDirectoryUser(normalizedOriginalEmail, normalizedUser);
     else await upsertDirectoryUser(normalizedUser);
+    await syncOrganizationMembership({ organizationId: access.user.organizationId, email: normalizedUser.email, active: normalizedUser.active, previousEmail: normalizedOriginalEmail });
 
     return NextResponse.json({ success: true, message: "User account saved successfully." });
   } catch (error) {

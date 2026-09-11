@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { cookies } from "next/headers";
 
 import {
   getApplication,
@@ -46,6 +47,17 @@ import { generateRoleId } from "@/lib/role-id";
 import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows } from "@/lib/google-calendar";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isStandardFinalInterviewSlot, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { getPortalConfigNumber } from "@/lib/portal-config";
+import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
+
+async function targetOrganizationId() {
+  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  return user?.organizationId || DEFAULT_ORGANIZATION_ID;
+}
+
+function rowOrganizationId(row: unknown) {
+  return text((row as Record<string, unknown> | null)?.organizationId);
+}
 
 function text(value: unknown) {
   return String(value ?? "").trim();
@@ -96,8 +108,8 @@ function storedResumeRecord(value: Record<string, unknown> | null | undefined): 
   };
 }
 
-// The extracted resume text is not persisted; it is re-read from the stored
-// file on demand. A missing or expired file is not an error for the HR view.
+// Extracted resume text is persisted during intake and reused by the HR view.
+// Older rows without persisted text are still read from storage on demand.
 async function storedResumeText(value: Record<string, unknown> | null | undefined) {
   const record = storedResumeRecord(value);
   if (!record) return "";
@@ -141,6 +153,7 @@ function roleSummary(role: Record<string, unknown>): RoleRequestSummary {
   const posted = Boolean(role.postedAt) || role.postingConfirmed === true;
   return {
     roleId: text(role.externalId),
+    organizationId: text(role.organizationId),
     createdAt: text(role.createdAt),
     requesterEmail: text(role.requesterEmail),
     targetHiringDate: text(role.targetHiringDate),
@@ -168,15 +181,17 @@ function roleSummary(role: Record<string, unknown>): RoleRequestSummary {
 }
 
 export async function targetRoleSummaries(options: { liveOnly?: boolean } = {}) {
-  const roles = (await repairPublishedRoleIds(await listRoles())).filter((role) => !isArchivedRole(role as unknown as Record<string, unknown>));
+  const organizationId = await targetOrganizationId();
+  const roles = (await repairPublishedRoleIds((await listRoles()).filter((role) => rowOrganizationId(role) === organizationId))).filter((role) => !isArchivedRole(role as unknown as Record<string, unknown>));
   const visible = options.liveOnly
     ? roles.filter((role) => ["approved", "recruitment_setup", "job_posted"].includes(text(role.status).toLowerCase()))
     : roles;
   return visible.map((role) => roleSummary(role as unknown as Record<string, unknown>));
 }
 
-export async function targetRoleDetails(externalId: string): Promise<RoleRequestDetails | null> {
-  const roles = await repairPublishedRoleIds(await listRoles());
+export async function targetRoleDetails(externalId: string, organizationId = ""): Promise<RoleRequestDetails | null> {
+  const targetOrg = organizationId || await targetOrganizationId();
+  const roles = await repairPublishedRoleIds((await listRoles()).filter((role) => rowOrganizationId(role) === targetOrg));
   const role = roles.find((candidate) => text(candidate.externalId).toLowerCase() === decodeURIComponent(externalId).trim().toLowerCase());
   if (!role) return null;
   const raw = role as unknown as Record<string, unknown>;
@@ -255,6 +270,15 @@ export async function targetRoleDetails(externalId: string): Promise<RoleRequest
     lastUpdatedByEmail: text(raw.updatedByEmail),
     source: text(raw.source),
   };
+}
+
+/** Resolve a public job link without inheriting the default tenant from an
+ * absent HR session. The role external ID is globally unique, and the role's
+ * own tenant is then used for all downstream application writes. */
+export async function targetPublicRoleDetails(externalId: string): Promise<RoleRequestDetails | null> {
+  const role = await getRole(externalId);
+  const organizationId = rowOrganizationId(role);
+  return role && organizationId ? targetRoleDetails(externalId, organizationId) : null;
 }
 
 function isArchivedRole(role: Record<string, unknown>) {
@@ -345,10 +369,11 @@ export async function targetBookingContext(kind: "voice" | "final", tokenHash: s
   const slots = await listApplicationSlots(token.applicationExternalId);
   const roleId = text(row.roleExternalId);
   const targetType = kind === "voice" ? "voice" : "final";
-  const role = await targetRoleDetails(roleId);
+  if (rowOrganizationId(row.application) !== rowOrganizationId(token.token)) return null;
+  const role = await targetRoleDetails(roleId, rowOrganizationId(token.token));
   const matching = slots.map(({ slot }) => bookingSlot(slot as unknown as Record<string, unknown>, roleId)).filter((slot) => text(slot.interviewType).toLowerCase().includes(targetType));
   const currentSlot = matching.find((slot) => ["booked", "completed", "no show"].includes(text(slot.status).toLowerCase()));
-  const availableRows = await listBookingSlots(targetType, roleId);
+  const availableRows = (await listBookingSlots(targetType, roleId)).filter((value) => rowOrganizationId(((value as { slot?: unknown }).slot || value)) === rowOrganizationId(token.token));
   const persistedAvailable = availableRows
     .map((value) => bookingSlot(((value as { slot?: unknown }).slot || value) as Record<string, unknown>, roleId))
     .filter((slot) => isBeforeTargetHiringDate(slot.date, row.roleTargetHiringDate || undefined))
@@ -605,9 +630,14 @@ export async function targetCreateScreeningInvitation(input: { roleId: string; c
   return { invitationId: result.invitation.id, token, expiresAt: result.invitation.expiresAt?.toISOString() || "" };
 }
 
-export async function targetCreateApplication(input: { externalId: string; roleId: string; candidateName: string; email: string; phone: string; preferredMobile: string; applicantCountry: string; source: string; sourceDetail?: string; consentAt?: string; resume?: { fileId: string; fileName: string; mimeType: string; size: number; sha256: string; kind: string; expiresAt: string; extractedText?: string } }) {
-  const resumeFileId = input.resume ? await registerResumeFile({ storageRef: input.resume.fileId, sha256: input.resume.sha256, filename: input.resume.fileName, mimeType: input.resume.mimeType, size: input.resume.size, kind: input.resume.kind, expiresAt: input.resume.expiresAt, extractedText: input.resume.extractedText }) : null;
-  const result = await createApplication({ externalId: input.externalId, roleExternalId: input.roleId, applicantEmail: input.email, applicantName: input.candidateName, phone: input.phone, preferredMobile: input.preferredMobile, applicantCountry: input.applicantCountry, source: input.source, sourceDetail: input.sourceDetail, consentAt: input.consentAt, resumeFileId: resumeFileId || undefined });
+export async function targetCreateApplication(input: { externalId: string; roleId: string; candidateName: string; email: string; phone: string; preferredMobile: string; applicantCountry: string; source: string; sourceDetail?: string; consentAt?: string; creditOwnerEmail?: string; organizationId?: string; resume?: { fileId: string; fileName: string; mimeType: string; size: number; sha256: string; kind: string; expiresAt: string; extractedText?: string } }) {
+  const role = await getRole(input.roleId);
+  const roleOrganizationId = rowOrganizationId(role);
+  if (!role || !roleOrganizationId) throw new Error("Unable to resolve the application role organization.");
+  if (input.organizationId?.trim() && input.organizationId.trim() !== roleOrganizationId) throw new Error("application_role_belongs_to_another_organization");
+  const organizationId = roleOrganizationId;
+  const resumeFileId = input.resume ? await registerResumeFile({ storageRef: input.resume.fileId, sha256: input.resume.sha256, filename: input.resume.fileName, mimeType: input.resume.mimeType, size: input.resume.size, kind: input.resume.kind, expiresAt: input.resume.expiresAt, extractedText: input.resume.extractedText, organizationId }) : null;
+  const result = await createApplication({ externalId: input.externalId, roleExternalId: input.roleId, applicantEmail: input.email, applicantName: input.candidateName, phone: input.phone, preferredMobile: input.preferredMobile, applicantCountry: input.applicantCountry, source: input.source, sourceDetail: input.sourceDetail, consentAt: input.consentAt, creditOwnerEmail: input.creditOwnerEmail, resumeFileId: resumeFileId || undefined });
   if (!result.application) throw new Error(result.error || "Unable to create the application.");
   if (input.resume) {
     const queued = await enqueueBulkScreening({
@@ -783,18 +813,21 @@ function targetApplicantSummary(row: TargetApplicationRow) {
 }
 
 export async function targetApplicantSummaries() {
-  const rows = await listApplications();
+  const organizationId = await targetOrganizationId();
+  const rows = (await listApplications()).filter((row) => rowOrganizationId(row.application) === organizationId);
   return rows.map(targetApplicantSummary);
 }
 
 export async function targetRecentApplicantSummaries(department = "") {
-  const rows = await listRecentApplications(department || undefined, 50);
+  const organizationId = await targetOrganizationId();
+  const rows = (await listRecentApplications(department || undefined, 50)).filter((row) => rowOrganizationId(row.application) === organizationId);
   return rows.map(targetApplicantSummary);
 }
 
 export async function targetDeleteApplicant(externalId: string) {
   const row = await getApplication(externalId);
   if (!row) return { deleted: false, error: "unknown_application" as const };
+  if (rowOrganizationId(row.application) !== await targetOrganizationId()) return { deleted: false, error: "unknown_application" as const };
   const slots = await listApplicationSlots(externalId);
   const finalBookedSlots = slots
     .map(({ slot }) => slot as unknown as Record<string, unknown>)
@@ -846,6 +879,7 @@ export async function targetApplicantMetrics(rows?: Awaited<ReturnType<typeof ta
 export async function targetApplicantDetails(externalId: string) {
   const row = await getApplication(externalId);
   if (!row) return null;
+  if (rowOrganizationId(row.application) !== await targetOrganizationId()) return null;
   const summary = targetApplicantSummary(row);
   const application = row.application as unknown as Record<string, unknown>;
   const screening = row.screeningResult as unknown as Record<string, unknown> | null;
@@ -964,7 +998,8 @@ export async function targetApplicantDetails(externalId: string) {
 }
 
 export async function targetActiveBookingLinkRoleIds() {
-  const rows = await listActiveBookingRoleIds();
+  const organizationId = await targetOrganizationId();
+  const rows = (await listActiveBookingRoleIds()).filter((row) => rowOrganizationId(row) === organizationId);
   return {
     voice: rows.filter((row) => row.kind === "voice").map((row) => text(row.roleExternalId)),
     final: rows.filter((row) => row.kind === "final").map((row) => text(row.roleExternalId)),
@@ -972,7 +1007,8 @@ export async function targetActiveBookingLinkRoleIds() {
 }
 
 export async function targetBulkResumeQueue(roleExternalId = "") {
-  const rows = await listBulkQueueForPortal(undefined, roleExternalId || undefined);
+  const organizationId = await targetOrganizationId();
+  const rows = (await listBulkQueueForPortal(undefined, roleExternalId || undefined)).filter((row) => rowOrganizationId(row.item) === organizationId);
   return rows.map(({ item, roleExternalId: roleId, applicationExternalId }) => ({
     driveFileId: text(item.driveFileId), driveFileName: text(item.filename), driveFileUrl: text(item.fileUrl), roleId: text(roleId),
     candidateName: text(item.candidateName), candidateEmail: text(item.candidateEmail), status: label(item.status), applicationId: text(applicationExternalId),
@@ -989,7 +1025,8 @@ export async function targetAppendBulkResumeQueue(event: { driveFileId: string; 
 }
 
 export async function targetBookings() {
-  const rows = await listBookingSlots();
+  const organizationId = await targetOrganizationId();
+  const rows = (await listBookingSlots()).filter((row) => rowOrganizationId(((row as { slot?: unknown }).slot || row)) === organizationId);
   return rows.map((row) => {
     const slot = (row as { slot?: Record<string, unknown> }).slot || row as unknown as Record<string, unknown>;
     const timezone = text(slot.timezone) || "Asia/Singapore";

@@ -117,6 +117,7 @@ export async function POST(request: Request) {
       roleTitle: role.jobTitle || "",
       actorName: user.name,
       actorEmail: user.email,
+      organizationId: user.organizationId,
       submittedByEmail: user.email,
       sourceLabel: "Portal Drive Import",
       sources: valid.map((file) => ({

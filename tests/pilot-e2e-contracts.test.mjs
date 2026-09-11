@@ -50,7 +50,7 @@ test("application intake is authenticated, role-bound, and supports a new applic
   assert.match(route, /candidateEmail/);
   assert.match(route, /consent/);
   assert.match(resolver, /isPublishedRoleForIntake/);
-  assert.match(resolver, /targetRoleDetails/);
+  assert.match(resolver, /targetPublicRoleDetails/);
 });
 
 test("screening completes before HR approval can advance the applicant", () => {

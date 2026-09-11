@@ -1,7 +1,7 @@
 import type { RoleRequestDetails } from "@/lib/google-sheets";
 import { isPublishedRoleForIntake } from "@/lib/recruitment-role-eligibility";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { targetRoleDetails } from "@/lib/recruitment-target-portal";
+import { targetPublicRoleDetails } from "@/lib/recruitment-target-portal";
 
 /**
  * Resolve an intake role from the configured recruitment source.
@@ -20,7 +20,7 @@ export async function resolvePublishedRecruitmentRole(roleId: string): Promise<R
   if (!normalizedRoleId) return null;
 
   const role = isPostgresRecruitmentTarget()
-    ? await targetRoleDetails(normalizedRoleId)
+    ? await targetPublicRoleDetails(normalizedRoleId)
     : await (async () => {
       // Keep Sheets out of the target-mode module graph at request time. This
       // preserves legacy behavior without requiring Sheets credentials just to

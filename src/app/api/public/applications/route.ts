@@ -98,14 +98,14 @@ export async function POST(request: Request) {
 
     if (isPostgresRecruitmentTarget()) {
       try {
-        await assertCreditsAvailable(1, "cv_analysis");
+        await assertCreditsAvailable(1, "cv_analysis", { organizationId: role.organizationId, ownerEmail: role.requesterEmail });
       } catch (creditError) {
         if (creditError instanceof EllaCreditsError) return responseError(request, "Applications are temporarily paused. Please contact the recruiter who invited you.", 402, { code: creditError.code });
         throw creditError;
       }
       const applicationId = `APP-${crypto.randomUUID()}`;
       if (intake.resumeFile) storedResume = await storeResumeFile(intake.resumeFile);
-      await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: invitation ? "hr_invitation" : "direct", sourceDetail: invitation?.invitationId || "public", consentAt: new Date().toISOString(), resume: storedResume ? { ...storedResume.record } : undefined });
+      await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: invitation ? "hr_invitation" : "direct", sourceDetail: invitation?.invitationId || "public", consentAt: new Date().toISOString(), creditOwnerEmail: role.requesterEmail, organizationId: role.organizationId, resume: storedResume ? { ...storedResume.record, extractedText: storedResume.extractedText } : undefined });
       if (inviteToken) await markResumeScreeningInvitationUsed(inviteToken, applicationId);
       return withPublicCors(request, NextResponse.json({ success: true, applicationId, roleId, status: "Pending CV Analysis", message: "Application submitted successfully and queued for CV analysis." }, { status: 201 }));
     }
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
     // resume or invoking the workflow if the balance can't cover it; the raw
     // credit reason is logged, not shown to the candidate.
     try {
-      await assertCreditsAvailable(1, "cv_analysis");
+      await assertCreditsAvailable(1, "cv_analysis", { organizationId: role.organizationId, ownerEmail: role.requesterEmail });
     } catch (creditError) {
       if (creditError instanceof EllaCreditsError) {
         console.warn("[API Public Applications] Blocked by Ella Credits:", creditError.message);
@@ -174,6 +174,7 @@ export async function POST(request: Request) {
       idempotencyKey: `cv:${applicationId}`,
       roleId,
       actorEmail: invitation?.candidateEmail || "",
+      organizationId: role.organizationId,
       note: "HR invite application screening",
     }).catch((error) => console.error("[API Public Applications] Could not record credit deduction:", error));
 
@@ -191,6 +192,6 @@ export async function POST(request: Request) {
   } catch (error) {
     if (storedResume) await deleteResumeFile(storedResume.record).catch(() => undefined);
     console.error("[API Public Applications] POST failed:", error);
-    return responseError(request, error instanceof Error ? error.message : "Unable to submit the application.", 400);
+    return responseError(request, "Unable to submit the application. Please try again.", 400);
   }
 }
