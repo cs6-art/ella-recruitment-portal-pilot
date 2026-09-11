@@ -82,6 +82,25 @@ test("stale or terminal voice attempts cannot receive a result or call log", () 
   }
 });
 
+test("a dispatch failure/block reason is never dropped by the terminal-attempt guard it just triggered", () => {
+  // Regression: failVoiceAttemptDispatch/blockVoiceAttempt flip the attempt to
+  // "failed" and then log the reason via createVoiceCallLog — but that log call
+  // re-reads the attempt's *current* status, so its own terminal-attempt guard
+  // rejected the write and the error reason (why the call never went through)
+  // was silently lost every time. allowTerminalAttempt lets these two self-caused
+  // failure logs bypass that guard while webhook/replay callers still respect it.
+  const source = read("src/lib/internal-recruitment-queries.ts");
+  const logFn = source.slice(source.indexOf("export async function createVoiceCallLog"), source.indexOf("export async function hrDecisionQueue"));
+  assert.match(logFn, /allowTerminalAttempt\?:\s*boolean/);
+  assert.match(logFn, /if \(!input\.allowTerminalAttempt && \["failed", "cancelled"\]\.includes\(attempt\.status\)\)/);
+
+  const dispatchFailFn = source.slice(source.indexOf("export async function failVoiceAttemptDispatch"), source.indexOf("export async function blockVoiceAttempt"));
+  assert.match(dispatchFailFn, /allowTerminalAttempt:\s*true/);
+
+  const blockFn = source.slice(source.indexOf("export async function blockVoiceAttempt"), source.indexOf("export async function voiceAttemptContext"));
+  assert.match(blockFn, /allowTerminalAttempt:\s*true/);
+});
+
 test("voice queue expires late scheduled work before claiming it", () => {
   const source = read("src/lib/internal-recruitment-queries.ts");
   const claim = source.slice(source.indexOf("export async function claimVoiceCalls"), source.indexOf("export async function pendingVoiceCalls"));

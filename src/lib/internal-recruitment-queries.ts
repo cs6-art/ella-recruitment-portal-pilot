@@ -779,6 +779,7 @@ export async function failVoiceAttemptDispatch(attemptId: string, reason: string
       callStatus: "failed",
       errorDetails: reason,
       rawResult: { dispatchFailed: true },
+      allowTerminalAttempt: true,
     }).catch(() => undefined);
   }
   return rowsOf<Record<string, unknown>>(result)[0] || null;
@@ -791,7 +792,7 @@ export async function blockVoiceAttempt(attemptId: string, reason: string) {
   const row = rowsOf<Record<string, unknown>>(result)[0];
   if (row) {
     const context = await voiceAttemptContext(attemptId);
-    if (context) await createVoiceCallLog({ applicationExternalId: context.applicationExternalId, voiceCallAttemptId: attemptId, provider: "vapi", sourceEventKey: `dispatch-blocked:${attemptId}`, callStatus: "blocked", errorDetails: reason, rawResult: { dispatchBlocked: true } }).catch(() => undefined);
+    if (context) await createVoiceCallLog({ applicationExternalId: context.applicationExternalId, voiceCallAttemptId: attemptId, provider: "vapi", sourceEventKey: `dispatch-blocked:${attemptId}`, callStatus: "blocked", errorDetails: reason, rawResult: { dispatchBlocked: true }, allowTerminalAttempt: true }).catch(() => undefined);
   }
   return row || null;
 }
@@ -943,7 +944,7 @@ export async function voiceResultStatuses(applicationExternalIds: string[]) {
   return db.select({ externalId: applications.externalId, currentStage: applications.currentStage, voiceHrDecision: applications.voiceHrDecision, latestResultAt: sql<string>`max(${voiceInterviewResults.createdAt})` }).from(applications).leftJoin(voiceInterviewResults, eq(voiceInterviewResults.applicationId, applications.id)).where(inArray(applications.externalId, applicationExternalIds)).groupBy(applications.externalId, applications.currentStage, applications.voiceHrDecision);
 }
 
-export async function createVoiceCallLog(input: { applicationExternalId: string; voiceCallAttemptId?: string; provider?: string; providerCallId?: string; providerEventId?: string; sourceEventKey: string; callStatus?: string; durationSeconds?: number | null; recordingUrl?: string; communicationScore?: number | null; completenessScore?: number | null; transcript?: string; summary?: string; recommendation?: string; errorDetails?: string; rawResult?: unknown; startedAt?: string; endedAt?: string; isComplete?: boolean }) {
+export async function createVoiceCallLog(input: { applicationExternalId: string; voiceCallAttemptId?: string; provider?: string; providerCallId?: string; providerEventId?: string; sourceEventKey: string; callStatus?: string; durationSeconds?: number | null; recordingUrl?: string; communicationScore?: number | null; completenessScore?: number | null; transcript?: string; summary?: string; recommendation?: string; errorDetails?: string; rawResult?: unknown; startedAt?: string; endedAt?: string; isComplete?: boolean; allowTerminalAttempt?: boolean }) {
   const db = getDb();
   const [application] = await db.select({ id: applications.id, organizationId: applications.organizationId, creditOwnerEmail: applications.creditOwnerEmail, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
   if (!application) return { log: null, created: false, error: "unknown_application" as const };
@@ -951,7 +952,13 @@ export async function createVoiceCallLog(input: { applicationExternalId: string;
   const attempt = input.voiceCallAttemptId ? attempts.find((item) => item.id === input.voiceCallAttemptId) : attempts[0];
   if (!attempt) return { log: null, created: false, error: "attempt_not_found" as const };
   if (attempt.id !== attempts[0]?.id) return { log: null, created: false, error: "stale_attempt" as const };
-  if (["failed", "cancelled"].includes(attempt.status)) return { log: null, created: false, error: "attempt_not_processable" as const };
+  // A dispatch-failure/blocked log call from failVoiceAttemptDispatch/blockVoiceAttempt
+  // records the very reason the attempt just became "failed" moments ago — it must
+  // not be rejected by the terminal-attempt guard below, or the error is lost forever
+  // (see docs/VOICE-BILLING-OUTCOME-MAPPING.md incident history). Webhook/replay
+  // callers never set this flag, so late results for an already-terminal attempt
+  // are still rejected as before.
+  if (!input.allowTerminalAttempt && ["failed", "cancelled"].includes(attempt.status)) return { log: null, created: false, error: "attempt_not_processable" as const };
   const [log] = await db.insert(voiceCallLogs).values({ organizationId: application.organizationId, applicationId: application.id, voiceCallAttemptId: attempt?.id || null, provider: input.provider || "", providerCallId: input.providerCallId || "", providerEventId: input.providerEventId || "", sourceEventKey: input.sourceEventKey, callStatus: input.callStatus || "", durationSeconds: input.durationSeconds ?? null, recordingUrl: input.recordingUrl || "", communicationScore: input.communicationScore ?? null, completenessScore: input.completenessScore ?? null, transcript: input.transcript || "", summary: input.summary || "", recommendation: input.recommendation || "", errorDetails: input.errorDetails || "", rawResult: (input.rawResult ?? null) as object | null, startedAt: isoOrNull(input.startedAt), endedAt: isoOrNull(input.endedAt) }).onConflictDoNothing({ target: voiceCallLogs.sourceEventKey }).returning();
   const billingOutcome = classifyVoiceInterviewBillingOutcome(input);
   const chargedCredits = billingOutcome && attempt ? await recordVoiceInterviewDeduction({ applicationId: input.applicationExternalId, attemptId: attempt.id, outcome: billingOutcome, actorEmail: application.creditOwnerEmail, organizationId: application.organizationId }) : 0;
