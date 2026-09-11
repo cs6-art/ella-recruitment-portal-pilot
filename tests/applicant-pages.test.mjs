@@ -121,6 +121,35 @@ test("voice review reflects the real call outcome when no interview took place",
   assert.match(detail, /currentStage=\{applicant\.currentStage\}/);
 });
 
+test("a call that never reached the candidate reads as a system failure, not 'awaiting evaluation'", () => {
+  // Regression: a dispatch/provider/system error (status "failed", no call ever
+  // placed) used to fall through the voiceNotConducted check — built only for
+  // candidate-side outcomes (no answer, busy, voicemail, ...) — leaving Voice
+  // AI Score/Recommendation stuck on "Awaiting AI evaluation" forever, since a
+  // terminally failed attempt will never produce a result. voiceSystemFailure
+  // catches the distinct "never reached the candidate" family so HR sees a
+  // system fault to chase, not a candidate outcome to wait on.
+  const detail = read("src/app/applicants/[applicationId]/page.tsx");
+  const notConductedSource = detail.match(/const voiceNotConducted = \/(.+)\/i\.test\(voiceCallStatus\);/)?.[1];
+  const systemFailureSource = detail.match(/const voiceSystemFailure = \/(.+)\/i\.test\(voiceCallStatus\);/)?.[1];
+  assert.ok(notConductedSource, "voiceNotConducted regex not found");
+  assert.ok(systemFailureSource, "voiceSystemFailure regex not found");
+  const voiceNotConducted = new RegExp(notConductedSource, "i");
+  const voiceSystemFailure = new RegExp(systemFailureSource, "i");
+
+  for (const status of ["failed", "system_failure", "provider_failure", "technical_failure", "blocked", "dispatch_failed"]) {
+    assert.equal(voiceSystemFailure.test(status), true, `${status} should be a system failure`);
+  }
+  // Candidate-side outcomes must stay classified as voiceNotConducted, not
+  // voiceSystemFailure — they are different remediations for HR.
+  for (const status of ["no answer", "no-show", "busy", "voicemail", "declined", "cancelled", "incomplete"]) {
+    assert.equal(voiceNotConducted.test(status), true, `${status} should be voiceNotConducted`);
+    assert.equal(voiceSystemFailure.test(status), false, `${status} should not be voiceSystemFailure`);
+  }
+
+  assert.match(detail, /voiceSystemFailure \? "The call did not go through due to a system or dispatch error/);
+});
+
 test("eligible final bookings invite the applicant through Google Calendar", () => {
   const workflow = read("src/lib/applicant-workflow.ts");
   const applications = read("src/lib/candidate-applications.ts");

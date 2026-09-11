@@ -148,8 +148,13 @@ function FinalInterviewCard({ applicant, role }: { applicant: ApplicantDetails; 
 function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails }) {
   const voiceCallStatus = applicant.voiceCallStatus?.trim() || "";
   const voiceBookingLink = externalUrl(applicant.voiceBookingLink);
+  // The candidate declined, missed, or cut the call short — no system fault.
   const voiceNotConducted = /no answer|no[- ]?show|incomplete|not connected|voicemail|busy|declined|cancell?ed/i.test(voiceCallStatus);
-  const voiceScorePending = voiceNotConducted ? "Not evaluated — no completed interview" : "Awaiting AI evaluation";
+  // The call never reached the candidate at all — a dispatch/provider/system
+  // error on our side. Distinct from voiceNotConducted so HR sees a call that
+  // needs an infra fix (retry/redispatch), not one waiting on the candidate.
+  const voiceSystemFailure = /(?:^|[^a-z])failed(?:[^a-z]|$)|blocked|system[_ -]?failure|provider[_ -]?failure|technical[_ -]?failure|dispatch[_ -]?fail/i.test(voiceCallStatus);
+  const voiceScorePending = voiceNotConducted || voiceSystemFailure ? "Not evaluated — no completed interview" : "Awaiting AI evaluation";
   return <section className="card applicant-detail-card applicant-screening-evidence-card">
     <DetailCardHeader icon="document" title="AI Screening Evidence" description="CV analysis and voice interview evidence for one complete HR review." />
     <div className="applicant-detail-content">
@@ -177,7 +182,7 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
           <DetailField label="AI Recommendation" value={applicant.voiceRecommendation || voiceScorePending} />
         </div>
         {voiceBookingLink && <div className="applicant-copy-block"><span>Candidate booking page</span><p><Link href={voiceBookingLink} target="_blank" rel="noreferrer">Open the candidate booking page</Link></p></div>}
-        <div className="applicant-copy-block"><span>AI Summary</span><p>{applicant.voiceSummary || (voiceNotConducted ? "No interview took place, so there is no AI summary." : "No AI summary is available.")}</p></div>
+        <div className="applicant-copy-block"><span>AI Summary</span><p>{applicant.voiceSummary || (voiceSystemFailure ? "The call did not go through due to a system or dispatch error — the candidate was never reached, so there is no AI summary. Check the voice call logs, or ask a developer to, for the failure reason and consider re-sending the booking link." : voiceNotConducted ? "No interview took place, so there is no AI summary." : "No AI summary is available.")}</p></div>
         <div className="applicant-copy-columns"><div><span>Strengths</span><ReadableList value={applicant.voiceStrengths} empty="No strengths recorded." /></div><div><span>Concerns</span><ReadableList value={applicant.voiceConcerns} empty="No concerns recorded." /></div></div>
         <div className="applicant-copy-columns"><div><span>Communication Quality</span><p>{applicant.voiceCommunicationQuality || "Not provided."}</p></div><div><span>Answer Completeness</span><p>{applicant.voiceAnswerCompleteness || "Not provided."}</p></div></div>
         {applicant.voiceEvaluationFields.length > 0 && <div className="applicant-copy-columns">{applicant.voiceEvaluationFields.map((evaluation) => <div key={evaluation.key}><span>{evaluation.label}</span><p>{evaluation.value}</p></div>)}</div>}
