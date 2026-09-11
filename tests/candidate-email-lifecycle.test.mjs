@@ -47,12 +47,20 @@ test("resume approval creates a separate one-time avatar invitation with the sam
   const target = read("src/lib/recruitment-target-portal.ts");
   const query = read("src/lib/internal-recruitment-queries.ts");
   const labels = read("src/lib/notification-labels.ts");
+  const migration = read("drizzle/0009_allow_avatar_booking_tokens.sql");
   assert.match(target, /kind: "avatar"/);
   assert.match(target, /avatarInterviewInvitationQueued: true/);
   assert.match(query, /input\.kind === "avatar"/);
   assert.match(query, /status: "active"/);
   assert.match(query, /status: "used", usedAt/);
   assert.match(labels, /secondaryCta: avatarLink/);
+  assert.match(migration, /'voice', 'final', 'avatar'/);
+});
+
+test("decision errors do not expose database SQL or booking-token values", () => {
+  const route = read("src/app/api/applicants/[applicationId]/decision/route.ts");
+  assert.match(route, /publicDecisionError\(error\)/);
+  assert.doesNotMatch(route, /error: error instanceof Error \? error\.message/);
 });
 
 test("voice approval invites the candidate to book the face-to-face interview", () => {

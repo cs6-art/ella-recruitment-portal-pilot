@@ -21,6 +21,14 @@ const decisionSchema = z.object({
   comments: z.string().trim().min(1).max(5000),
 });
 
+function publicDecisionError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (/booking_tokens|booking token|booking invitation|avatar interview invitation|voice interview invitation/i.test(message)) {
+    return "The decision could not finish because the interview invitation is not ready. Please try again; existing invitations are reused safely.";
+  }
+  return "Unable to save applicant decision. Please try again.";
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ applicationId: string }> }) {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user || !canDecideApplicant(user)) {
@@ -56,7 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
     return NextResponse.json({ success: true, result });
   } catch (error) {
     return NextResponse.json({
-      error: error instanceof Error ? error.message : "Unable to save applicant decision.",
+      error: publicDecisionError(error),
     }, { status: 400 });
   }
 }
