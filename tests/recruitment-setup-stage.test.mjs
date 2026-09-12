@@ -174,11 +174,11 @@ test("VAPI prompt is interview-only and has no scheduling context", () => {
   assert.match(prompt, /This call is an interview only/);
   assert.match(prompt, /McLink Group's AI HR Recruiting Assistant/);
   assert.match(prompt, /Fair and Consistent Assessment/);
-  assert.match(prompt, /Never use or infer a person's name, age, gender/);
-  assert.match(prompt, /The AI recommendation is advisory only/);
+  assert.match(prompt, /Never make a positive or negative judgment based on a person's name, age, gender/);
+  assert.match(prompt, /The AI recommendation is advisory/);
   assert.doesNotMatch(prompt, /\[Time Management\]/);
   assert.doesNotMatch(prompt, /Current Time: \{\{current_time\}\}/);
-  assert.match(prompt, /Never schedule an interview/);
+  assert.match(prompt, /never schedule an HR interview/);
 });
 
 test("AI voice interview emails disclose the AI interviewer and human review", () => {
