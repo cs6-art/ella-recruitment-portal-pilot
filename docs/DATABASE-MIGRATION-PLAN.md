@@ -1096,6 +1096,16 @@ history → external writers):
    `portal_settings`, `oauth_connections`, `recruitment_templates`,
    `bulk_role_folders`. Low churn, mostly portal-only, no n8n write contention.
    Gets a real `users` auth source and `departments` entity in place early.
+   **Exception carved out 2026-09-12 (client-org login only, not this phase):**
+   `src/lib/postgres-directory.ts` reads `users` as a login fallback, but ONLY
+   for a non-default organization (a client tenant) whose email will never
+   have a Google Sheet `User_Directory` row — McLink's own staff still
+   authenticate from the Sheet exactly as before, completely untouched. This
+   is a narrow, additive login-only patch to unblock client trials, not the
+   `users`-as-auth-source cutover this phase describes; it does not satisfy
+   this phase's prerequisites (§13) and this phase is not considered started.
+   New client orgs are provisioned with `npm run db:provision:organization`
+   (`src/db/provision-client-organization.mjs`).
 3. **Roles / requisitions** — `roles`, `role_recruitment_setup`,
    `role_evaluation_fields`, `interview_availability_rules`,
    `role_status_history`. n8n co-writer (`role-request-foundation`) → sync worker
