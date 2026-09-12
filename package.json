@@ -17,7 +17,8 @@
     "db:reconcile:credits:mirror": "node --env-file-if-exists=.env.local src/db/reconcile-credit-sheet-mirror.mjs",
     "db:backfill:recruitment": "node --env-file-if-exists=.env.local src/db/backfill-recruitment.mjs",
     "db:check:recruitment": "node --env-file-if-exists=.env.local src/db/check-recruitment-parity.mjs",
-    "db:check:recruitment:integrity": "node --env-file-if-exists=.env.local src/db/check-recruitment-integrity.mjs"
+    "db:check:recruitment:integrity": "node --env-file-if-exists=.env.local src/db/check-recruitment-integrity.mjs",
+    "db:provision:organization": "node --env-file-if-exists=.env.local src/db/provision-client-organization.mjs"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.80",

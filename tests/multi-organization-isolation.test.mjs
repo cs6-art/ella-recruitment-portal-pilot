@@ -45,6 +45,21 @@ test("directory provisioning cannot grant a user access to another tenant", () =
   assert.match(orgs, /previousEmail/);
 });
 
+test("client organizations can log in without a row in McLink's own user directory", () => {
+  const auth = read("src/app/api/auth/google/route.ts");
+  const directory = read("src/lib/postgres-directory.ts");
+  const provision = read("src/db/provision-client-organization.mjs");
+  assert.match(auth, /findPostgresDirectoryUser/);
+  // The Postgres fallback must never run for the default (McLink) organization
+  // — the Sheet-only login path for existing McLink staff stays untouched.
+  assert.match(auth, /organizationId !== DEFAULT_ORGANIZATION_ID/);
+  assert.match(directory, /eq\(users\.organizationId, organizationId\)/);
+  assert.match(provision, /insert into organizations/);
+  assert.match(provision, /insert into users/);
+  assert.match(provision, /insert into organization_memberships/);
+  assert.match(provision, /insert into credit_accounts/);
+});
+
 test("applicants cannot be reused across organizations", () => {
   const queries = read("src/lib/internal-recruitment-queries.ts");
   assert.match(queries, /applicant_belongs_to_another_organization/);

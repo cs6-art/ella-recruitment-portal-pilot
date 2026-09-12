@@ -2,7 +2,8 @@ import { OAuth2Client } from "google-auth-library";
 import { NextResponse } from "next/server";
 
 import { findDirectoryUser } from "@/lib/google-sheets";
-import { resolveOrganizationForLogin, syncOrganizationMembership } from "@/lib/organization-accounts";
+import { DEFAULT_ORGANIZATION_ID, resolveOrganizationForLogin, syncOrganizationMembership } from "@/lib/organization-accounts";
+import { findPostgresDirectoryUser } from "@/lib/postgres-directory";
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, createSessionToken } from "@/lib/session";
@@ -105,7 +106,14 @@ export async function POST(request: Request) {
 
     console.log("[Login] Looking up User_Directory:", normalizedEmail);
 
-    const directoryUser = await findDirectoryUser(normalizedEmail);
+    let directoryUser = await findDirectoryUser(normalizedEmail);
+
+    // A client organization has no row in McLink's own Sheet and never will.
+    // This never runs for the default (McLink) organization, so the existing
+    // Sheet-only login path for McLink staff is completely unchanged.
+    if (!directoryUser && organizationId !== DEFAULT_ORGANIZATION_ID) {
+      directoryUser = await findPostgresDirectoryUser(normalizedEmail, organizationId);
+    }
 
     console.log("[Login] User_Directory result:", {
       found: Boolean(directoryUser),
