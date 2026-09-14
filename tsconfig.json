@@ -10,6 +10,13 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // Lets a .ts file import a sibling .ts file with an explicit extension
+    // (e.g. "../bulk-resume-limits.ts"). Only valid paired with noEmit above.
+    // Needed because tests/help-bot-knowledge.test.mjs runs src/lib/help-bot's
+    // .ts files directly under plain Node ESM (no bundler), which requires an
+    // explicit resolvable extension on relative imports -- unlike webpack's
+    // bundler resolution, which resolves extensionless imports fine either way.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
