@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       const context = await startAvatarInterview(avatarToken);
       if (!context) return NextResponse.json({ success: false, error: "This avatar interview link has already been used, expired, or is no longer available." }, { status: 410 });
       const session = await createLiveAvatarSession({ roleTitle: context.roleTitle, jobDescription: context.roleDescription, candidateName: context.candidateName, resumeSummary: context.resumeSummary, screeningQuestion: context.screeningQuestion });
-      return NextResponse.json({ success: true, sessionToken: session.sessionToken, sessionId: session.sessionId }, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json({ success: true, ...session }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
       console.error("[API Live Avatar Candidate Session] POST failed:", error);
       return NextResponse.json({ success: false, error: "Unable to start the avatar interview." }, { status: 502 });
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(
-      { success: true, sessionToken: session.sessionToken, sessionId: session.sessionId },
+      { success: true, ...session },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

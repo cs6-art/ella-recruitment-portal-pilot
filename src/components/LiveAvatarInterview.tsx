@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { LiveAvatarEvaluation, LiveAvatarPreparation } from "@/lib/live-avatar-screening";
+import { joinBridgeRoom, openBridgeSocket, startBridgeMicCapture, stopBridgeSession, type BridgeSocket, type MicCapture } from "@/lib/live-avatar-bridge-client";
 
 type WidgetState = "idle" | "starting" | "connecting" | "live" | "ending" | "evaluating" | "ended" | "error" | "results";
 
@@ -38,10 +39,17 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
   const sessionRef = useRef<LiveAvatarSessionInstance | null>(null);
   const sessionIdRef = useRef("");
   const endingRef = useRef(false);
+  const bridgeSocketRef = useRef<BridgeSocket | null>(null);
+  const bridgeRoomRef = useRef<(() => Promise<void>) | null>(null);
+  const bridgeMicRef = useRef<MicCapture | null>(null);
+  const bridgeSessionRef = useRef(false);
 
   useEffect(() => {
     return () => {
       sessionRef.current?.stop().catch(() => {});
+      bridgeMicRef.current?.stop();
+      bridgeSocketRef.current?.close();
+      bridgeRoomRef.current?.().catch(() => {});
       sessionRef.current = null;
     };
   }, []);
@@ -60,6 +68,25 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       });
       const tokenBody = await tokenResponse.json().catch(() => ({}));
       if (!tokenResponse.ok || !tokenBody?.success) throw new Error(tokenBody?.error || "Ella isn't available right now.");
+
+      if (tokenBody.mode === "BRIDGE") {
+        bridgeSessionRef.current = true;
+        sessionIdRef.current = typeof tokenBody.sessionId === "string" ? tokenBody.sessionId : "";
+        bridgeRoomRef.current = await joinBridgeRoom(tokenBody.livekitUrl, tokenBody.livekitClientToken, videoRef.current!);
+        bridgeSocketRef.current = openBridgeSocket(tokenBody.wsUrl, {
+          onReady: () => {
+            setState("live");
+            void startBridgeMicCapture((audio) => bridgeSocketRef.current?.sendMicAudio(audio))
+              .then((capture) => { bridgeMicRef.current = capture; })
+              .catch((caught) => setError(caught instanceof Error ? `Microphone unavailable: ${caught.message}` : "Microphone unavailable."));
+          },
+          onTurn: (turn) => { if (turn.role === "user" && turn.text) setLastResponse(turn.text); },
+          onError: (message) => setError(message),
+          onClose: () => { if (!endingRef.current) setState("ended"); },
+        });
+        setState("connecting");
+        return;
+      }
 
       const { LiveAvatarSession, SessionEvent, AgentEventsEnum } = await import("@heygen/liveavatar-web-sdk");
       const session = new LiveAvatarSession(tokenBody.sessionToken, { voiceChat: true }) as unknown as LiveAvatarSessionInstance;
@@ -98,7 +125,18 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
     endingRef.current = true;
     setState("ending");
     try {
-      await sessionRef.current?.stop();
+      if (bridgeSessionRef.current) {
+        bridgeMicRef.current?.stop();
+        bridgeMicRef.current = null;
+        bridgeSocketRef.current?.close();
+        bridgeSocketRef.current = null;
+        await bridgeRoomRef.current?.();
+        bridgeRoomRef.current = null;
+        await stopBridgeSession("/api/live-avatar/stop", sessionId);
+        bridgeSessionRef.current = false;
+      } else {
+        await sessionRef.current?.stop();
+      }
       if (!sessionId) throw new Error("The interview session did not return an id.");
       setState("evaluating");
       let response: Response | null = null;

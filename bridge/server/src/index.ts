@@ -26,6 +26,7 @@ import { config, missingConfig } from "./config";
 import { LiveAvatarApiError, startSession as startUpstream } from "./liveavatar";
 import { addSession, getSession, stopAll, stopSession } from "./registry";
 import { Session } from "./session";
+import type { LiveInterviewContext } from "./prompts";
 
 const WEB_DIST = fileURLToPath(new URL("../../web/dist", import.meta.url));
 const MIME: Record<string, string> = {
@@ -52,22 +53,23 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     res.writeHead(200).end("ok");
     return;
   }
-  if (req.method === "POST" && path === "/api/session/start") return handleStart(res);
+  if (req.method === "POST" && path === "/api/session/start") return handleStart(req, res);
   if (req.method === "POST" && path === "/api/session/stop") return handleStop(req, res);
   return serveStatic(res, path);
 }
 
-async function handleStart(res: ServerResponse): Promise<void> {
+async function handleStart(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const missing = missingConfig();
   if (missing.length > 0) {
     json(res, 500, { error: `missing env vars: ${missing.join(", ")} — copy .env.example to .env` });
     return;
   }
   try {
+    const body = (await readJson(req)) as LiveInterviewContext;
     const upstream = await startUpstream();
     const session = new Session(upstream.sessionId, upstream.wsUrl, (id) => {
       void stopSession(id, "leg_died");
-    });
+    }, body);
     addSession(session);
     session.start();
     console.log(`[http] session started: ${upstream.sessionId}`);
