@@ -257,15 +257,18 @@ export async function archiveRole(input: { externalId: string; actorEmail: strin
   });
 }
 
-export async function listApplicants(email?: string) {
+export async function listApplicants(email?: string, organizationId = DEFAULT_ORGANIZATION_ID) {
   const db = getDb();
-  return db.select().from(applicants).where(email ? eq(applicants.primaryEmail, email.trim().toLowerCase()) : undefined).orderBy(desc(applicants.updatedAt)).limit(LIMIT);
+  const filters = [eq(applicants.organizationId, organizationId)];
+  if (email) filters.push(eq(applicants.primaryEmail, email.trim().toLowerCase()));
+  return db.select().from(applicants).where(and(...filters)).orderBy(desc(applicants.updatedAt)).limit(LIMIT);
 }
 
-export async function upsertApplicant(input: { email: string; fullName?: string; phoneE164?: string; country?: string; notes?: string }) {
+export async function upsertApplicant(input: { email: string; fullName?: string; phoneE164?: string; country?: string; notes?: string; organizationId?: string }) {
   const db = getDb();
   const email = input.email.trim().toLowerCase();
-  const [applicant] = await db.insert(applicants).values({ organizationId: DEFAULT_ORGANIZATION_ID, primaryEmail: email, fullName: input.fullName || "", phoneE164: input.phoneE164 || "", country: input.country || "", notes: input.notes || "" }).onConflictDoUpdate({ target: applicants.primaryEmail, set: { fullName: input.fullName || "", phoneE164: input.phoneE164 || "", country: input.country || "", notes: input.notes || "", updatedAt: new Date() } }).returning();
+  const organizationId = input.organizationId?.trim() || DEFAULT_ORGANIZATION_ID;
+  const [applicant] = await db.insert(applicants).values({ organizationId, primaryEmail: email, fullName: input.fullName || "", phoneE164: input.phoneE164 || "", country: input.country || "", notes: input.notes || "" }).onConflictDoUpdate({ target: [applicants.organizationId, applicants.primaryEmail], set: { fullName: input.fullName || "", phoneE164: input.phoneE164 || "", country: input.country || "", notes: input.notes || "", updatedAt: new Date() } }).returning();
   return applicant;
 }
 
@@ -313,10 +316,7 @@ export async function createApplication(input: { externalId: string; applicantEm
     const [role] = await tx.select({ id: roles.id, organizationId: roles.organizationId, departmentSnapshot: roles.departmentSnapshot, requesterEmail: roles.requesterEmail }).from(roles).where(eq(roles.externalId, input.roleExternalId)).limit(1);
     if (!role) return { application: null, created: false, error: "unknown_role" as const };
     const email = input.applicantEmail.trim().toLowerCase();
-    const [existingApplicant] = await tx.select({ id: applicants.id, organizationId: applicants.organizationId, fullName: applicants.fullName }).from(applicants).where(eq(applicants.primaryEmail, email)).limit(1);
-    if (existingApplicant && existingApplicant.organizationId !== role.organizationId) {
-      return { application: null, created: false, error: "applicant_belongs_to_another_organization" as const };
-    }
+    const [existingApplicant] = await tx.select({ id: applicants.id, organizationId: applicants.organizationId, fullName: applicants.fullName }).from(applicants).where(and(eq(applicants.organizationId, role.organizationId), eq(applicants.primaryEmail, email))).limit(1);
     const [applicant] = existingApplicant
       ? await tx.update(applicants).set({ fullName: input.applicantName || "", phoneE164: input.phone || "", country: input.applicantCountry || "", updatedAt: new Date() }).where(eq(applicants.id, existingApplicant.id)).returning()
       : await tx.insert(applicants).values({ organizationId: role.organizationId, primaryEmail: email, fullName: input.applicantName || "", phoneE164: input.phone || "", country: input.applicantCountry || "" }).returning();
