@@ -44,7 +44,7 @@ function requiredEnv(name: string): string | null {
  * broken on environments that have not been configured yet.
  */
 export function isLiveAvatarConfigured(): boolean {
-  if (requiredEnv("LIVEAVATAR_BRIDGE_URL")) return true;
+  if (requiredEnv("LIVEAVATAR_BRIDGE_URL") && requiredEnv("LIVEAVATAR_BRIDGE_PUBLIC_URL")) return true;
   return Boolean(
     requiredEnv("LIVEAVATAR_API_KEY") &&
       requiredEnv("LIVEAVATAR_AVATAR_ID") &&
@@ -95,7 +95,7 @@ function clampVariable(value: string, maxLength = 1000): string {
 export async function createLiveAvatarSession(
   role: LiveAvatarRoleContext,
 ): Promise<LiveAvatarSessionResult> {
-  if (bridgeUrl()) return createBridgeSession(role);
+  if (bridgeUrl() && requiredEnv("LIVEAVATAR_BRIDGE_PUBLIC_URL")) return createBridgeSession(role);
   const apiKey = requiredEnv("LIVEAVATAR_API_KEY");
   const avatarId = requiredEnv("LIVEAVATAR_AVATAR_ID");
   const voiceAgentId = requiredEnv("LIVEAVATAR_VOICE_AGENT_ID");
