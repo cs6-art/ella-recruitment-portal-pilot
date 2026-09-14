@@ -104,6 +104,97 @@ function rowsOf<T>(value: unknown): T[] {
   }
   return [];
 }
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function firstText(...values: unknown[]) {
+  return values.map((value) => String(value ?? "").trim()).find(Boolean) || "";
+}
+
+function firstNumber(...values: unknown[]): number | null {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const number = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
+type VoiceResultInput = {
+  applicationExternalId: string;
+  attemptId?: string;
+  score?: number | null;
+  recommendation?: string;
+  strengths?: string;
+  concerns?: string;
+  summary?: string;
+  transcript?: string;
+  callStatus?: string;
+  callFinalStatus?: string;
+  providerEventType?: string;
+  callCompletedAt?: string;
+  raw?: unknown;
+  sourceEventKey?: string;
+  isComplete?: boolean;
+  completenessScore?: number | null;
+};
+
+/**
+ * Accept both the portal's flat result contract and a raw Vapi end-of-call
+ * report. n8n integrations have historically forwarded the latter without
+ * mapping every analysis field, so the portal extracts the stable fields at
+ * the trust boundary instead of leaving a completed call stuck as initiated.
+ */
+function normalizeVoiceResultInput(input: VoiceResultInput): VoiceResultInput {
+  const raw = objectValue(input.raw);
+  const body = objectValue(raw.body);
+  const message = objectValue(body.message || raw.message || body || raw);
+  const call = objectValue(message.call);
+  const analysis = objectValue(message.analysis);
+  const structured = objectValue(analysis.structuredData || analysis.structured_data || message.structuredData || message.structured_data);
+  const artifact = objectValue(message.artifact);
+  const endedReason = firstText(message.endedReason, call.endedReason, call.ended_reason);
+  const transcript = firstText(input.transcript, message.transcript, artifact.transcript);
+  const callStatus = firstText(input.callStatus, message.status, call.status, transcript || endedReason ? "ended" : "");
+  const callFinalStatus = firstText(input.callFinalStatus, endedReason);
+  const isComplete = input.isComplete ?? (typeof structured.interview_completed === "boolean" ? structured.interview_completed : undefined);
+  return {
+    ...input,
+    score: input.score ?? firstNumber(structured.voice_score, structured.score, message.score),
+    recommendation: firstText(input.recommendation, structured.voice_recommendation, structured.recommendation, message.recommendation),
+    strengths: firstText(input.strengths, structured.voice_strengths, structured.strengths, message.strengths),
+    concerns: firstText(input.concerns, structured.voice_concerns, structured.concerns, message.concerns),
+    summary: firstText(input.summary, structured.hr_summary, structured.summary, message.summary),
+    transcript,
+    callStatus,
+    callFinalStatus,
+    providerEventType: firstText(input.providerEventType, message.type),
+    callCompletedAt: firstText(input.callCompletedAt, message.endedAt, call.endedAt, call.ended_at),
+    isComplete,
+    completenessScore: input.completenessScore ?? firstNumber(structured.completeness_score),
+  };
+}
+
+type SettledVoiceAttempt = { status: "completed" | "no_show"; outcome: "completed" | "no_answer" };
+type VoiceOutcomeInput = { outcome?: string; callStatus?: string; callFinalStatus?: string; transcript?: string; isComplete?: boolean; completenessScore?: number | null };
+
+function settledVoiceAttempt(input: VoiceOutcomeInput): SettledVoiceAttempt | null {
+  const billingOutcome = classifyVoiceInterviewBillingOutcome(input);
+  if (billingOutcome === "no_answer") return { status: "no_show", outcome: "no_answer" };
+  if (billingOutcome === "completed" || billingOutcome === "incomplete") return { status: "completed", outcome: "completed" };
+  return null;
+}
+
+const ACTIVE_VOICE_ATTEMPT_STATUSES = ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "retry_scheduled"];
+
+async function settleVoiceAttemptFromResult(db: ReturnType<typeof getDb>, attemptId: string, input: VoiceOutcomeInput) {
+  const settled = settledVoiceAttempt(input);
+  if (!settled) return null;
+  await db.update(voiceCallAttempts).set({ status: settled.status, outcome: settled.outcome, updatedAt: new Date() }).where(and(eq(voiceCallAttempts.id, attemptId), inArray(voiceCallAttempts.status, ACTIVE_VOICE_ATTEMPT_STATUSES)));
+  return settled;
+}
 export function isValidStage(value: string): value is (typeof STAGES)[number] { return (STAGES as readonly string[]).includes(value); }
 export function isValidDecision(value: string): value is (typeof DECISIONS)[number] { return (DECISIONS as readonly string[]).includes(value); }
 export function isValidTransition(from: string, to: string): boolean { return STAGE_TRANSITIONS[from]?.includes(to) ?? false; }
@@ -1004,23 +1095,32 @@ export async function scheduleVoiceRetry(input: { attemptId: string; retryAfter:
   });
 }
 
-export async function ingestVoiceResult(input: { applicationExternalId: string; attemptId?: string; score?: number | null; recommendation?: string; strengths?: string; concerns?: string; summary?: string; transcript?: string; callStatus?: string; callFinalStatus?: string; providerEventType?: string; callCompletedAt?: string; raw?: unknown; sourceEventKey?: string; isComplete?: boolean; completenessScore?: number | null }) {
+export async function ingestVoiceResult(rawInput: VoiceResultInput) {
+  const input = normalizeVoiceResultInput(rawInput);
   const db = getDb();
   const result = await db.transaction(async (tx) => {
-    const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, creditOwnerEmail: applications.creditOwnerEmail, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
+    const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, creditOwnerEmail: applications.creditOwnerEmail, email: applications.email, currentStage: applications.currentStage }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
     if (!application) return { inserted: false, applicationId: null, attemptId: null, candidateEmail: "", creditOwnerEmail: "", organizationId: DEFAULT_ORGANIZATION_ID, chargedCredits: 0, billingOutcome: null, error: "unknown_application" as const };
     const attempts = await tx.select({ id: voiceCallAttempts.id, status: voiceCallAttempts.status }).from(voiceCallAttempts).where(eq(voiceCallAttempts.applicationId, application.id)).orderBy(desc(voiceCallAttempts.attemptNumber), desc(voiceCallAttempts.createdAt));
     const attempt = input.attemptId ? attempts.find((item) => item.id === input.attemptId) : attempts[0];
     if (!attempt) return { inserted: false, applicationId: application.id, attemptId: null, candidateEmail: application.email, creditOwnerEmail: application.creditOwnerEmail, organizationId: application.organizationId, chargedCredits: 0, billingOutcome: null, error: "attempt_not_found" as const };
     if (attempt.id !== attempts[0]?.id) return { inserted: false, applicationId: application.id, attemptId: attempt.id, candidateEmail: application.email, creditOwnerEmail: application.creditOwnerEmail, organizationId: application.organizationId, chargedCredits: 0, billingOutcome: null, error: "stale_attempt" as const };
     if (["failed", "cancelled"].includes(attempt.status)) return { inserted: false, applicationId: application.id, attemptId: attempt.id, candidateEmail: application.email, creditOwnerEmail: application.creditOwnerEmail, organizationId: application.organizationId, chargedCredits: 0, billingOutcome: null, error: "attempt_not_processable" as const };
-    const attemptId = attempt?.id || null;
+    const attemptId = attempt.id;
     const completedAt = isoOrNull(input.callCompletedAt);
+    // Settle the attempt from the terminal result even when the separate n8n
+    // attempt-status callback was skipped. This is idempotent and keeps a
+    // completed Vapi call from remaining visually stuck at "Initiated".
+    await settleVoiceAttemptFromResult(tx, attemptId, input);
+    const moveToVoiceReview = async () => {
+      if (application.currentStage !== "voice_scheduled") return;
+      await tx.update(applications).set({ currentStage: "voice_review_pending", updatedAt: new Date() }).where(eq(applications.id, application.id));
+      await tx.insert(applicationStatusHistory).values({ organizationId: application.organizationId, applicationId: application.id, stage: "voice_review_pending", previousStage: "voice_scheduled", newStage: "voice_review_pending", decision: input.recommendation || "", source: "internal_api:voice_result", comments: input.summary || "", actionRequestId: input.sourceEventKey || null, notificationStatus: "pending", notificationEventType: "voice_result_next_step", notificationRecipient: pilotEmailRecipient(application.email).to, notificationIntendedRecipient: application.email }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
+    };
+    await moveToVoiceReview();
     const existing = await tx.select({ id: voiceInterviewResults.id }).from(voiceInterviewResults).where(and(eq(voiceInterviewResults.applicationId, application.id), eq(voiceInterviewResults.providerEventType, input.providerEventType || ""), completedAt ? eq(voiceInterviewResults.callCompletedAt, completedAt) : isNull(voiceInterviewResults.callCompletedAt))).limit(1);
     if (existing.length > 0) return { inserted: false, applicationId: application.id, attemptId, candidateEmail: application.email, creditOwnerEmail: application.creditOwnerEmail, organizationId: application.organizationId, chargedCredits: 0, billingOutcome: null, error: null };
     const [inserted] = await tx.insert(voiceInterviewResults).values({ organizationId: application.organizationId, applicationId: application.id, attemptId, score: input.score ?? null, recommendation: input.recommendation || "", strengths: input.strengths || "", concerns: input.concerns || "", summary: input.summary || "", transcript: input.transcript || "", callStatus: input.callStatus || "", callFinalStatus: input.callFinalStatus || "", providerEventType: input.providerEventType || "", callCompletedAt: completedAt, resultReceivedAt: new Date(), raw: (input.raw ?? null) as object | null }).returning();
-    await tx.update(applications).set({ currentStage: "voice_review_pending", updatedAt: new Date() }).where(and(eq(applications.id, application.id), eq(applications.currentStage, "voice_scheduled")));
-    await tx.insert(applicationStatusHistory).values({ organizationId: application.organizationId, applicationId: application.id, stage: "voice_review_pending", previousStage: "voice_scheduled", newStage: "voice_review_pending", decision: input.recommendation || "", source: "internal_api:voice_result", comments: input.summary || "", actionRequestId: input.sourceEventKey || null, notificationStatus: "pending", notificationEventType: "voice_result_next_step", notificationRecipient: pilotEmailRecipient(application.email).to, notificationIntendedRecipient: application.email }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     return { inserted: Boolean(inserted), applicationId: application.id, attemptId, candidateEmail: application.email, creditOwnerEmail: application.creditOwnerEmail, organizationId: application.organizationId, chargedCredits: 0, billingOutcome: null, error: null };
   });
   if (!result.applicationId || !result.attemptId) return { ...result, chargedCredits: 0, billingOutcome: null };
@@ -1037,7 +1137,20 @@ export async function applicationVoiceReview(externalId: string) {
   const [result] = await db.select().from(voiceInterviewResults).where(eq(voiceInterviewResults.applicationId, application.id)).orderBy(desc(voiceInterviewResults.createdAt)).limit(1);
   const [log] = await db.select().from(voiceCallLogs).where(eq(voiceCallLogs.applicationId, application.id)).orderBy(desc(voiceCallLogs.createdAt)).limit(1);
   const [attempt] = await db.select().from(voiceCallAttempts).where(eq(voiceCallAttempts.applicationId, application.id)).orderBy(desc(voiceCallAttempts.attemptNumber), desc(voiceCallAttempts.createdAt)).limit(1);
-  return { result: result ?? null, log: log ?? null, attempt: attempt ?? null };
+  let currentAttempt = attempt ?? null;
+  if (result && currentAttempt) {
+    // Repair historical rows on read as well as on callback. This covers a
+    // result that was saved successfully before n8n's attempt-status update
+    // ran, so HR immediately sees the terminal call state on refresh.
+    const settled = await settleVoiceAttemptFromResult(db, currentAttempt.id, {
+      outcome: currentAttempt.outcome || undefined,
+      callStatus: result.callStatus,
+      callFinalStatus: result.callFinalStatus,
+      transcript: result.transcript,
+    });
+    if (settled) currentAttempt = { ...currentAttempt, status: settled.status, outcome: settled.outcome };
+  }
+  return { result: result ?? null, log: log ?? null, attempt: currentAttempt };
 }
 
 export async function voiceResultStatuses(applicationExternalIds: string[]) {
@@ -1062,6 +1175,10 @@ export async function createVoiceCallLog(input: { applicationExternalId: string;
   // are still rejected as before.
   if (!input.allowTerminalAttempt && ["failed", "cancelled"].includes(attempt.status)) return { log: null, created: false, error: "attempt_not_processable" as const };
   const [log] = await db.insert(voiceCallLogs).values({ organizationId: application.organizationId, applicationId: application.id, voiceCallAttemptId: attempt?.id || null, provider: input.provider || "", providerCallId: input.providerCallId || "", providerEventId: input.providerEventId || "", sourceEventKey: input.sourceEventKey, callStatus: input.callStatus || "", durationSeconds: input.durationSeconds ?? null, recordingUrl: input.recordingUrl || "", communicationScore: input.communicationScore ?? null, completenessScore: input.completenessScore ?? null, transcript: input.transcript || "", summary: input.summary || "", recommendation: input.recommendation || "", errorDetails: input.errorDetails || "", rawResult: (input.rawResult ?? null) as object | null, startedAt: isoOrNull(input.startedAt), endedAt: isoOrNull(input.endedAt) }).onConflictDoNothing({ target: voiceCallLogs.sourceEventKey }).returning();
+  // The provider log is also a terminal signal. Reconcile the attempt here
+  // for workflows that emit the call log but omit the separate result/status
+  // callback; the deduction below remains idempotent by attempt ID.
+  await settleVoiceAttemptFromResult(db, attempt.id, input);
   const billingOutcome = classifyVoiceInterviewBillingOutcome(input);
   const chargedCredits = billingOutcome && attempt ? await recordVoiceInterviewDeduction({ applicationId: input.applicationExternalId, attemptId: attempt.id, outcome: billingOutcome, actorEmail: application.creditOwnerEmail, organizationId: application.organizationId }) : 0;
   return { log: log ?? null, created: Boolean(log), chargedCredits, billingOutcome, error: null };
