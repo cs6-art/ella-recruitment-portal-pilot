@@ -55,7 +55,11 @@ export function enterTenantDatabase(organizationId: string) {
 export function tenantDatabaseUrl(organizationId = currentTenantOrganizationId()): string | undefined {
   const id = normalizedId(organizationId);
   if (id === DEFAULT_ORGANIZATION_ID) return process.env.DATABASE_URL?.trim();
-  return tenantDatabaseUrls()[id];
+  // Interim shared-database mode: organizations without an explicit physical
+  // URL use the control database, while every tenant-owned query still carries
+  // its organization_id predicate. A mapped URL transparently upgrades one
+  // organization to a separate physical database later.
+  return tenantDatabaseUrls()[id] || process.env.DATABASE_URL?.trim();
 }
 
 export function isTenantDatabaseConfigured(organizationId = currentTenantOrganizationId()) {

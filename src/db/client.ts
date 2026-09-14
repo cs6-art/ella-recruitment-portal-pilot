@@ -46,7 +46,7 @@ export function getTenantDb(): NeonDatabase<typeof schema> {
   const organizationId = currentTenantOrganizationId();
   const url = tenantDatabaseUrl(organizationId);
   if (!url) {
-    throw new Error(`No physical database is configured for organization ${organizationId}. Set TENANT_DATABASE_URLS.`);
+    throw new Error(`No database is configured for organization ${organizationId}. Set DATABASE_URL or TENANT_DATABASE_URLS.`);
   }
   const existing = cachedByUrl.get(url);
   if (existing) return existing;

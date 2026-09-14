@@ -22,6 +22,7 @@ test("tenant database routing is request-local and keeps McLink as the default",
   assert.match(router, /AsyncLocalStorage/);
   assert.match(router, /TENANT_DATABASE_URLS/);
   assert.match(router, /DEFAULT_ORGANIZATION_ID/);
+  assert.match(router, /process\.env\.DATABASE_URL\?\.trim\(\)/);
   assert.match(client, /getTenantDb/);
   assert.match(client, /tenantDatabaseUrl/);
 });
@@ -47,7 +48,7 @@ test("public Postgres role pages and intake search configured tenant databases",
   const portal = read("src/lib/recruitment-target-portal.ts");
   const roles = read("src/app/api/public/roles/route.ts");
   const page = read("src/app/apply/[roleId]/page.tsx");
-  assert.match(portal, /configuredTenantOrganizationIds/);
+  assert.match(portal, /activeTenantOrganizationIds/);
   assert.match(portal, /targetPublicRoleSummaries/);
   assert.match(roles, /targetPublicRoleSummaries/);
   assert.match(page, /resolvePublishedRecruitmentRole/);
@@ -55,11 +56,14 @@ test("public Postgres role pages and intake search configured tenant databases",
 
 test("organization administration is restricted to the McLink platform admin", () => {
   const route = read("src/app/api/organizations/route.ts");
+  const directory = read("src/app/api/user-directory/route.ts");
   const editor = read("src/components/UserAccountsEditor.tsx");
   assert.match(route, /Only a McLink platform administrator/);
-  assert.match(route, /databaseStatus: "pending"/);
+  assert.match(route, /databaseStatus: "shared"/);
   assert.match(route, /A provisioned organization cannot change its slug/);
+  assert.match(directory, /organizationId/);
+  assert.match(directory, /runWithTenantDatabase/);
   assert.match(editor, /\/api\/organizations/);
-  assert.match(editor, /Pending database/);
-  assert.match(editor, /TENANT_DATABASE_URLS/);
+  assert.match(editor, /Manage users for/);
+  assert.match(editor, /Shared database/);
 });

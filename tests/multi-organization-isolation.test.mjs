@@ -40,7 +40,8 @@ test("sessions and login resolve an organization before tenant-scoped requests",
 test("directory provisioning cannot grant a user access to another tenant", () => {
   const directory = read("src/app/api/user-directory/route.ts");
   const orgs = read("src/lib/organization-accounts.ts");
-  assert.match(directory, /organizationId: access\.user\.organizationId/);
+  assert.match(directory, /organizationId: target\.organizationId/);
+  assert.match(directory, /isPlatformAdmin/);
   assert.match(orgs, /current tenant/);
   assert.match(orgs, /previousEmail/);
 });
