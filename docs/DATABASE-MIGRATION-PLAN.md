@@ -1219,6 +1219,16 @@ retry/no-show lifecycle.
 
 ## 16. Physical tenant database implementation
 
+### Interim shared-database mode
+
+Organizations can be created and used immediately without a second database.
+When an organization has no `TENANT_DATABASE_URLS` entry, tenant queries use
+`DATABASE_URL` and remain isolated by `organization_id` on the tenant tables.
+The User Accounts screen lets a McLink platform administrator select an
+organization and add its users. A later physical split is opt-in: adding the
+organization ID and URL to `TENANT_DATABASE_URLS` moves that tenant's database
+connection without changing its organization identity.
+
 The control-plane `organizations` table now records `database_key` and
 `database_status` (`drizzle/0014_physical_tenant_databases.sql`). McLink keeps
 using `DATABASE_URL`. A client organization is routed to its own Postgres URL

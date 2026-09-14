@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
+import { eq } from "drizzle-orm";
 
 import {
   getApplication,
@@ -37,6 +38,8 @@ import {
   getApplicationBookingNotification,
   copyScreeningResult,
 } from "@/lib/internal-recruitment-queries";
+import { getDb } from "@/db/client";
+import { organizations } from "@/db/schema";
 import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
 import { applicantVoiceTimezone } from "@/lib/applicant-timezone";
 import { extractStoredResumeText, type ResumeFileKind, type ResumeFileRecord } from "@/lib/resume-files";
@@ -49,11 +52,16 @@ import { hasValidFutureTime, isBeforeTargetHiringDate, isStandardFinalInterviewS
 import { getPortalConfigNumber } from "@/lib/portal-config";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
-import { configuredTenantOrganizationIds, runWithTenantDatabase } from "@/lib/tenant-database";
+import { runWithTenantDatabase } from "@/lib/tenant-database";
 
 async function targetOrganizationId() {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   return user?.organizationId || DEFAULT_ORGANIZATION_ID;
+}
+
+async function activeTenantOrganizationIds() {
+  const rows = await getDb().select({ id: organizations.id }).from(organizations).where(eq(organizations.active, true));
+  return Array.from(new Set([DEFAULT_ORGANIZATION_ID, ...rows.map((row) => row.id)]));
 }
 
 function rowOrganizationId(row: unknown) {
@@ -197,7 +205,7 @@ async function targetRoleSummariesForOrganization(organizationId: string, option
 /** Public catalogue across configured physical tenant databases. */
 export async function targetPublicRoleSummaries(options: { liveOnly?: boolean } = {}) {
   const summaries = [];
-  for (const organizationId of [DEFAULT_ORGANIZATION_ID, ...configuredTenantOrganizationIds()]) {
+  for (const organizationId of await activeTenantOrganizationIds()) {
     const rows = await runWithTenantDatabase(organizationId, () => targetRoleSummariesForOrganization(organizationId, options));
     summaries.push(...rows);
   }
@@ -291,7 +299,7 @@ export async function targetRoleDetails(externalId: string, organizationId = "")
  * absent HR session. The role external ID is globally unique, and the role's
  * own tenant is then used for all downstream application writes. */
 export async function targetPublicRoleDetails(externalId: string): Promise<RoleRequestDetails | null> {
-  const organizationIds = [DEFAULT_ORGANIZATION_ID, ...configuredTenantOrganizationIds()];
+  const organizationIds = await activeTenantOrganizationIds();
   for (const organizationId of organizationIds) {
     const role = await runWithTenantDatabase(organizationId, () => getRole(externalId));
     if (!role) continue;
@@ -381,9 +389,9 @@ function bookingSlot(slot: Record<string, unknown>, roleExternalId = "") {
 }
 
 async function findBookingTokenOrganization(tokenHash: string) {
-  for (const organizationId of [DEFAULT_ORGANIZATION_ID, ...configuredTenantOrganizationIds()]) {
+  for (const organizationId of await activeTenantOrganizationIds()) {
     const token = await runWithTenantDatabase(organizationId, () => getBookingToken(tokenHash));
-    if (token) return organizationId;
+    if (token) return token.token.organizationId;
   }
   return "";
 }
@@ -714,7 +722,7 @@ async function targetCreateApplicationInTenant(input: { externalId: string; role
 export async function targetGetScreeningInvitation(token: string) {
   const tokenHash = crypto.createHash("sha256").update(token.trim()).digest("hex");
   let row: Awaited<ReturnType<typeof getScreeningInvitation>> | null = null;
-  for (const organizationId of [DEFAULT_ORGANIZATION_ID, ...configuredTenantOrganizationIds()]) {
+  for (const organizationId of await activeTenantOrganizationIds()) {
     row = await runWithTenantDatabase(organizationId, () => getScreeningInvitation(tokenHash));
     if (row) break;
   }
@@ -727,7 +735,7 @@ export async function targetGetScreeningInvitation(token: string) {
 
 export async function targetUseScreeningInvitation(token: string, applicationId: string) {
   const tokenHash = crypto.createHash("sha256").update(token.trim()).digest("hex");
-  for (const organizationId of [DEFAULT_ORGANIZATION_ID, ...configuredTenantOrganizationIds()]) {
+  for (const organizationId of await activeTenantOrganizationIds()) {
     const invitation = await runWithTenantDatabase(organizationId, () => getScreeningInvitation(tokenHash));
     if (invitation) return runWithTenantDatabase(organizationId, () => markScreeningInvitationUsed(tokenHash, applicationId));
   }

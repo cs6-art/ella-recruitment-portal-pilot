@@ -56,6 +56,7 @@ const emptyForm: AccountForm = {
 };
 
 const emptyOrganizationForm: OrganizationForm = { name: "", slug: "", active: true };
+const DEFAULT_ORG_ID = "00000000-0000-4000-8000-000000000001";
 
 const accountFieldLabels: Record<string, string> = {
   fullName: "Full name",
@@ -101,12 +102,14 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
   const [organizationSaving, setOrganizationSaving] = useState(false);
   const [organizationError, setOrganizationError] = useState("");
   const [organizationMessage, setOrganizationMessage] = useState("");
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState(DEFAULT_ORG_ID);
 
-  async function loadUsers() {
+  async function loadUsers(organizationId = selectedOrganizationId) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/user-directory", { credentials: "same-origin", cache: "no-store" });
+      const query = canManageOrganizations && organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
+      const response = await fetch(`/api/user-directory${query}`, { credentials: "same-origin", cache: "no-store" });
       const data = await response.json();
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to load user accounts.");
       setUsers(data.users || []);
@@ -129,6 +132,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to load organizations.");
       setOrganizations(data.organizations || []);
       setCanManageOrganizations(true);
+      if (!data.organizations?.some((organization: Organization) => organization.id === selectedOrganizationId)) setSelectedOrganizationId(data.organizations?.[0]?.id || DEFAULT_ORG_ID);
       setOrganizationError("");
     } catch (loadError) {
       setCanManageOrganizations(false);
@@ -138,7 +142,9 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
     }
   }
 
-  useEffect(() => { void loadUsers(); void loadOrganizations(); }, []);
+  // These loaders intentionally run once on mount; later organization changes
+  // invoke loadUsers with the selected organization explicitly.
+  useEffect(() => { void loadUsers(); void loadOrganizations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeCount = useMemo(() => users.filter((user) => user.active).length, [users]);
   const adminCount = useMemo(() => users.filter((user) => user.canEditSettings && user.active).length, [users]);
@@ -227,7 +233,6 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showForm]);
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
@@ -250,7 +255,10 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
 
     setSaving(true);
     try {
-      const endpoint = originalEmail ? `/api/user-directory?originalEmail=${encodeURIComponent(originalEmail)}` : "/api/user-directory";
+      const params = new URLSearchParams();
+      if (originalEmail) params.set("originalEmail", originalEmail);
+      if (canManageOrganizations) params.set("organizationId", selectedOrganizationId);
+      const endpoint = `/api/user-directory${params.toString() ? `?${params.toString()}` : ""}`;
       const response = await fetch(endpoint, {
         method: originalEmail ? "PATCH" : "POST",
         credentials: "same-origin",
@@ -261,7 +269,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to save the user account.");
       setMessage(data.message || "User account saved successfully.");
       setShowForm(false);
-      await loadUsers();
+      await loadUsers(selectedOrganizationId);
       router.refresh();
     } catch (caught) {
       setSaveError(caught instanceof Error ? caught.message : "Unable to save the user account.");
@@ -308,7 +316,9 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
     setError("");
     setMessage("");
     try {
-      const response = await fetch(`/api/user-directory?originalEmail=${encodeURIComponent(user.email)}`, {
+      const params = new URLSearchParams({ originalEmail: user.email });
+      if (canManageOrganizations) params.set("organizationId", selectedOrganizationId);
+      const response = await fetch(`/api/user-directory?${params.toString()}`, {
         method: "PATCH",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
@@ -317,7 +327,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       const data = await response.json();
       if (!response.ok || data.success !== true) throw new Error(data.error || `Unable to ${action} the account.`);
       setMessage(user.active ? "User account deactivated." : "User account reactivated.");
-      await loadUsers();
+      await loadUsers(selectedOrganizationId);
       router.refresh();
     } catch (toggleError) {
       setError(toggleError instanceof Error ? toggleError.message : `Unable to ${action} the account.`);
@@ -348,7 +358,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       {message && <ActionFeedback kind="success">{message}</ActionFeedback>}
 
       {canManageOrganizations && <section className="card organization-admin-card">
-        <div className="card-header"><div><h2>Organizations</h2><p>Organizations define the tenant boundary. Each client must have its own physical database before its users can sign in.</p></div><button type="button" className="btn btn-primary" onClick={openNewOrganizationForm}>Add organization</button></div>
+        <div className="card-header"><div><h2>Organizations</h2><p>Organizations define the tenant boundary. New organizations use the shared database with strict organization-level data isolation.</p></div><button type="button" className="btn btn-primary" onClick={openNewOrganizationForm}>Add organization</button></div>
         {organizationError && <ActionFeedback kind="error">{organizationError}</ActionFeedback>}
         {organizationMessage && <ActionFeedback kind="success">{organizationMessage}</ActionFeedback>}
         {showOrganizationForm && <form className="user-account-form organization-form" noValidate onSubmit={(event) => void saveOrganization(event)}>
@@ -357,8 +367,8 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
           <label className="user-account-active"><input type="checkbox" checked={organizationForm.active} onChange={(event) => setOrganizationForm((current) => ({ ...current, active: event.target.checked }))} disabled={organizationForm.id === "00000000-0000-4000-8000-000000000001"} /> Organization is active</label>
           <div className="user-account-form-actions"><button type="button" className="btn btn-secondary" onClick={closeOrganizationForm}>Cancel</button><button type="submit" className="btn btn-primary" disabled={organizationSaving}>{organizationSaving ? "Saving…" : "Save organization"}</button></div>
         </form>}
-        {organizationLoading ? <div className="empty">Loading organizations…</div> : organizations.length === 0 ? <div className="empty">No organizations found.</div> : <div className="table-wrap"><table className="user-account-table"><thead><tr><th>Organization</th><th>Database key</th><th>Database status</th><th>Status</th><th>Actions</th></tr></thead><tbody>{organizations.map((organization) => <tr key={organization.id}><td><strong>{organization.name}</strong><span>{organization.slug}</span></td><td><code>{organization.databaseKey}</code></td><td><span className={`user-account-status ${organization.databaseStatus === "ready" ? "is-active" : "is-inactive"}`}>{organization.databaseStatus === "ready" ? "Ready" : "Pending database"}</span></td><td><span className={`user-account-status ${organization.active ? "is-active" : "is-inactive"}`}>{organization.active ? "Active" : "Inactive"}</span></td><td><button type="button" className="btn btn-secondary btn-small" onClick={() => openEditOrganizationForm(organization)}>Edit</button></td></tr>)}</tbody></table></div>}
-        <p className="field-hint">Database URLs stay in deployment secrets. After creating a pending organization, run the physical database provisioning command and add its organization ID to <code>TENANT_DATABASE_URLS</code>.</p>
+        {organizationLoading ? <div className="empty">Loading organizations…</div> : organizations.length === 0 ? <div className="empty">No organizations found.</div> : <div className="table-wrap"><table className="user-account-table"><thead><tr><th>Organization</th><th>Database key</th><th>Database status</th><th>Status</th><th>Actions</th></tr></thead><tbody>{organizations.map((organization) => { const shared = organization.databaseStatus === "shared"; const ready = organization.databaseStatus === "ready"; return <tr key={organization.id}><td><strong>{organization.name}</strong><span>{organization.slug}</span></td><td><code>{organization.databaseKey}</code></td><td><span className={`user-account-status ${ready || shared ? "is-active" : "is-inactive"}`}>{ready ? "Physical database" : shared ? "Shared database" : "Pending database"}</span></td><td><span className={`user-account-status ${organization.active ? "is-active" : "is-inactive"}`}>{organization.active ? "Active" : "Inactive"}</span></td><td><button type="button" className="btn btn-secondary btn-small" onClick={() => openEditOrganizationForm(organization)}>Edit</button></td></tr>; })}</tbody></table></div>}
+        <p className="field-hint">Users, roles, applicants, and credits are isolated by organization ID in the shared database. A separate database can be attached later by adding that organization ID to <code>TENANT_DATABASE_URLS</code>.</p>
       </section>}
 
       <section className="user-account-stats" aria-label="Account summary">
@@ -383,7 +393,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       </div>}
 
       <section className="card user-account-list-card">
-        <div className="card-header"><div><h2>Directory accounts</h2><p>These accounts are read from the <code>User_Directory</code> sheet.</p></div><button type="button" className="btn btn-secondary" onClick={() => void loadUsers()} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button></div>
+        <div className="card-header"><div><h2>Directory accounts</h2><p>{canManageOrganizations ? `Manage accounts for ${organizations.find((organization) => organization.id === selectedOrganizationId)?.name || "the selected organization"}.` : "Manage accounts for your organization."}</p></div><div className="user-account-actions">{canManageOrganizations && organizations.length > 0 && <div className="field"><label htmlFor="user-account-organization">Manage users for</label><select id="user-account-organization" value={selectedOrganizationId} onChange={(event) => { const organizationId = event.target.value; setSelectedOrganizationId(organizationId); setShowForm(false); void loadUsers(organizationId); }}><option value={DEFAULT_ORG_ID}>McLink Group</option>{organizations.filter((organization) => organization.id !== DEFAULT_ORG_ID).map((organization) => <option key={organization.id} value={organization.id} disabled={!organization.active}>{organization.name}{organization.active ? "" : " (inactive)"}</option>)}</select></div>}<button type="button" className="btn btn-secondary" onClick={() => void loadUsers(selectedOrganizationId)} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button></div></div>
         {loading ? <div className="empty">Loading user accounts…</div> : users.length === 0 ? <div className="empty">No user accounts were found.</div> : <div className="table-wrap user-account-table-wrap"><table className="user-account-table"><thead><tr><th>User</th><th>Access role</th><th>Department</th><th>Status</th><th>Permissions</th><th>Actions</th></tr></thead><tbody>{users.map((user) => <tr key={user.email}><td><strong>{user.fullName || "Unnamed user"}</strong><span>{user.email}</span></td><td>{user.accessRole || "—"}</td><td>{user.department || "—"}</td><td><span className={`user-account-status ${user.active ? "is-active" : "is-inactive"}`}>{user.active ? "Active" : "Inactive"}</span></td><td>{permissionLabels(user)}</td><td><div className="user-account-actions"><button type="button" className="btn btn-secondary btn-small" onClick={() => openEditForm(user)}>Edit</button><button type="button" className={`btn btn-small ${user.active ? "btn-danger-outline" : "btn-secondary"}`} onClick={() => void toggleActive(user)} disabled={user.email === currentEmail.trim().toLowerCase()}>{user.active ? "Deactivate" : "Reactivate"}</button></div></td></tr>)}</tbody></table></div>}
       </section>
     </main>
