@@ -1,4 +1,4 @@
-import { boolean, date, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { organizations } from "@/db/schema";
 
@@ -18,10 +18,10 @@ export const departments = pgTable("departments", {
   id: uuid("id").defaultRandom().primaryKey(),
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),
   name: text("name").notNull(),
-  nameKey: text("name_key").notNull().unique(),
+  nameKey: text("name_key").notNull(),
   active: boolean("active").notNull().default(true),
   createdAt: ts("created_at").notNull().defaultNow(),
-});
+}, (t) => [uniqueIndex("departments_organization_name_key_uidx").on(t.organizationId, t.nameKey)]);
 
 export const users = pgTable(
   "users",
@@ -60,13 +60,13 @@ export const oauthConnections = pgTable("oauth_connections", {
 });
 
 export const portalSettings = pgTable("portal_settings", {
-  key: text("key").primaryKey(),
+  key: text("key").notNull(),
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),
   value: text("value").notNull().default(""),
   category: text("category").notNull().default(""),
   updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
   updatedBy: text("updated_by").notNull().default(""),
-});
+}, (t) => [primaryKey({ name: "portal_settings_pkey", columns: [t.organizationId, t.key] })]);
 
 export const roles = pgTable(
   "roles",
@@ -145,7 +145,7 @@ export const applicants = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     organizationId: uuid("organization_id").notNull().references(() => organizations.id),
-    primaryEmail: text("primary_email").notNull().unique(),
+    primaryEmail: text("primary_email").notNull(),
     fullName: text("full_name").notNull().default(""),
     phoneE164: text("phone_e164").notNull().default(""),
     country: text("country").notNull().default(""),
@@ -154,7 +154,7 @@ export const applicants = pgTable(
     updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
     notes: text("notes").notNull().default(""),
   },
-  (t) => [index("applicants_phone_e164_idx").on(t.phoneE164)],
+  (t) => [index("applicants_phone_e164_idx").on(t.phoneE164), uniqueIndex("applicants_organization_primary_email_uidx").on(t.organizationId, t.primaryEmail)],
 );
 
 export const applicantAliases = pgTable("applicant_aliases", {
@@ -165,7 +165,7 @@ export const applicantAliases = pgTable("applicant_aliases", {
   value: text("value").notNull(),
   source: text("source").notNull().default(""),
   firstSeenAt: ts("first_seen_at").notNull().defaultNow(),
-});
+}, (t) => [uniqueIndex("applicant_aliases_organization_kind_value_uidx").on(t.organizationId, t.kind, t.value)]);
 
 export const resumeFiles = pgTable(
   "resume_files",

@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getDirectoryUsers, updateDirectoryUser, upsertDirectoryUser, type DirectoryUser } from "@/lib/google-sheets";
-import { syncOrganizationMembership } from "@/lib/organization-accounts";
+import { DEFAULT_ORGANIZATION_ID, syncOrganizationMembership } from "@/lib/organization-accounts";
+import { getPostgresDirectoryUsers, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -48,7 +49,9 @@ export async function GET(request: Request) {
   if ("error" in access) return access.error;
 
   try {
-    const users = await getDirectoryUsers();
+    const users = access.user.organizationId === DEFAULT_ORGANIZATION_ID
+      ? await getDirectoryUsers()
+      : await getPostgresDirectoryUsers(access.user.organizationId);
     return NextResponse.json({ success: true, users }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API User Directory] GET failed:", error);
@@ -90,7 +93,10 @@ async function saveAccount(request: Request, originalEmail?: string) {
       canReviewDepartmentRole: user.canReviewDepartmentRole,
       active: user.active,
     };
-    const users = await getDirectoryUsers();
+    const isDefaultOrganization = access.user.organizationId === DEFAULT_ORGANIZATION_ID;
+    const users = isDefaultOrganization
+      ? await getDirectoryUsers()
+      : await getPostgresDirectoryUsers(access.user.organizationId);
     const normalizedOriginalEmail = originalEmail?.trim().toLowerCase();
     const duplicate = users.some((existing) => existing.email === normalizedEmail && existing.email !== normalizedOriginalEmail);
     if (duplicate) return responseError("An account already exists for that email address.", 409);
@@ -102,8 +108,12 @@ async function saveAccount(request: Request, originalEmail?: string) {
       return responseError("The account being edited no longer exists.", 404);
     }
 
-    if (normalizedOriginalEmail) await updateDirectoryUser(normalizedOriginalEmail, normalizedUser);
-    else await upsertDirectoryUser(normalizedUser);
+    if (isDefaultOrganization) {
+      if (normalizedOriginalEmail) await updateDirectoryUser(normalizedOriginalEmail, normalizedUser);
+      else await upsertDirectoryUser(normalizedUser);
+    } else {
+      await upsertPostgresDirectoryUser(access.user.organizationId, normalizedUser, normalizedOriginalEmail);
+    }
     await syncOrganizationMembership({ organizationId: access.user.organizationId, email: normalizedUser.email, active: normalizedUser.active, previousEmail: normalizedOriginalEmail });
 
     return NextResponse.json({ success: true, message: "User account saved successfully." });

@@ -62,10 +62,12 @@ test("client organizations can log in without a row in McLink's own user directo
   assert.match(provision, /insert into credit_accounts/);
 });
 
-test("applicants cannot be reused across organizations", () => {
+test("applicants are deduplicated inside each organization", () => {
   const queries = read("src/lib/internal-recruitment-queries.ts");
-  assert.match(queries, /applicant_belongs_to_another_organization/);
-  assert.match(queries, /existingApplicant\.organizationId !== role\.organizationId/);
+  const migration = read("drizzle/0013_tenant_scoped_uniqueness.sql");
+  assert.match(queries, /eq\(applicants\.organizationId, role\.organizationId\)/);
+  assert.match(queries, /target: \[applicants\.organizationId, applicants\.primaryEmail\]/);
+  assert.match(migration, /applicants_organization_primary_email_uidx/);
 });
 
 test("resume and booking writes carry the application tenant", () => {

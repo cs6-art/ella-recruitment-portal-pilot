@@ -5,6 +5,34 @@ import { organizations } from "@/db/schema";
 import { departments, users } from "@/db/schema-recruitment";
 import type { DirectoryUser } from "@/lib/google-sheets";
 
+function directoryUserFromRow(row: {
+  email: string;
+  fullName: string | null;
+  accessRole: string | null;
+  departmentName: string | null;
+  canCreateRole: boolean;
+  canReviewRole: boolean;
+  canApproveRole: boolean;
+  canEditSettings: boolean;
+  canManageUsers: boolean;
+  canReviewDepartmentRole: boolean;
+  active: boolean;
+}): DirectoryUser {
+  return {
+    email: row.email.trim().toLowerCase(),
+    fullName: row.fullName || "",
+    accessRole: row.accessRole || "",
+    department: row.departmentName || "",
+    canCreateRole: row.canCreateRole,
+    canReviewRole: row.canReviewRole,
+    canApproveRole: row.canApproveRole,
+    canEditSettings: row.canEditSettings,
+    canManageUsers: row.canManageUsers,
+    canReviewDepartmentRole: row.canReviewDepartmentRole,
+    active: row.active,
+  };
+}
+
 /**
  * Client-organization login fallback (see [[roadmap]] / DATABASE-MIGRATION-PLAN.md
  * item #2 "users auth source"). McLink's own staff keep authenticating from the
@@ -42,24 +70,86 @@ export async function findPostgresDirectoryUser(email: string, organizationId: s
       .where(and(eq(users.email, normalizedEmail), eq(users.organizationId, organizationId)))
       .limit(1);
     if (!row) return null;
-    return {
-      email: normalizedEmail,
-      fullName: row.fullName || "",
-      accessRole: row.accessRole || "",
-      department: row.departmentName || "",
-      canCreateRole: row.canCreateRole,
-      canReviewRole: row.canReviewRole,
-      canApproveRole: row.canApproveRole,
-      canEditSettings: row.canEditSettings,
-      canManageUsers: row.canManageUsers,
-      active: row.active,
-      canReviewDepartmentRole: row.canReviewDepartmentRole,
-    };
+    return directoryUserFromRow(row);
   } catch (error) {
     // The recruitment-core tables are an opt-in migration; a client org
     // provisioned before that migration ran must not crash login.
     console.error("[Postgres Directory] Lookup unavailable:", error instanceof Error ? error.message : error);
     return null;
+  }
+}
+
+export async function getPostgresDirectoryUsers(organizationId: string): Promise<DirectoryUser[]> {
+  if (!isDatabaseConfigured()) return [];
+  const db = getDb();
+  const rows = await db
+    .select({
+      email: users.email,
+      fullName: users.fullName,
+      accessRole: users.accessRole,
+      departmentName: departments.name,
+      canCreateRole: users.canCreateRole,
+      canReviewRole: users.canReviewRole,
+      canApproveRole: users.canApproveRole,
+      canEditSettings: users.canEditSettings,
+      canManageUsers: users.canManageUsers,
+      canReviewDepartmentRole: users.canReviewDepartmentRole,
+      active: users.active,
+    })
+    .from(users)
+    .leftJoin(departments, and(eq(departments.id, users.departmentId), eq(departments.organizationId, users.organizationId)))
+    .where(eq(users.organizationId, organizationId))
+    .orderBy(users.email);
+  return rows.map(directoryUserFromRow);
+}
+
+export async function upsertPostgresDirectoryUser(organizationId: string, user: DirectoryUser, originalEmail?: string): Promise<void> {
+  if (!isDatabaseConfigured()) throw new Error("Database is not configured.");
+  const db = getDb();
+  const email = user.email.trim().toLowerCase();
+  const previousEmail = originalEmail?.trim().toLowerCase();
+  const [existingEmail] = await db.select({ id: users.id, organizationId: users.organizationId }).from(users).where(eq(users.email, email)).limit(1);
+  if (existingEmail && existingEmail.organizationId !== organizationId) throw new Error("The email already belongs to another organization.");
+  const [existing] = previousEmail
+    ? await db.select({ id: users.id, organizationId: users.organizationId }).from(users).where(eq(users.email, previousEmail)).limit(1)
+    : [];
+  if (previousEmail && (!existing || existing.organizationId !== organizationId)) throw new Error("The account being edited no longer exists.");
+  if (!previousEmail && existingEmail) throw new Error("An account already exists for that email address.");
+
+  const departmentName = user.department.trim();
+  let departmentId: string | null = null;
+  if (departmentName) {
+    const nameKey = departmentName.toLowerCase();
+    const [department] = await db.select({ id: departments.id }).from(departments).where(and(eq(departments.organizationId, organizationId), eq(departments.nameKey, nameKey))).limit(1);
+    if (department) departmentId = department.id;
+    else {
+      const [created] = await db.insert(departments).values({ organizationId, name: departmentName, nameKey }).onConflictDoNothing({ target: [departments.organizationId, departments.nameKey] }).returning({ id: departments.id });
+      if (created) departmentId = created.id;
+      else {
+        const [existingDepartment] = await db.select({ id: departments.id }).from(departments).where(and(eq(departments.organizationId, organizationId), eq(departments.nameKey, nameKey))).limit(1);
+        departmentId = existingDepartment?.id || null;
+      }
+    }
+  }
+
+  const values = {
+    email,
+    fullName: user.fullName.trim(),
+    accessRole: user.accessRole.trim(),
+    departmentId,
+    canCreateRole: user.canCreateRole,
+    canReviewRole: user.canReviewRole,
+    canApproveRole: user.canApproveRole,
+    canEditSettings: user.canEditSettings,
+    canManageUsers: user.canManageUsers,
+    canReviewDepartmentRole: user.canReviewDepartmentRole,
+    active: user.active,
+    updatedAt: new Date(),
+  };
+  if (existing) {
+    await db.update(users).set(values).where(and(eq(users.id, existing.id), eq(users.organizationId, organizationId)));
+  } else {
+    await db.insert(users).values({ organizationId, ...values });
   }
 }
 

@@ -71,7 +71,7 @@ const sheets = google.sheets({
 
 const response = await sheets.spreadsheets.values.get({
   spreadsheetId,
-  range: "User_Directory!A2:I",
+  range: "User_Directory!A2:K",
 });
 
 const rows = response.data.values ?? [];
@@ -99,5 +99,7 @@ console.log({
   canReviewRole: matchedRow[5],
   canApproveRole: matchedRow[6],
   canEditSettings: matchedRow[7],
-  active: matchedRow[8],
+  canManageUsers: matchedRow[8],
+  active: matchedRow[9],
+  canReviewDepartmentRole: matchedRow[10],
 });
