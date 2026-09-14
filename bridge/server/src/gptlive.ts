@@ -30,6 +30,9 @@ import {
   LESSON_DIRECTIVE,
   LIVE_DIRECTIVE,
   RESPONSES_INSTRUCTIONS,
+  recruitmentGreeting,
+  recruitmentInstructions,
+  type LiveInterviewContext,
 } from "./prompts";
 import { TurnProjector } from "./turns";
 
@@ -146,6 +149,7 @@ export class GptLiveBridge {
   constructor(
     private readonly events: GptLiveEvents,
     private readonly log: (msg: string) => void = () => {},
+    private readonly interviewContext?: LiveInterviewContext,
   ) {
     this.turns = new TurnProjector({
       onTurn: (turn) => this.events.onTurn(turn),
@@ -249,8 +253,9 @@ export class GptLiveBridge {
     // Persona + visual/delegation mechanics + the whole lesson plan, all at
     // startup: instructions are the one channel the live model reliably
     // follows, and mid-session appends broke its own practice pacing.
-    const instructions =
-      DEFAULT_INSTRUCTIONS + LIVE_DIRECTIVE + LESSON_DIRECTIVE;
+    const instructions = this.interviewContext
+      ? recruitmentInstructions(this.interviewContext)
+      : DEFAULT_INSTRUCTIONS + LIVE_DIRECTIVE + LESSON_DIRECTIVE;
     // v3: the FIRST message. Everything here is immutable afterwards except
     // delegation.responses settings (session.update) — and the delegation
     // TYPE is fixed for the session's life.
@@ -442,7 +447,9 @@ export class GptLiveBridge {
     // speak-now directive AND the opening. Not commentary — that is for
     // information to paraphrase, and the guide measured instructions as the
     // reliable trigger (500/500 sessions spoke first).
-    const greeting = DEFAULT_GREETING;
+    const greeting = this.interviewContext
+      ? recruitmentGreeting(this.interviewContext)
+      : DEFAULT_GREETING;
     if (!greeting) return;
     this.append("instructions", GREETING_PREAMBLE + greeting);
   }

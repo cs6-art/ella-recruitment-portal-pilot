@@ -26,6 +26,10 @@ export type LiveAvatarRoleContext = {
 export type LiveAvatarSessionResult = {
   sessionToken: string;
   sessionId: string;
+  mode?: "FULL" | "BRIDGE";
+  livekitUrl?: string;
+  livekitClientToken?: string;
+  wsUrl?: string;
 };
 
 function requiredEnv(name: string): string | null {
@@ -40,11 +44,39 @@ function requiredEnv(name: string): string | null {
  * broken on environments that have not been configured yet.
  */
 export function isLiveAvatarConfigured(): boolean {
+  if (requiredEnv("LIVEAVATAR_BRIDGE_URL")) return true;
   return Boolean(
     requiredEnv("LIVEAVATAR_API_KEY") &&
       requiredEnv("LIVEAVATAR_AVATAR_ID") &&
       requiredEnv("LIVEAVATAR_VOICE_AGENT_ID"),
   );
+}
+
+function bridgeUrl(): string | null {
+  const value = requiredEnv("LIVEAVATAR_BRIDGE_URL");
+  return value ? value.replace(/\/+$/, "") : null;
+}
+
+async function createBridgeSession(role: LiveAvatarRoleContext): Promise<LiveAvatarSessionResult> {
+  const baseUrl = bridgeUrl();
+  if (!baseUrl) throw new Error("The live avatar bridge is not configured.");
+  const response = await fetch(`${baseUrl}/api/session/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(role),
+    cache: "no-store",
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(typeof body?.error === "string" ? body.error : `Live avatar bridge request failed (${response.status}).`);
+  const data = body as { session_id?: unknown; livekit_url?: unknown; livekit_client_token?: unknown; ws_path?: unknown };
+  const sessionId = typeof data.session_id === "string" ? data.session_id : "";
+  const livekitUrl = typeof data.livekit_url === "string" ? data.livekit_url : "";
+  const livekitClientToken = typeof data.livekit_client_token === "string" ? data.livekit_client_token : "";
+  const publicBase = requiredEnv("LIVEAVATAR_BRIDGE_PUBLIC_URL") || baseUrl;
+  const wsPath = typeof data.ws_path === "string" ? data.ws_path : "";
+  const wsUrl = `${publicBase.replace(/\/+$/, "")}${wsPath}`;
+  if (!sessionId || !livekitUrl || !livekitClientToken || !wsPath) throw new Error("The live avatar bridge returned an incomplete session.");
+  return { sessionToken: "", sessionId, mode: "BRIDGE", livekitUrl, livekitClientToken, wsUrl };
 }
 
 // LiveAvatar dynamic_variables values are capped at 1000 characters and 64
@@ -63,6 +95,7 @@ function clampVariable(value: string, maxLength = 1000): string {
 export async function createLiveAvatarSession(
   role: LiveAvatarRoleContext,
 ): Promise<LiveAvatarSessionResult> {
+  if (bridgeUrl()) return createBridgeSession(role);
   const apiKey = requiredEnv("LIVEAVATAR_API_KEY");
   const avatarId = requiredEnv("LIVEAVATAR_AVATAR_ID");
   const voiceAgentId = requiredEnv("LIVEAVATAR_VOICE_AGENT_ID");

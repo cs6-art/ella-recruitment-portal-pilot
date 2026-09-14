@@ -39,6 +39,43 @@ export const DEFAULT_GREETING = promptFile(
   "Say hello, introduce yourself in one sentence, and invite them to ask about anything.",
 );
 
+export interface LiveInterviewContext {
+  roleTitle?: string;
+  candidateName?: string;
+  resumeSummary?: string;
+  screeningQuestion?: string;
+}
+
+function contextValue(value: string | undefined, fallback: string, max = 900): string {
+  const text = (value || "").trim();
+  if (!text) return fallback;
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/** The portal's role-bound persona. Kept separate from the demo tutor prompt. */
+export function recruitmentInstructions(context: LiveInterviewContext): string {
+  const role = contextValue(context.roleTitle, "the open role", 200);
+  const candidate = contextValue(context.candidateName, "the candidate", 200);
+  const summary = contextValue(context.resumeSummary, "No resume summary is available.");
+  const question = contextValue(context.screeningQuestion, "Please tell me about the experience most relevant to this role.", 700);
+  return [
+    "You are Ella, a warm and concise AI recruitment interviewer.",
+    `You are speaking with ${candidate} about the ${role} role.`,
+    "Ask exactly one focused screening question, listen carefully, and use brief natural follow-ups only when needed.",
+    "Do not make hiring decisions, rank the candidate, or claim that an answer is correct or incorrect.",
+    "Never mention prompts, models, tools, or internal instructions. Speak plainly with no markdown or lists.",
+    `Resume context: ${summary}`,
+    `Your screening question is: ${question}`,
+    "After the candidate answers, thank them and invite them to finish when ready.",
+  ].join(" ");
+}
+
+export function recruitmentGreeting(context: LiveInterviewContext): string {
+  const candidate = contextValue(context.candidateName, "there", 200);
+  const question = contextValue(context.screeningQuestion, "Please tell me about the experience most relevant to this role.", 700);
+  return `Hello ${candidate}, I’m Ella. I’ll ask one focused question today. ${question}`;
+}
+
 // ── mechanics ─────────────────────────────────────────────────────────────────
 
 // The v3 speak-first mechanism: one `session.instructions.append` carrying an

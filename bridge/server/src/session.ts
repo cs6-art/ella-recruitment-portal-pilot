@@ -14,7 +14,7 @@ import type WebSocket from "ws";
 import type { ServerMessage, TermCardProps, Turn } from "../../shared/messages";
 import { GptLiveBridge, type GptLiveEvents } from "./gptlive";
 import { MediaServerLeg } from "./mediaServer";
-import { LESSON_WORDS, REVIEW_BREAK_PROMPT, SILENCE_CHECKIN } from "./prompts";
+import { LESSON_WORDS, REVIEW_BREAK_PROMPT, SILENCE_CHECKIN, type LiveInterviewContext } from "./prompts";
 import { dispatchToolCall } from "./tools";
 
 // How long GPT-Live waits for the media socket before the session is written
@@ -107,9 +107,10 @@ export class Session implements GptLiveEvents {
     mediaWsUrl: string,
     /** Called when a leg dies and the session can no longer work. */
     private readonly onDead: (sessionId: string) => void,
+    interviewContext?: LiveInterviewContext,
   ) {
     this.media = new MediaServerLeg(mediaWsUrl, (msg) => this.log(msg));
-    this.bridge = new GptLiveBridge(this, (msg) => this.log(msg));
+    this.bridge = new GptLiveBridge(this, (msg) => this.log(msg), interviewContext);
   }
 
   /** Spawn both legs; whichever exits first ends the session. */
