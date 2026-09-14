@@ -25,6 +25,22 @@ type DirectoryUser = {
 
 type AccountForm = DirectoryUser;
 
+type Organization = {
+  id: string;
+  name: string;
+  slug: string;
+  databaseKey: string;
+  databaseStatus: string;
+  active: boolean;
+};
+
+type OrganizationForm = {
+  id?: string;
+  name: string;
+  slug: string;
+  active: boolean;
+};
+
 const emptyForm: AccountForm = {
   email: "",
   fullName: "",
@@ -38,6 +54,8 @@ const emptyForm: AccountForm = {
   canReviewDepartmentRole: false,
   active: true,
 };
+
+const emptyOrganizationForm: OrganizationForm = { name: "", slug: "", active: true };
 
 const accountFieldLabels: Record<string, string> = {
   fullName: "Full name",
@@ -75,6 +93,14 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
   const [saveError, setSaveError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [canManageOrganizations, setCanManageOrganizations] = useState(false);
+  const [organizationForm, setOrganizationForm] = useState<OrganizationForm>(emptyOrganizationForm);
+  const [showOrganizationForm, setShowOrganizationForm] = useState(false);
+  const [organizationLoading, setOrganizationLoading] = useState(true);
+  const [organizationSaving, setOrganizationSaving] = useState(false);
+  const [organizationError, setOrganizationError] = useState("");
+  const [organizationMessage, setOrganizationMessage] = useState("");
 
   async function loadUsers() {
     setLoading(true);
@@ -91,10 +117,33 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
     }
   }
 
-  useEffect(() => { void loadUsers(); }, []);
+  async function loadOrganizations() {
+    setOrganizationLoading(true);
+    try {
+      const response = await fetch("/api/organizations", { credentials: "same-origin", cache: "no-store" });
+      if (response.status === 403) {
+        setCanManageOrganizations(false);
+        return;
+      }
+      const data = await response.json();
+      if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to load organizations.");
+      setOrganizations(data.organizations || []);
+      setCanManageOrganizations(true);
+      setOrganizationError("");
+    } catch (loadError) {
+      setCanManageOrganizations(false);
+      setOrganizationError(loadError instanceof Error ? loadError.message : "Unable to load organizations.");
+    } finally {
+      setOrganizationLoading(false);
+    }
+  }
+
+  useEffect(() => { void loadUsers(); void loadOrganizations(); }, []);
 
   const activeCount = useMemo(() => users.filter((user) => user.active).length, [users]);
   const adminCount = useMemo(() => users.filter((user) => user.canEditSettings && user.active).length, [users]);
+  const editingOrganization = useMemo(() => organizations.find((organization) => organization.id === organizationForm.id), [organizations, organizationForm.id]);
+  const organizationSlugLocked = Boolean(editingOrganization && editingOrganization.databaseStatus !== "pending");
 
   function openNewForm() {
     setOriginalEmail("");
@@ -104,6 +153,25 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
     setSaveError("");
     setFieldErrors({});
     setShowForm(true);
+  }
+
+  function openNewOrganizationForm() {
+    setOrganizationForm(emptyOrganizationForm);
+    setOrganizationError("");
+    setOrganizationMessage("");
+    setShowOrganizationForm(true);
+  }
+
+  function openEditOrganizationForm(organization: Organization) {
+    setOrganizationForm({ id: organization.id, name: organization.name, slug: organization.slug, active: organization.active });
+    setOrganizationError("");
+    setOrganizationMessage("");
+    setShowOrganizationForm(true);
+  }
+
+  function closeOrganizationForm() {
+    setShowOrganizationForm(false);
+    setOrganizationError("");
   }
 
   function openEditForm(user: DirectoryUser) {
@@ -202,6 +270,37 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
     }
   }
 
+  async function saveOrganization(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = organizationForm.name.trim();
+    const slug = organizationForm.slug.trim().toLowerCase();
+    if (name.length < 2 || !/^[a-z0-9][a-z0-9-]{1,62}$/.test(slug)) {
+      setOrganizationError("Enter a name and a slug using 2–63 lowercase letters, numbers, or hyphens.");
+      return;
+    }
+    setOrganizationSaving(true);
+    setOrganizationError("");
+    setOrganizationMessage("");
+    try {
+      const response = await fetch(organizationForm.id ? `/api/organizations?id=${encodeURIComponent(organizationForm.id)}` : "/api/organizations", {
+        method: organizationForm.id ? "PATCH" : "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, slug, active: organizationForm.active }),
+      });
+      const data = await response.json();
+      if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to save the organization.");
+      setOrganizationMessage(data.message || "Organization saved.");
+      setShowOrganizationForm(false);
+      await loadOrganizations();
+      router.refresh();
+    } catch (caught) {
+      setOrganizationError(caught instanceof Error ? caught.message : "Unable to save the organization.");
+    } finally {
+      setOrganizationSaving(false);
+    }
+  }
+
   async function toggleActive(user: DirectoryUser) {
     if (user.email === currentEmail.trim().toLowerCase()) return;
     const action = user.active ? "deactivate" : "reactivate";
@@ -247,6 +346,20 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       {error && <ActionFeedback kind="error">{error}</ActionFeedback>}
       {saveError && <ValidationSummary error={saveError} title="Save failed" issues={Object.entries(fieldErrors).filter(([, message]) => Boolean(message)).map(([field, message]) => ({ field, label: accountFieldLabels[field] || field, message, href: accountFieldAnchors[field] }))} />}
       {message && <ActionFeedback kind="success">{message}</ActionFeedback>}
+
+      {canManageOrganizations && <section className="card organization-admin-card">
+        <div className="card-header"><div><h2>Organizations</h2><p>Organizations define the tenant boundary. Each client must have its own physical database before its users can sign in.</p></div><button type="button" className="btn btn-primary" onClick={openNewOrganizationForm}>Add organization</button></div>
+        {organizationError && <ActionFeedback kind="error">{organizationError}</ActionFeedback>}
+        {organizationMessage && <ActionFeedback kind="success">{organizationMessage}</ActionFeedback>}
+        {showOrganizationForm && <form className="user-account-form organization-form" noValidate onSubmit={(event) => void saveOrganization(event)}>
+          <div className="field"><label htmlFor="organization-name">Organization name</label><input id="organization-name" value={organizationForm.name} onChange={(event) => setOrganizationForm((current) => ({ ...current, name: event.target.value }))} required /></div>
+          <div className="field"><label htmlFor="organization-slug">Organization slug</label><input id="organization-slug" value={organizationForm.slug} onChange={(event) => setOrganizationForm((current) => ({ ...current, slug: event.target.value }))} disabled={organizationSlugLocked} required /><small className="field-hint">Used as the database key. A provisioned organization cannot change its slug.</small></div>
+          <label className="user-account-active"><input type="checkbox" checked={organizationForm.active} onChange={(event) => setOrganizationForm((current) => ({ ...current, active: event.target.checked }))} disabled={organizationForm.id === "00000000-0000-4000-8000-000000000001"} /> Organization is active</label>
+          <div className="user-account-form-actions"><button type="button" className="btn btn-secondary" onClick={closeOrganizationForm}>Cancel</button><button type="submit" className="btn btn-primary" disabled={organizationSaving}>{organizationSaving ? "Saving…" : "Save organization"}</button></div>
+        </form>}
+        {organizationLoading ? <div className="empty">Loading organizations…</div> : organizations.length === 0 ? <div className="empty">No organizations found.</div> : <div className="table-wrap"><table className="user-account-table"><thead><tr><th>Organization</th><th>Database key</th><th>Database status</th><th>Status</th><th>Actions</th></tr></thead><tbody>{organizations.map((organization) => <tr key={organization.id}><td><strong>{organization.name}</strong><span>{organization.slug}</span></td><td><code>{organization.databaseKey}</code></td><td><span className={`user-account-status ${organization.databaseStatus === "ready" ? "is-active" : "is-inactive"}`}>{organization.databaseStatus === "ready" ? "Ready" : "Pending database"}</span></td><td><span className={`user-account-status ${organization.active ? "is-active" : "is-inactive"}`}>{organization.active ? "Active" : "Inactive"}</span></td><td><button type="button" className="btn btn-secondary btn-small" onClick={() => openEditOrganizationForm(organization)}>Edit</button></td></tr>)}</tbody></table></div>}
+        <p className="field-hint">Database URLs stay in deployment secrets. After creating a pending organization, run the physical database provisioning command and add its organization ID to <code>TENANT_DATABASE_URLS</code>.</p>
+      </section>}
 
       <section className="user-account-stats" aria-label="Account summary">
         <div className="stat-card"><span>Total accounts</span><strong>{users.length}</strong></div>
