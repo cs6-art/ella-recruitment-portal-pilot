@@ -66,7 +66,7 @@ test("voice attempt migration matches the provider dispatch state machine", () =
 });
 
 test("the migration runner will accept the new files (no functions / DO blocks / dollar-quoting)", () => {
-  for (const f of ["drizzle/0002_payments.sql", "drizzle/0003_recruitment_core.sql", "drizzle/0004_voice_call_logs.sql", "drizzle/0005_candidate_email_events.sql", "drizzle/0006_voice_attempt_dispatch_states.sql", "drizzle/0007_resume_extraction_cache.sql", "drizzle/0008_notification_claim_leases.sql"]) {
+  for (const f of ["drizzle/0002_payments.sql", "drizzle/0003_recruitment_core.sql", "drizzle/0004_voice_call_logs.sql", "drizzle/0005_candidate_email_events.sql", "drizzle/0006_voice_attempt_dispatch_states.sql", "drizzle/0007_resume_extraction_cache.sql", "drizzle/0008_notification_claim_leases.sql", "drizzle/0012_tenant_directory_integrity.sql"]) {
     const sql = read(f);
     assert.doesNotMatch(sql, /\$\$|CREATE (OR REPLACE )?FUNCTION|DO \$/i);
   }

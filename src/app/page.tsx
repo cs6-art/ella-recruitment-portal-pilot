@@ -50,9 +50,9 @@ export default async function Home({ searchParams }: HomePageProps) {
         </div>
         <div className="login-panel">
           <h2>Welcome</h2>
-          <p>Sign in using your McLink Group Google Workspace account to create and monitor role requests.</p>
+          <p>Sign in with the Google account listed in the portal user directory to create and monitor role requests.</p>
           <GoogleLogin redirectTo={redirectTo} />
-          <div className="notice"><strong>Company access only.</strong><br />The backend verifies the Google token and only accepts accounts managed under <strong>mclinkgroup.com</strong>.</div>
+          <div className="notice"><strong>Directory access only.</strong><br />Your Google account must be verified and listed as an active user in the portal directory.</div>
         </div>
       </section>
     </main>

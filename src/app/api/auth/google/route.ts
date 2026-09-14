@@ -3,8 +3,7 @@ import { NextResponse } from "next/server";
 
 import { findDirectoryUser } from "@/lib/google-sheets";
 import { DEFAULT_ORGANIZATION_ID, resolveOrganizationForLogin, syncOrganizationMembership } from "@/lib/organization-accounts";
-import { findPostgresDirectoryUser } from "@/lib/postgres-directory";
-import { getPortalConfigValue } from "@/lib/portal-config";
+import { findPostgresDirectoryUser, findPostgresDirectoryUserByEmail } from "@/lib/postgres-directory";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, createSessionToken } from "@/lib/session";
 
@@ -32,12 +31,9 @@ export async function POST(request: Request) {
     }
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
-    const allowedDomain =
-      (await getPortalConfigValue("Allowed_Google_Domain")) || "mclinkgroup.com";
 
     console.log("[Login] Configuration:", {
       clientIdConfigured: Boolean(clientId),
-      allowedDomain,
     });
 
     if (!clientId) {
@@ -89,29 +85,33 @@ export async function POST(request: Request) {
     }
 
     const normalizedEmail = payload.email.trim().toLowerCase();
-    const organizationId = await resolveOrganizationForLogin(normalizedEmail, allowedDomain);
-    if (!organizationId) {
-      console.log("[Login] Rejected: invalid Workspace domain", {
-        receivedDomain: payload.hd,
-        expectedDomain: allowedDomain,
-      });
-
-      return NextResponse.json(
-        {
-          error: `Only verified ${allowedDomain} Google Workspace accounts are allowed.`,
-        },
-        { status: 403 },
-      );
-    }
-
     console.log("[Login] Looking up User_Directory:", normalizedEmail);
 
-    let directoryUser = await findDirectoryUser(normalizedEmail);
+    // The directory, not the Google hosted domain, is the access boundary.
+    // Sheet rows belong to the default tenant; Postgres rows carry their own
+    // tenant. Existing memberships take precedence so a stale duplicate row
+    // cannot move a user into a different organization.
+    const sheetDirectoryUser = await findDirectoryUser(normalizedEmail);
+    let organizationId = await resolveOrganizationForLogin(normalizedEmail, Boolean(sheetDirectoryUser));
+    let directoryUser = sheetDirectoryUser;
 
-    // A client organization has no row in McLink's own Sheet and never will.
-    // This never runs for the default (McLink) organization, so the existing
-    // Sheet-only login path for McLink staff is completely unchanged.
-    if (!directoryUser && organizationId !== DEFAULT_ORGANIZATION_ID) {
+    if (!organizationId || organizationId !== DEFAULT_ORGANIZATION_ID || !directoryUser) {
+      const postgresDirectory = await findPostgresDirectoryUserByEmail(normalizedEmail);
+      if (!organizationId && postgresDirectory) {
+        organizationId = postgresDirectory.organizationId;
+      }
+      if (organizationId && organizationId !== DEFAULT_ORGANIZATION_ID) {
+        directoryUser = postgresDirectory?.organizationId === organizationId
+          ? postgresDirectory.user
+          : null;
+      } else if (!directoryUser && postgresDirectory?.organizationId === organizationId) {
+        directoryUser = postgresDirectory.user;
+      }
+    }
+
+    if (organizationId && organizationId !== DEFAULT_ORGANIZATION_ID && !directoryUser) {
+      // Keep the tenant-specific lookup as a compatibility fallback for
+      // deployments where the cross-organization helper cannot be used.
       directoryUser = await findPostgresDirectoryUser(normalizedEmail, organizationId);
     }
 
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
       active: directoryUser?.active,
     });
 
-    if (!directoryUser) {
+    if (!organizationId || !directoryUser) {
       console.log("[Login] Rejected: user not found in User_Directory");
 
       return NextResponse.json(

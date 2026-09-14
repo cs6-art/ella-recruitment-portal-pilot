@@ -10,8 +10,8 @@
 
 | # | Test Condition | Expected Result | Pass/Fail |
 |---|---|---|---|
-| 1 | Google Workspace Sign-In | Portal accepts a Google sign-in only for an active user in the allowed `@mclinkgroup.com` directory, issues an HTTP-only secure session cookie, and lands the user on the dashboard. | |
-| 2 | Inactive / Foreign Account Rejection | An inactive, unlisted, or non-domain Google account is denied access and never receives a portal session. | |
+| 1 | Google Sign-In | Portal accepts a Google sign-in only for an active user-directory row, regardless of email domain, issues an HTTP-only secure session cookie, and lands the user on the dashboard. | |
+| 2 | Inactive / Unlisted Account Rejection | An inactive or unlisted Google account is denied access and never receives a portal session; a listed account from another email domain is allowed. | |
 | 3 | Unauthenticated Route Protection | A logged-out visitor hitting `/dashboard`, `/roles`, `/roles/new`, `/settings`, or `/profile` is redirected to the login page with no data exposed. | |
 | 4 | Session Logout | Signing out clears the session cookie and returns the user to the login page; protected routes are no longer reachable. | |
 | 5 | RBAC — Creator Visibility | A requester sees only their own role requests ("My Role Requests"), scoped list and metrics, and a direct URL to another user's role returns access denied. | |

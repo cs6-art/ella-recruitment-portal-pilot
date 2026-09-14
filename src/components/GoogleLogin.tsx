@@ -41,7 +41,6 @@ export default function GoogleLogin({ redirectTo = "/dashboard" }: GoogleLoginPr
 
     window.google.accounts.id.initialize({
       client_id: clientId,
-      hd: "mclinkgroup.com",
       callback: async ({ credential }: GoogleCredentialResponse) => {
         setError("");
         const response = await fetch("/api/auth/google", {

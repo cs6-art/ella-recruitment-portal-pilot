@@ -1,5 +1,7 @@
 import { boolean, date, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
+import { organizations } from "@/db/schema";
+
 /**
  * Recruitment-core Drizzle schema — mirrors drizzle/0003_recruitment_core.sql.
  *
@@ -14,7 +16,7 @@ const ts = (name: string) => timestamp(name, { withTimezone: true });
 
 export const departments = pgTable("departments", {
   id: uuid("id").defaultRandom().primaryKey(),
-  organizationId: uuid("organization_id").notNull(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
   name: text("name").notNull(),
   nameKey: text("name_key").notNull().unique(),
   active: boolean("active").notNull().default(true),
@@ -25,7 +27,7 @@ export const users = pgTable(
   "users",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     email: text("email").notNull().unique(),
     fullName: text("full_name").notNull().default(""),
     accessRole: text("access_role").notNull().default(""),
@@ -45,7 +47,7 @@ export const users = pgTable(
 
 export const oauthConnections = pgTable("oauth_connections", {
   id: uuid("id").defaultRandom().primaryKey(),
-  organizationId: uuid("organization_id").notNull(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
   userEmail: text("user_email").notNull(),
   provider: text("provider").notNull(),
   accessTokenEnc: text("access_token_enc").notNull().default(""),
@@ -59,7 +61,7 @@ export const oauthConnections = pgTable("oauth_connections", {
 
 export const portalSettings = pgTable("portal_settings", {
   key: text("key").primaryKey(),
-  organizationId: uuid("organization_id").notNull(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
   value: text("value").notNull().default(""),
   category: text("category").notNull().default(""),
   updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
@@ -70,7 +72,7 @@ export const roles = pgTable(
   "roles",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     externalId: text("external_id").notNull().unique(),
     code: text("code").unique(),
     title: text("title").notNull().default(""),
@@ -115,7 +117,7 @@ export const roleStatusHistory = pgTable(
   "role_status_history",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     roleId: uuid("role_id").notNull().references(() => roles.id),
     changedAt: ts("changed_at").notNull().defaultNow(),
     changedByName: text("changed_by_name").notNull().default(""),
@@ -142,7 +144,7 @@ export const applicants = pgTable(
   "applicants",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     primaryEmail: text("primary_email").notNull().unique(),
     fullName: text("full_name").notNull().default(""),
     phoneE164: text("phone_e164").notNull().default(""),
@@ -157,7 +159,7 @@ export const applicants = pgTable(
 
 export const applicantAliases = pgTable("applicant_aliases", {
   id: uuid("id").defaultRandom().primaryKey(),
-  organizationId: uuid("organization_id").notNull(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
   applicantId: uuid("applicant_id").notNull().references(() => applicants.id),
   kind: text("kind").notNull(),
   value: text("value").notNull(),
@@ -169,7 +171,7 @@ export const resumeFiles = pgTable(
   "resume_files",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     storageRef: text("storage_ref").notNull().unique(),
     sha256: text("sha256").notNull().default(""),
     filename: text("filename").notNull().default(""),
@@ -192,7 +194,7 @@ export const applications = pgTable(
   "applications",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     externalId: text("external_id").notNull().unique(),
     applicantId: uuid("applicant_id").notNull().references(() => applicants.id),
     roleId: uuid("role_id").notNull().references(() => roles.id),
@@ -236,7 +238,7 @@ export const screeningResults = pgTable(
   "screening_results",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     applicationId: uuid("application_id").notNull().unique().references(() => applications.id),
     matchScore: integer("match_score"),
     recommendation: text("recommendation").notNull().default(""),
@@ -256,7 +258,7 @@ export const screeningInvitations = pgTable(
   "screening_invitations",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     roleId: uuid("role_id").notNull().references(() => roles.id),
     tokenHash: text("token_hash").notNull().unique(),
     email: text("email").notNull().default(""),
@@ -274,7 +276,7 @@ export const bulkScreeningQueueItems = pgTable(
   "bulk_screening_queue_items",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     batchId: text("batch_id").notNull().default(""),
     roleId: uuid("role_id").notNull().references(() => roles.id),
     dedupeKey: text("dedupe_key").notNull(),
@@ -307,7 +309,7 @@ export const interviewSlots = pgTable(
   "interview_slots",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     slotCode: text("slot_code").unique(),
     interviewType: text("interview_type").notNull(),
     roleId: uuid("role_id").references(() => roles.id),
@@ -341,7 +343,7 @@ export const voiceCallAttempts = pgTable(
   "voice_call_attempts",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     applicationId: uuid("application_id").notNull().references(() => applications.id),
     roleId: uuid("role_id").references(() => roles.id),
     attemptNumber: integer("attempt_number").notNull().default(1),
@@ -368,7 +370,7 @@ export const voiceInterviewResults = pgTable(
   "voice_interview_results",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     applicationId: uuid("application_id").notNull().references(() => applications.id),
     attemptId: uuid("attempt_id").references(() => voiceCallAttempts.id),
     score: integer("score"),
@@ -393,7 +395,7 @@ export const voiceCallLogs = pgTable(
   "voice_call_logs",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     applicationId: uuid("application_id").notNull().references(() => applications.id),
     voiceCallAttemptId: uuid("voice_call_attempt_id").references(() => voiceCallAttempts.id),
     provider: text("provider").notNull().default(""),
@@ -427,7 +429,7 @@ export const bookingTokens = pgTable(
   "booking_tokens",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     applicationId: uuid("application_id").notNull().references(() => applications.id),
     kind: text("kind").notNull(),
     tokenHash: text("token_hash").notNull().unique(),
@@ -444,7 +446,7 @@ export const applicationStatusHistory = pgTable(
   "application_status_history",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     applicationId: uuid("application_id").notNull().references(() => applications.id),
     changedAt: ts("changed_at").notNull().defaultNow(),
     stage: text("stage").notNull().default(""),

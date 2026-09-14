@@ -120,14 +120,6 @@ export const PORTAL_CONFIG_CATALOG: PortalConfigEntry[] = [
     default: "",
   },
   {
-    key: "Allowed_Google_Domain",
-    envKeys: ["ALLOWED_GOOGLE_DOMAIN"],
-    category: "Access & Security",
-    description: "Google Workspace hosted domain allowed to sign in. Changing this changes who can log in.",
-    type: "text",
-    default: "mclinkgroup.com",
-  },
-  {
     key: "Booking_Link_Expiry_Days",
     envKeys: ["BOOKING_LINK_EXPIRY_DAYS"],
     category: "Booking & Interview",

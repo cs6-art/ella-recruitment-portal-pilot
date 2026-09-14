@@ -70,7 +70,7 @@ and confirm the **Google Drive API** is enabled under APIs & Services. For an
 Internal Workspace app no verification review is required.
 
 Same `NEXT_PUBLIC_GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` values as
-production. `ALLOWED_GOOGLE_DOMAIN` stays `mclinkgroup.com`.
+production. Access is controlled by active portal-directory rows, not by a Google hosted domain.
 
 > You need the final URL here. Either decide the custom domain now, or first deploy to get the
 > `*.vercel.app` URL (step 7), add it here, then redeploy.
@@ -125,7 +125,6 @@ openssl rand -base64 48   # N8N_WEBHOOK_SECRET  (must match the value set in eve
 | `GOOGLE_CLIENT_ID` | same as production |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | same as production |
 | `GOOGLE_OAUTH_REDIRECT_URI` | `https://<new-url>/api/auth/google-calendar/callback` |
-| `ALLOWED_GOOGLE_DOMAIN` | `mclinkgroup.com` |
 | `SESSION_SECRET` | new random (step 6) |
 | `GOOGLE_SHEETS_SPREADSHEET_ID` | **new workbook ID** |
 | `GOOGLE_CANDIDATE_SPREADSHEET_ID` | leave unset unless you split candidate data into a 2nd workbook |
@@ -168,7 +167,7 @@ openssl rand -base64 48   # N8N_WEBHOOK_SECRET  (must match the value set in eve
 
 Most operational settings can be changed at runtime from **Settings → Infrastructure** (settings
 admins only) instead of Vercel env vars: the six n8n webhook URLs, `App_URL`, the invite / portal
-base URLs, the resume-storage Drive folder ID, the bulk Drive link, the allowed Google domain, link
+base URLs, the resume-storage Drive folder ID, the bulk Drive link, link
 expiry days, bulk upload concurrency, the batch-complete email toggle, and the Ella credit costs.
 A blank field uses the environment variable; a filled field overrides it. A changed webhook URL
 takes effect on the next workflow action — no redeploy.

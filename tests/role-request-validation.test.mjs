@@ -13,7 +13,7 @@ const dateOnlySource = fs.readFileSync("src/lib/date-only.ts", "utf8");
 
 function validate(input) {
   const email = String(input.requesterEmail || "").trim().toLowerCase();
-  if (!/^\S+@mclinkgroup\.com$/.test(email)) return false;
+  if (!/^\S+@\S+\.\S+$/.test(email)) return false;
   if (input.requestType === "Staff Replacement" && !String(input.replacementEmployee || "").trim()) return false;
   if (input.salaryMin !== undefined && input.salaryMin < 1) return false;
   if (input.salaryMax !== undefined && input.salaryMax < 1) return false;
@@ -40,10 +40,10 @@ test("requester identity is not collected as a form field and remains server-own
   assert.match(apiSource, /submittedBy: \{/);
 });
 
-test("invalid, non-McLink, and mismatched requester emails are rejected", () => {
+test("invalid requester emails are rejected while directory users may use any domain", () => {
   assert.equal(validate({ requesterEmail: "bad-email" }), false);
-  assert.equal(validate({ requesterEmail: "user@example.com" }), false);
-  assert.equal(validate({ requesterEmail: "user@mclinkgroup.comds" }), false);
+  assert.equal(validate({ requesterEmail: "user@example.com" }), true);
+  assert.equal(validate({ requesterEmail: "user@invalid" }), false);
 });
 
 test("salary validation rejects negative and inverted values", () => {

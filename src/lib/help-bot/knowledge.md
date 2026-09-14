@@ -37,9 +37,9 @@ use do not appear for you.
 
 ## Signing in
 
-Sign in with your McLink Group Google Workspace account using "Sign in with
-Google". Personal Google accounts are rejected. The portal checks that the email
-is verified and belongs to the company Workspace domain. If access is denied after
+Sign in with the Google account listed in the portal user directory using "Sign in with
+Google". The portal checks that the email is verified and has an active User_Directory
+row; the Google hosted domain is not an access rule. If access is denied after
 a successful Google sign-in, your account may not have recruitment access yet —
 contact HR or the portal administrator.
 
