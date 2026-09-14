@@ -13,6 +13,8 @@ import crypto from "node:crypto";
  * `INTERNAL_API_ENTITIES` (comma-separated, or `all`) AND `DATABASE_URL` is
  * set. Authentication and entity authorization are handled before route logic;
  * missing configuration is a server failure, never a successful fallback.
+ * Non-default tenants are selected with the X-Organization-Id header; when it
+ * is omitted the McLink control/default tenant is used for compatibility.
  *
  * This module is framework-free (no `next` import) so it is unit-testable; the
  * NextResponse helpers + route wrapper live in `internal-api-http.ts`.

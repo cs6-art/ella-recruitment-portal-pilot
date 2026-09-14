@@ -1,7 +1,12 @@
 # Database Migration Plan — Ella Recruitment Portal (Pilot)
 
-> **Status: AUDIT & PLAN ONLY.** No migration performed. No schema cutover. No
-> switch of `CREDITS_BACKEND` off `dual`. No n8n changes. Prepared 2026-09-02
+> **Implementation update — 2026-09-14:** The physical tenant database routing
+> described below is now implemented. The original audit/plan sections remain
+> as historical migration context.
+
+> **Historical audit status:** This document was prepared 2026-09-02 for the
+> recruitment migration decision. Physical tenant routing was implemented on
+> 2026-09-14; the credits backend remains on `dual` and no n8n changes were made.
 > from three code-traced audits (Google Sheets dependencies, existing
 > Postgres/Neon implementation, recruitment domain data model).
 
@@ -1212,7 +1217,20 @@ retry/no-show lifecycle.
 
 ---
 
-*Prepared as an audit and plan only. No migration, schema cutover, or
-Postgres-only switch has been performed or is authorised by this document beyond
-Phase A preparation and continued observation of the existing credits dual-write
-soak.*
+## 16. Physical tenant database implementation
+
+The control-plane `organizations` table now records `database_key` and
+`database_status` (`drizzle/0014_physical_tenant_databases.sql`). McLink keeps
+using `DATABASE_URL`. A client organization is routed to its own Postgres URL
+through `TENANT_DATABASE_URLS`, keyed by organization ID. The URL is supplied
+through deployment secrets and is never stored in Postgres.
+
+Provision a client with `npm run db:provision:organization` and provide a fresh,
+different `--database-url`. The command applies every migration to that client
+database, creates its local organization and first HR directory account, and
+creates the control-plane membership and credit account. Internal n8n/Vapi
+requests for a client must send `X-Organization-Id`.
+
+The original plan above remains the historical record for the recruitment
+cutover and credits decisions; physical routing does not change RBAC or the
+existing McLink Sheet directory path.

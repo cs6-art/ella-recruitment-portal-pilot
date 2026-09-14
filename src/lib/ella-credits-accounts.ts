@@ -1,6 +1,6 @@
 import { sql, type SQL } from "drizzle-orm";
 
-import { getDb } from "@/db/client";
+import { getTenantDb as getDb } from "@/db/client";
 import { EllaCreditsError } from "@/lib/ella-credit-math";
 import type { CreditBalance, LedgerAppend, LedgerEntry } from "@/lib/ella-credits-store";
 

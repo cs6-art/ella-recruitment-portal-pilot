@@ -49,6 +49,7 @@ import { hasValidFutureTime, isBeforeTargetHiringDate, isStandardFinalInterviewS
 import { getPortalConfigNumber } from "@/lib/portal-config";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
+import { configuredTenantOrganizationIds, runWithTenantDatabase } from "@/lib/tenant-database";
 
 async function targetOrganizationId() {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
@@ -182,11 +183,25 @@ function roleSummary(role: Record<string, unknown>): RoleRequestSummary {
 
 export async function targetRoleSummaries(options: { liveOnly?: boolean } = {}) {
   const organizationId = await targetOrganizationId();
+  return targetRoleSummariesForOrganization(organizationId, options);
+}
+
+async function targetRoleSummariesForOrganization(organizationId: string, options: { liveOnly?: boolean } = {}) {
   const roles = (await repairPublishedRoleIds((await listRoles()).filter((role) => rowOrganizationId(role) === organizationId))).filter((role) => !isArchivedRole(role as unknown as Record<string, unknown>));
   const visible = options.liveOnly
     ? roles.filter((role) => ["approved", "recruitment_setup", "job_posted"].includes(text(role.status).toLowerCase()))
     : roles;
   return visible.map((role) => roleSummary(role as unknown as Record<string, unknown>));
+}
+
+/** Public catalogue across configured physical tenant databases. */
+export async function targetPublicRoleSummaries(options: { liveOnly?: boolean } = {}) {
+  const summaries = [];
+  for (const organizationId of [DEFAULT_ORGANIZATION_ID, ...configuredTenantOrganizationIds()]) {
+    const rows = await runWithTenantDatabase(organizationId, () => targetRoleSummariesForOrganization(organizationId, options));
+    summaries.push(...rows);
+  }
+  return summaries;
 }
 
 export async function targetRoleDetails(externalId: string, organizationId = ""): Promise<RoleRequestDetails | null> {
@@ -276,9 +291,13 @@ export async function targetRoleDetails(externalId: string, organizationId = "")
  * absent HR session. The role external ID is globally unique, and the role's
  * own tenant is then used for all downstream application writes. */
 export async function targetPublicRoleDetails(externalId: string): Promise<RoleRequestDetails | null> {
-  const role = await getRole(externalId);
-  const organizationId = rowOrganizationId(role);
-  return role && organizationId ? targetRoleDetails(externalId, organizationId) : null;
+  const organizationIds = [DEFAULT_ORGANIZATION_ID, ...configuredTenantOrganizationIds()];
+  for (const organizationId of organizationIds) {
+    const role = await runWithTenantDatabase(organizationId, () => getRole(externalId));
+    if (!role) continue;
+    return runWithTenantDatabase(organizationId, () => targetRoleDetails(externalId, organizationId));
+  }
+  return null;
 }
 
 function isArchivedRole(role: Record<string, unknown>) {
@@ -361,7 +380,21 @@ function bookingSlot(slot: Record<string, unknown>, roleExternalId = "") {
   };
 }
 
+async function findBookingTokenOrganization(tokenHash: string) {
+  for (const organizationId of [DEFAULT_ORGANIZATION_ID, ...configuredTenantOrganizationIds()]) {
+    const token = await runWithTenantDatabase(organizationId, () => getBookingToken(tokenHash));
+    if (token) return organizationId;
+  }
+  return "";
+}
+
 export async function targetBookingContext(kind: "voice" | "final", tokenHash: string) {
+  const organizationId = await findBookingTokenOrganization(tokenHash);
+  if (!organizationId) return null;
+  return runWithTenantDatabase(organizationId, () => targetBookingContextInTenant(kind, tokenHash));
+}
+
+async function targetBookingContextInTenant(kind: "voice" | "final", tokenHash: string) {
   const token = await getBookingToken(tokenHash);
   if (!token || token.token.kind !== kind || ["used", "booked", "expired", "revoked"].includes(text(token.token.status).toLowerCase()) || (token.token.expiresAt && token.token.expiresAt.getTime() < Date.now())) return null;
   const row = await getApplication(token.applicationExternalId);
@@ -435,6 +468,12 @@ export async function targetBookingContext(kind: "voice" | "final", tokenHash: s
 }
 
 export async function targetReserveBooking(kind: "voice" | "final", tokenHash: string, slotId: string, actorEmail: string) {
+  const organizationId = await findBookingTokenOrganization(tokenHash);
+  if (!organizationId) return { booked: false, error: "invalid_booking_token" as const };
+  return runWithTenantDatabase(organizationId, () => targetReserveBookingInTenant(kind, tokenHash, slotId, actorEmail));
+}
+
+async function targetReserveBookingInTenant(kind: "voice" | "final", tokenHash: string, slotId: string, actorEmail: string) {
   const context = await targetBookingContext(kind, tokenHash);
   if (!context) return { booked: false, error: "invalid_booking_token" as const };
   let persistedSlotId = slotId;
@@ -631,6 +670,13 @@ export async function targetCreateScreeningInvitation(input: { roleId: string; c
 }
 
 export async function targetCreateApplication(input: { externalId: string; roleId: string; candidateName: string; email: string; phone: string; preferredMobile: string; applicantCountry: string; source: string; sourceDetail?: string; consentAt?: string; creditOwnerEmail?: string; organizationId?: string; resume?: { fileId: string; fileName: string; mimeType: string; size: number; sha256: string; kind: string; expiresAt: string; extractedText?: string } }) {
+  const organizationId = input.organizationId?.trim();
+  return organizationId
+    ? runWithTenantDatabase(organizationId, () => targetCreateApplicationInTenant(input))
+    : targetCreateApplicationInTenant(input);
+}
+
+async function targetCreateApplicationInTenant(input: { externalId: string; roleId: string; candidateName: string; email: string; phone: string; preferredMobile: string; applicantCountry: string; source: string; sourceDetail?: string; consentAt?: string; creditOwnerEmail?: string; organizationId?: string; resume?: { fileId: string; fileName: string; mimeType: string; size: number; sha256: string; kind: string; expiresAt: string; extractedText?: string } }) {
   const role = await getRole(input.roleId);
   const roleOrganizationId = rowOrganizationId(role);
   if (!role || !roleOrganizationId) throw new Error("Unable to resolve the application role organization.");
@@ -667,7 +713,11 @@ export async function targetCreateApplication(input: { externalId: string; roleI
 
 export async function targetGetScreeningInvitation(token: string) {
   const tokenHash = crypto.createHash("sha256").update(token.trim()).digest("hex");
-  const row = await getScreeningInvitation(tokenHash);
+  let row: Awaited<ReturnType<typeof getScreeningInvitation>> | null = null;
+  for (const organizationId of [DEFAULT_ORGANIZATION_ID, ...configuredTenantOrganizationIds()]) {
+    row = await runWithTenantDatabase(organizationId, () => getScreeningInvitation(tokenHash));
+    if (row) break;
+  }
   if (!row) return null;
   const expiresAt = row.invitation.expiresAt;
   const expired = Boolean(expiresAt && expiresAt.getTime() < Date.now());
@@ -677,7 +727,11 @@ export async function targetGetScreeningInvitation(token: string) {
 
 export async function targetUseScreeningInvitation(token: string, applicationId: string) {
   const tokenHash = crypto.createHash("sha256").update(token.trim()).digest("hex");
-  return markScreeningInvitationUsed(tokenHash, applicationId);
+  for (const organizationId of [DEFAULT_ORGANIZATION_ID, ...configuredTenantOrganizationIds()]) {
+    const invitation = await runWithTenantDatabase(organizationId, () => getScreeningInvitation(tokenHash));
+    if (invitation) return runWithTenantDatabase(organizationId, () => markScreeningInvitationUsed(tokenHash, applicationId));
+  }
+  return { updated: false, error: null };
 }
 
 export async function targetUpdateRoleFields(roleId: string, fields: Record<string, string>) {
