@@ -6,6 +6,7 @@ import { isDatabaseConfigured } from "@/db/client";
 import { appendSheetLedgerEntry, getSheetCreditBalance } from "@/lib/ella-credits-sheets";
 import { appendPostgresLedgerEntry, getPostgresCreditBalance } from "@/lib/ella-credits-postgres";
 import { appendAccountLedgerEntry, perUserCreditsEnabled, getAccountCreditBalance } from "@/lib/ella-credits-accounts";
+import { runWithTenantDatabase } from "@/lib/tenant-database";
 import type { CreditBalance, LedgerAppend } from "@/lib/ella-credits-store";
 
 export { CREDIT_COST, EllaCreditsError } from "@/lib/ella-credit-math";
@@ -84,7 +85,7 @@ function accountScope(scope: CreditScope) {
 
 export async function getCreditBalance(options: { fresh?: boolean } & CreditScope = {}): Promise<CreditBalance> {
   const account = accountScope(options);
-  if (account) return getAccountCreditBalance(account);
+  if (account) return runWithTenantDatabase(account.organizationId, () => getAccountCreditBalance(account));
   const backend = creditsBackend();
   if (backend === "postgres") return getPostgresCreditBalance();
   const balance = await getSheetCreditBalance(options);
@@ -165,7 +166,7 @@ export async function assertCreditsAvailable(units: number, event: CreditEvent, 
 async function append(entry: LedgerAppend, opts: { guard: boolean }, scope: CreditScope = {}): Promise<{ balanceAfter: number }> {
   const account = accountScope(scope);
   if (account) {
-    const { balanceAfter } = await appendAccountLedgerEntry({ ...account, entry }, opts);
+    const { balanceAfter } = await runWithTenantDatabase(account.organizationId, () => appendAccountLedgerEntry({ ...account, entry }, opts));
     return { balanceAfter };
   }
   const backend = creditsBackend();

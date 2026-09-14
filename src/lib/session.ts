@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { enterTenantDatabase } from "@/lib/tenant-database";
 
 export type SessionUser = {
   sub: string;
@@ -68,6 +69,7 @@ export function verifySessionToken(token?: string | null): SessionUser | null {
     if (!user.exp || user.exp <= Math.floor(Date.now() / 1000)) return null;
     if (user.active === false) return null;
     if (!user.organizationId || typeof user.organizationId !== "string") return null;
+    enterTenantDatabase(user.organizationId);
     return user;
   } catch {
     return null;

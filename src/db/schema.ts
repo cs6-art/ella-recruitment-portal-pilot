@@ -4,6 +4,8 @@ export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey(),
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
+  databaseKey: text("database_key").notNull().default("mclinkgroup"),
+  databaseStatus: text("database_status").notNull().default("ready"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

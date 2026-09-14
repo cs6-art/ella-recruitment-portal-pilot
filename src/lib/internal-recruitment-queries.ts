@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 
 import { and, asc, desc, eq, gte, inArray, isNull, lte, not, or, sql } from "drizzle-orm";
 
-import { getDb } from "@/db/client";
+import { getTenantDb as getDb } from "@/db/client";
 import { appendPostgresLedgerEntryOnExecutor } from "@/lib/ella-credits-postgres";
 import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
 import { recordVoiceInterviewDeduction } from "@/lib/ella-credits";

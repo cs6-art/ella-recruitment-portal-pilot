@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { findDirectoryUser } from "@/lib/google-sheets";
 import { DEFAULT_ORGANIZATION_ID, resolveOrganizationForLogin, syncOrganizationMembership } from "@/lib/organization-accounts";
 import { findPostgresDirectoryUser, findPostgresDirectoryUserByEmail } from "@/lib/postgres-directory";
+import { runWithTenantDatabase } from "@/lib/tenant-database";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, createSessionToken } from "@/lib/session";
 
@@ -96,7 +97,13 @@ export async function POST(request: Request) {
     let directoryUser = sheetDirectoryUser;
 
     if (!organizationId || organizationId !== DEFAULT_ORGANIZATION_ID || !directoryUser) {
-      const postgresDirectory = await findPostgresDirectoryUserByEmail(normalizedEmail);
+      const tenantOrganizationId = organizationId;
+      const postgresDirectory = tenantOrganizationId && tenantOrganizationId !== DEFAULT_ORGANIZATION_ID
+        ? await runWithTenantDatabase(tenantOrganizationId, async () => {
+          const user = await findPostgresDirectoryUser(normalizedEmail, tenantOrganizationId);
+          return user ? { organizationId: tenantOrganizationId, user } : null;
+        })
+        : await findPostgresDirectoryUserByEmail(normalizedEmail);
       if (!organizationId && postgresDirectory) {
         organizationId = postgresDirectory.organizationId;
       }
@@ -112,7 +119,7 @@ export async function POST(request: Request) {
     if (organizationId && organizationId !== DEFAULT_ORGANIZATION_ID && !directoryUser) {
       // Keep the tenant-specific lookup as a compatibility fallback for
       // deployments where the cross-organization helper cannot be used.
-      directoryUser = await findPostgresDirectoryUser(normalizedEmail, organizationId);
+      directoryUser = await runWithTenantDatabase(organizationId, () => findPostgresDirectoryUser(normalizedEmail, organizationId));
     }
 
     console.log("[Login] User_Directory result:", {

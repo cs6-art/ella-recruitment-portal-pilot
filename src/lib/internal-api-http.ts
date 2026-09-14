@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { authorizeInternalRequest } from "@/lib/internal-api";
+import { DEFAULT_ORGANIZATION_ID, isTenantDatabaseConfigured, runWithTenantDatabase } from "@/lib/tenant-database";
 
 /** NextResponse helpers + the route wrapper for the internal recruitment API. */
 
@@ -45,7 +46,9 @@ export function withInternalAuth(
     const authorization = authorizeInternalRequest(request, entity);
     if (!authorization.allowed) return internalJson({ ok: false, error: authorization.error }, authorization.status);
     try {
-      return await handler(request);
+      const organizationId = request.headers.get("x-organization-id")?.trim() || DEFAULT_ORGANIZATION_ID;
+      if (!isTenantDatabaseConfigured(organizationId)) return internalConfigurationFailure("tenant_database_not_configured");
+      return await runWithTenantDatabase(organizationId, () => handler(request));
     } catch (error) {
       console.error(`[Internal API ${entity}] handler failed:`, error);
       return internalJson({ ok: false, error: "internal_error" }, 500);

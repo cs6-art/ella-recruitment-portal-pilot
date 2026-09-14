@@ -1,7 +1,8 @@
 import { eq, and } from "drizzle-orm";
 
-import { getDb, isDatabaseConfigured } from "@/db/client";
+import { getDb, getTenantDb, isDatabaseConfigured } from "@/db/client";
 import { creditAccounts, organizationMemberships, organizations } from "@/db/schema";
+import { runWithTenantDatabase } from "@/lib/tenant-database";
 
 /** Stable tenant for the existing Pilot data set. */
 export const DEFAULT_ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
@@ -62,11 +63,18 @@ export async function syncOrganizationMembership(input: {
           target: [organizationMemberships.organizationId, organizationMemberships.email],
           set: { active: input.active, updatedAt: new Date() },
         });
-      await tx
-        .insert(creditAccounts)
-        .values({ organizationId, ownerEmail: email, balance: 0 })
-        .onConflictDoNothing({ target: [creditAccounts.organizationId, creditAccounts.ownerEmail] });
+      if (organizationId === DEFAULT_ORGANIZATION_ID) {
+        await tx
+          .insert(creditAccounts)
+          .values({ organizationId, ownerEmail: email, balance: 0 })
+          .onConflictDoNothing({ target: [creditAccounts.organizationId, creditAccounts.ownerEmail] });
+      }
     });
+    if (organizationId !== DEFAULT_ORGANIZATION_ID) {
+      await runWithTenantDatabase(organizationId, async () => {
+        await getTenantDb().insert(creditAccounts).values({ organizationId, ownerEmail: email, balance: 0 }).onConflictDoNothing({ target: [creditAccounts.organizationId, creditAccounts.ownerEmail] });
+      });
+    }
   } catch (error) {
     // The migration is deliberately opt-in. Legacy deployments can continue
     // using the existing directory until their tenant tables are provisioned.

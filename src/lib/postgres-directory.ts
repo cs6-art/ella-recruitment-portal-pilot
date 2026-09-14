@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
-import { getDb, isDatabaseConfigured } from "@/db/client";
+import { getDb, getTenantDb, isDatabaseConfigured } from "@/db/client";
 import { organizations } from "@/db/schema";
 import { departments, users } from "@/db/schema-recruitment";
 import type { DirectoryUser } from "@/lib/google-sheets";
@@ -49,7 +49,7 @@ export async function findPostgresDirectoryUser(email: string, organizationId: s
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail || !organizationId.trim()) return null;
 
-  const db = getDb();
+  const db = getTenantDb();
   try {
     const [row] = await db
       .select({
@@ -81,7 +81,7 @@ export async function findPostgresDirectoryUser(email: string, organizationId: s
 
 export async function getPostgresDirectoryUsers(organizationId: string): Promise<DirectoryUser[]> {
   if (!isDatabaseConfigured()) return [];
-  const db = getDb();
+  const db = getTenantDb();
   const rows = await db
     .select({
       email: users.email,
@@ -105,7 +105,7 @@ export async function getPostgresDirectoryUsers(organizationId: string): Promise
 
 export async function upsertPostgresDirectoryUser(organizationId: string, user: DirectoryUser, originalEmail?: string): Promise<void> {
   if (!isDatabaseConfigured()) throw new Error("Database is not configured.");
-  const db = getDb();
+  const db = getTenantDb();
   const email = user.email.trim().toLowerCase();
   const previousEmail = originalEmail?.trim().toLowerCase();
   const [existingEmail] = await db.select({ id: users.id, organizationId: users.organizationId }).from(users).where(eq(users.email, email)).limit(1);
