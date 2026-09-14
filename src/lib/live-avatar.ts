@@ -26,7 +26,7 @@ export type LiveAvatarRoleContext = {
 export type LiveAvatarSessionResult = {
   sessionToken: string;
   sessionId: string;
-  mode?: "FULL" | "BRIDGE";
+  mode?: "FULL" | "BRIDGE" | "VERCEL_BRIDGE";
   livekitUrl?: string;
   livekitClientToken?: string;
   wsUrl?: string;
@@ -37,6 +37,10 @@ function requiredEnv(name: string): string | null {
   return value && value.trim() ? value.trim() : null;
 }
 
+function vercelBridgeEnabled(): boolean {
+  return (process.env.LIVEAVATAR_VERCEL_BRIDGE || "").trim().toLowerCase() === "true";
+}
+
 /**
  * True once an operator has configured the LiveAvatar env vars. The apply
  * page checks this (via the session API route) to decide whether to render
@@ -44,6 +48,7 @@ function requiredEnv(name: string): string | null {
  * broken on environments that have not been configured yet.
  */
 export function isLiveAvatarConfigured(): boolean {
+  if (vercelBridgeEnabled() && requiredEnv("LIVEAVATAR_API_KEY") && requiredEnv("OPENAI_API_KEY") && requiredEnv("SESSION_SECRET")) return true;
   if (requiredEnv("LIVEAVATAR_BRIDGE_URL") && requiredEnv("LIVEAVATAR_BRIDGE_PUBLIC_URL")) return true;
   return Boolean(
     requiredEnv("LIVEAVATAR_API_KEY") &&
@@ -95,6 +100,10 @@ function clampVariable(value: string, maxLength = 1000): string {
 export async function createLiveAvatarSession(
   role: LiveAvatarRoleContext,
 ): Promise<LiveAvatarSessionResult> {
+  if (vercelBridgeEnabled() && requiredEnv("LIVEAVATAR_API_KEY") && requiredEnv("OPENAI_API_KEY") && requiredEnv("SESSION_SECRET")) {
+    const { createVercelBridgeTicket } = await import("./live-avatar-vercel.ts");
+    return { sessionToken: createVercelBridgeTicket({ ...role }), sessionId: "", mode: "VERCEL_BRIDGE" };
+  }
   if (bridgeUrl() && requiredEnv("LIVEAVATAR_BRIDGE_PUBLIC_URL")) return createBridgeSession(role);
   const apiKey = requiredEnv("LIVEAVATAR_API_KEY");
   const avatarId = requiredEnv("LIVEAVATAR_AVATAR_ID");

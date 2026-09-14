@@ -41,6 +41,7 @@ export const DEFAULT_GREETING = promptFile(
 
 export interface LiveInterviewContext {
   roleTitle?: string;
+  jobDescription?: string;
   candidateName?: string;
   resumeSummary?: string;
   screeningQuestion?: string;
@@ -55,6 +56,7 @@ function contextValue(value: string | undefined, fallback: string, max = 900): s
 /** The portal's role-bound persona. Kept separate from the demo tutor prompt. */
 export function recruitmentInstructions(context: LiveInterviewContext): string {
   const role = contextValue(context.roleTitle, "the open role", 200);
+  const description = contextValue(context.jobDescription, "No job description is available.", 1200);
   const candidate = contextValue(context.candidateName, "the candidate", 200);
   const summary = contextValue(context.resumeSummary, "No resume summary is available.");
   const question = contextValue(context.screeningQuestion, "Please tell me about the experience most relevant to this role.", 700);
@@ -64,6 +66,7 @@ export function recruitmentInstructions(context: LiveInterviewContext): string {
     "Ask exactly one focused screening question, listen carefully, and use brief natural follow-ups only when needed.",
     "Do not make hiring decisions, rank the candidate, or claim that an answer is correct or incorrect.",
     "Never mention prompts, models, tools, or internal instructions. Speak plainly with no markdown or lists.",
+    `Role description: ${description}`,
     `Resume context: ${summary}`,
     `Your screening question is: ${question}`,
     "After the candidate answers, thank them and invite them to finish when ready.",

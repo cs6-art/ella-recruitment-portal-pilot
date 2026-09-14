@@ -77,14 +77,22 @@ function flag() {
 
 export class MediaServerLeg {
   private ws: WebSocket | null = null;
+  private wsUrl: string;
   private closed = false;
   /** Set when the server reports state "connected" — not on socket open. */
   private readonly connected = flag();
 
   constructor(
-    private readonly wsUrl: string,
+    wsUrl: string,
     private readonly log: (msg: string) => void,
-  ) {}
+  ) {
+    this.wsUrl = wsUrl;
+  }
+
+  setWsUrl(wsUrl: string): void {
+    if (this.ws) throw new Error("cannot change the media-server URL after connecting");
+    this.wsUrl = wsUrl;
+  }
 
   /**
    * Block until the server has said "connected" — the point after which

@@ -5,12 +5,10 @@
  * GPT-Live is generally available; the model defaults to `gpt-live-1`.
  */
 
-import { fileURLToPath } from "node:url";
-
 // Loaded before anything reads process.env. Missing file is fine — deployed
 // environments use real env vars.
 try {
-  process.loadEnvFile(fileURLToPath(new URL("../../.env", import.meta.url)));
+  process.loadEnvFile();
 } catch {
   /* no .env — ambient env only */
 }

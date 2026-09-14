@@ -5,6 +5,7 @@ import { Room, RoomEvent, Track, type RemoteTrack } from "livekit-client";
 export type BridgeTurn = { id: string; role: "user" | "assistant"; text: string; done: boolean };
 
 export interface BridgeSocketHandlers {
+  onStarted?: (session: { sessionId: string; livekitUrl: string; livekitClientToken: string }) => void;
   onReady: () => void;
   onTurn: (turn: BridgeTurn) => void;
   onError: (message: string) => void;
@@ -49,9 +50,10 @@ export function openBridgeSocket(wsUrl: string, handlers: BridgeSocketHandlers):
   const ws = new WebSocket(wsUrl);
   let closedByUs = false;
   ws.onmessage = (event: MessageEvent<string>) => {
-    let message: { type?: string; message?: string; id?: string; role?: "user" | "assistant"; text?: string; done?: boolean };
+    let message: { type?: string; message?: string; id?: string; role?: "user" | "assistant"; text?: string; done?: boolean; session_id?: string; livekit_url?: string; livekit_client_token?: string };
     try { message = JSON.parse(event.data); } catch { return; }
-    if (message.type === "ready") handlers.onReady();
+    if (message.type === "started" && message.session_id && message.livekit_url && message.livekit_client_token) handlers.onStarted?.({ sessionId: message.session_id, livekitUrl: message.livekit_url, livekitClientToken: message.livekit_client_token });
+    else if (message.type === "ready") handlers.onReady();
     else if (message.type === "turn" && message.id && message.role && typeof message.text === "string") handlers.onTurn({ id: message.id, role: message.role, text: message.text, done: Boolean(message.done) });
     else if (message.type === "error") handlers.onError(message.message || "The live avatar bridge reported an error.");
   };
@@ -66,6 +68,11 @@ export function openBridgeSocket(wsUrl: string, handlers: BridgeSocketHandlers):
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
     },
   };
+}
+
+export function openVercelBridgeSocket(ticket: string, handlers: BridgeSocketHandlers): BridgeSocket {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return openBridgeSocket(`${protocol}//${window.location.host}/api/live-avatar/ws?ticket=${encodeURIComponent(ticket)}`, handlers);
 }
 
 export async function stopBridgeSession(stopUrl: string, sessionId: string): Promise<void> {
