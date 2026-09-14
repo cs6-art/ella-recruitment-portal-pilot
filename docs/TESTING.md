@@ -20,7 +20,7 @@ Manual smoke test:
 
 1. Confirm a logged-out visitor is redirected from `/dashboard`, `/roles`, and
    `/settings`.
-2. Log in as an inactive or unlisted Workspace user and confirm access is
+2. Log in as an inactive or unlisted directory user and confirm access is
    denied.
 3. Log in as a creator-only user. Confirm `/roles` is titled `My Role
    Requests`, the list and metrics contain only that user's requests, and a

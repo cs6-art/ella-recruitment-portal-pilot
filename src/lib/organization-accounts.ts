@@ -74,11 +74,18 @@ export async function syncOrganizationMembership(input: {
   }
 }
 
-export async function resolveOrganizationForLogin(email: string, allowedDomain: string) {
+/**
+ * Resolve the tenant for a login after the caller has checked the directory.
+ *
+ * A Google hosted domain is not an authorization boundary: users may belong
+ * to any email domain, provided they are present in an active portal
+ * directory. The legacy Sheet directory belongs to the default tenant, while
+ * a Postgres directory row supplies its own tenant in the auth route.
+ */
+export async function resolveOrganizationForLogin(email: string, hasDefaultDirectoryUser: boolean) {
   const membership = await findActiveOrganizationMembership(email);
   if (membership) return membership.organizationId;
-  const domain = normalizedEmail(email).split("@")[1] || "";
-  return domain === normalizedEmail(allowedDomain) ? DEFAULT_ORGANIZATION_ID : null;
+  return hasDefaultDirectoryUser ? DEFAULT_ORGANIZATION_ID : null;
 }
 
 export function isDefaultOrganization(organizationId: string | undefined) {

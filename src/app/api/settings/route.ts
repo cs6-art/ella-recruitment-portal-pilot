@@ -15,7 +15,6 @@ const configByKey = new Map(PORTAL_CONFIG_CATALOG.map((entry) => [entry.key, ent
 // environment variables, webhook endpoints, and legacy sheet-only values are
 // intentionally kept out of the HR-facing Settings page.
 const editableSettingKeys = new Set([
-  "Allowed_Google_Domain",
   "Voice_Interview_Duration_Minutes",
   "Final_Interview_Calendar_Email",
   "Final_Interview_Calendar_ID",

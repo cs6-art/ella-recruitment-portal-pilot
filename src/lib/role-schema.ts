@@ -54,14 +54,8 @@ export const roleRequestSchema = z.object({
   noticePeriodRequirement: z.string().trim().max(1000).default(""),
   salaryExpectationGuidance: z.string().trim().max(1000).default(""),
   requesterName: z.string().trim().min(2).max(150),
-  requesterEmail: z.string().trim().toLowerCase().email().refine(
-    (value) => value.endsWith("@mclinkgroup.com"),
-    "Requester email must use the McLink email domain.",
-  ),
-  hodEmail: z.string().trim().toLowerCase().email().refine(
-    (value) => value.endsWith("@mclinkgroup.com"),
-    "HR interviewer email must use the McLink email domain.",
-  ).default(""),
+  requesterEmail: z.string().trim().toLowerCase().email(),
+  hodEmail: z.string().trim().toLowerCase().email().default(""),
 }).superRefine((value, context) => {
   if (value.requestType === "Staff Replacement" && !value.replacementEmployee) {
     context.addIssue({

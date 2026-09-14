@@ -262,13 +262,6 @@ export async function POST(request: Request) {
     if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many role requests. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
 
     const sessionEmail = user.email.trim().toLowerCase();
-    if (!/^[^\s@]+@mclinkgroup\.com$/i.test(sessionEmail)) {
-      return NextResponse.json(
-        { success: false, error: "Your authenticated McLink email is not valid." },
-        { status: 400 },
-      );
-    }
-
     const clientInput = await request.json();
     const finalInterviewCalendar = await getFinalInterviewCalendarConfig();
 

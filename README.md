@@ -8,7 +8,7 @@ A role-first internal recruitment website starter for:
 
 - Google Identity Services login page
 - Server-side Google ID-token verification
-- Restriction to the `mclinkgroup.com` hosted domain
+- Access limited to active users in the portal directory, regardless of email domain
 - Signed, HTTP-only session cookie
 - Responsive recruitment dashboard
 - Staff addition/replacement role request form
@@ -53,7 +53,7 @@ openssl rand -base64 48
    - `https://recruitment.your-domain.com`
 5. Put the Web Client ID into both Google client ID variables.
 
-The backend checks `email_verified` and the Google Workspace `hd` claim. A matching email suffix alone is not treated as sufficient authorization.
+The backend checks `email_verified` and then authorizes the exact normalized email against the active portal directory. A Google hosted-domain claim or matching email suffix is not used as an access rule.
 
 ## 4. n8n webhook
 

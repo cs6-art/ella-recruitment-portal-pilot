@@ -201,8 +201,8 @@ configuration editable from Settings -> Infrastructure: the n8n webhook URLs
 `N8N_Application_Invite_Email_Webhook_URL`, `N8N_Bulk_Resume_Upload_Webhook_URL`),
 `App_URL`, `Resume_Screening_Invite_Base_URL`, `N8N_Bulk_Resume_Portal_Base_URL`,
 `Resume_Storage_Drive_Folder_ID`, `Bulk_Resume_Drive_URL`,
-`Allowed_Google_Domain`, `Booking_Link_Expiry_Days`,
-`Resume_Screening_Link_Expiry_Days`, `Bulk_Resume_Upload_Concurrency`,
+`Booking_Link_Expiry_Days`, `Resume_Screening_Link_Expiry_Days`,
+`Bulk_Resume_Upload_Concurrency`,
 `Bulk_Resume_Notify_On_Success`, `Ella_Credit_Cost_CV_Analysis`,
 `Ella_Credit_Cost_Phone_Interview`, `Ella_Credit_Discount_Threshold`,
 `Ella_Credit_Discount_Percent`, `Voice_Call_Max_Attempts`, and

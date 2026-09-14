@@ -23,11 +23,8 @@ test("env var is used when the Settings value is blank", () => {
   delete process.env.NEXT_PUBLIC_APP_URL;
 });
 
-test("catalog default is the last resort", () => {
-  delete process.env.ALLOWED_GOOGLE_DOMAIN;
-  const result = resolvePortalConfigValue("Allowed_Google_Domain", []);
-  assert.equal(result.value, "mclinkgroup.com");
-  assert.equal(result.source, "default");
+test("Google hosted domain is not a portal access setting", () => {
+  assert.equal(PORTAL_CONFIG_CATALOG.some((entry) => entry.key === "Allowed_Google_Domain"), false);
 });
 
 test("the first defined env fallback wins", () => {

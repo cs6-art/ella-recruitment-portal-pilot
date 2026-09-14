@@ -50,9 +50,11 @@ test("client organizations can log in without a row in McLink's own user directo
   const directory = read("src/lib/postgres-directory.ts");
   const provision = read("src/db/provision-client-organization.mjs");
   assert.match(auth, /findPostgresDirectoryUser/);
+  assert.match(auth, /findPostgresDirectoryUserByEmail/);
+  assert.match(auth, /The directory, not the Google hosted domain/);
   // The Postgres fallback must never run for the default (McLink) organization
   // — the Sheet-only login path for existing McLink staff stays untouched.
-  assert.match(auth, /organizationId !== DEFAULT_ORGANIZATION_ID/);
+  assert.match(directory, /from\(users\)\s*\.innerJoin\(organizations/);
   assert.match(directory, /eq\(users\.organizationId, organizationId\)/);
   assert.match(provision, /insert into organizations/);
   assert.match(provision, /insert into users/);
@@ -84,4 +86,11 @@ test("resume and booking writes carry the application tenant", () => {
   assert.match(hrIntake, /extractedText: storedResume\.extractedText/);
   assert.doesNotMatch(hrIntake, /responseError\(error instanceof Error \? error\.message/);
   assert.doesNotMatch(publicIntake, /responseError\(request, error instanceof Error \? error\.message/);
+});
+
+test("tenant columns are protected by database foreign keys", () => {
+  const migration = read("drizzle/0012_tenant_directory_integrity.sql");
+  for (const table of ["departments", "users", "roles", "applicants", "applications", "screening_results", "interview_slots", "voice_call_attempts", "voice_interview_results", "voice_call_logs", "booking_tokens", "application_status_history"]) {
+    assert.match(migration, new RegExp(`ALTER TABLE \\"${table}\\"[\\s\\S]*FOREIGN KEY \\(\\"organization_id\\"\\) REFERENCES \\"organizations\\"`, "i"), `missing tenant FK for ${table}`);
+  }
 });

@@ -36,7 +36,7 @@ deduction — 1/CV, 0 on failed), 15 (insufficient-credit 402), 16 (Sheet ↔ Ne
 
 | # | Area | Test | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Login / SSO | Sign in with an allowed `mclinkgroup.com` Google account | lands on dashboard; session cookie set | | |
+| 1 | Login / SSO | Sign in with an active user-directory Google account from any email domain | lands on dashboard; session cookie set | | |
 | 2 | Login / SSO | Sign in with a non-allowed domain | rejected | | |
 | 3 | RBAC | Creator-only user opens `/dashboard`, `/settings`, `/user-accounts` | pipeline metrics + settings hidden per role | | |
 | 4 | RBAC | Non-HR hits `/api/resume-screening/bulk/upload` and `/drive/import` | 403 | | |
