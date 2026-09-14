@@ -1,0 +1,19 @@
+services:
+  ella-gpt-live-bridge:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: "8787"
+      LIVEAVATAR_API_URL: "https://api.liveavatar.com"
+      LIVEAVATAR_API_KEY: ""
+      LIVEAVATAR_AVATAR_ID: "65f9e3c9-d48b-4118-b73a-4ae2e3cbb8f0"
+      OPENAI_API_KEY: ""
+      GPT_LIVE_MODEL: "gpt-live-1"
+      GPT_LIVE_VOICE: "marin"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
