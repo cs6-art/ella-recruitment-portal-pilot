@@ -273,3 +273,49 @@ test("evaluation fields flow into the rendered voice interview prompt", async ()
   });
   assert.doesNotMatch(withoutEvaluationFields, /ADDITIONAL EVALUATION FIELDS/);
 });
+
+// Regression guard for the 2026-09-14 pilot incident: a live voice call ran
+// under an unrelated Vapi assistant's own saved prompt ("ELAI (Copy) (Copy)",
+// a generic scheduling-bot greeting) because n8n never received a resolved
+// Ella system prompt to override it with. buildVoiceCallPrompt() is the
+// single source of truth the dispatch route uses to build that prompt, and
+// it must both (a) fully resolve every placeholder with real role/candidate
+// data, and (b) flag `resolved: false` so the dispatch route can refuse to
+// send the call rather than silently let the assistant's own prompt run.
+test("buildVoiceCallPrompt fully resolves the Ella prompt for a real call", async () => {
+  const { buildVoiceCallPrompt } = await import("../src/lib/recruitment-prompt.ts");
+
+  const resolved = buildVoiceCallPrompt(
+    {
+      jobDescription: "Handle inbound customer calls.",
+      screeningCriteria: "Prior call center experience preferred.",
+      requiredInterviewQuestion1: "Tell me about your customer service experience.",
+      requiredInterviewQuestion2: "How do you handle an upset customer?",
+      evaluationFieldToggles: ["communication_quality"],
+    },
+    "Customer Service Officer",
+    { candidateName: "Lihen Bong", email: "lihen@example.com", matchScore: "82", aiSummary: "Strong resume match." },
+  );
+
+  assert.equal(resolved.resolved, true);
+  assert.match(resolved.systemPrompt, /You are Ella, McLink Group's professional and inviting AI HR Recruiting Assistant/);
+  assert.match(resolved.systemPrompt, /Am I speaking with Lihen Bong\?/);
+  assert.match(resolved.systemPrompt, /Q1: Tell me about your customer service experience\./);
+  assert.match(resolved.systemPrompt, /Q2: How do you handle an upset customer\?/);
+  assert.doesNotMatch(resolved.systemPrompt, /\{\{[a-z_]+\}\}/);
+
+  // No saved role setup at all (e.g. a role record with no recruitment setup
+  // yet) must never resolve to a usable-looking prompt.
+  const missingSetup = buildVoiceCallPrompt(null, "Customer Service Officer", {
+    candidateName: "Lihen Bong", email: "", matchScore: "", aiSummary: "",
+  });
+  assert.equal(missingSetup.resolved, true, "the standard template alone is still a complete, valid Ella prompt");
+  assert.match(missingSetup.systemPrompt, /No approved interview questions have been provided\./);
+});
+
+test("Pilot dispatch route refuses to start a call whose prompt did not resolve", () => {
+  const route = fs.readFileSync("src/app/api/internal/recruitment/voice/dispatch/route.ts", "utf8");
+  assert.match(route, /buildVoiceCallPrompt/);
+  assert.match(route, /if \(!prompt\.resolved\) return block\("voice_prompt_not_resolved", 409\);/);
+  assert.match(route, /ellaSystemPrompt: prompt\.systemPrompt/);
+});

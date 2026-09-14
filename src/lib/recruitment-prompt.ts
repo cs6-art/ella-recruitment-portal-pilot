@@ -1,4 +1,9 @@
 import type { RecruitmentSetupInput } from "@/lib/recruitment-setup-schema";
+// Relative (not `@/`) imports here deliberately: this module is imported
+// directly by tests under the plain Node test runner, which strips TypeScript
+// types but does not resolve the `@/*` path alias at runtime.
+import { evaluationFieldsForSetup } from "./recruitment-setup-schema.ts";
+import { buildNumberedInterviewQuestions } from "./interview-question-count.ts";
 
 // Keep the prompt's baseline output contract stable even when it is rendered
 // directly by a workflow or a test rather than through the editor.
@@ -420,4 +425,98 @@ export function renderRecruitmentSystemPromptSample(template: string, setup: Rec
     .replaceAll("{{email}}", "jamie.cruz@example.com")
     .replaceAll("{{match_score}}", "82")
     .replaceAll("{{ai_summary}}", "Jamie has three years of relevant experience and a strong resume match for this role.");
+}
+
+type VoiceCallRoleSetup = {
+  aiSystemPrompt?: string;
+  jobDescription?: string;
+  screeningCriteria?: string;
+  licenseOrCertificateRequired?: string;
+  keywordsToLookFor?: string;
+  transferableSkillsAccepted?: string;
+  salaryOrBudgetRange?: string;
+  earliestAvailabilityRule?: string;
+  minimumYearsOfExperience?: string;
+  requiredInterviewQuestion1?: string;
+  requiredInterviewQuestion2?: string;
+  requiredInterviewQuestion3?: string;
+  requiredInterviewQuestion4?: string;
+  requiredInterviewQuestion5?: string;
+  evaluationFieldToggles?: string[] | string;
+  customEvaluationFields?: { key: string; label: string; description: string }[];
+};
+
+export type VoiceCallCandidateInfo = {
+  candidateName: string;
+  email: string;
+  matchScore: string;
+  aiSummary: string;
+};
+
+export type VoiceCallPromptResult = {
+  systemPrompt: string;
+  interviewQuestions: string;
+  jobDescription: string;
+  screeningCriteria: string;
+  evaluationFields: { key: string; label: string; description: string }[];
+  /** false when the rendered prompt still has an unresolved {{token}} or is
+   * missing the [Identity] section — see /api/internal/recruitment/voice/dispatch,
+   * which must refuse to dispatch a call whose prompt did not resolve rather
+   * than let Vapi fall back to whatever prompt happens to be saved on the
+   * assistant in the dashboard. */
+  resolved: boolean;
+};
+
+const UNRESOLVED_TOKEN_PATTERN = /\{\{\s*(candidate_name|email|match_score|ai_summary|selected_role|role|job_description|system_prompt|interview_questions|evaluation_fields)\s*\}\}/i;
+
+/**
+ * Build the exact Vapi system prompt for one scheduled call: the role's
+ * saved Ella prompt template (or the standard default) with both the role
+ * placeholders and the real candidate's placeholders resolved. This is the
+ * single source of truth for what n8n must send as `ella_system_prompt` in
+ * `assistantOverrides.variableValues` — n8n must never invent or re-derive
+ * this text itself.
+ */
+export function buildVoiceCallPrompt(
+  roleSetup: VoiceCallRoleSetup | null | undefined,
+  roleTitle: string,
+  candidate: VoiceCallCandidateInfo,
+): VoiceCallPromptResult {
+  const setup = roleSetup || {};
+  const interviewQuestions = buildNumberedInterviewQuestions([
+    setup.requiredInterviewQuestion1, setup.requiredInterviewQuestion2, setup.requiredInterviewQuestion3,
+    setup.requiredInterviewQuestion4, setup.requiredInterviewQuestion5,
+  ]).join("\n");
+  const evaluationFields = evaluationFieldsForSetup(setup.evaluationFieldToggles, setup.customEvaluationFields);
+
+  const promptInput: RecruitmentPromptInput = {
+    roleTitle,
+    jobDescription: setup.jobDescription || "",
+    screeningCriteria: setup.screeningCriteria || "",
+    licenseOrCertificateRequired: setup.licenseOrCertificateRequired || "",
+    keywordsToLookFor: setup.keywordsToLookFor || "",
+    transferableSkillsAccepted: setup.transferableSkillsAccepted || "",
+    salaryOrBudgetRange: setup.salaryOrBudgetRange || "",
+    earliestAvailabilityRule: setup.earliestAvailabilityRule || "",
+    experienceRequired: setup.minimumYearsOfExperience || "",
+    interviewQuestions,
+    evaluationFields,
+  };
+
+  const template = setup.aiSystemPrompt?.trim() || STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE;
+  const roleResolved = renderRecruitmentSystemPrompt(template, promptInput);
+  const systemPrompt = roleResolved
+    .replaceAll("{{candidate_name}}", candidate.candidateName || "")
+    .replaceAll("{{email}}", candidate.email || "")
+    .replaceAll("{{match_score}}", candidate.matchScore || "")
+    .replaceAll("{{ai_summary}}", candidate.aiSummary || "");
+
+  return {
+    systemPrompt,
+    interviewQuestions,
+    jobDescription: promptInput.jobDescription,
+    screeningCriteria: promptInput.screeningCriteria || "",
+    evaluationFields,
+    resolved: systemPrompt.includes("[Identity]") && !UNRESOLVED_TOKEN_PATTERN.test(systemPrompt),
+  };
 }
