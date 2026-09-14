@@ -1636,7 +1636,20 @@ input:not([type="file"]), select { border-radius: 8px; border-color: #c2c7d0; }
 /* Recruitment portal API base. Single-use HR application links (?invite=...)
    are validated and submitted through the portal itself rather than n8n
    directly, so the portal can enforce "one use only" on the link. */
-const PORTAL_API_BASE_URL = "https://ella-recruitment.mclinkgroup.com";
+const inviteQuery = new URLSearchParams(window.location.search);
+const configuredPortalApi = (inviteQuery.get("portalApi") || "").trim();
+const PORTAL_API_BASE_URL = (() => {
+  try {
+    // The candidate page may remain on a custom/legacy host while the
+    // Next.js portal is deployed at the canonical pilot origin. New links may
+    // override this with portalApi; older links use the stable fallback.
+    const url = new URL(configuredPortalApi || "https://ella-recruitment-portal-pilot.vercel.app");
+    if (url.protocol === "http:" || url.protocol === "https:") return url.origin;
+  } catch {
+    // Fall back to the page origin if the optional override is malformed.
+  }
+  return window.location.origin;
+})();
 const MAX_RESUME_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_RESUME_TYPES = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
 const ALLOWED_RESUME_EXTENSIONS = ["pdf", "doc", "docx"];
@@ -1682,7 +1695,7 @@ let applicationInProgress = false;
    Resume Screening tab (e.g. ?invite=<token>). When present, that token
    determines which role the candidate applies to, and the link stops
    working the moment they submit. */
-const inviteToken = (new URLSearchParams(window.location.search).get("invite") || "").trim();
+const inviteToken = (inviteQuery.get("invite") || "").trim();
 let activeInvitation = null;
 
 function portalEndpoint(path) {

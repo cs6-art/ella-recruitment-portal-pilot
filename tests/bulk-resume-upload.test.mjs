@@ -272,7 +272,8 @@ test("invite links can use a separate candidate page origin without breaking por
   assert.match(candidatePage, /const inviteToken =/);
   assert.match(candidatePage, /api\/public\/resume-screening-invite/);
   assert.match(candidatePage, /api\/public\/applications/);
-  assert.match(candidatePage, /const PORTAL_API_BASE_URL = "https:\/\/ella-recruitment\.mclinkgroup\.com"/);
+  assert.match(candidatePage, /const configuredPortalApi =/);
+  assert.match(candidatePage, /ella-recruitment-portal-pilot\.vercel\.app/);
   assert.match(publicCors, /new URL\(cleanValue\)\.origin/);
   assert.match(applications, /intake\.body\.candidateName = invitation\.candidateName/);
   assert.match(applications, /intake\.body\.candidateEmail = invitation\.candidateEmail/);

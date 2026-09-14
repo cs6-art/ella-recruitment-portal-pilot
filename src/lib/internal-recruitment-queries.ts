@@ -5,7 +5,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, lte, not, or, sql } from "dri
 import { getTenantDb as getDb } from "@/db/client";
 import { appendPostgresLedgerEntryOnExecutor } from "@/lib/ella-credits-postgres";
 import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
-import { recordVoiceInterviewDeduction } from "@/lib/ella-credits";
+import { creditCostFor, recordVoiceInterviewDeduction } from "@/lib/ella-credits";
 import { appendAccountLedgerEntryOnExecutor, perUserCreditsEnabled } from "@/lib/ella-credits-accounts";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
@@ -659,13 +659,33 @@ export async function markInterviewNoShow(slotId: string, actorEmail = "", actor
 export async function upsertScreeningResult(input: { applicationExternalId: string; matchScore?: number | null; recommendation?: string; summary?: string; strengths?: string; gaps?: string; interviewQuestions?: string; evaluationScores?: unknown; screenedAt?: string; raw?: unknown }) {
   const db = getDb();
   return db.transaction(async (tx) => {
-    const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
-    if (!application) return { result: null, error: "unknown_application" as const };
-    const [existing] = await tx.select({ matchScore: screeningResults.matchScore }).from(screeningResults).where(eq(screeningResults.applicationId, application.id)).limit(1);
+      const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, email: applications.email, creditOwnerEmail: applications.creditOwnerEmail }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
+      if (!application) return { result: null, error: "unknown_application" as const };
+      const [existing] = await tx.select({ id: screeningResults.id, matchScore: screeningResults.matchScore }).from(screeningResults).where(eq(screeningResults.applicationId, application.id)).for("update").limit(1);
     // A partial or retried callback must never erase a previously persisted
     // grade just because its score was omitted or encoded as an empty value.
-    const resultValues = { matchScore: input.matchScore ?? existing?.matchScore ?? null, recommendation: input.recommendation || "", summary: input.summary || "", strengths: input.strengths || "", gaps: input.gaps || "", interviewQuestions: input.interviewQuestions || "", evaluationScores: (input.evaluationScores ?? []) as object, screenedAt: isoOrNull(input.screenedAt), raw: (input.raw ?? null) as object | null };
-    const [result] = await tx.insert(screeningResults).values({ organizationId: application.organizationId, applicationId: application.id, ...resultValues }).onConflictDoUpdate({ target: screeningResults.applicationId, set: resultValues }).returning();
+      const resultValues = { matchScore: input.matchScore ?? existing?.matchScore ?? null, recommendation: input.recommendation || "", summary: input.summary || "", strengths: input.strengths || "", gaps: input.gaps || "", interviewQuestions: input.interviewQuestions || "", evaluationScores: (input.evaluationScores ?? []) as object, screenedAt: isoOrNull(input.screenedAt), raw: (input.raw ?? null) as object | null };
+      const [result] = await tx.insert(screeningResults).values({ organizationId: application.organizationId, applicationId: application.id, ...resultValues }).onConflictDoUpdate({ target: screeningResults.applicationId, set: resultValues }).returning();
+      // Single-screen callbacks used to persist their result without billing.
+      // Charge only the first durable result; the deterministic source ID makes
+      // retries and the manual-intake upfront charge safe and idempotent.
+      let credit: { applied: boolean; balanceAfter: number } | null = null;
+      if (!existing) {
+        const cost = await creditCostFor("cv_analysis");
+        const ledger: LedgerAppend = {
+          type: "Deduction",
+          event: "cv_analysis",
+          units: 1,
+          creditsDelta: -cost,
+          reference: input.applicationExternalId,
+          actorEmail: application.creditOwnerEmail,
+          note: "Postgres target single resume screening",
+          sourceEntryId: `LDG-${crypto.createHash("sha256").update(`cv:${input.applicationExternalId}`).digest("hex")}`,
+        };
+        credit = perUserCreditsEnabled()
+          ? await appendAccountLedgerEntryOnExecutor(tx, { organizationId: application.organizationId, ownerEmail: application.creditOwnerEmail, entry: ledger }, { guard: true })
+          : await appendPostgresLedgerEntryOnExecutor(tx, ledger, { guard: true });
+      }
     await tx.insert(applicationStatusHistory).values({
       organizationId: application.organizationId,
       applicationId: application.id,
@@ -681,7 +701,7 @@ export async function upsertScreeningResult(input: { applicationExternalId: stri
       notificationRecipient: pilotEmailRecipient(application.email).to,
       notificationIntendedRecipient: application.email,
     }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
-    return { result, error: null };
+      return { result, credit, error: null };
   });
 }
 
