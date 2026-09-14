@@ -171,7 +171,7 @@ export default function HelpBot() {
             </button>
           </form>
           <p className={styles.disclaimer}>
-            Answers come from the portal guide and may be incomplete. Ella can't see your records or make changes.
+            Answers come from the portal guide and your signed-in access context. Ella can't see candidate records or make changes.
           </p>
         </section>
       )}

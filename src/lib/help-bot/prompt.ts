@@ -1,5 +1,17 @@
 import type { RetrievedContext } from "./knowledge";
 
+export type HelpUserContext = {
+  name?: string;
+  accessRole?: string;
+  department?: string;
+  canCreateRole?: boolean;
+  canReviewRole?: boolean;
+  canApproveRole?: boolean;
+  canEditSettings?: boolean;
+  canManageUsers?: boolean;
+  canReviewDepartmentRole?: boolean;
+};
+
 export const HELP_BOT_STARTER_QUESTIONS = [
   "How do I create a role requisition?",
   "How does HR review and approve a role?",
@@ -9,10 +21,13 @@ export const HELP_BOT_STARTER_QUESTIONS = [
   "What do the applicant stages mean?",
   "How do Ella Credits work?",
   "What can Management users access?",
+  "What is my portal role and department?",
+  "How do I add a user to an organization?",
+  "How are organizations separated?",
 ] as const;
 
 /** Answers common orientation questions without spending an AI request. */
-export function directHelpAnswer(question: string): string | null {
+export function directHelpAnswer(question: string, user?: HelpUserContext): string | null {
   const normalized = question.trim().toLowerCase().replace(/[?!.,]+$/g, "").replace(/\s+/g, " ");
   if (/^(who are you|who is ella|what are you|tell me about yourself)$/.test(normalized)) {
     return "I'm Ella, your in-portal guide for the McLink Recruitment Portal. I can explain portal steps, applicant stages, screening, interviews, access, and Ella Credits. I can't see your records or make changes.";
@@ -22,6 +37,32 @@ export function directHelpAnswer(question: string): string | null {
   }
   if (/^(what are the three ways to screen resumes?|how many ways (are there to screen|can i screen) (a )?resumes?|how do i screen resumes?)$/.test(normalized)) {
     return "For HR screening, the portal has three intake options: (1) upload resumes from your computer, (2) import resumes from Google Drive, or (3) import resumes from OneDrive when Microsoft setup is enabled. All three use the same queue, duplicate checks, status tracking, and credit rules. A candidate can also submit one resume through an application page; that is separate from the three HR intake options.";
+  }
+  if (/^(what is my (portal )?role( and department)?|what is my access role|what role am i|what access do i have|what are my permissions)$/.test(normalized) && user) {
+    const permissions = [
+      user.canCreateRole && "create role requests",
+      user.canReviewRole && "review roles, applicants, and interview operations",
+      user.canReviewDepartmentRole && "review your department's roles and candidates",
+      user.canApproveRole && "approve or reject role decisions",
+      user.canEditSettings && "edit portal settings",
+      user.canManageUsers && "manage user accounts",
+    ].filter(Boolean);
+    return `Your portal access role is ${user.accessRole || "not specified"}${user.department ? ` in ${user.department}` : ""}. You can ${permissions.length ? permissions.join(", ") : "use the areas currently available to your account"}.`;
+  }
+  if (/^(what department am i in|which department am i in|what is my department)$/.test(normalized) && user) {
+    return user.department ? `Your assigned department is ${user.department}.` : "No department is currently assigned to your portal account. Ask an administrator to update your user account.";
+  }
+  if (/^(how do i add a user|how do i add a user account|how do i add users?)$/.test(normalized)) {
+    return "Open User Accounts and choose Add user account. Enter the person's name, email, access role, department, permissions, and active status, then save. A McLink platform administrator can choose the organization first under Manage users for.";
+  }
+  if (/^(how do i add an organization|how do i create an organization|how do i add a client)$/.test(normalized)) {
+    return "Open User Accounts and use Add organization. Enter the organization name and lowercase slug, save it, then choose the organization under Manage users for before adding its users.";
+  }
+  if (/^(how many resumes can i upload|what is the bulk screening limit|how many files can i screen at once)$/.test(normalized)) {
+    return "The current Pilot limit is 4 files per batch. PDF, DOC, and DOCX files are accepted up to 10 MB each. The same limit applies to computer upload, Google Drive import, and OneDrive import.";
+  }
+  if (/^(are organizations separate|are client records separate|how are organizations separated)$/.test(normalized)) {
+    return "Yes. Users, departments, roles, applicants, interview records, and Ella Credits are separated by organization. Users only see the organization assigned to their signed-in account.";
   }
   return null;
 }
@@ -35,9 +76,10 @@ export const HELP_BOT_SYSTEM_PROMPT = [
   "- If the KNOWLEDGE does not contain the answer, reply that you don't have that",
   "  information and suggest contacting HR or the portal administrator. Do not guess.",
   "- You have no access to live portal data: candidate records, resumes, scores,",
-  "  calendars, credit balances, user lists, or settings. If asked for any specific",
-  "  record or value, explain that you can only give general guidance and point the",
-  "  user to the relevant portal screen.",
+  "  calendars, credit balances, user lists, or settings. The SIGNED-IN ACCOUNT",
+  "  CONTEXT may be used only for the current user's own access role, department,",
+  "  and permissions. If asked for any other specific record or value, explain that",
+  "  you can only give general guidance and point the user to the relevant screen.",
   "- You cannot perform actions or change anything. You are informational only.",
   "- When a question asks for the ways, steps, statuses, limits, or differences between",
   "  features, give the complete list from KNOWLEDGE rather than describing only one path.",
@@ -56,12 +98,31 @@ export const HELP_BOT_SYSTEM_PROMPT = [
   "unless the user asks for more detail.",
 ].join("\n");
 
-export function buildUserPrompt(context: RetrievedContext, question: string): string {
+export function buildUserPrompt(context: RetrievedContext, question: string, user?: HelpUserContext): string {
+  const userContext = user
+    ? [
+      "SIGNED-IN ACCOUNT CONTEXT (use only for the current user's own access questions):",
+      `Name: ${user.name || "Not available"}`,
+      `Access role: ${user.accessRole || "Not specified"}`,
+      `Department: ${user.department || "Not specified"}`,
+      `Permissions: ${[
+        user.canCreateRole && "create role requests",
+        user.canReviewRole && "review roles, applicants, and interview operations",
+        user.canReviewDepartmentRole && "review department-scoped roles and candidates",
+        user.canApproveRole && "approve or reject role decisions",
+        user.canEditSettings && "edit settings",
+        user.canManageUsers && "manage users",
+      ].filter(Boolean).join(", ") || "No elevated permissions listed"}`,
+      "Do not infer live records, balances, organization names, or other facts from this context.",
+      "",
+    ].join("\n")
+    : "";
   return [
     "KNOWLEDGE (the only approved source — do not go beyond it):",
     "",
     context.text,
     "",
+    userContext,
     "---",
     "",
     `USER QUESTION: ${question}`,

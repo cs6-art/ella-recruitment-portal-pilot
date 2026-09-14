@@ -45,9 +45,10 @@ test("the endpoint is rate limited per user and degrades on provider rate limits
   assert.match(route, /status: 502/); // generic provider failure fallback
 });
 
-test("only static knowledge + the question reach the model — no applicant / Sheets / DB / n8n data", () => {
+test("only static knowledge + safe signed-in context reach the model — no applicant / Sheets / DB / n8n data", () => {
   const route = read("src/app/api/help-bot/route.ts");
   assert.match(route, /retrieveContext\(question\)/);
+  assert.match(route, /userContext/);
   assert.doesNotMatch(route, /getApplicant|getRoleRequest|google-sheets|getDb\(|N8N_|webhook/);
   const knowledge = read("src/lib/help-bot/knowledge.ts");
   assert.doesNotMatch(knowledge, /fetch\(|getDb\(|googleapis|neon\(/);
