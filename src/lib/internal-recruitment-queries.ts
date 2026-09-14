@@ -814,10 +814,18 @@ export async function voiceAttemptContext(attemptId: string) {
     withdrawn: applications.withdrawn,
     roleExternalId: roles.externalId,
     roleTitle: roles.title,
+    // The role's saved recruitment setup (Ella prompt template, screening
+    // criteria, approved questions, evaluation fields) and the resume
+    // screening result (match score, AI summary) are what the dispatched
+    // call's Vapi system prompt must be built from — see voiceCallPromptPayload.
+    roleSetup: roles.setup,
+    screeningMatchScore: screeningResults.matchScore,
+    screeningSummary: screeningResults.summary,
   }).from(voiceCallAttempts)
     .innerJoin(applications, eq(applications.id, voiceCallAttempts.applicationId))
     .innerJoin(applicants, eq(applicants.id, applications.applicantId))
     .leftJoin(roles, eq(roles.id, voiceCallAttempts.roleId))
+    .leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id))
     .where(eq(voiceCallAttempts.id, attemptId.trim()))
     .limit(1);
   return row ?? null;
@@ -1054,6 +1062,39 @@ export async function updateApplicationStage(input: { applicationExternalId: str
 export async function bulkScreeningQueue(statuses: string[] = ["queued", "processing"]) {
   const db = getDb();
   return db.select().from(bulkScreeningQueueItems).where(inArray(bulkScreeningQueueItems.status, statuses)).orderBy(asc(bulkScreeningQueueItems.discoveredAt)).limit(LIMIT);
+}
+
+/**
+ * Aggregate-only bulk screening queue health, grouped by status, scoped to
+ * one organization. For the Help Bot's live-tools registry (see
+ * src/lib/help-bot/live-tools.ts) -- returns counts only, never a candidate
+ * name, email, filename, or role. Unlike bulkScreeningQueue/
+ * listBulkQueueForPortal above (which have no organization filter and return
+ * full rows), this must never be relaxed to accept a caller-supplied filter
+ * or to select non-count columns.
+ */
+export async function bulkQueueStatusSummary(organizationId: string): Promise<Record<string, number>> {
+  const db = getDb();
+  const rows = await db.select({ status: bulkScreeningQueueItems.status, count: sql<number>`count(*)::int` })
+    .from(bulkScreeningQueueItems)
+    .where(eq(bulkScreeningQueueItems.organizationId, organizationId))
+    .groupBy(bulkScreeningQueueItems.status);
+  return Object.fromEntries(rows.map((row) => [row.status, row.count]));
+}
+
+/**
+ * Aggregate-only voice interview attempt health, grouped by status, scoped to
+ * one organization. For the Help Bot's live-tools registry -- counts only,
+ * never a transcript, score, recording, or candidate name (those live on
+ * voiceInterviewResults / voiceCallLogs, which this function does not touch).
+ */
+export async function voiceAttemptStatusSummary(organizationId: string): Promise<Record<string, number>> {
+  const db = getDb();
+  const rows = await db.select({ status: voiceCallAttempts.status, count: sql<number>`count(*)::int` })
+    .from(voiceCallAttempts)
+    .where(eq(voiceCallAttempts.organizationId, organizationId))
+    .groupBy(voiceCallAttempts.status);
+  return Object.fromEntries(rows.map((row) => [row.status, row.count]));
 }
 
 export async function listBulkQueueForPortal(statuses: string[] = ["queued", "processing", "screened", "failed", "skipped"], roleExternalId?: string) {

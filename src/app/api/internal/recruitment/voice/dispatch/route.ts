@@ -1,6 +1,7 @@
 import { internalJson, readInternalJson, withInternalAuth } from "@/lib/internal-api-http";
 import { assertCreditsAvailable, EllaCreditsError } from "@/lib/ella-credits";
 import { record, requiredString } from "@/lib/internal-recruitment-http";
+import { buildVoiceCallPrompt } from "@/lib/recruitment-prompt";
 import {
   beginVoiceAttemptDispatch,
   blockVoiceAttempt,
@@ -62,6 +63,24 @@ export const POST = withInternalAuth("voice_attempts", async (request) => {
     throw error;
   }
 
+  // Build the exact Ella system prompt this call must run — role template
+  // and screening criteria resolved, and the real candidate's name/email/
+  // match score/AI summary filled in. n8n must send this text verbatim as
+  // `ella_system_prompt`; it must never fall back to whatever prompt is
+  // saved on the Vapi assistant itself (that gap previously sent live calls
+  // out under a stale, unrelated assistant prompt — see KNOWN-ISSUES.md).
+  const prompt = buildVoiceCallPrompt(
+    context.roleSetup as Record<string, unknown> | null,
+    context.roleTitle || "",
+    {
+      candidateName: context.candidateName || "",
+      email: context.candidateEmail || "",
+      matchScore: context.screeningMatchScore == null ? "" : String(context.screeningMatchScore),
+      aiSummary: context.screeningSummary || "",
+    },
+  );
+  if (!prompt.resolved) return block("voice_prompt_not_resolved", 409);
+
   const claimed = await beginVoiceAttemptDispatch(attemptId);
   if (!claimed) return internalJson({ ok: false, error: "attempt_dispatch_already_claimed" }, 409);
   return internalJson({
@@ -71,11 +90,21 @@ export const POST = withInternalAuth("voice_attempts", async (request) => {
     applicationExternalId: context.applicationExternalId,
     candidate: {
       name: context.candidateName,
+      email: context.candidateEmail || "",
       phoneNumber,
     },
     role: {
       externalId: context.roleExternalId || "",
       title: context.roleTitle || "",
+    },
+    prompt: {
+      ellaSystemPrompt: prompt.systemPrompt,
+      jobDescription: prompt.jobDescription,
+      screeningCriteria: prompt.screeningCriteria,
+      interviewQuestions: prompt.interviewQuestions,
+      evaluationFields: prompt.evaluationFields,
+      matchScore: context.screeningMatchScore == null ? "" : String(context.screeningMatchScore),
+      aiSummary: context.screeningSummary || "",
     },
     applicantCountry: context.applicantCountry || "",
     scheduledAt: context.attempt.scheduledAt,

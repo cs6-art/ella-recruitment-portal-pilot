@@ -107,6 +107,53 @@ that call; do not pass the literal `{{ella_system_prompt}}` as its value. The
 criteria at call setup; the editable template must remain available for later
 HR changes. Return HTTP 200 JSON with `{ "success": true }`.
 
+### Postgres-target voice dispatch (`POST /api/internal/recruitment/voice/dispatch`)
+
+<!-- Added 2026-09-14 after a pilot incident: this endpoint's response was
+     missing entirely from this doc, so the pilot's outbound-call n8n
+     workflow never forwarded a resolved Ella prompt and a live call ran
+     under whatever prompt happened to be saved on the Vapi assistant in the
+     dashboard instead. See docs/KNOWN-ISSUES.md for the incident record. -->
+
+For the Postgres-target pilot, n8n claims a due voice attempt and then POSTs
+`{ "attemptId": "..." }` to this route to get everything needed to start the
+Vapi call, **including the fully resolved system prompt** — n8n must not
+compute or cache this prompt itself. A successful response looks like:
+
+```json
+{
+  "ok": true,
+  "dispatchReady": true,
+  "attemptId": "...",
+  "applicationExternalId": "...",
+  "candidate": { "name": "...", "email": "...", "phoneNumber": "+65..." },
+  "role": { "externalId": "...", "title": "..." },
+  "prompt": {
+    "ellaSystemPrompt": "<the complete rendered Ella prompt, role AND candidate placeholders already resolved>",
+    "jobDescription": "...",
+    "screeningCriteria": "...",
+    "interviewQuestions": "Q1: ...\nQ2: ...",
+    "evaluationFields": [{ "key": "score", "label": "Score", "description": "..." }],
+    "matchScore": "...",
+    "aiSummary": "..."
+  },
+  "applicantCountry": "...",
+  "scheduledAt": "...",
+  "attemptNumber": 1,
+  "maxAttempts": 3,
+  "status": "dispatching"
+}
+```
+
+n8n's Vapi call node **must** put `prompt.ellaSystemPrompt` into
+`assistantOverrides.variableValues.ella_system_prompt` (and, for backward
+compatibility with assistants still keyed on the older wording, also into
+`system_prompt`) on every call. The assistant's own persistent prompt saved
+in the Vapi dashboard is not a fallback — if this field is ever missing or
+empty, the dispatch route itself refuses to hand back a `dispatching` result
+(`{ "ok": false, "error": "voice_prompt_not_resolved" }`, HTTP 409) rather
+than let a call go out with no real prompt behind it.
+
 For candidate final-interview invitations, the portal creates or normalizes
 `Final_Interview_Booking_Link` when HR approves the voice interview. n8n
 should send that exact sheet value in the invitation email; it should not

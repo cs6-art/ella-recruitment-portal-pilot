@@ -4,7 +4,14 @@ Open items found during the 2026-08-14 demo preparation. Each entry records what
 was observed, what the investigation established, and the fix that has not been
 applied yet. Fixes already shipped are listed at the bottom for context.
 
-## 1. Loading a saved template silently overwrites a role's setup
+## 1. Loading a saved template silently overwrites a role's setup — RESOLVED
+
+**Resolution (2026-09-14).** The portal no longer exposes a template-load
+control in Recruitment Setup. The affected live `WD01` Web Developer posting
+was placed **On Hold**, its application link and publication flags were cleared,
+and its screening criteria, interview questions, and AI prompt were cleared for
+HR to configure afresh before relaunch. No applicant can enter that role while
+it is on hold.
 
 **Severity:** high — produced live, incorrect screening on a published role.
 
@@ -31,7 +38,12 @@ not logic:
 - Once loaded, nothing distinguishes template content from the role's own saved
   setup, so the next save silently adopts it.
 
-**Planned fix.**
+**Historical planned fix (superseded).**
+
+The former confirmation/banner/move-template plan is no longer the active
+remediation because the template-load control has been removed from the
+Recruitment Setup UI. The live role was also placed on hold and cleared before
+launch. Do not treat the historical bullets below as remaining work.
 
 1. Confirmation prompt before `Load` replaces a non-empty setup, naming the
    template and the role it will overwrite.
@@ -40,15 +52,24 @@ not logic:
 3. Consider moving the template panel below the HR-edited sections so it is not
    the first thing in reach.
 
-**Data cleanup still outstanding.** `WD01` retains the AI Engineer setup and is
+**Historical data-cleanup finding (resolved above).** `WD01` previously retained the AI Engineer setup and was
 `Job Posted` with a live application link. It needs either a clear-back-to-blank
 or a genuine Web Developer setup. Its `AI_System_Prompt` also opens with "You are
 Julio…" instead of "You are Ella…" — someone edited the prompt after loading, and
 the interviewer would introduce herself as Julio on a real call.
 
-## 2. Final-interview invitation is never sent unless Vapi said "Completed"
+The preceding paragraph is historical discovery evidence; the resolution above
+is the current state. HR must configure and review a genuine Web Developer setup
+before publishing `WD01` again.
 
-**Severity:** high — approved candidates silently never receive a booking link.
+## 2. Final-interview invitation is never sent unless Vapi said "Completed" — FIXED
+
+**Status (2026-09-12):** the planned fix below has shipped and is live in
+production workflow `4FsKYuSxyaKxFtsM`, node **Filter Voice HR Actions**:
+`hrHasDecided` is present and the return condition matches exactly what's
+described below. Left here for history; not an open item.
+
+**Severity (at the time):** high — approved candidates silently never received a booking link.
 
 **Where.** n8n workflow *Voice Interview HR Decision v2 – Hashed Final Booking
 Token* (`4FsKYuSxyaKxFtsM`), node **Filter Voice HR Actions**.
@@ -144,6 +165,62 @@ final-interview booking flow reads and writes (range widened to `X`).
 Related: `updateRoleRequestFields()` appends any column it cannot find. If a
 header name in the code ever drifts from the sheet, the mismatch appears as a new
 column at the far right of `Role_Requests` rather than as an error.
+
+## 7. Pilot voice calls ran under the wrong Vapi assistant prompt — FIXED
+
+**Status (2026-09-14):** fixed the same day it was found. The portal now
+builds and validates the call's prompt before dispatch (`buildVoiceCallPrompt`
+in `src/lib/recruitment-prompt.ts`, wired into
+`/api/internal/recruitment/voice/dispatch`), and the pilot n8n workflow now
+forwards it. See `docs/N8N-CONTRACTS.md` → "Postgres-target voice dispatch"
+for the contract.
+
+**Severity:** high — live applicants were called by an AI voice interviewer
+that did not run the Ella script at all.
+
+**Observed.** A Vapi call log for applicant Lihen Bong (Malaysia number,
+09/14/2026, assistant `4698fa1c-eef6-454f-9b0b-830c76738d1c`, named
+`ELAI (Copy) (Copy)` in the Vapi dashboard) opened with "Hello, how can I
+assist you today? Are you looking to schedule a meeting, check calendar
+availability, or something else?" — not Ella's identity confirmation line and
+not part of the Ella prompt anywhere.
+
+**Root cause.** The Postgres-target pilot's outbound-call workflow
+(`[TARGET-PG][PILOT] AI Voice Interview Scheduled Calling (Pilot)`,
+`sJM0djTE8oIjpPvo`, node **Call Vapi with n8n credential (Pilot)**) sent
+`assistantOverrides.variableValues` with only `application_id`, `attempt_id`,
+`candidate_name`, `contact_number`, `role`, `selected_role`, `role_id`, and
+`scheduled_at` — never `ella_system_prompt`. It couldn't have: the endpoint it
+calls, `POST /api/internal/recruitment/voice/dispatch`, only ever returned
+candidate name/phone and role id/title, never a resolved prompt. Per
+`N8N-CONTRACTS.md`, n8n is required to send a rendered `ella_system_prompt`
+on every call — but that contract only documented the older Sheets-era
+role-setup-update flow, not this Postgres pilot's per-call dispatch endpoint,
+so the gap was never caught. Every MY/SG pilot voice call dispatched through
+this path ran on whatever prompt happens to be saved directly on the Vapi
+assistant in the dashboard — unrelated, unversioned, and in this case a
+duplicated ("(Copy) (Copy)") generic scheduling-bot prompt.
+
+**Fix.**
+1. `voiceAttemptContext()` now also loads the role's saved recruitment setup
+   (`roles.setup`) and the resume screening result (match score, AI summary).
+2. `buildVoiceCallPrompt()` (`src/lib/recruitment-prompt.ts`) renders the
+   role's Ella template with both role- and candidate-level placeholders
+   resolved, and reports `resolved: false` if the result is missing the
+   `[Identity]` section or still has an unresolved `{{token}}`.
+3. `/api/internal/recruitment/voice/dispatch` calls it, returns the result
+   under `prompt.ellaSystemPrompt` (plus job description, screening criteria,
+   interview questions, evaluation fields, match score, AI summary), and
+   refuses to dispatch (`voice_prompt_not_resolved`, HTTP 409) instead of
+   claiming the attempt when the prompt did not resolve — a broken prompt can
+   no longer reach Vapi silently.
+4. The pilot n8n workflow's Vapi call node now reads `prompt.ellaSystemPrompt`
+   from the dispatch response into
+   `assistantOverrides.variableValues.ella_system_prompt`.
+5. Regression tests: `tests/recruitment-setup-stage.test.mjs` asserts
+   `buildVoiceCallPrompt` fully resolves a real call's prompt with no
+   remaining `{{...}}` tokens, and that the dispatch route contains the
+   `resolved` guard.
 
 ---
 
