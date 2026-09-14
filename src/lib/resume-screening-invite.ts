@@ -58,11 +58,15 @@ function hashToken(token: string) {
  * the root of its own site, while also supporting a full URL such as
  * `https://careers.example.com/index.html`.
  */
-export function applicationInviteLink(baseUrl: string, token: string) {
+export function applicationInviteLink(baseUrl: string, token: string, apiBaseUrl = "") {
   const url = new URL(baseUrl.trim());
   if (!url.pathname || url.pathname === "/") url.pathname = "/index.html";
   url.search = "";
   url.searchParams.set("invite", token);
+  if (apiBaseUrl.trim()) {
+    const apiUrl = new URL(apiBaseUrl.trim());
+    if (apiUrl.protocol === "http:" || apiUrl.protocol === "https:") url.searchParams.set("portalApi", apiUrl.origin);
+  }
   return url.toString();
 }
 
@@ -133,12 +137,14 @@ export async function createResumeScreeningInvitation(input: {
   createdByName: string;
   createdByEmail: string;
   baseUrl: string;
+  apiBaseUrl?: string;
+  organizationId?: string;
 }) {
   if (isPostgresRecruitmentTarget()) {
     const configuredDays = await getPortalConfigNumber("Resume_Screening_Link_Expiry_Days", 7);
     const expiryDays = Number.isFinite(configuredDays) ? Math.min(Math.max(configuredDays, 1), 30) : 7;
-    const target = await targetCreateScreeningInvitation({ roleId: input.roleId, candidateEmail: input.candidateEmail, createdBy: input.createdByEmail, expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString() });
-    return { ...target, link: applicationInviteLink(input.baseUrl, target.token) };
+    const target = await targetCreateScreeningInvitation({ roleId: input.roleId, candidateEmail: input.candidateEmail, createdBy: input.createdByEmail, expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString(), organizationId: input.organizationId });
+    return { ...target, link: applicationInviteLink(input.baseUrl, target.token, input.apiBaseUrl) };
   }
   await ensureTab();
   const token = crypto.randomBytes(32).toString("hex");
@@ -170,7 +176,7 @@ export async function createResumeScreeningInvitation(input: {
     insertDataOption: "INSERT_ROWS",
     requestBody: { values: [row] },
   });
-  const link = applicationInviteLink(input.baseUrl, token);
+  const link = applicationInviteLink(input.baseUrl, token, input.apiBaseUrl);
   return { invitationId, token, link, expiresAt };
 }
 

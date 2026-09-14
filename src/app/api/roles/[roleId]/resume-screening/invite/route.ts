@@ -6,10 +6,12 @@ import { canManagePipeline } from "@/lib/access-control";
 import { sendApplicationInviteEmail } from "@/lib/application-invite-email";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { getPortalConfig } from "@/lib/portal-config";
-import { resolvePublicAppBaseUrl } from "@/lib/public-url";
+import { requestOrigin } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { createResumeScreeningInvitation } from "@/lib/resume-screening-invite";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { targetRoleDetails } from "@/lib/recruitment-target-portal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,7 +44,9 @@ export async function POST(request: Request, context: { params: Promise<{ roleId
     return responseError("Invalid role reference.", 400);
   }
 
-  const role = await getRoleRequestById(roleId);
+  const role = isPostgresRecruitmentTarget()
+    ? await targetRoleDetails(roleId, user.organizationId)
+    : await getRoleRequestById(roleId);
   if (!role || !isPublishedRoleForIntake(role)) {
     return responseError("The selected role is not published for applications.", 409);
   }
@@ -57,7 +61,8 @@ export async function POST(request: Request, context: { params: Promise<{ roleId
   const configuredBaseUrl =
     portalConfig.Resume_Screening_Invite_Base_URL.trim().replace(/\/$/, "") ||
     portalConfig.N8N_Bulk_Resume_Portal_Base_URL.trim().replace(/\/$/, "");
-  const baseUrl = configuredBaseUrl || (await resolvePublicAppBaseUrl(request));
+  const baseUrl = configuredBaseUrl || requestOrigin(request);
+  const apiBaseUrl = requestOrigin(request);
 
   try {
     const invitation = await createResumeScreeningInvitation({
@@ -68,6 +73,8 @@ export async function POST(request: Request, context: { params: Promise<{ roleId
       createdByName: user.name,
       createdByEmail: user.email,
       baseUrl,
+      apiBaseUrl,
+      organizationId: user.organizationId,
     });
     const email: { status: string; error?: string } = parsed.data.sendEmail
       ? await sendApplicationInviteEmail({

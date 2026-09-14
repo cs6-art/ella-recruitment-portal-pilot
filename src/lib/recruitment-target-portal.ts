@@ -671,9 +671,10 @@ export async function targetRecordApplicantDecision(input: { applicationId: stri
   return result;
 }
 
-export async function targetCreateScreeningInvitation(input: { roleId: string; candidateEmail: string; createdBy: string; expiresAt?: string }) {
+export async function targetCreateScreeningInvitation(input: { roleId: string; candidateEmail: string; createdBy: string; expiresAt?: string; organizationId?: string }) {
   const token = crypto.randomBytes(32).toString("hex");
-  const result = await createScreeningInvitation({ roleExternalId: input.roleId, tokenHash: crypto.createHash("sha256").update(token).digest("hex"), email: input.candidateEmail, createdBy: input.createdBy, expiresAt: input.expiresAt });
+  const create = () => createScreeningInvitation({ roleExternalId: input.roleId, tokenHash: crypto.createHash("sha256").update(token).digest("hex"), email: input.candidateEmail, createdBy: input.createdBy, expiresAt: input.expiresAt });
+  const result = input.organizationId?.trim() ? await runWithTenantDatabase(input.organizationId, create) : await create();
   if (!result.invitation) throw new Error(result.error || "Unable to create screening invitation.");
   return { invitationId: result.invitation.id, token, expiresAt: result.invitation.expiresAt?.toISOString() || "" };
 }
