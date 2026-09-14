@@ -1,5 +1,9 @@
 # OneDrive resume import — Microsoft Entra setup
 
+> Current launch limit: **6 files per submission** across local upload, Google
+> Drive, and OneDrive. Older 8-file references in historical validation notes
+> are not the current operator limit.
+
 **Implementation status (2026-09-03): code COMPLETE.** OAuth connect/callback/
 status/disconnect, Graph token refresh, folder browse, file download, the
 shared bulk-intake pipeline (SHA-256 dedupe, `Bulk_Resume_Queue`, one

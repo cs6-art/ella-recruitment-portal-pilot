@@ -86,6 +86,8 @@ test("notification queue carries ready-to-send candidate email copy per booking 
   assert.match(labels, /voice_booking_invitation: "Schedule your AI voice interview with McLink Group"/);
   assert.match(labels, /voice_booking_confirmation: "Your AI voice interview is confirmed"/);
   assert.match(labels, /Ella, will call you at your preferred mobile number/);
+  assert.match(labels, /Please ensure you are available and in a quiet location\./);
+  assert.match(labels, /AI Interview Notice: This interview will be conducted with the assistance of an AI interviewing system/);
   assert.match(labels, /cta: "Schedule a call"/);
   assert.match(labels, /secondaryCta: avatarLink \? "Interview with our Avatar now"/);
   assert.match(labels, /cta: "Schedule final interview"/);
@@ -96,6 +98,7 @@ test("notification queue carries ready-to-send candidate email copy per booking 
   assert.match(labels, /if \(key === "final_booking_confirmation"\) return null/);
   assert.match(query, /email: notificationEmail\(history\.notificationEventType/);
   assert.match(query, /confirmationIsEmailed \? "pending" : "skipped"/);
+  assert.match(query, /return `\$\{dateParts\.year\}-\$\{dateParts\.month\}-\$\{dateParts\.day\} \$\{timeParts\.hour\}:\$\{timeParts\.minute\} \$\{tz\}`/);
 });
 
 test("AI voice interview times follow the applicant country timezone; face-to-face stays office time", async () => {

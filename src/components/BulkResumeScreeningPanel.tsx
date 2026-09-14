@@ -9,6 +9,7 @@ import GoogleDriveIcon from "@/components/GoogleDriveIcon";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 import { buildCloudImportRequest, type CloudImportSelection } from "@/lib/cloud-import-request";
 import { formatPortalDateTime } from "@/lib/portal-time";
+import { MAX_FILES_PER_SUBMISSION } from "@/lib/bulk-resume-limits";
 
 type RoleOption = { roleId: string; label: string };
 type QueueItem = {
@@ -31,10 +32,10 @@ type QueueItem = {
 
 const statusOrder = ["Queued", "Processing", "Completed", "Failed", "Skipped"];
 const POLL_INTERVAL_MS = 90_000;
-// Temporary operator-facing cap, mirrors MAX_FILES_PER_SUBMISSION in
-// src/lib/bulk-resume-intake.ts (kept as a local literal because that module is
-// server-only). The server also enforces it — see bulk/upload and drive/import.
-const MAX_FILES_PER_SUBMISSION = 8;
+// MAX_FILES_PER_SUBMISSION imported from @/lib/bulk-resume-limits above — a
+// dependency-free module client code can safely import (bulk-resume-intake.ts
+// itself is server-only). The server also enforces this cap — see bulk/upload
+// and drive/import.
 const TERMINAL_STATUSES = new Set(["screened", "processed", "failed", "skipped"]);
 
 // Pilot Postgres keeps the Drive object ID for storage traceability, while

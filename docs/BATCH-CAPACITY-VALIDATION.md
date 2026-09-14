@@ -1,7 +1,71 @@
 # Phase 5 — Hosting & batch-capacity validation
 
-Status: **COMPLETE** — code-derived analysis + live empirical measurement
-(2026-08-31, deployed pilot). Recommended maximum direct/Drive batch: **8 files**.
+Status: **COMPLETE WITH CURRENT PILOT LIMIT** — code-derived analysis + live
+empirical measurement. The current Vercel Hobby deployment enforces a maximum
+of **6 files per submission** for local, Google Drive, and OneDrive intake.
+Earlier 8-file measurements below are historical evidence, not the current limit.
+
+## Second correction (2026-09-14, same day) — the cap below was calculated for the wrong code path
+
+The "4 files" mitigation immediately below was calculated from this doc's own
+8-file/68s measurement and its per-file stagger formula (`(N-2)*10s + tail`).
+That formula describes `intakeResumeBatch`'s legacy staggered worker pool
+(2-concurrency, 10s stagger, synchronous per-file AI-screening wait) — the
+code path used only when `RECRUITMENT_BACKEND` is unset or `sheets`.
+
+**`RECRUITMENT_BACKEND=postgres` has been live on this deployment the whole
+time.** The code path that actually runs on every real bulk upload is
+`intakeTargetResumeBatch`: a plain sequential `for` loop, no artificial
+stagger, no synchronous AI-screening wait (screening is deferred to an async
+queue worker). Its real per-file cost is pdf-parse text extraction (~0.2-1s)
++ 3 sequential Google Drive API calls in `storeResumeFile` (~0.5-2s combined)
++ 5 sequential Postgres round trips (~0.5-1s combined) — typical ~1.2-3.5s/file,
+worst case ~5-7s/file. This is cheaper than the legacy path's model, so the
+4-file cap was needlessly conservative for what's actually live.
+
+**Recalculated cap: 6 files** (worst case 6×7s=42s, 30% margin under Hobby's
+60s ceiling; typical case 6×3s=18s). 8 files at worst case (~56s) was judged
+too close to the edge to call safe. `MAX_FILES_PER_SUBMISSION` is now **6**
+across `bulk-resume-intake.ts`, all three routes, `BulkResumeScreeningPanel.tsx`,
+and `tests/bulk-batch-cap.test.mjs`. `maxDuration = 60` and the 20s per-file
+webhook timeout from the note below are unaffected (both are still correct
+for Hobby, and the webhook timeout only applies to the legacy path if the
+backend is ever flipped back).
+
+Raise further only after a live empirical measurement of the real path (the
+same method the 2026-08-31 section below used for the legacy path), or once
+off Hobby.
+
+## Correction (2026-09-14) — the pilot is on Vercel Hobby, not Fluid Compute's 300s budget
+
+The 2026-08-31 measurements below observed the pilot completing an 8-file
+batch in 68s with **no timeout**, and attributed the effective budget to
+**Vercel Fluid Compute's ~300s default** (no `maxDuration` was set, so this
+was the platform-supplied ceiling at the time). The project is confirmed on
+the **Hobby plan**, whose Node function ceiling is a hard **60s** — a
+different budget than what these measurements assumed, whether that was
+always the actual plan or it changed since.
+
+Everything below this point (the empirical table, the "8 files" conclusion)
+was true for the platform budget available on 2026-08-31. Applied to a real
+60s ceiling, this doc's own derived table already said **"60s -> ~5 files
+(the 5-file run measured 60.4s -- on the edge)"** — i.e. even 5 was already
+over budget on a strict 60s limit.
+
+**Current mitigation (2026-09-14):**
+- `MAX_FILES_PER_SUBMISSION` lowered from 8 to **4** (local upload + Google
+  Drive import + OneDrive import), enforced at `bulk-resume-intake.ts`, all
+  three route handlers, and `BulkResumeScreeningPanel.tsx`.
+- `maxDuration = 60` now explicitly declared on all three intake routes
+  (`bulk/upload`, `drive/import`, `onedrive/import`) — previously undeclared,
+  which on Hobby defaults to a much shorter 10s, not 60s.
+- Per-file webhook timeout (`bulkWebhookTimeoutMs`) lowered from 60s to 20s —
+  at 60s it could never fire before the platform's own 60s hard kill did, so
+  it was protecting nothing.
+- This is still a cap-driven mitigation, not the proper fix (background
+  drain, see "Remaining recommendations" below) — it trades batch size for
+  fitting inside Hobby's ceiling. Re-measure and consider raising the cap
+  again if/when the project moves to a paid plan (Pro's ceiling is 300s).
 
 ## Hosting note — URS says "GoDaddy", the pilot runs on Vercel
 

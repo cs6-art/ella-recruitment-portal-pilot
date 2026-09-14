@@ -63,6 +63,33 @@ test("target booking tokens create a notification event once", () => {
   assert.match(route, /notificationHistoryId: result\.notificationHistoryId/);
 });
 
+// Pins the exact wire contract n8n's "Create final booking token" node depends on
+// (workflow ExccjPAxp1Zr7EkN). That node once built its body from a field path that
+// doesn't exist on the queue response (item.json.externalId instead of
+// item.json.application.externalId), silently dropping applicationExternalId and
+// always failing with application_kind_required. If either field name below moves,
+// n8n's expression must move with it.
+test("booking token creation requires applicationExternalId and kind by exact name", () => {
+  const route = read("src/app/api/internal/recruitment/bookings/tokens/route.ts");
+  assert.match(route, /requiredString\(item\.applicationExternalId\) && requiredString\(item\.kind\)/);
+  assert.match(route, /error: "application_kind_required" \}, 422\)/);
+  assert.match(route, /body\.kind !== "voice" && body\.kind !== "final"/);
+  assert.match(route, /error: "invalid_booking_kind" \}, 422\)/);
+});
+
+// Pins the applications-queue response shape n8n's "Split voice HR decision items"
+// node splits and reads from: each item nests the application row under an
+// `application` key, so its externalId lives at item.json.application.externalId —
+// NOT item.json.externalId.
+test("applications queue nests each row's externalId under application.externalId", () => {
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(query, /export async function listApplications/);
+  const start = query.indexOf("export async function listApplications");
+  const body = query.slice(start, query.indexOf("\n}", start));
+  assert.match(body, /application: applications/);
+  assert.doesNotMatch(body, /externalId: applications\.externalId/);
+});
+
 test("target role and applicant paths resolve Postgres before legacy Sheets", () => {
   const roles = read("src/app/api/roles/route.ts");
   const detail = read("src/app/api/roles/[roleId]/route.ts");

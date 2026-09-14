@@ -67,8 +67,16 @@ export async function POST(request: Request) {
       const applicationId = `APP-${crypto.randomUUID()}`;
       if (intake.resumeFile) storedResume = await storeResumeFile(intake.resumeFile);
       const created = await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: "direct", sourceDetail: "hr_manual", consentAt: new Date().toISOString(), creditOwnerEmail: user.email, organizationId: user.organizationId, resume: storedResume ? { ...storedResume.record, extractedText: storedResume.extractedText } : undefined });
-      if (!created.screeningReused) await recordDeduction({ event: "cv_analysis", units: 1, reference: applicationId, idempotencyKey: `cv:${applicationId}`, roleId, actorName: user.name, actorEmail: user.email, organizationId: user.organizationId, note: "Postgres target HR manual intake screening" });
-      return NextResponse.json({ success: true, applicationId, roleId, message: "Candidate added successfully.", creditsCharged: created.screeningReused ? 0 : await creditCostFor("cv_analysis") }, { status: 201 });
+      const reused = created.screeningReused === true;
+      return NextResponse.json({
+        success: true,
+        applicationId,
+        roleId,
+        message: reused ? "Candidate added successfully. An existing CV analysis was reused and 1 credit was deducted." : "Candidate added successfully and queued for CV analysis.",
+        screeningQueued: created.screeningQueued === true,
+        screeningReused: reused,
+        creditsCharged: reused ? await creditCostFor("cv_analysis") : 0,
+      }, { status: 201 });
     }
 
     const webhookUrl = await getPortalConfigValue("N8N_Candidate_Application_Webhook_URL");
@@ -120,16 +128,16 @@ export async function POST(request: Request) {
     invalidateSheetsCache("High_Match_Profile");
 
     await recordDeduction({
-      event: "cv_analysis",
-      units: 1,
-      reference: applicationId,
-      idempotencyKey: `cv:${applicationId}`,
-      roleId,
-      actorName: user.name,
-      actorEmail: user.email,
-      organizationId: user.organizationId,
-      note: "HR manual intake screening",
-    }).catch((error) => console.error("[API Applicants] Could not record credit deduction:", error));
+        event: "cv_analysis",
+        units: 1,
+        reference: applicationId,
+        idempotencyKey: `cv:${applicationId}`,
+        roleId,
+        actorName: user.name,
+        actorEmail: user.email,
+        organizationId: user.organizationId,
+        note: "HR manual intake screening",
+      });
 
     return NextResponse.json({
       success: true,

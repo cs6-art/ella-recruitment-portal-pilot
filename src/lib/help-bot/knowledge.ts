@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+// Relative, not "@/lib/...", on purpose: this module is imported directly
+// (not just read as text) by tests/help-bot-knowledge.test.mjs under plain
+// Node ESM, which does not resolve the "@/" tsconfig path alias the way
+// Next.js's webpack build does.
+import { MAX_FILES_PER_SUBMISSION } from "../bulk-resume-limits.ts";
+
 /**
  * Ella help-assistant knowledge base.
  *
@@ -14,11 +20,18 @@ import { join } from "node:path";
  * The file is read from disk at module load. `next.config.mjs` lists it under
  * `outputFileTracingIncludes` so the deployment bundle ships it alongside the
  * `/api/help-bot` route.
+ *
+ * Operational facts that live elsewhere as code (not portal-guide prose) must
+ * not be hardcoded here a second time — that's exactly how the bulk-upload
+ * limit went stale (it said "8", then drifted to "4", while the enforced
+ * value moved independently). `{{BULK_FILE_LIMIT}}` is substituted below from
+ * the same constant the routes and UI enforce, so this file can never drift
+ * from it again.
  */
 const KNOWLEDGE_MARKDOWN = readFileSync(
   join(process.cwd(), "src/lib/help-bot/knowledge.md"),
   "utf8",
-);
+).replaceAll("{{BULK_FILE_LIMIT}}", String(MAX_FILES_PER_SUBMISSION));
 
 export type KnowledgeSection = {
   heading: string;

@@ -6,6 +6,16 @@ import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate
 import { retrieveContext } from "@/lib/help-bot/knowledge";
 import { directHelpAnswer, HELP_BOT_SYSTEM_PROMPT, buildUserPrompt, type HelpUserContext } from "@/lib/help-bot/prompt";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { runHelpBotConversation } from "@/lib/help-bot/conversation";
+import type { LiveToolDependencies } from "@/lib/help-bot/live-tools";
+import { getCreditBalance } from "@/lib/ella-credits";
+import { bulkQueueStatusSummary, voiceAttemptStatusSummary } from "@/lib/internal-recruitment-queries";
+
+// The one place the real live-tool implementations are wired in. live-tools.ts
+// and conversation.ts stay decoupled from these (see the comment at the top of
+// live-tools.ts) so they can be unit tested under plain Node without pulling
+// in this module's "@/lib/..." dependency chain.
+const liveToolDeps: LiveToolDependencies = { getCreditBalance, bulkQueueStatusSummary, voiceAttemptStatusSummary };
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -130,19 +140,25 @@ export async function POST(request: Request) {
   try {
     // OpenAI Responses API. `instructions` carries the strict grounding /
     // anti-injection system prompt; `input` is the prior turns plus the
-    // knowledge-grounded user prompt. Only the static knowledge sections and
-    // the user's question reach the model — no live portal data.
-    const response = await client.responses.create({
-      model: process.env.HELP_BOT_MODEL || DEFAULT_MODEL,
-      max_output_tokens: 700,
-      instructions: HELP_BOT_SYSTEM_PROMPT,
-      input: [
-        ...history,
-        { role: "user", content: buildUserPrompt(context, question, userContext) },
-      ],
-    });
-
-    const answer = (response.output_text || "").trim();
+    // knowledge-grounded user prompt. Static knowledge sections and the
+    // user's question always reach the model; the model may additionally
+    // request up to MAX_LIVE_TOOL_CALLS_PER_QUESTION calls into the
+    // whitelisted, zero-parameter, RBAC-gated live-tools registry (see
+    // src/lib/help-bot/live-tools.ts) — nothing else about the system's live
+    // state is reachable from here.
+    const { answer, toolCallsUsed } = await runHelpBotConversation(
+      client,
+      {
+        model: process.env.HELP_BOT_MODEL || DEFAULT_MODEL,
+        instructions: HELP_BOT_SYSTEM_PROMPT,
+        input: [
+          ...history,
+          { role: "user", content: buildUserPrompt(context, question, userContext) },
+        ],
+      },
+      user,
+      liveToolDeps,
+    );
 
     if (!answer) {
       return NextResponse.json(
@@ -151,8 +167,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const sources = context.sections.map((section) => section.heading);
+    if (toolCallsUsed > 0) sources.push("Live portal data");
+
     return NextResponse.json(
-      { success: true, answer, sources: context.sections.map((section) => section.heading) },
+      { success: true, answer, sources },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

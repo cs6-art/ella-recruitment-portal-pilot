@@ -28,3 +28,17 @@
 - Perform the manual smoke test in `TESTING.md` against production n8n and a
   test spreadsheet row.
 - Verify HTTPS, secure cookie behavior, backups, monitoring, and rollback.
+- Set `CRON_SECRET` and confirm the daily queue-reconciliation and resume-cleanup
+  cron executions are green. Vercel Hobby permits daily cron schedules only;
+  use Pro before changing queue reconciliation to a sub-daily schedule.
+- Complete the live release checklist with fresh test data before admitting real
+  applicants; automated tests cannot verify the real n8n, email, calendar, or
+  phone path.
+- For a controlled soft launch, keep `RECRUITMENT_BACKEND=postgres` and
+  `CREDITS_BACKEND=dual`; keep voice dry-run enabled until the first supervised
+  n8n/Vapi call is verified. Set `PILOT_VOICE_DRY_RUN=false` only for that
+  explicit live-call window.
+- Before opening to client users, close the external gates: resolve the known
+  n8n Google Sheets 429/quota issue, confirm `CRON_SECRET` in Vercel, enable
+  shared edge rate limiting, confirm Neon backups/PITR and a tested restore,
+  and verify monitoring/error alerts.

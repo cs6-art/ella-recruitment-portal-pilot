@@ -12,10 +12,11 @@ The portal currently exposes five boolean permissions in `User_Directory`:
 
 | Access role | Create roles | Review HR setup/applicants | Approve roles | Edit settings | Manage users |
 | --- | --- | --- | --- | --- | --- |
+| CEO | Yes | Yes | Yes | Yes | Yes |
 | Admin | Yes | Yes | Yes | Yes | Yes |
 | HR | Yes | Yes | No | No | No |
-| Management | No | Yes | Yes | No | No |
-| HOD / Department Head | Yes | Yes | No | No | No |
+| Management | No | View-only | Yes | No | No |
+| HOD / Department Head | Yes | Department view-only | No | No | No |
 | Recruiter | Yes | Yes | No | No | No |
 | Interviewer | No | Yes | No | No | No |
 | Hiring Manager | No | Yes | Yes | No | No |

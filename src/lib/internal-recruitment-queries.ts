@@ -391,12 +391,18 @@ export async function registerResumeFile(input: { storageRef: string; sha256: st
 }
 
 /** Reuse a completed role-scoped screening for a duplicate application. */
-export async function copyScreeningResult(input: { sourceApplicationId: string; targetApplicationId: string }) {
+export async function copyScreeningResult(input: { sourceApplicationId: string; targetApplicationId: string; ledger?: LedgerAppend }) {
   if (input.sourceApplicationId === input.targetApplicationId) return false;
   const db = getDb();
   return db.transaction(async (tx) => {
     const [source] = await tx.select().from(screeningResults).where(eq(screeningResults.applicationId, input.sourceApplicationId)).limit(1);
     if (!source) return false;
+    const [target] = await tx.select({ organizationId: applications.organizationId, creditOwnerEmail: applications.creditOwnerEmail })
+      .from(applications)
+      .where(eq(applications.id, input.targetApplicationId))
+      .for("update")
+      .limit(1);
+    if (!target || target.organizationId !== source.organizationId) return false;
     const [copied] = await tx.insert(screeningResults).values({
       organizationId: source.organizationId,
       applicationId: input.targetApplicationId,
@@ -410,6 +416,19 @@ export async function copyScreeningResult(input: { sourceApplicationId: string; 
       screenedAt: source.screenedAt,
       raw: source.raw as object | null,
     }).onConflictDoNothing({ target: screeningResults.applicationId }).returning({ id: screeningResults.id });
+    if (copied && input.ledger) {
+      // Keep reused-result billing under the same atomic boundary as the
+      // screening row. A concurrent balance change rolls back both writes.
+      if (perUserCreditsEnabled()) {
+        await appendAccountLedgerEntryOnExecutor(tx, {
+          organizationId: target.organizationId,
+          ownerEmail: target.creditOwnerEmail,
+          entry: input.ledger,
+        }, { guard: true });
+      } else {
+        await appendPostgresLedgerEntryOnExecutor(tx, input.ledger, { guard: true });
+      }
+    }
     return Boolean(copied);
   });
 }
@@ -1681,9 +1700,19 @@ export async function notificationQueue(stage?: string) {
     const parsed = new Date(startsAt);
     if (!startsAt || Number.isNaN(parsed.getTime())) return "";
     const tz = timezone || "Asia/Singapore";
-    const date = new Intl.DateTimeFormat("en-GB", { timeZone: tz, day: "numeric", month: "long", year: "numeric" }).format(parsed);
-    const time = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit", hour12: true }).format(parsed);
-    return `${date} at ${time} (${tz.replace(/_/g, " ")})`;
+    const dateParts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(parsed).filter(({ type }) => type !== "literal").map(({ type, value }) => [type, value]));
+    const timeParts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(parsed).filter(({ type }) => type !== "literal").map(({ type, value }) => [type, value]));
+    return `${dateParts.year}-${dateParts.month}-${dateParts.day} ${timeParts.hour}:${timeParts.minute} ${tz}`;
   };
   const applicationItems = (() => {
     return rows.map(({ history, ...context }) => ({

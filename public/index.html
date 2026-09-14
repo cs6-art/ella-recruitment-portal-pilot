@@ -1643,6 +1643,7 @@ const PORTAL_API_BASE_URL = (() => {
     // The candidate page may remain on a custom/legacy host while the
     // Next.js portal is deployed at the canonical pilot origin. New links may
     // override this with portalApi; older links use the stable fallback.
+    // This keeps older custom-domain links pointed at the current API.
     const url = new URL(configuredPortalApi || "https://ella-recruitment-portal-pilot.vercel.app");
     if (url.protocol === "http:" || url.protocol === "https:") return url.origin;
   } catch {

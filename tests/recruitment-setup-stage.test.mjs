@@ -187,7 +187,7 @@ test("AI voice interview emails disclose the AI interviewer and human review", (
   assert.match(contracts, /AI Interview Notice: This interview will be conducted with the assistance of/);
   assert.match(contracts, /may record, transcribe and assess your/);
   assert.match(contracts, /official representation/);
-  assert.match(contracts, /commitment or offer by Mclink Group/);
+  assert.match(contracts, /commitment or offer by McLink Group/);
   assert.match(contracts, /Face-to-Face\s+Interview invitations are for the\s+human HR interviewer/);
   assert.match(workflow, /AI Interview Notice: This interview will be conducted with the assistance/);
 });

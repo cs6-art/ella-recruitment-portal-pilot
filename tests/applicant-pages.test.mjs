@@ -86,6 +86,17 @@ test("applicant stage labels are presentation-only and used consistently", () =>
   assert.match(labels, /must continue to\n\s*\* send and persist the canonical status key/);
 });
 
+test("opening Applicants clears row highlights immediately and counts only persisted screenings", () => {
+  const list = read("src/components/ApplicantsList.tsx");
+  const target = read("src/lib/recruitment-target-portal.ts");
+  assert.match(list, /const seenAt = Date\.now\(\);\s*writeApplicantsLastSeen\(userEmail, seenAt\);\s*setSeenWatermark\(seenAt\)/);
+  assert.doesNotMatch(list, /readApplicantsLastSeen\(userEmail\)/);
+  assert.match(list, /applicant\.resumeStatus\.trim\(\)\.toLowerCase\(\) === "processed"/);
+  assert.match(target, /cvRecommendation: text\(screening\?\.recommendation\)/);
+  assert.match(target, /resumeStatus: screening \? "Processed" : ""/);
+  assert.match(target, /screened: summaries\.filter\(\(row\) => row\.resumeStatus === "Processed"\)\.length/);
+});
+
 test("stored list values render as readable HR text, not raw JSON arrays", async () => {
   const { parseTextList } = await import("../src/lib/formatters.ts");
   assert.deepEqual(parseTextList('["7+ years accounting","SAP Business One"]'), ["7+ years accounting", "SAP Business One"]);

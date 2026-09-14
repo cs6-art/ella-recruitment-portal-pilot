@@ -1,5 +1,9 @@
 # Remaining manual checklist
 
+> Current launch limit: bulk screening accepts up to **6 files per submission**
+> across local upload, Google Drive, and OneDrive. Any older 8-file references
+> in historical evidence are not current instructions.
+
 Everything code-side is done and green. These five items need a human on the
 deployed pilot. Ordered by what unblocks Code Freeze → production.
 

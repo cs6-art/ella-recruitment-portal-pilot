@@ -1,5 +1,17 @@
 # Release validation status
 
+## Current launch update - 2026-09-14
+
+The current branch includes the launch-hardening changes and uses a **6-file
+maximum per bulk submission** across local upload, Google Drive, and OneDrive.
+The older 8-file measurements and recommendations retained below are historical
+evidence only. Current validation is green: 439 automated tests, TypeScript,
+lint (0 errors), production build, and 4/4 browser smoke tests. The remaining
+release gates are the live browser workflow, the 24-48 hour credit dual-write
+log soak, and a clean n8n execution/quota check. The live read-only database
+checks also pass: 19/19 recruitment tables present, 46 foreign keys, 0 orphan
+rows, and credit parity PASS with 37 target-only rows classified by design.
+
 Covers Phases 2, 3, 5, 6, 7, 8. Phase 4 (docs / AI support bot) and OneDrive
 live validation are **intentionally deferred**, not failed.
 

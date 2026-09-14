@@ -14,10 +14,9 @@ checks as the final authorization layer.
 
 ## CSRF protection
 
-All browser mutations should remain same-origin and use the HTTP-only,
-SameSite session cookie. Before exposing beyond a trusted internal network,
-add a synchronizer token or signed origin-bound CSRF token to POST/PUT routes,
-and reject unexpected `Origin`/`Referer` values.
+Browser API mutations now enforce an origin check in `proxy.ts` and continue to
+use the HTTP-only, SameSite session cookie. Server-to-server internal, webhook,
+and cron routes remain protected by their own bearer/signature contracts.
 
 ## Structured logging and monitoring
 

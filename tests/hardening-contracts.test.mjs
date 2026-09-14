@@ -10,11 +10,16 @@ const promptSource = fs.readFileSync("src/lib/recruitment-prompt.ts", "utf8");
 const demoModeSource = fs.readFileSync("src/lib/demo-mode.ts", "utf8");
 const demoDataSource = fs.readFileSync("src/lib/demo-data.ts", "utf8");
 const candidateApplicationsSource = fs.readFileSync("src/lib/candidate-applications.ts", "utf8");
+const targetPortalSource = fs.readFileSync("src/lib/recruitment-target-portal.ts", "utf8");
 const applicantWorkflowSource = fs.readFileSync("src/lib/applicant-workflow.ts", "utf8");
 const calendarSource = fs.readFileSync("src/lib/google-calendar.ts", "utf8");
 const roleSheetSource = fs.readFileSync("src/lib/google-sheets.ts", "utf8");
 const hrApplicantRouteSource = fs.readFileSync("src/app/api/applicants/route.ts", "utf8");
 const publicApplicantRouteSource = fs.readFileSync("src/app/api/public/applications/route.ts", "utf8");
+const proxySource = fs.readFileSync("proxy.ts", "utf8");
+const nextConfigSource = fs.readFileSync("next.config.mjs", "utf8");
+const queueCronSource = fs.readFileSync("src/app/api/cron/reconcile-bulk-queue/route.ts", "utf8");
+const vercelSource = fs.readFileSync("vercel.json", "utf8");
 
 test("authentication and logout use secure HTTP-only cookie settings", () => {
   assert.match(authSource, /httpOnly: true/);
@@ -75,6 +80,30 @@ test("structured Recruitment Setup can generate a readable prompt", () => {
   assert.match(promptSource, /LICENSE OR CERTIFICATE REQUIRED/);
   assert.match(promptSource, /\{\{interview_questions\}\}/);
   assert.match(promptSource, /\{\{system_prompt\}\}/);
+});
+
+test("browser mutations enforce same-origin protection and server responses set baseline security headers", () => {
+  assert.match(proxySource, /isBrowserMutation/);
+  assert.match(proxySource, /Cross-site request blocked/);
+  assert.match(proxySource, /sameOrigin/);
+  assert.match(proxySource, /\/api\/:path\*/);
+  assert.match(nextConfigSource, /X-Content-Type-Options/);
+  assert.match(nextConfigSource, /X-Frame-Options/);
+  assert.match(nextConfigSource, /Referrer-Policy/);
+  assert.match(nextConfigSource, /Permissions-Policy/);
+});
+
+test("stale bulk queue reconciliation is cron-authenticated and scheduled daily on Hobby", () => {
+  assert.match(queueCronSource, /CRON_SECRET/);
+  assert.match(queueCronSource, /unauthorized/);
+  assert.match(queueCronSource, /reconcileBulkResumeQueue/);
+  const config = JSON.parse(vercelSource);
+  assert.equal(config.crons.some((cron) => cron.path === "/api/cron/reconcile-bulk-queue" && cron.schedule === "17 3 * * *"), true);
+});
+
+test("stale queue reconciliation updates the persisted Postgres dedupe key", () => {
+  assert.match(candidateApplicationsSource, /dedupeKey: item\.dedupeKey \|\| item\.driveFileId/);
+  assert.match(targetPortalSource, /dedupeKey: text\(item\.dedupeKey\) \|\| text\(item\.driveFileId\)/);
 });
 
 test("the generated prompt no longer depends on the retired voice sub-fields", () => {

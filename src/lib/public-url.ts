@@ -12,7 +12,7 @@ function normalizeConfiguredOrigin(value: string | undefined): string {
   return "";
 }
 
-function requestOrigin(request: Request): string {
+export function requestOrigin(request: Request): string {
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",", 1)[0]?.trim() || request.headers.get("host")?.trim();
   if (forwardedHost) {
     const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",", 1)[0]?.trim() || "http";

@@ -119,7 +119,7 @@ export default function CandidateApplicationForm({
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
-    if (key === "candidateName") setLiveAvatarPreparation(null);
+    setLiveAvatarPreparation(null);
     setError("");
     setMessage("");
     setFieldErrors((current) => ({ ...current, [key]: "" }));
@@ -307,7 +307,7 @@ export default function CandidateApplicationForm({
             </label>
             <small>PDF, DOC, or DOCX · up to 10 MB</small>
             {readFieldError(fieldErrors, "resumeFile") && <small>{readFieldError(fieldErrors, "resumeFile")}</small>}
-            {enableLiveAvatar && <div className="resume-avatar-action"><div><strong>Run Ella's resume-led screen</strong><small>Ella will analyze the candidate's resume, prepare one relevant question, and show you a response summary.</small></div><button type="button" className="btn btn-secondary" disabled={saving || !form.candidateName.trim() || !resumeFile} onClick={() => void prepareElla()}>{saving ? "Analyzing resume..." : liveAvatarPreparation ? "Re-analyze resume" : "Analyze resume & prepare Ella"}</button></div>}
+            {enableLiveAvatar && <div className="resume-avatar-action"><div><strong>Preview Ella&apos;s resume-led question</strong><small>This preview does not save a screening record or use credits. Select &quot;Save Screening Record&quot; to start the billable CV screening.</small></div><button type="button" className="btn btn-secondary" disabled={saving || !form.candidateName.trim() || !resumeFile} onClick={() => void prepareElla()}>{saving ? "Preparing..." : liveAvatarPreparation ? "Preview ready" : "Preview Ella&apos;s question"}</button></div>}
           </div>
         </div>
 

@@ -24,6 +24,17 @@ export type AccessRoleOption = AccessRolePermissions & {
 
 export const ACCESS_ROLE_OPTIONS: AccessRoleOption[] = [
   {
+    value: "CEO",
+    label: "CEO",
+    description: "Full access to users, settings, credits, and all recruitment workflows.",
+    canCreateRole: true,
+    canReviewRole: true,
+    canApproveRole: true,
+    canEditSettings: true,
+    canManageUsers: true,
+    canReviewDepartmentRole: true,
+  },
+  {
     value: "Admin",
     label: "Admin",
     description: "Manage users, portal settings, and all recruitment workflows.",
