@@ -52,3 +52,14 @@ test("public Postgres role pages and intake search configured tenant databases",
   assert.match(roles, /targetPublicRoleSummaries/);
   assert.match(page, /resolvePublishedRecruitmentRole/);
 });
+
+test("organization administration is restricted to the McLink platform admin", () => {
+  const route = read("src/app/api/organizations/route.ts");
+  const editor = read("src/components/UserAccountsEditor.tsx");
+  assert.match(route, /Only a McLink platform administrator/);
+  assert.match(route, /databaseStatus: "pending"/);
+  assert.match(route, /A provisioned organization cannot change its slug/);
+  assert.match(editor, /\/api\/organizations/);
+  assert.match(editor, /Pending database/);
+  assert.match(editor, /TENANT_DATABASE_URLS/);
+});
