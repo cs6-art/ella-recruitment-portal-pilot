@@ -33,6 +33,32 @@ The main menu items are Dashboard, Role Requests, Resume Screening, Applicants,
 Bookings, Settings, User Accounts, and Profile. Menu items you are not allowed to
 use do not appear for you.
 
+## Quick answers for common portal questions
+
+**Where do I add a user?** Open **User Accounts**, choose **Add user account**,
+complete the name, email, access role, department, and permissions, then save.
+McLink platform administrators can first choose the organization in **Manage
+users for**. Organization administrators manage users in their own organization.
+
+**How do I add an organization?** A McLink platform administrator opens **User
+Accounts**, uses **Add organization**, enters the organization name and lowercase
+slug, and saves. The new organization can then be selected in **Manage users for**
+so its user directory can be created. Editing an organization changes its
+directory metadata; it does not move or delete recruitment records.
+
+**Are client records mixed together?** No. Each organization's users,
+departments, roles, applicants, interview records, and Ella Credits are separated
+by the organization's access boundary. A user only sees the organization tied to
+their signed-in account.
+
+**What does Ella know about me?** Ella can explain the signed-in account's access
+role, department, and permissions. She cannot look up candidate records, resume
+files, applicant scores, calendars, balances, or other live business records.
+
+**What is the current bulk screening limit?** The current Pilot limit is 4 files
+per batch, with PDF, DOC, and DOCX accepted up to 10 MB per file. The limit is
+shared by computer upload, Google Drive import, and OneDrive import.
+
 ---
 
 ## Signing in
@@ -44,6 +70,45 @@ a successful Google sign-in, your account may not have recruitment access yet â€
 contact HR or the portal administrator.
 
 ---
+
+## User accounts and organizations
+
+An active user-directory account is required to sign in. The account's access
+role, department, and permissions determine which screens and actions are
+available. An administrator can open **User Accounts**, choose **Add user
+account**, then set the user's name, email, access role, department, permissions,
+and active status. Deactivate an account when access should be removed; do not
+reuse another person's account.
+
+The portal can serve multiple organizations. A McLink platform administrator can
+open **User Accounts**, add an organization in the **Organizations** section,
+then choose it in **Manage users for** before adding its users. Each organization
+has its own users, departments, roles, applicants, interview records, and Ella
+Credits. Users cannot manage or view another organization's recruitment records.
+The McLink organization remains the existing organization; adding a client does
+not copy McLink's recruitment records into that client.
+
+The organization and user setup is informationally separate from candidate
+records: an organization administrator can manage users and access, while HR
+handles roles, screening, applicants, and interviews. If a menu item is missing,
+the account's permissions or active status should be checked.
+
+## What the User Accounts permissions mean
+
+- **Create role requests** lets the user submit staffing requests.
+- **Review role requests** gives company-wide HR operational access, including
+  Recruitment Setup, applicant review, and interview operations.
+- **Review own department only** gives HOD-style read-only visibility for the
+  user's department, plus interview participation where enabled.
+- **Approve role requests and hiring decisions** permits the approval or rejection
+  actions assigned to that account.
+- **Edit settings** permits authorized portal settings changes.
+- **Manage user accounts and roles** permits adding, editing, activating, and
+  deactivating accounts within the user's organization.
+
+Changing an access role applies the portal's recommended permissions, which an
+administrator can then adjust. Access changes affect future requests and page
+visibility; they do not delete recruitment history.
 
 ## How to create a role requisition (role request)
 
@@ -365,6 +430,17 @@ manages Settings to check or reconnect the shared HR calendar.
 Ella Credits are the portal's usage allowance for AI-assisted recruitment work,
 such as automated CV screening and AI voice interviews. The current balance is
 shown in the sidebar (the Ella Credits meter) and on the Ella Credits panel.
+
+Current usage costs are:
+
+- **1 credit** per successfully screened resume / AI CV analysis.
+- **10 credits** for a completed AI voice interview.
+- **8 credits** when an AI voice interview is connected but incomplete.
+- **5 credits** when the candidate does not answer.
+
+Booking a time, creating a role request, commenting, and ordinary portal actions
+do not consume credits. A duplicate resume for the same role is skipped and is
+not charged. Failed or invalid resume screening is not charged.
 
 Each AI-assisted action draws down the balance â€” for example screening a resume or
 running an AI voice interview consumes credits. When the balance runs low, ask

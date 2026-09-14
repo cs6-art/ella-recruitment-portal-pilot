@@ -4,7 +4,7 @@ import OpenAI from "openai";
 
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { retrieveContext } from "@/lib/help-bot/knowledge";
-import { directHelpAnswer, HELP_BOT_SYSTEM_PROMPT, buildUserPrompt } from "@/lib/help-bot/prompt";
+import { directHelpAnswer, HELP_BOT_SYSTEM_PROMPT, buildUserPrompt, type HelpUserContext } from "@/lib/help-bot/prompt";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -102,7 +102,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const directAnswer = directHelpAnswer(question);
+  const userContext: HelpUserContext = {
+    name: user.name,
+    accessRole: user.accessRole,
+    department: user.department,
+    canCreateRole: user.canCreateRole,
+    canReviewRole: user.canReviewRole,
+    canApproveRole: user.canApproveRole,
+    canEditSettings: user.canEditSettings,
+    canManageUsers: user.canManageUsers,
+    canReviewDepartmentRole: user.canReviewDepartmentRole,
+  };
+
+  const directAnswer = directHelpAnswer(question, userContext);
   if (directAnswer) {
     return NextResponse.json(
       { success: true, answer: directAnswer, sources: ["About Ella"] },
@@ -126,7 +138,7 @@ export async function POST(request: Request) {
       instructions: HELP_BOT_SYSTEM_PROMPT,
       input: [
         ...history,
-        { role: "user", content: buildUserPrompt(context, question) },
+        { role: "user", content: buildUserPrompt(context, question, userContext) },
       ],
     });
 

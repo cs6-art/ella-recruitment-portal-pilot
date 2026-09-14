@@ -50,6 +50,18 @@ test("Ella directly lists the three HR resume screening options", () => {
   assert.match(answer, /same queue/);
 });
 
+test("Ella answers safe signed-in account questions from session context", () => {
+  const answer = directHelpAnswer("What is my portal role and department?", {
+    accessRole: "HR",
+    department: "AI",
+    canReviewRole: true,
+    canManageUsers: true,
+  }) || "";
+  assert.match(answer, /HR/);
+  assert.match(answer, /AI/);
+  assert.match(answer, /manage user accounts/);
+});
+
 test("retrieval matches voice interview scheduling", () => {
   const context = retrieveContext("how does the AI voice interview booking work");
   assert.ok(context.sections.some((s) => s.heading === "How voice interview scheduling works"));
@@ -68,6 +80,15 @@ test("user prompt embeds the knowledge and the question", () => {
   assert.match(prompt, /KNOWLEDGE/);
   assert.match(prompt, /USER QUESTION: what do the applicant stages mean/);
   assert.match(prompt, /Resume HR Review/);
+});
+
+test("user prompt includes only safe account context for account questions", () => {
+  const context = retrieveContext("what is my access role");
+  const prompt = buildUserPrompt(context, "what is my access role", { accessRole: "HR", department: "AI", canReviewRole: true });
+  assert.match(prompt, /SIGNED-IN ACCOUNT CONTEXT/);
+  assert.match(prompt, /Access role: HR/);
+  assert.match(prompt, /Department: AI/);
+  assert.match(prompt, /Do not infer live records/);
 });
 
 test("starter questions are defined", () => {
