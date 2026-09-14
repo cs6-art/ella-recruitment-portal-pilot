@@ -61,6 +61,30 @@ test("failed or invalid bulk screening has no credit boundary", () => {
   assert.match(executor, /finalizeBulkScreening/);
 });
 
+test("single-screen callbacks bill the first persisted result atomically and idempotently", () => {
+  const source = read("src/lib/internal-recruitment-queries.ts");
+  const upsert = source.slice(source.indexOf("export async function upsertScreeningResult"), source.indexOf("export async function listScreening"));
+  const resultInsert = upsert.indexOf("tx.insert(screeningResults)");
+  const creditWrite = upsert.indexOf("appendAccountLedgerEntryOnExecutor");
+  assert.ok(resultInsert >= 0 && creditWrite > resultInsert, "single screening must bill after result persistence in the same transaction");
+  assert.match(upsert, /if \(!existing\)/);
+  assert.match(upsert, /creditCostFor\("cv_analysis"\)/);
+  assert.match(upsert, /update\(`cv:\$\{input\.applicationExternalId\}`\)/);
+  assert.match(upsert, /sourceEntryId/);
+  assert.match(upsert, /return \{ result, credit, error: null \}/);
+});
+
+test("applicant reads reconcile stored resumes that lost their screening queue row", () => {
+  const queries = read("src/lib/internal-recruitment-queries.ts");
+  const portal = read("src/lib/recruitment-target-portal.ts");
+  const reconcile = queries.slice(queries.indexOf("export async function reconcileMissingTargetScreeningQueue"), queries.indexOf("/** Return only the newest target applicants"));
+  assert.match(reconcile, /join resume_files/);
+  assert.match(reconcile, /s\.id is null/);
+  assert.match(reconcile, /q\.id is null/);
+  assert.match(reconcile, /on conflict do nothing/);
+  assert.match(portal, /await reconcileMissingTargetScreeningQueue\(organizationId\)/);
+});
+
 test("bulk frontend matches Pilot queue status by job identity, not storage identity", () => {
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
   const target = read("src/lib/recruitment-target-portal.ts");

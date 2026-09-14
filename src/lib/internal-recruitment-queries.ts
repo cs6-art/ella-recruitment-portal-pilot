@@ -285,6 +285,40 @@ export async function listApplications(stage?: string, roleExternalId?: string) 
     .orderBy(desc(applications.updatedAt)).limit(LIMIT);
 }
 
+/**
+ * Recover applications whose resume was stored but whose queue insert was
+ * lost by an older or partially failed intake request. This is deliberately
+ * scoped to the tenant and excludes applications that already have a result
+ * or queue row; the queue's uniqueness rules make retries safe.
+ */
+export async function reconcileMissingTargetScreeningQueue(organizationId: string) {
+  const orgId = organizationId.trim();
+  if (!orgId) return 0;
+  const db = getDb();
+  const result = await db.execute(sql`
+    insert into bulk_screening_queue_items
+      (organization_id, batch_id, role_id, dedupe_key, resume_sha256,
+       drive_file_id, filename, file_url, mime_type, status, application_id,
+       candidate_name, candidate_email, preferred_mobile, applicant_country,
+       source, environment, is_uat, job_id)
+    select a.organization_id, '', a.role_id, a.external_id, lower(rf.sha256),
+      rf.storage_ref, rf.filename, '', rf.mime_type, 'queued', a.id,
+      a.candidate_name, a.email, a.preferred_mobile, a.applicant_country,
+      'reconciled', 'production', false, ''
+    from applications a
+    join resume_files rf on rf.id = a.resume_file_id
+    left join screening_results s on s.application_id = a.id
+    left join bulk_screening_queue_items q on q.application_id = a.id
+    where a.organization_id = ${orgId}
+      and a.current_stage <> 'withdrawn'
+      and s.id is null
+      and q.id is null
+    on conflict do nothing
+    returning id
+  `);
+  return rowsOf(result).length;
+}
+
 /** Return only the newest target applicants needed by the notification bell. */
 export async function listRecentApplications(department?: string, limit = 50) {
   const db = getDb();

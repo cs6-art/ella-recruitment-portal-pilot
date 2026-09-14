@@ -17,6 +17,7 @@ import {
   listApplicationSlots,
   listApplicationBookingTokens,
   listApplications,
+  reconcileMissingTargetScreeningQueue,
   listRecentApplications,
   listBulkQueueForPortal,
   listBookingSlots,
@@ -876,6 +877,9 @@ function targetApplicantSummary(row: TargetApplicationRow) {
 
 export async function targetApplicantSummaries() {
   const organizationId = await targetOrganizationId();
+  // Repair legacy/partial intake rows before reading the portal pipeline so a
+  // stored resume cannot remain permanently outside the screening worker.
+  await reconcileMissingTargetScreeningQueue(organizationId);
   const rows = (await listApplications()).filter((row) => rowOrganizationId(row.application) === organizationId);
   return rows.map(targetApplicantSummary);
 }
