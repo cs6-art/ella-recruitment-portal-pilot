@@ -158,7 +158,17 @@ export class VercelLiveAvatarBridge implements GptLiveEvents {
         await stopLiveAvatar(this.sessionId).catch(() => {});
         return;
       }
-      void this.media.run().catch((error) => this.onError(error instanceof Error ? error.message : "Avatar media connection failed."));
+      void this.media.run()
+        .then(() => {
+          if (!this.stopping) {
+            this.onError("The avatar media connection dropped. Please start a new session.");
+            void this.stop();
+          }
+        })
+        .catch((error) => {
+          this.onError(error instanceof Error ? error.message : "Avatar media connection failed.");
+          void this.stop();
+        });
       void this.runGptWhenMediaReady();
     } catch (error) {
       this.onError(error instanceof Error ? error.message : "Unable to start the live avatar.");
@@ -172,7 +182,13 @@ export class VercelLiveAvatarBridge implements GptLiveEvents {
       await this.stop();
       return;
     }
-    if (!this.stopping) await this.gpt.run();
+    if (!this.stopping) {
+      await this.gpt.run();
+      if (!this.stopping) {
+        this.onError("The GPT Live connection dropped. Please start a new session.");
+        await this.stop();
+      }
+    }
   }
 
   async stop(): Promise<void> {
