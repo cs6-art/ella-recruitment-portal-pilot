@@ -76,14 +76,15 @@ test("applicant stage labels are presentation-only and used consistently", () =>
   assert.match(labels, /if \(key === "approve" \|\| key === "approved"\) return "Approve"/);
   assert.match(labels, /if \(key === "reject" \|\| key === "rejected"\) return "Reject"/);
   assert.match(labels, /replace\(\/\[\\s-\]\+\/g, "_"\)/);
+  const historyTimeline = read("src/components/CandidateHistoryTimeline.tsx");
   assert.match(list, /applicantStageLabel\(applicant\.currentStage\)/);
   assert.match(detail, /applicantStageLabel\(applicant\.currentStage\)/);
-  assert.match(detail, /applicantStageLabel\(entry\.newStatus\)/);
+  assert.match(historyTimeline, /applicantStageLabel\(entry\.newStatus\)/);
   assert.match(detail, /applicantDecisionLabel\(applicant\.resumeStatus\)/);
   assert.match(detail, /applicantStageLabel\(applicant\.voiceCallStatus \|\| applicant\.voiceStatus\)/);
   // Canonical keys remain the values used for filters and database/API work.
   assert.match(list, /applicant\.currentStage === stageFilter/);
-  assert.match(labels, /must continue to\n\s*\* send and persist the canonical status key/);
+  assert.match(labels, /must continue to\r?\n\s*\* send and persist the canonical status key/);
 });
 
 test("opening Applicants clears row highlights immediately and counts only persisted screenings", () => {
@@ -220,7 +221,17 @@ test("applicant routes are protected and render populated sheet data", () => {
   assert.match(detail, /getCandidateStatusHistory/);
   assert.match(detail, /latestDecisionComment/);
   assert.match(detail, /const resumeComments = applicant\.resumeComments \|\|/);
-  assert.match(detail, /Candidate Status History/);
+  assert.match(detail, /CandidateHistoryTimeline/);
+  // The status history timeline is a paginated client component so long
+  // audit trails don't render as one unbounded list, and it speaks in
+  // HR/client-facing wording rather than raw workflow keys and action-source
+  // identifiers.
+  const historyTimeline = read("src/components/CandidateHistoryTimeline.tsx");
+  assert.match(historyTimeline, /Candidate Status History/);
+  assert.match(historyTimeline, /"use client"/);
+  assert.match(historyTimeline, /Pagination/);
+  assert.match(historyTimeline, /historyStageLabel/);
+  assert.match(historyTimeline, /historySourceLabel/);
   // Applicant timestamps are rendered in the shared HR operating timezone so
   // UTC values from Sheets never appear shifted in the reviewer UI.
   assert.match(detail, /formatPortalDateTime/);
