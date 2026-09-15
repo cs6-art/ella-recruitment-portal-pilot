@@ -1,4 +1,5 @@
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
+import { pilotOutboundEmailEnabled } from "@/lib/pilot-email-policy";
 
 /**
  * Human-readable copy for the recruitment notification queue. The stored
@@ -108,6 +109,8 @@ export type NotificationEmailCopy = {
  * (e.g. the face-to-face booking confirmation, which Google Calendar covers).
  */
 export function notificationEmail(eventType: string | null | undefined, context: NotificationEmailContext = {}): NotificationEmailCopy | null {
+  if (!pilotOutboundEmailEnabled()) return null;
+
   const key = normalize(eventType);
   if (key === "final_booking_confirmation") return null;
 

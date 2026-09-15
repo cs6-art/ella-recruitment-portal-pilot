@@ -11,6 +11,7 @@ import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
 import { notificationEmail, notificationEventLabel, notificationStatusLabel, notificationSummary } from "@/lib/notification-labels";
+import { pilotOutboundEmailEnabled } from "@/lib/pilot-email-policy";
 import { avatarInterviewLink } from "@/lib/public-url";
 import type { LiveAvatarEvaluation, LiveAvatarTranscriptTurn } from "@/lib/live-avatar-screening";
 import {
@@ -1736,6 +1737,11 @@ export async function listActiveBookingRoleIds() {
 }
 
 export async function notificationQueue(stage?: string) {
+  // Do not even claim queue rows while pilot outbound email is disabled. This
+  // keeps n8n from seeing new or previously pending `[PILOT]` notifications;
+  // rows remain auditable and can be intentionally re-enabled later.
+  if (!pilotOutboundEmailEnabled()) return [];
+
   const db = getDb();
   const cleanStage = stage?.trim();
   // Claim rows while holding database locks. A read-then-ack notifier can

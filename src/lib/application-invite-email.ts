@@ -1,4 +1,5 @@
 import { getPortalConfigValue } from "@/lib/portal-config";
+import { PILOT_OUTBOUND_EMAIL_DISABLED_MESSAGE, pilotOutboundEmailEnabled } from "@/lib/pilot-email-policy";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
 import { fetchWithTimeout, timeoutFromEnv } from "@/lib/fetch-with-timeout";
 
@@ -15,6 +16,10 @@ export async function sendApplicationInviteEmail(input: {
   createdByName: string;
   createdByEmail: string;
 }): Promise<{ status: ApplicationInviteEmailStatus; error?: string }> {
+  if (!pilotOutboundEmailEnabled()) {
+    return { status: "not_configured", error: PILOT_OUTBOUND_EMAIL_DISABLED_MESSAGE };
+  }
+
   const targetMode = process.env.RECRUITMENT_BACKEND?.trim().toLowerCase() === "postgres";
   const targetUrl = targetMode
     ? (process.env.N8N_APPLICATION_INVITE_EMAIL_TARGET_WEBHOOK_URL || await getPortalConfigValue("N8N_Application_Invite_Email_Target_Webhook_URL")).trim()

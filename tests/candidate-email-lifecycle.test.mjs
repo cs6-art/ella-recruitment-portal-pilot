@@ -163,6 +163,18 @@ test("notification queue claims rows atomically to prevent overlapping duplicate
   assert.match(route, /recruitment_target_not_enabled/);
 });
 
+test("pilot outbound email is fail-closed for the Postgres target", () => {
+  const policy = read("src/lib/pilot-email-policy.ts");
+  const invite = read("src/lib/application-invite-email.ts");
+  const labels = read("src/lib/notification-labels.ts");
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(policy, /PILOT_OUTBOUND_EMAIL_ENABLED/);
+  assert.match(policy, /!== "postgres"/);
+  assert.match(invite, /PILOT_OUTBOUND_EMAIL_DISABLED_MESSAGE/);
+  assert.match(labels, /if \(!pilotOutboundEmailEnabled\(\)\) return null/);
+  assert.match(query, /if \(!pilotOutboundEmailEnabled\(\)\) return \[\]/);
+});
+
 test("Pilot target notifier is candidate-event allowlisted and never sends to an arbitrary mailbox", () => {
   const safety = read("src/lib/pilot-test-safety.ts");
   assert.match(safety, /PILOT_TEST_EMAIL = "cs6@mclinkgroup\.com"/);
