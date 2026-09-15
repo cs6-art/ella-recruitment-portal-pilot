@@ -16,14 +16,12 @@ test("Pilot provisions a tenant and independent seeded credit accounts", () => {
   assert.match(migration, /ON CONFLICT \("organization_id", "owner_email"\) DO NOTHING/);
 });
 
-test("per-user credit operations always carry both tenant and owner scope", () => {
+test("org-scoped credit operations always carry a tenant scope, shared by every user in the org", () => {
   const credits = read("src/lib/ella-credits.ts");
   const accounts = read("src/lib/ella-credits-accounts.ts");
-  assert.match(accounts, /WHERE "organization_id" = \$\{orgId\} AND "owner_email" = \$\{owner\}/);
-  assert.match(accounts, /FOR UPDATE/);
+  assert.match(accounts, /WHERE "organization_id" = \$\{orgId\}\s*\n\s*FOR UPDATE/);
   assert.match(accounts, /credit_account_ledger/);
-  assert.match(credits, /An organization and owner are required for per-user credits/);
-  assert.match(credits, /ownerEmail: input\.actorEmail/);
+  assert.match(credits, /An organization is required for org-scoped credits/);
 });
 
 test("sessions and login resolve an organization before tenant-scoped requests", () => {
@@ -49,7 +47,6 @@ test("directory provisioning cannot grant a user access to another tenant", () =
 test("client organizations can log in without a row in McLink's own user directory", () => {
   const auth = read("src/app/api/auth/google/route.ts");
   const directory = read("src/lib/postgres-directory.ts");
-  const provision = read("src/db/provision-client-organization.mjs");
   assert.match(auth, /findPostgresDirectoryUser/);
   assert.match(auth, /findPostgresDirectoryUserByEmail/);
   assert.match(auth, /The directory, not the Google hosted domain/);
@@ -57,10 +54,34 @@ test("client organizations can log in without a row in McLink's own user directo
   // — the Sheet-only login path for existing McLink staff stays untouched.
   assert.match(directory, /from\(users\)\s*\.innerJoin\(organizations/);
   assert.match(directory, /eq\(users\.organizationId, organizationId\)/);
-  assert.match(provision, /insert into organizations/);
-  assert.match(provision, /insert into users/);
-  assert.match(provision, /insert into organization_memberships/);
-  assert.match(provision, /insert into credit_accounts/);
+});
+
+test("user identities are unique within a tenant and McLink login wins for shared test identities", () => {
+  const schema = read("src/db/schema-recruitment.ts");
+  const migration = read("drizzle/0016_tenant_user_identity.sql");
+  const directory = read("src/lib/postgres-directory.ts");
+  const orgs = read("src/lib/organization-accounts.ts");
+  assert.doesNotMatch(schema, /email: text\("email"\)\.notNull\(\)\.unique\(\)/);
+  assert.match(schema, /users_organization_email_uidx/);
+  assert.match(migration, /DROP CONSTRAINT IF EXISTS "users_email_key"/);
+  assert.match(migration, /ON "users" \("organization_id", "email"\)/);
+  assert.match(directory, /eq\(users\.organizationId, organizationId\)/);
+  assert.match(orgs, /if \(hasDefaultDirectoryUser\) return DEFAULT_ORGANIZATION_ID/);
+});
+
+test("a new organization and its first user are self-service, no separate database needed", () => {
+  const organizationsRoute = read("src/app/api/organizations/route.ts");
+  const orgs = read("src/lib/organization-accounts.ts");
+  const directory = read("src/lib/postgres-directory.ts");
+  // Creating an organization needs nothing but a name/slug from a platform admin.
+  assert.match(organizationsRoute, /requirePlatformAdmin/);
+  assert.match(organizationsRoute, /insert\(organizations\)/);
+  // Its first (and every later) user is created through the same directory
+  // upsert every organization uses -- no separate provisioning script.
+  assert.match(directory, /export async function upsertPostgresDirectoryUser/);
+  // Every organization gets its own single shared credit balance automatically.
+  assert.match(orgs, /insert\(creditAccounts\)/);
+  assert.match(orgs, /onConflictDoNothing\(\{ target: creditAccounts\.organizationId \}\)/);
 });
 
 test("applicants are deduplicated inside each organization", () => {

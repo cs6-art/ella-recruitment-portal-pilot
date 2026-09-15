@@ -11,6 +11,7 @@ import { isBulkResumeUatMode } from "@/lib/bulk-resume-config";
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { isLiveAvatarConfigured } from "@/lib/live-avatar";
+import { targetPublicRoleSummaries } from "@/lib/recruitment-target-portal";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -20,16 +21,17 @@ export default async function ResumeScreeningPage() {
   if (!user) redirect("/");
   if (!canManagePipeline(user)) redirect("/dashboard");
 
-  // Intake must use the live role sheet even in demo mode so every currently
-  // published role is available, not just the synthetic catalogue roles.
-  const roles = await getRoleRequests({ liveOnly: true });
+  const targetRecruitment = isPostgresRecruitmentTarget();
+  // Intake and invitation generation must read from the same recruitment
+  // backend; otherwise a target role can be displayed from Sheets and then
+  // fail when the invitation is stored in Postgres.
+  const roles = targetRecruitment ? await targetPublicRoleSummaries({ liveOnly: true }) : await getRoleRequests({ liveOnly: true });
   const roleOptions = roles
     .filter(isPublishedRoleForIntake)
     .map((role) => ({ roleId: role.roleId, label: `${role.jobTitle || role.roleId} (${role.roleId})` }))
     // Keep every resume-screening role selector predictable as the published
     // role catalogue grows; IDs remain the option values.
     .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
-  const targetRecruitment = isPostgresRecruitmentTarget();
   const driveRootFolderId = targetRecruitment ? (process.env.RESUME_STORAGE_DRIVE_FOLDER_ID || "").trim() : "";
   // Target mode must not inherit a stale operational Drive URL from the
   // legacy Sheets configuration. The folder ID is navigation-only; the

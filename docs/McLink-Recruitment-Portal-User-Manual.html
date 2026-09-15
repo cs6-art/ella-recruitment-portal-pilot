@@ -111,7 +111,7 @@
         <div class="cover-band"><strong>Who is this for?</strong>People who request new staff, HR teams, department heads, managers, recruiters, interviewers, and administrators.</div>
       </div>
     </div>
-    <div class="cover-footer"><span>McLink Group</span><span>Version 1.1 · 2 September 2026 · Pilot</span></div>
+      <div class="cover-footer"><span>McLink Group</span><span>Version 1.2 · 15 September 2026 · Pilot</span></div>
   </section>
 
   <section class="page">
@@ -122,15 +122,26 @@
       <div class="toc-item"><span class="toc-num">1</span><span><strong>Sign in and find your way around</strong><span>Dashboard, menu, profile, and access</span></span></div>
       <div class="toc-item"><span class="toc-num">2</span><span><strong>Request a new role</strong><span>Staff addition or replacement</span></span></div>
       <div class="toc-item"><span class="toc-num">3</span><span><strong>Review and approve requests</strong><span>HR discusses and decides; management and department heads view only</span></span></div>
-      <div class="toc-item"><span class="toc-num">4</span><span><strong>Prepare a role for hiring</strong><span>Screening and interview setup</span></span></div>
+      <div class="toc-item"><span class="toc-num">4</span><span><strong>Prepare and publish a role</strong><span>Screening, interview, and publishing setup</span></span></div>
       <div class="toc-item"><span class="toc-num">5</span><span><strong>Screen and manage applicants</strong><span>Resumes, reviews, decisions, and notes</span></span></div>
       <div class="toc-item"><span class="toc-num">6</span><span><strong>Ella Credits</strong><span>Balance, manual credits, and payment</span></span></div>
-      <div class="toc-item"><span class="toc-num">7</span><span><strong>Arrange interviews</strong><span>Available times, bookings, and attendance</span></span></div>
+      <div class="toc-item"><span class="toc-num">7</span><span><strong>Schedule interviews</strong><span>Voice availability, bookings, and attendance</span></span></div>
       <div class="toc-item"><span class="toc-num">8</span><span><strong>For candidates</strong><span>Apply and choose interview times</span></span></div>
-      <div class="toc-item"><span class="toc-num">9</span><span><strong>Help and good practice</strong><span>Common problems and safe handling</span></span></div>
+      <div class="toc-item"><span class="toc-num">9</span><span><strong>Help, boundaries, and good practice</strong><span>Common problems and safe handling</span></span></div>
     </div>
-    <div class="callout success"><span class="callout-title">The short version</span>Request the role → HR reviews the details and decides → HR prepares the hiring details → candidates are screened and interviewed.</div>
-    <div class="callout"><span class="callout-title">About this pilot version</span>In the current pilot: HR has a company-wide view and makes all role and applicant decisions. Management has a company-wide <strong>view-only</strong> role — they can see everything but cannot approve, reject, send to manual review, change a role's status, edit recruitment setup, bulk screen, create invites or interview slots, or edit or delete applicants. Department Heads see only their own department's records, read-only. A role requester who has no reviewer access sees only their own requests and no applicant information. The bulk resume upload accepts up to <strong>8</strong> files per batch. Google Drive resume import is available; OneDrive import is built but stays hidden until a Microsoft administrator completes the Entra setup. Ella Credits include manual top-ups and HitPay sandbox purchases (see section 6). New-applicant notifications and the "Ella" in-portal help assistant are included (see sections 5 and 9).</div>
+    <div class="callout success"><span class="callout-title">The current workflow</span>Request a role → HR reviews and decides → HR completes the screening and interview setup → HR publishes the role → candidates apply → Ella assists with CV analysis and a phone interview → HR reviews the evidence → the candidate books a face-to-face interview → HR records the final decision.</div>
+    <table>
+      <thead><tr><th>Stage</th><th>Who acts</th><th>What the system does</th></tr></thead>
+      <tbody>
+        <tr><td>1. Role request</td><td>Requester or HR</td><td>Creates a staffing request. The form autosaves a draft until it is submitted.</td></tr>
+        <tr><td>2. HR decision</td><td>HR</td><td>Approves, returns, holds, or rejects the request. There is no separate management-approval stage.</td></tr>
+        <tr><td>3. Hiring setup</td><td>HR</td><td>Defines screening criteria, Ella's questions, evaluation fields, posting details, and interview requirements.</td></tr>
+        <tr><td>4. Candidate journey</td><td>Candidate and Ella</td><td>Candidate applies, books an AI Voice Interview, receives the call, and—if approved—books a face-to-face interview.</td></tr>
+        <tr><td>5. Human decisions</td><td>HR</td><td>Reviews CV and interview evidence and records the resume, voice, and final interview decisions.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout"><span class="callout-title">Two ways candidates enter</span>Candidates can use the public <strong>Open roles</strong> catalogue or a private application link generated by HR for a specific published role. HR can also add a candidate directly from <span class="nav-path">Resume Screening</span> or process a batch of resumes.</div>
+    <div class="callout"><span class="callout-title">About this pilot version</span>HR and Recruiter users have company-wide pipeline access and make the role and applicant decisions. CEO and Admin users have full access. Management has company-wide <strong>view-only</strong> access; Department Heads see their own department's records read-only; a requester without reviewer access sees only their own requests and no applicant information. The bulk resume upload and cloud imports accept up to <strong>6</strong> files per batch on the current pilot deployment. Google Drive import is available when connected; OneDrive appears only when Microsoft OAuth and administrator consent are configured. The <span class="nav-path">Credits</span> page is available to signed-in users, while manual ledger top-ups are restricted to authorised HR and administrative users. New-applicant notifications and the "Ella" in-portal help assistant are included.</div>
   </section>
 
   <section class="page">
@@ -139,7 +150,7 @@
     <h3>Signing in</h3>
     <div class="steps">
       <div class="step"><div class="step-body"><strong>Open the McLink Recruitment Portal.</strong><span>Use the link provided by your organisation.</span></div></div>
-      <div class="step"><div class="step-body"><strong>Choose “Sign in with Google”.</strong><span>Use your McLink Group Google Workspace account.</span></div></div>
+      <div class="step"><div class="step-body"><strong>Choose “Sign in with Google”.</strong><span>Use the Google account that an administrator has activated in the portal's User Accounts directory. The email domain alone does not grant access.</span></div></div>
       <div class="step"><div class="step-body"><strong>Start from the Dashboard.</strong><span>Your account permissions decide which areas are available.</span></div></div>
     </div>
     <div class="callout warning"><span class="callout-title">If you cannot sign in</span>Make sure you are using your company account, not a personal Google account. If access is still denied, contact HR or the portal administrator.</div>
@@ -152,8 +163,9 @@
         <tr><td><strong>Resume Screening</strong></td><td>For HR: upload several resumes and follow their progress.</td></tr>
         <tr><td><strong>Applicants</strong></td><td>For reviewers: find candidates, read their information, and record decisions.</td></tr>
         <tr><td><strong>Bookings</strong></td><td>For HR: view interview times and scheduled appointments.</td></tr>
-        <tr><td><strong>Settings</strong></td><td>View shared portal and calendar settings. Only authorised people can change them.</td></tr>
-        <tr><td><strong>User Accounts</strong></td><td>For administrators: add people and control what they can do.</td></tr>
+        <tr><td><strong>Settings</strong></td><td>For users with settings access: manage the shared HR calendar connection and organisation credit controls.</td></tr>
+        <tr><td><strong>Credits</strong></td><td>See the shared balance and buy configured credit packs. Authorised HR and administrative users also see the ledger and manual top-up controls.</td></tr>
+        <tr><td><strong>User Accounts</strong></td><td>For administrators and settings editors: add people and control what they can do.</td></tr>
         <tr><td><strong>Profile</strong></td><td>View your name, department, and access.</td></tr>
       </tbody>
     </table>
@@ -165,11 +177,11 @@
     <p class="section-intro">The portal shows only the actions a person is allowed to use. The names below describe the usual responsibilities; one person may have more than one responsibility.</p>
     <div class="grid-2">
       <div class="card role-card"><h3>Requester</h3><p>Creates a staffing request and follows the requests they submitted.</p><p class="small">Usually sees: Dashboard, Role Requests, Profile.</p></div>
-      <div class="card role-card"><h3>HR or Recruiter</h3><p>Reviews role details, prepares hiring information, screens candidates, arranges interviews, and manages the hiring list.</p><p class="small">Usually sees: Role Requests, Resume Screening, Applicants, Bookings.</p></div>
+      <div class="card role-card"><h3>HR or Recruiter</h3><p>Reviews and decides role requests, prepares hiring information, screens candidates, arranges interviews, and manages the hiring list.</p><p class="small">Usually sees: Role Requests, Resume Screening, Applicants, Bookings, Credits.</p></div>
       <div class="card role-card"><h3>Department Head</h3><p>Views requests and applicants for their own department only. Read-only — no approvals, edits, deletions, or applicant decisions.</p><p class="small">Usually sees: their department's role requests and applicant records.</p></div>
       <div class="card role-card"><h3>Management</h3><p>Company-wide <strong>view-only</strong> access. Can open every role request and applicant record and read screening and interview information, but cannot approve, reject, send to manual review, change a role's status, edit recruitment setup, bulk screen, create invites or slots, or edit or delete applicants.</p><p class="small">Usually sees: Role Requests, Applicants, Bookings — all read-only.</p></div>
-      <div class="card role-card"><h3>Interviewer</h3><p>Reviews the information needed for interviews. Interview times and candidate links are provided by the portal.</p><p class="small">Access may be limited to the information needed for the interview.</p></div>
-      <div class="card role-card"><h3>Administrator</h3><p>Manages user access and, where authorised, shared settings and the interview calendar connection.</p><p class="small">Give administrator access only to people who need it.</p></div>
+      <div class="card role-card"><h3>Interviewer</h3><p>Reviews the information needed for interviews. Interview times and candidate links are provided by the portal.</p><p class="small">The exact access depends on the permissions assigned to the account.</p></div>
+      <div class="card role-card"><h3>CEO or Administrator</h3><p>Has full access to users, settings, credits, role requests, applicants, and interview operations.</p><p class="small">Give administrative access only to people who need it.</p></div>
     </div>
     <div class="callout"><span class="callout-title">What you see may be different from a colleague</span>This is normal. If you need a menu item or action that is missing, ask HR or the portal administrator to review your access.</div>
   </section>
@@ -196,7 +208,7 @@
     </div>
     <div class="callout success"><span class="callout-title">Tip: use the job description helper</span>If you have a job description file, upload it in the form or paste the description, then choose the option to fill in the form from it. Always check the suggested details before submitting.</div>
     <h3>What happens after submission?</h3>
-    <p>The request is sent to HR for discussion. The requester can follow it from <span class="nav-path">Role Requests</span>. A normal saved draft is not a submitted request and does not publish a job.</p>
+    <p>The form autosaves changes as a draft so you can leave and return without losing work. The request is sent to HR only when you submit it. The requester can follow it from <span class="nav-path">Role Requests</span>. A saved draft is not a submitted request and does not publish a job.</p>
   </section>
 
   <section class="page">
@@ -225,13 +237,13 @@
       </tbody>
     </table>
     <h3>Making a decision</h3>
-    <p>An HR reviewer chooses the action that matches the decision, adds a clear comment when useful, and confirms. If the request has changed since you opened it, refresh the page and review it again before trying the action. If you are a Management or Department Head user, the decision actions are not shown — your view is read-only.</p>
+    <p>An HR reviewer chooses the action that matches the decision, enters a comment, and confirms. A comment is required for every role decision. If the request has changed since you opened it, refresh the page and review it again before trying the action. If you are a Management or Department Head user, the decision actions are not shown — your view is read-only.</p>
     <div class="callout warning"><span class="callout-title">Remember</span>Approval of a role is not the same as publishing a job. HR still needs to complete the recruitment setup and publish the role.</div>
   </section>
 
   <section class="page">
     <div class="eyebrow">4 · Hiring setup</div>
-    <h2>Prepare an approved role for hiring</h2>
+    <h2>Prepare and publish an approved role</h2>
     <p class="section-intro">HR uses Recruitment Setup to tell the portal what to look for in resumes and interviews. This page is normally available only to HR reviewers.</p>
     <h3>Complete the screening instructions</h3>
     <ul>
@@ -244,23 +256,23 @@
       <li><strong>Earliest availability instructions:</strong> Explain any start-date question to ask.</li>
     </ul>
     <h3>Set evaluation fields and questions</h3>
-    <p>The portal always considers the candidate’s score, recommendation, strengths, and concerns. You can add role-specific items and up to three custom items. Add three to five interview questions. The questions are asked as written, so keep them clear and fair.</p>
+    <p>The portal always considers the candidate’s score, recommendation, strengths, and concerns. You can add optional evaluation fields and up to three custom fields. Add three to five interview questions: questions 1–3 are required, and questions 4–5 are optional. If the role request supplied HR questions, they appear first and cannot be edited here. The questions are asked as written, so keep them clear and fair.</p>
     <div class="callout">Suggested questions may be shown for review. Treat them as a starting point, edit them as needed, and make sure the final questions are relevant to the job.</div>
     <h3>Use the publishing checklist</h3>
     <ul class="checklist">
-      <li>Choose at least one place where the job will be posted.</li>
-      <li>Choose the salary visibility option.</li>
-      <li>Choose the license requirement.</li>
-      <li>Choose whether an HR interview is required.</li>
+      <li>Choose at least one posting channel.</li>
+      <li>Choose salary visibility: <strong>Disclosed</strong> or <strong>Not disclosed</strong>.</li>
+      <li>Choose the license requirement: <strong>Required</strong>, <strong>Preferred</strong>, or <strong>Not required</strong>.</li>
+      <li>Choose whether a <strong>Face-to-Face interview</strong> is required. If required, enter the venue and arrival instructions.</li>
     </ul>
     <h3>Save and move the role forward</h3>
     <table>
       <thead><tr><th>Button</th><th>Use it when</th></tr></thead>
       <tbody>
         <tr><td><strong>Save</strong></td><td>You want to save changes and continue working.</td></tr>
-        <tr><td><strong>Mark as Recruitment Ready</strong></td><td>The basic screening and interview information is complete.</td></tr>
-        <tr><td><strong>Mark as Ready for Publishing</strong></td><td>The publishing checklist is complete and HR has reviewed it.</td></tr>
-        <tr><td><strong>Publish Role</strong></td><td>The role is ready to appear for candidates.</td></tr>
+        <tr><td><strong>Mark as Recruitment Ready</strong></td><td>The AI prompt, screening guidance, posting channel, and three required questions are complete.</td></tr>
+        <tr><td><strong>Mark as Ready for Publishing</strong></td><td>The publishing checklist is complete, including the face-to-face venue when required.</td></tr>
+        <tr><td><strong>Publish Role</strong></td><td>The role becomes available in the public <strong>Open roles</strong> catalogue and for private HR application links.</td></tr>
       </tbody>
     </table>
     <div class="callout success"><span class="callout-title">Good practice</span>Read the script preview before saving. It shows the kind of conversation candidates will receive and helps you catch unclear wording.</div>
@@ -279,10 +291,10 @@
       <div class="card"><h3>Applications</h3><p>Total applications in the available history.</p></div>
       <div class="card"><h3>Resume Screened</h3><p>Applications that have been processed and are ready for review.</p></div>
       <div class="card"><h3>Voice Interview</h3><p>Candidates with activity in the phone interview stage.</p></div>
-      <div class="card"><h3>HR Interview</h3><p>Candidates who have moved beyond the phone interview stage.</p></div>
+      <div class="card"><h3>Face-to-Face Interview</h3><p>Candidates who have moved beyond the AI Voice Interview stage.</p></div>
     </div>
     <h3>Read an applicant record</h3>
-    <p>Select <strong>View</strong> beside a candidate. The record brings together contact information, role, resume information, screening result, interview activity, and history. Use the linked resume only for recruitment purposes.</p>
+    <p>Select <strong>View</strong> beside a candidate. The record brings together contact information, role, resume information, CV analysis, voice interview evidence, interview activity, decisions, and candidate status history. Use the resume and interview information only for recruitment purposes.</p>
     <h3>Send a personal application link</h3>
     <p>HR can invite one person to apply for one published role. The link opens the familiar candidate application page with the role and invited person’s details already prepared.</p>
     <div class="steps">
@@ -297,14 +309,15 @@
     <table>
       <thead><tr><th>Stage</th><th>What it means</th></tr></thead>
       <tbody>
-        <tr><td>Resume HR Review</td><td>The resume has been received and needs a human review.</td></tr>
+        <tr><td>Resume Review</td><td>The resume and CV analysis have been received and need human review.</td></tr>
         <tr><td>Resume Approved</td><td>The candidate can move to the phone interview step.</td></tr>
         <tr><td>Voice Booking Pending</td><td>The candidate needs to choose a phone interview time.</td></tr>
         <tr><td>Voice Interview Scheduled</td><td>A phone interview time has been booked.</td></tr>
-        <tr><td>Voice HR Review</td><td>The phone interview result is ready for HR to review.</td></tr>
+        <tr><td>Voice Interview Review</td><td>The phone interview result is ready for HR to review. If the call was not completed, the record explains that no completed interview was available.</td></tr>
         <tr><td>Approved for Face-to-Face Interview</td><td>The candidate can choose a Face-to-Face Interview time.</td></tr>
         <tr><td>Face-to-Face Interview Scheduled</td><td>A Face-to-Face Interview time has been booked.</td></tr>
-        <tr><td>Passed Face-to-Face Interview</td><td>The candidate passed the Face-to-Face Interview step.</td></tr>
+        <tr><td>Face-to-Face Decision Pending</td><td>The face-to-face meeting is complete and HR still needs to record the outcome.</td></tr>
+        <tr><td>Passed Final Interview</td><td>The candidate passed the final interview step.</td></tr>
         <tr><td>Rejected</td><td>The candidate will not move to the next step.</td></tr>
       </tbody>
     </table>
@@ -314,26 +327,26 @@
   <section class="page">
     <div class="eyebrow">5 · Resumes</div>
     <h2>Upload several resumes at once</h2>
-    <p class="section-intro">HR can screen a group of resumes for one published role from <span class="nav-path">Resume Screening</span>. Each file is handled once for that role, and progress appears on the page.</p>
+    <p class="section-intro">HR and Recruiter users can screen a group of resumes for one published role from <span class="nav-path">Resume Screening</span>. Each file is checked for duplicates, queued, and tracked on the page.</p>
     <h3>Upload from your computer</h3>
     <div class="steps">
       <div class="step"><div class="step-body"><strong>Choose the published role.</strong><span>Pick the role that matches every resume in this batch.</span></div></div>
-      <div class="step"><div class="step-body"><strong>Add the files.</strong><span>Drag them into the box or click the box to choose them. PDF, DOC, and DOCX files are accepted. You can add up to 8 files per batch in the pilot, with a 10 MB limit per file. Each resume that screens successfully uses one Ella Credit; files that are skipped as duplicates or that fail are not charged.</span></div></div>
+      <div class="step"><div class="step-body"><strong>Add the files.</strong><span>Drag them into the box or click the box to choose them. PDF, DOC, and DOCX files are accepted. You can add up to 6 files per batch in the pilot, with a 10 MB limit per file. Each resume that screens successfully uses one Ella Credit; duplicates and files that fail before a successful analysis are not charged.</span></div></div>
       <div class="step"><div class="step-body"><strong>Select “Start screening”.</strong><span>The portal sends the resumes for processing and shows each one in the queue.</span></div></div>
       <div class="step"><div class="step-body"><strong>Watch the progress.</strong><span>The list updates automatically. You can also choose “Refresh status”.</span></div></div>
-      <div class="step"><div class="step-body"><strong>Review the applicants.</strong><span>When processing is complete, choose “View Processed Applicants” to begin the human review.</span></div></div>
+      <div class="step"><div class="step-body"><strong>Review the applicants.</strong><span>When processing is complete, choose “View Processed Applicants” to begin the human review. If some files fail, “Retry failed” resubmits only those files.</span></div></div>
     </div>
     <h3>Import from Google Drive</h3>
-    <p>Choose the published role first. The first time you use this, select <strong>Connect Google Drive</strong> and sign in with your McLink Group Google account (HR only). After that, select <strong>Choose from Google Drive</strong>, browse to the folder holding the resumes, tick the files you want (PDF, DOC, or DOCX; up to 8 per import), and confirm. Imported resumes go through exactly the same screening pipeline, duplicate check, and one-credit-per-successful-file rule as a computer upload. A resume already screened for this role is skipped and not charged.</p>
+    <p>Choose the published role first. The first time you use this, select <strong>Connect Google Drive</strong> and sign in with the Google account you want to use for your own Drive files (HR only). After that, select <strong>Choose from Google Drive</strong>, browse My Drive or an available Shared Drive, tick the files you want (PDF, DOC, or DOCX; up to 6 per import), and confirm. Imported resumes go through the same screening pipeline, duplicate check, and one-credit-per-successful-file rule as a computer upload.</p>
     <h3>Import from OneDrive</h3>
-    <p>OneDrive import works exactly like Google Drive import — same 8-file limit, 10&nbsp;MB per file, accepted file types, duplicate check, and one-credit-per-successful-file rule. Select <strong>Connect OneDrive</strong> and sign in with your Microsoft 365 account (HR only), then <strong>Choose from OneDrive</strong>. <span class="pill amber">Pending setup</span> A Microsoft administrator must first register the portal in Microsoft Entra; until that is done the OneDrive buttons stay hidden. See <em>OneDrive resume import — Microsoft Entra setup</em> for the administrator steps.</p>
+    <p>When enabled for the deployment, OneDrive import works like Google Drive import: the same 6-file limit, 10&nbsp;MB per file, accepted file types, duplicate check, and one-credit-per-successful-file rule apply. Select <strong>Connect OneDrive</strong>, sign in with the Microsoft account used for your own files (HR only), then choose <strong>Choose from OneDrive</strong>. <span class="pill amber">Deployment dependent</span> The buttons stay hidden until the Microsoft app registration, redirect URL, and administrator consent have been configured.</p>
     <h3>Queue messages</h3>
     <table>
       <thead><tr><th>Message</th><th>What to do</th></tr></thead>
       <tbody>
         <tr><td><span class="pill">Queued</span></td><td>Wait. The file has been accepted and is waiting to be processed.</td></tr>
         <tr><td><span class="pill amber">Processing</span></td><td>Wait. The portal is reading and checking the resume.</td></tr>
-        <tr><td><span class="pill green">Completed / Screened</span></td><td>Open the applicant list and review the candidate.</td></tr>
+        <tr><td><span class="pill green">Completed</span></td><td>Open the applicant list and review the candidate.</td></tr>
         <tr><td><span class="pill">Skipped</span></td><td>The file was already handled for this role.</td></tr>
         <tr><td><span class="pill red">Failed</span></td><td>Check the file and choose “Retry failed”. Use a readable, unlocked PDF, DOC, or DOCX.</td></tr>
       </tbody>
@@ -344,24 +357,23 @@
   <section class="page">
     <div class="eyebrow">6 · Ella Credits</div>
     <h2>Credits, balance, and payment</h2>
-    <p class="section-intro">Ella Credits meter the AI features. One AI CV analysis costs <strong>1 credit</strong>; one AI phone interview costs <strong>10 credits</strong>. The balance is shared for the whole organisation and is shown on <span class="nav-path">Settings &rsaquo; Ella Credits</span>. Skipped duplicates and files that fail before analysis are not charged, and the same billable action is never charged twice.</p>
+    <p class="section-intro">Ella Credits meter the AI features. One AI CV analysis costs <strong>1 credit</strong>. An AI phone interview costs <strong>10 credits</strong> when completed, <strong>8 credits</strong> when connected but incomplete, or <strong>5 credits</strong> when the candidate does not answer. The balance is shared for the organisation and is shown on <span class="nav-path">Credits</span>; authorised settings users also see it in <span class="nav-path">Settings</span>. Booking a time is not itself a charge.</p>
     <h3>Who can manage credits</h3>
     <table>
-      <thead><tr><th>Role</th><th>View balance &amp; ledger, add manual credits, buy credits</th></tr></thead>
+      <thead><tr><th>Access</th><th>What is available</th></tr></thead>
       <tbody>
-        <tr><td>Admin / IT Admin</td><td><span class="pill green">Allowed</span></td></tr>
-        <tr><td>HR</td><td><span class="pill green">Allowed</span></td></tr>
-        <tr><td>Management</td><td><span class="pill red">Not allowed</span></td></tr>
-        <tr><td>HOD / Department Head</td><td><span class="pill red">Not allowed</span></td></tr>
-        <tr><td>Requester / Employee</td><td><span class="pill red">Not allowed</span></td></tr>
+        <tr><td>Any signed-in user</td><td>View the shared balance and start a configured credit-pack purchase.</td></tr>
+        <tr><td>CEO / Admin with settings access</td><td><span class="pill green">Full credit management</span> View ledger, add manual credits, and buy credits.</td></tr>
+        <tr><td>Authorised HR reviewer</td><td><span class="pill green">Full credit management</span> View ledger, add manual credits, and buy credits.</td></tr>
+        <tr><td>Management, HOD, requester, or other users</td><td><span class="pill amber">Purchase only</span> Manual top-up and ledger controls are not available.</td></tr>
       </tbody>
     </table>
     <h3>Add credits manually (demo / adjustment)</h3>
-    <p>On <span class="nav-path">Settings &rsaquo; Ella Credits</span>, enter a <strong>positive whole number</strong> and a <strong>reason</strong> (required), and optionally a reference. The adjustment is written to the credit ledger with your name, the amount, the reason, the reference, the time, and the resulting balance. The balance can never be changed without a ledger entry, and re-submitting the same adjustment does not add the credits twice.</p>
+    <p>On <span class="nav-path">Settings &rsaquo; Credits</span>, enter a <strong>positive whole number</strong> and a <strong>reason</strong> (required), and optionally a reference. The adjustment is written to the credit ledger with your name, the amount, the reason, the reference, the time, and the resulting balance. The balance can never be changed without a ledger entry, and re-submitting the same adjustment does not add the credits twice.</p>
     <h3>Buy credits (HitPay)</h3>
     <div class="steps">
       <div class="step"><div class="step-body"><strong>Choose a credit pack.</strong><span>The price is set by the portal — you only choose a pack, never a price or a credit amount.</span></div></div>
-      <div class="step"><div class="step-body"><strong>Pay on the HitPay page.</strong><span>You are taken to HitPay to complete payment, then returned to the portal.</span></div></div>
+      <div class="step"><div class="step-body"><strong>Pay on the HitPay page.</strong><span>You are taken to HitPay to complete payment, then returned to the portal. The amount and credit quantity are set by the selected pack.</span></div></div>
       <div class="step"><div class="step-body"><strong>Wait for confirmation.</strong><span>Credits are added only after HitPay confirms the payment to the portal directly — returning to the page is not enough on its own. This usually takes a few seconds.</span></div></div>
     </div>
     <div class="callout warning"><span class="callout-title">Pilot</span>Payments in the pilot run against the HitPay <strong>sandbox</strong> — no real money moves. This feature is inactive until the payment keys are configured for the pilot deployment; until then the “Buy credits” action reports that it is not set up yet.</div>
@@ -381,26 +393,26 @@
 
   <section class="page">
     <div class="eyebrow">7 · Interviews</div>
-    <h2>Arrange and follow interviews</h2>
+    <h2>Schedule and follow interviews</h2>
     <h3>View the interview calendar</h3>
-    <p>HR can open <span class="nav-path">Bookings</span> to see monthly availability and appointments. Use the role and interview-type filters to focus the view. Choose a date to see open times, scheduled candidates, completed interviews, and conflicts.</p>
+    <p>HR can open <span class="nav-path">Bookings</span> to see the AI Voice Interview and Face-to-Face Interview calendars, monthly availability, and appointments. Use the role and interview-type filters to focus the view. Choose a date to see open times, scheduled candidates, completed interviews, no-shows, and conflicts.</p>
     <h3>Add HR availability</h3>
     <ol>
-      <li>Choose <strong>+ HR Availability</strong>.</li>
+      <li>Choose <strong>+ HR Availability</strong> to add a Face-to-Face Interview time.</li>
       <li>Choose an approved role.</li>
-      <li>Choose <strong>Refresh availability</strong> to check the shared HR calendar.</li>
+      <li>Enter a future date, start and end time, and timezone. The portal checks the shared HR Google Calendar for conflicts before saving.</li>
       <li>Ask the candidate to use the booking link they received.</li>
     </ol>
-    <p class="small">The candidate sees individual available times. They do not see the full internal calendar.</p>
+    <p class="small">The candidate sees individual available times. They do not see the full internal calendar. AI Voice Interview availability is maintained separately as role availability.</p>
     <h3>When a candidate books</h3>
-    <p>The selected time becomes a scheduled appointment, the candidate receives a confirmation, and the calendar is updated. The portal also records the time zone so the candidate and HR see the same appointment time.</p>
+    <p>The selected time becomes a scheduled appointment, the candidate receives a confirmation, and the calendar is updated for a Face-to-Face Interview. The portal records the timezone so the candidate and HR see the same appointment time. The candidate sees only the individual times offered for booking, not the full internal calendar.</p>
     <h3>If a candidate does not attend</h3>
     <p>Open the date details, find the scheduled appointment, and choose <strong>Mark No Show</strong> after the interview time has started. Confirm the action. This keeps the attendance record clear and allows the team to decide whether to offer another time.</p>
-    <div class="callout success"><span class="callout-title">Calendar connection</span>Interview availability comes from the shared HR calendar. If it is not connected, ask the person who manages Settings to reconnect or check the calendar.</div>
+    <div class="callout success"><span class="callout-title">Calendar connection</span>Face-to-Face Interview availability is checked against the shared HR Google Calendar. If it is not connected, ask the person who manages Settings to reconnect or check the calendar.</div>
     <h3>Phone (voice) interview</h3>
-    <p>When HR approves a candidate at the resume stage, the candidate is invited to book a phone interview and is called automatically at the booked time. The result and a transcript return to the applicant record, with each answer shown under the question it belongs to. Calls that come back as No Answer, Busy, or Wrong Person, and no-shows, are handled through the retry and no-show lifecycle rather than counting as a completed interview.</p>
+    <p>When HR approves a candidate at the resume stage, the candidate is invited to book an AI Voice Interview. The candidate chooses from the role's available weekday times, confirms a preferred mobile number, and is called automatically at the booked time. The standard schedule is 10-minute times between 09:00 and 17:00 in the candidate's phone or country timezone, with a maximum of 10 active calls at the same instant. Ella's result, transcript, scores, strengths, concerns, and follow-up questions return to the applicant record. Calls that come back as No Answer, Busy, Wrong Person, or No Show follow the retry/no-show lifecycle rather than counting as a completed interview. AI voice availability is separate from the shared HR calendar and is configured as role availability.</p>
     <h3>Face-to-face interview</h3>
-    <p>After HR approves a candidate at the phone-interview stage, the candidate books a face-to-face interview against the shared HR calendar, which blocks times that conflict with existing calendar events. The candidate is added as an attendee on the calendar event, and the <strong>venue or address</strong> HR enters is included in the invitation and shown on the completed booking in the portal.</p>
+    <p>After HR approves a candidate at the voice-interview stage, the candidate books a Face-to-Face Interview against the shared HR calendar. HR availability uses one-hour weekday times between 10:00 and 16:00, excluding 12:00–13:00, and blocks times that conflict with existing calendar events. The candidate is added as an attendee on the calendar event, and the <strong>venue or address</strong> HR enters is included in the invitation and shown on the completed booking in the portal.</p>
   </section>
 
   <section class="page">
@@ -408,15 +420,15 @@
     <h2>For candidates: applying and booking</h2>
     <h3>Apply for a role</h3>
     <div class="steps">
-      <div class="step"><div class="step-body"><strong>Open the job application page.</strong><span>For a personal invitation, open the link sent by HR. The role and your name may already be filled in.</span></div></div>
+        <div class="step"><div class="step-body"><strong>Open the job application page.</strong><span>Choose a role from the public <strong>Open roles</strong> catalogue, or open the private link sent by HR. The role and your name may already be filled in.</span></div></div>
       <div class="step"><div class="step-body"><strong>Enter your details.</strong><span>Provide your name, email address, country, and mobile number.</span></div></div>
       <div class="step"><div class="step-body"><strong>Attach your resume.</strong><span>Use a readable PDF, DOC, or DOCX file and check that the file is the correct version.</span></div></div>
       <div class="step"><div class="step-body"><strong>Review the privacy and consent message.</strong><span>Continue only when you understand and agree to the stated use of your information.</span></div></div>
-      <div class="step"><div class="step-body"><strong>Submit the application once.</strong><span>A confirmation message means the application was received. Sending it again may create another application.</span></div></div>
+        <div class="step"><div class="step-body"><strong>Submit the application once.</strong><span>A confirmation message means the application was received. The role must be published and accepting applications. Sending the form again may create another application.</span></div></div>
     </div>
     <h3>Book a phone interview</h3>
-    <p>Open the private booking link in the invitation email. Enter your local mobile number without the country code, choose a date, choose a time, and confirm. Keep the confirmation email.</p>
-    <h3>Book an HR interview</h3>
+    <p>Open the private booking link in the invitation email. The page discloses that Ella will conduct the AI interview and that the recruitment team will review the responses. Enter your local mobile number without the country code, choose a date, choose a time, and confirm. Keep the confirmation email.</p>
+    <h3>Book a face-to-face interview</h3>
     <p>If HR invites you to the next step, open the new booking link and choose from the available times. The page shows whether the interview is scheduled, completed, or no longer available.</p>
     <div class="callout warning"><span class="callout-title">Keep booking links private</span>These links are personal. Do not forward them to another person or post them in a group chat. If the link does not work, contact the recruitment team and ask for a new invitation.</div>
   </section>
@@ -425,7 +437,7 @@
     <div class="eyebrow">9 · Help and good practice</div>
     <h2>Common questions</h2>
     <h3>“I cannot see a role or applicant.”</h3>
-    <p>Your access may limit you to your own requests or your department. Ask HR to confirm that you have the right access.</p>
+    <p>Your access may limit you to your own requests, your department, or read-only views. Ask HR or the portal administrator to confirm that you have the right access.</p>
     <h3>“My request is not moving.”</h3>
     <p>Check the status and latest comment on the request. It may be waiting for HR to review, returned for more information, or on hold.</p>
     <h3>Ask Ella (in-portal help)</h3>
@@ -435,16 +447,16 @@
     <h3>“A resume failed.”</h3>
     <p>Make sure it is a readable, unlocked PDF, DOC, or DOCX file and no larger than 10 MB. Try the retry option. If it still fails, ask HR to check the file or enter the candidate another way. A failed file is not charged an Ella Credit.</p>
     <h3>“There are not enough Ella Credits.”</h3>
-    <p>The AI action is refused before any work is done — nothing is lost. An Admin or HR user can add credits on <span class="nav-path">Settings &rsaquo; Ella Credits</span> (a manual top-up, or a purchase). See section 6.</p>
+    <p>The AI action is refused before any work is done — nothing is lost. An authorised HR or administrative user can add credits on <span class="nav-path">Settings &rsaquo; Credits</span> (a manual top-up, or a purchase). See section 6.</p>
     <h3>“I paid but the credits are not showing.”</h3>
-    <p>Credits are added only when the payment provider confirms the payment to the portal directly, which is usually seconds but can lag. If it has not appeared after a few minutes, an Admin or HR user can open the payment on the Ella Credits page and choose to re-check its status.</p>
+    <p>Credits are added only when the payment provider confirms the payment to the portal directly, which is usually seconds but can lag. If it has not appeared after a few minutes, open the payment on the <span class="nav-path">Credits</span> page and re-check its status, or ask an authorised HR or administrative user for help.</p>
     <h3>“The calendar shows no times.”</h3>
-    <p>Check the role and interview-type filters, choose the correct month, and refresh. If there are still no times, ask the calendar administrator to check the shared HR calendar.</p>
+    <p>Check the role and interview-type filters, choose the correct month, and refresh. For AI Voice Interviews, ask HR to check the role's configured availability. For Face-to-Face Interviews, ask the calendar administrator to check the shared HR Google Calendar and conflicts.</p>
     <h3>“The page says someone else changed the record.”</h3>
     <p>Refresh the page, read the latest information, and then try again. This prevents one person’s changes from replacing another person’s work.</p>
     <h3>Good practice</h3>
     <div class="do-dont">
-      <div class="do"><h3>Do</h3><ul><li>Use clear, job-related information.</li><li>Check details before submitting or publishing.</li><li>Keep candidate information private.</li><li>Use human judgment alongside screening results.</li><li>Add useful comments when returning or rejecting a request.</li></ul></div>
+      <div class="do"><h3>Do</h3><ul><li>Use clear, job-related information.</li><li>Check details before submitting or publishing.</li><li>Keep candidate information private.</li><li>Use human judgment alongside screening results.</li><li>Add a useful comment with every role and applicant decision.</li></ul></div>
       <div class="dont"><h3>Do not</h3><ul><li>Share private booking links.</li><li>Use personal accounts for company recruitment work.</li><li>Make a hiring decision based only on an automated score.</li><li>Upload a resume to the wrong role.</li><li>Delete records unless you are sure they should be removed.</li></ul></div>
     </div>
     <div class="callout success"><span class="callout-title">Need more help?</span>Take a screenshot of the message, note the role or application number, and contact HR or the portal administrator. Do not include passwords or private booking links.</div>

@@ -3,6 +3,36 @@ import test from "node:test";
 
 import { retrieveContext, knowledgeHeadings } from "../src/lib/help-bot/knowledge.ts";
 import { buildUserPrompt, directHelpAnswer, HELP_BOT_STARTER_QUESTIONS } from "../src/lib/help-bot/prompt.ts";
+import { MAX_FILES_PER_SUBMISSION } from "../src/lib/bulk-resume-limits.ts";
+
+// Regression coverage for the exact failure this once had: the bulk-upload
+// limit was hardcoded independently in knowledge.md ("8", later "4") and in
+// prompt.ts's directHelpAnswer ("4"), both silently drifting from the real
+// enforced value in bulk-resume-limits.ts. These tests execute the real
+// retrieval/answer code (not a static grep) against the real constant, so if
+// either source is ever hardcoded again instead of substituted/imported, the
+// resulting text won't contain the live number and this fails.
+test("the direct bulk-limit answer states the live MAX_FILES_PER_SUBMISSION, not a hardcoded number", () => {
+  const answer = directHelpAnswer("What is the bulk screening limit?") || "";
+  assert.match(answer, new RegExp(`\\b${MAX_FILES_PER_SUBMISSION}\\b`));
+  assert.match(answer, /files per batch/);
+});
+
+test("the knowledge base's bulk-limit sections state the live MAX_FILES_PER_SUBMISSION, not a hardcoded number", () => {
+  const context = retrieveContext("what is the bulk screening limit");
+  assert.equal(context.hasMatch, true);
+  assert.match(context.text, new RegExp(`\\b${MAX_FILES_PER_SUBMISSION}\\b`));
+  // The placeholder must always be substituted -- never leak into an answer.
+  assert.doesNotMatch(context.text, /\{\{BULK_FILE_LIMIT\}\}/);
+  // Regression guard: this doc has drifted to stale hardcoded numbers before
+  // (8, then 4) while the enforced limit moved independently. Fail loudly if
+  // either stale number reappears next to "file"/"files" wording, since that
+  // is exactly the shape the old bugs took.
+  for (const stale of [4, 8]) {
+    if (stale === MAX_FILES_PER_SUBMISSION) continue;
+    assert.doesNotMatch(context.text, new RegExp(`\\b${stale}\\b[^.]*files`, "i"));
+  }
+});
 
 test("knowledge base parses into sections", () => {
   const headings = knowledgeHeadings();

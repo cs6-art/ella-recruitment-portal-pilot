@@ -1,5 +1,8 @@
 # Phase 7 — full regression
 
+> Current launch limit: use a **6-file** batch for the bulk-screening regression;
+> older 8-file measurements are historical evidence only.
+
 ## Automated portion — PASS (2026-08-31, HEAD after the layout fix)
 
 | Check | Result |

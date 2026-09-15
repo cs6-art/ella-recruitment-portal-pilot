@@ -114,7 +114,7 @@ export function filterVisibleApplicants<T extends { department: string }>(applic
 
 // Ella Credits — viewing the ledger, manual/demo top-ups, and initiating a
 // paid (HitPay) purchase. This is deliberately narrower than the recruitment
-// reviewer capability: Admin requires the Admin preset plus settings access;
+// reviewer capability: CEO/Admin require their preset plus settings access;
 // HR requires the HR preset plus review access. Recruiter, Interviewer, Hiring
 // Manager, Management, HOD, and requesters do not qualify. There is no separate
 // IT Admin preset; Admin is the administrative path for this pilot.
@@ -122,7 +122,7 @@ export function canManageCredits(
   user: Pick<SessionUser, "accessRole" | "canEditSettings" | "canReviewRole">,
 ): boolean {
   const role = user.accessRole.trim().toLowerCase();
-  if (role === "admin") return user.canEditSettings === true;
+  if (role === "admin" || role === "ceo") return user.canEditSettings === true;
   return role === "hr" && user.canReviewRole === true;
 }
 

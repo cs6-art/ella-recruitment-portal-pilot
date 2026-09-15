@@ -2,7 +2,7 @@ import { Pool } from "@neondatabase/serverless";
 import { drizzle, type NeonDatabase } from "drizzle-orm/neon-serverless";
 
 import * as schema from "@/db/schema";
-import { currentTenantOrganizationId, tenantDatabaseUrl } from "@/lib/tenant-database";
+import { tenantDatabaseUrl } from "@/lib/tenant-database";
 
 /**
  * Lazily-created Drizzle client over Neon's serverless pool driver. The pool
@@ -41,12 +41,16 @@ export function getDb(): NeonDatabase<typeof schema> {
   return db;
 }
 
-/** Return the physical recruitment database for the current signed-in tenant. */
+/**
+ * Return the shared recruitment database every organization uses. The name
+ * is kept (rather than merging into `getDb()`) because callers use it to
+ * signal "this query is tenant-owned and must carry an organization_id
+ * predicate" -- see `runWithTenantDatabase`.
+ */
 export function getTenantDb(): NeonDatabase<typeof schema> {
-  const organizationId = currentTenantOrganizationId();
-  const url = tenantDatabaseUrl(organizationId);
+  const url = tenantDatabaseUrl();
   if (!url) {
-    throw new Error(`No database is configured for organization ${organizationId}. Set DATABASE_URL or TENANT_DATABASE_URLS.`);
+    throw new Error("No database is configured. Set DATABASE_URL.");
   }
   const existing = cachedByUrl.get(url);
   if (existing) return existing;

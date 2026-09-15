@@ -4,9 +4,13 @@ import test from "node:test";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
-// Temporary hosting-safety cap: at most 8 files per direct upload / Google
-// Drive import, enforced at the UI and the server. The 25-file internal
-// architecture is preserved so the cap can be raised later without a rewrite.
+// Temporary hosting-safety cap: at most 6 files per direct upload / Google
+// Drive import, enforced at the UI and the server. Calculated on 2026-09-14
+// from the real per-file cost of the live (Postgres-target) intake path to
+// fit the Vercel Hobby plan's 60s function ceiling with real margin -- see
+// the cost breakdown on MAX_FILES_PER_SUBMISSION in bulk-resume-limits.ts.
+// The 25-file internal architecture is preserved so the cap can be raised
+// later without a rewrite.
 
 test("the internal 25-file architecture limit is preserved", () => {
   const intake = read("src/lib/bulk-resume-intake.ts");
@@ -15,15 +19,20 @@ test("the internal 25-file architecture limit is preserved", () => {
   assert.match(intake, /MAX_CONCURRENCY = 2/);
 });
 
-test("the operator-facing cap is 8 and documented as temporary", () => {
-  const intake = read("src/lib/bulk-resume-intake.ts");
-  assert.match(intake, /export const MAX_FILES_PER_SUBMISSION = 8;/);
+test("the operator-facing cap lives in one dependency-free module, is 6 (Hobby-fitting), and documented as temporary", () => {
+  const limits = read("src/lib/bulk-resume-limits.ts");
+  assert.match(limits, /export const MAX_FILES_PER_SUBMISSION = 6;/);
   // comment must explain it is temporary and raisable
-  assert.match(intake, /[Tt]emporary/);
-  assert.match(intake, /[Rr]aise this back toward MAX_FILES_PER_BATCH/);
+  assert.match(limits, /[Tt]emporary/);
+  assert.match(limits, /[Rr]aise this back toward MAX_FILES_PER_BATCH/);
+  // bulk-resume-intake.ts must re-export, not redeclare, so there is exactly
+  // one source of truth
+  const intake = read("src/lib/bulk-resume-intake.ts");
+  assert.match(intake, /export \{ MAX_FILES_PER_SUBMISSION \} from ".\/bulk-resume-limits"/);
+  assert.doesNotMatch(intake, /export const MAX_FILES_PER_SUBMISSION\s*=/);
 });
 
-test("the local upload route enforces the 8-file cap server-side", () => {
+test("the local upload route enforces the 6-file cap server-side", () => {
   const route = read("src/app/api/resume-screening/bulk/upload/route.ts");
   assert.match(route, /MAX_FILES_PER_SUBMISSION/);
   assert.doesNotMatch(route, /MAX_FILES_PER_BATCH\b/);
@@ -33,23 +42,24 @@ test("the local upload route enforces the 8-file cap server-side", () => {
   assert.match(route, /return responseError\(`Upload up to \$\{MAX_FILES_PER_SUBMISSION\} resumes per batch\.`, 422\)/);
 });
 
-test("the Google Drive import route enforces the 8-file cap server-side", () => {
+test("the Google Drive import route enforces the 6-file cap server-side", () => {
   const route = read("src/app/api/resume-screening/drive/import/route.ts");
   assert.match(route, /fileIds: z\.array\([\s\S]*?\)\.min\(1\)\.max\(MAX_FILES_PER_SUBMISSION\)/);
   assert.match(route, /Select 1 to \$\{MAX_FILES_PER_SUBMISSION\} files/);
   assert.doesNotMatch(route, /MAX_FILES_PER_BATCH\b/);
 });
 
-test("OneDrive import enforces the same 8-file cap as Google Drive (URS parity)", () => {
+test("OneDrive import enforces the same 6-file cap as Google Drive (URS parity)", () => {
   const route = read("src/app/api/resume-screening/onedrive/import/route.ts");
   assert.match(route, /fileIds: z\.array\([\s\S]*?\)\.min\(1\)\.max\(MAX_FILES_PER_SUBMISSION\)/);
   assert.match(route, /Select 1 to \$\{MAX_FILES_PER_SUBMISSION\} files/);
   assert.doesNotMatch(route, /MAX_FILES_PER_BATCH\b/);
 });
 
-test("the bulk panel enforces the 8-file cap in the UI", () => {
+test("the bulk panel enforces the cap in the UI, imported from the shared module (no local literal)", () => {
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
-  assert.match(panel, /const MAX_FILES_PER_SUBMISSION = 8;/);
+  assert.match(panel, /import \{ MAX_FILES_PER_SUBMISSION \} from "@\/lib\/bulk-resume-limits";/);
+  assert.doesNotMatch(panel, /const MAX_FILES_PER_SUBMISSION\s*=\s*\d/);
   // extra dropped files surface an explanation and the list is truncated
   assert.match(panel, /merged\.length > MAX_FILES_PER_SUBMISSION/);
   assert.match(panel, /return merged\.slice\(0, MAX_FILES_PER_SUBMISSION\)/);
@@ -60,13 +70,28 @@ test("the bulk panel enforces the 8-file cap in the UI", () => {
   assert.doesNotMatch(panel, /Up to 25 PDF/);
 });
 
-test("the Google Drive picker caps selection at 8 via the shared component", () => {
+// These routes await intake to completion before responding. The live
+// (Postgres-target) path is sequential with no artificial stagger, but still
+// costs real time per file (Drive API calls + DB round trips -- see the cost
+// breakdown on MAX_FILES_PER_SUBMISSION in bulk-resume-limits.ts). No
+// vercel.json and no maxDuration anywhere meant the platform default governed
+// and could cut the request short mid-batch. The project is on Vercel Hobby,
+// whose Node function ceiling is 60s; raise to 300 (Pro) once off Hobby, or
+// move batch draining off-request for the real fix (see batch-timeout-risk).
+test("every bulk intake route declares maxDuration at the Vercel Hobby ceiling", () => {
+  for (const route of ["bulk/upload", "drive/import", "onedrive/import"]) {
+    const source = read(`src/app/api/resume-screening/${route}/route.ts`);
+    assert.match(source, /export const maxDuration = 60;/, route);
+  }
+});
+
+test("the Google Drive picker caps selection at 6 via the shared component", () => {
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
   const picker = read("src/components/DriveFilePicker.tsx");
   // shared picker takes a maxSelection prop
   assert.match(picker, /maxSelection = DEFAULT_MAX_SELECTION/);
   assert.match(picker, /const MAX_SELECTION = maxSelection;/);
-  // both the Google Drive and OneDrive instances pass the 8-file cap
+  // both the Google Drive and OneDrive instances pass the 6-file cap
   assert.match(panel, /cloudPicker === "google"[\s\S]*?maxSelection=\{MAX_FILES_PER_SUBMISSION\}/);
   const oneDriveBlock = panel.slice(panel.indexOf('cloudPicker === "microsoft"'));
   assert.match(oneDriveBlock.slice(0, 400), /maxSelection=\{MAX_FILES_PER_SUBMISSION\}/);

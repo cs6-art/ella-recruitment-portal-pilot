@@ -20,6 +20,7 @@ const creator = {
   name: "Browser Creator",
   email: "creator@mclinkgroup.com",
   active: true,
+  organizationId: "00000000-0000-4000-8000-000000000001",
   accessRole: "Creator",
   department: "AI",
   canCreateRole: true,
@@ -64,7 +65,7 @@ test("creator dashboard and role creation remain responsive", async ({ page }) =
     await expectNoHorizontalOverflow(page);
   }
   await page.goto("/roles/new");
-  await expect(page.getByRole("heading", { name: "Create role request" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Create role request/i })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.goto("/settings");
   await expect(page).toHaveURL(/127\.0\.0\.1:3000\/dashboard/);

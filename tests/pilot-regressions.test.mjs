@@ -74,6 +74,17 @@ test("single-screen callbacks bill the first persisted result atomically and ide
   assert.match(upsert, /return \{ result, credit, error: null \}/);
 });
 
+test("terminal voice evidence settles attempts even when n8n omits the status callback", () => {
+  const source = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(source, /normalizeVoiceResultInput/);
+  assert.match(source, /settleVoiceAttemptFromResult\(tx, attemptId, input\)/);
+  assert.match(source, /status: settled\.status, outcome: settled\.outcome/);
+  assert.match(source, /ACTIVE_VOICE_ATTEMPT_STATUSES/);
+  const review = source.slice(source.indexOf("export async function applicationVoiceReview"), source.indexOf("export async function voiceResultStatuses"));
+  assert.match(review, /Repair historical rows on read/);
+  assert.match(review, /settleVoiceAttemptFromResult\(db, currentAttempt\.id/);
+});
+
 test("applicant reads reconcile stored resumes that lost their screening queue row", () => {
   const queries = read("src/lib/internal-recruitment-queries.ts");
   const portal = read("src/lib/recruitment-target-portal.ts");

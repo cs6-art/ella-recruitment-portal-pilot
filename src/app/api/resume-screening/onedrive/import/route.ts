@@ -12,6 +12,10 @@ import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// See src/app/api/resume-screening/bulk/upload/route.ts for the real per-file
+// cost breakdown of the live (Postgres-target) intake path. 60 is the Vercel
+// Hobby ceiling; raise once on a paid plan.
+export const maxDuration = 60;
 
 const RESUME_EXT = /\.(pdf|docx?|doc)$/i;
 

@@ -8,6 +8,10 @@
 
 **Date**     : September 10, 2026
 
+**Launch note:** the current bulk-screening limit is 6 files per submission
+across local upload, Google Drive, and OneDrive. Any older 8-file wording in
+this historical UAT sheet should be read as a pre-hardening test case.
+
 | # | Test Condition | Expected Result | Pass/Fail |
 |---|---|---|---|
 | 1 | Google Sign-In | Portal accepts a Google sign-in only for an active user-directory row, regardless of email domain, issues an HTTP-only secure session cookie, and lands the user on the dashboard. | |
@@ -18,7 +22,7 @@
 | 6 | RBAC — HOD Department Scope | A Head of Department sees and acts only on their own department's roles and applicants, can action their own draft, and cannot view other departments. | |
 | 7 | RBAC — HR Full Pipeline | HR has company-wide visibility and can manage recruitment setup, applicant decisions, and the full pipeline across all departments. | |
 | 8 | RBAC — Management View-Only | A Management user has organisation-wide read access but cannot perform recruitment setup, pipeline management, applicant decisions, or edit/delete. | |
-| 9 | RBAC — Credit Management Gate | Only the Admin and HR paths can open manual credit management; broad capability flags alone do not grant it. | |
+| 9 | RBAC — Credit Management Gate | Only the CEO, Admin, and HR paths can open manual credit management; broad capability flags alone do not grant it. | |
 | 10 | Confidential Role Visibility | Department scoping applies identically to roles and applicants, so a confidential cross-department role and its applicants are hidden from users outside that scope. | |
 | 11 | Role Request Creation | A creator submits a role requisition with department choices, salary band, and HR screening fields; identity is server-owned; the role persists complete and enters the HR review queue with an audited transition. | |
 | 12 | AI Job-Description Guidance | Pasting a job description generates AI screening guidance for the role without triggering the creation workflow. | |

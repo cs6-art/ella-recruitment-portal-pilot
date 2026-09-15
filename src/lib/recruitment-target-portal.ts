@@ -42,6 +42,7 @@ import {
 import { getDb } from "@/db/client";
 import { organizations } from "@/db/schema";
 import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
+import { creditCostFor } from "@/lib/ella-credits";
 import { applicantVoiceTimezone } from "@/lib/applicant-timezone";
 import { extractStoredResumeText, type ResumeFileKind, type ResumeFileRecord } from "@/lib/resume-files";
 import { scheduledInstant } from "@/lib/interview-time";
@@ -714,7 +715,22 @@ async function targetCreateApplicationInTenant(input: { externalId: string; role
     });
     if (queued.error) throw new Error(queued.error);
     const screeningReused = !queued.created && queued.item?.status === "screened" && Boolean(queued.item.applicationId)
-      ? await copyScreeningResult({ sourceApplicationId: queued.item.applicationId as string, targetApplicationId: result.application.id })
+      ? await copyScreeningResult({
+        sourceApplicationId: queued.item.applicationId as string,
+        targetApplicationId: result.application.id,
+        ledger: {
+          type: "Deduction",
+          event: "cv_analysis",
+          units: 1,
+          creditsDelta: -(await creditCostFor("cv_analysis")),
+          reference: result.application.externalId,
+          roleId: input.roleId,
+          actorName: "",
+          actorEmail: input.creditOwnerEmail || "",
+          note: "Postgres target reused resume screening",
+          sourceEntryId: `LDG-${crypto.createHash("sha256").update(`cv:${result.application.externalId}`).digest("hex")}`,
+        },
+      })
       : false;
     return { ...result, screeningQueued: queued.created, screeningQueueCreated: queued.created, screeningReused };
   }
@@ -865,8 +881,10 @@ function targetApplicantSummary(row: TargetApplicationRow) {
       appliedAt: text(application.appliedAt),
       matchScore: screening?.matchScore == null ? "" : String(screening.matchScore),
       recommendation: label(application.currentStage),
-      cvRecommendation: text(screening?.recommendation || application.resumeHrDecision),
-      resumeStatus: text(application.resumeHrDecision || (screening ? "Processed" : "")),
+      // HR decisions are a separate workflow step. They must never make an
+      // application appear AI-screened when no screening result exists.
+      cvRecommendation: text(screening?.recommendation),
+      resumeStatus: screening ? "Processed" : "",
       voiceStatus: text(application.voiceHrDecision),
       finalInterviewStatus: text(application.finalHrDecision),
       finalStatus: label(application.currentStage),
@@ -920,7 +938,7 @@ export async function targetApplicantMetrics(rows?: Awaited<ReturnType<typeof ta
   return {
     total: summaries.length,
     today: summaries.filter((row) => text(row.appliedAt).slice(0, 10) === new Date().toISOString().slice(0, 10)).length,
-    screened: summaries.filter((row) => Boolean(row.cvRecommendation || row.resumeStatus)).length,
+    screened: summaries.filter((row) => row.resumeStatus === "Processed").length,
     interviewed: summaries.filter((row) => ["voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"].includes(row.currentStage)).length,
     voiceActivity: summaries.filter((row) => Boolean(row.voiceStatus)).length,
     hrActivity: summaries.filter((row) => Boolean(row.cvRecommendation || row.voiceStatus || row.finalInterviewStatus)).length,
@@ -1077,6 +1095,7 @@ export async function targetBulkResumeQueue(roleExternalId = "") {
   const organizationId = await targetOrganizationId();
   const rows = (await listBulkQueueForPortal(undefined, roleExternalId || undefined)).filter((row) => rowOrganizationId(row.item) === organizationId);
   return rows.map(({ item, roleExternalId: roleId, applicationExternalId }) => ({
+    dedupeKey: text(item.dedupeKey) || text(item.driveFileId),
     driveFileId: text(item.driveFileId), driveFileName: text(item.filename), driveFileUrl: text(item.fileUrl), roleId: text(roleId),
     candidateName: text(item.candidateName), candidateEmail: text(item.candidateEmail), status: label(item.status), applicationId: text(applicationExternalId),
     errorMessage: text(item.errorMessage), discoveredAt: text(item.discoveredAt), processingStartedAt: text(item.processingStartedAt), processedAt: text(item.processedAt),

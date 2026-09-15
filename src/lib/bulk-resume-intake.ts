@@ -28,24 +28,29 @@ import { intakeTargetResumeBatch } from "@/lib/recruitment-target-bulk";
 // below.
 export const MAX_FILES_PER_BATCH = 25;
 
-// Temporary operator-facing hard cap on files per submission, enforced at both
-// the UI and server validation layers for the local upload and the Google
-// Drive import. It exists only because the intake pipeline currently runs the
-// staggered worker pool inline in the request (~(N-2)x10s), so a larger batch
-// risks a client-visible function timeout on the default platform budget.
-// Raise this back toward MAX_FILES_PER_BATCH once dispatch moves off-request.
-// See docs/BATCH-CAPACITY-VALIDATION.md.
-export const MAX_FILES_PER_SUBMISSION = 8;
+// Moved to bulk-resume-limits.ts (2026-09-14) so client-side and other
+// non-server-only code (BulkResumeScreeningPanel.tsx, the help-bot knowledge
+// base) can read this number without importing this module's server-only
+// dependencies (googleapis, mammoth, credits, resume storage). Re-exported
+// here so existing `import { MAX_FILES_PER_SUBMISSION } from
+// "@/lib/bulk-resume-intake"` call sites keep working unchanged.
+export { MAX_FILES_PER_SUBMISSION } from "./bulk-resume-limits";
 
 export const MAX_BULK_REQUEST_BYTES = 100 * 1024 * 1024;
 
 // Bound each per-file screening webhook so one stuck n8n execution fails that
 // single file (batch continues) instead of hanging until the serverless
-// function is killed. Mirrors sendCandidateApplicationWebhook's bound for the
-// single-application path.
+// function is killed. Lowered from 60s to 20s on 2026-09-14: on the Vercel
+// Hobby plan the whole function is killed at 60s regardless, so a 60s per-file
+// guard could never actually fire before the platform's own hard kill did --
+// it protected nothing. 20s fails a stuck file fast enough to leave the
+// remaining files in a 6-file batch (see MAX_FILES_PER_SUBMISSION) their own
+// chance to run inside the 60s budget. This guard only matters if the
+// backend is ever flipped back to Sheets -- the live Postgres-target path
+// doesn't call this webhook at all.
 function bulkWebhookTimeoutMs() {
   const configured = Number(process.env.N8N_BULK_RESUME_TIMEOUT_MS);
-  return Number.isFinite(configured) && configured > 0 ? configured : 60_000;
+  return Number.isFinite(configured) && configured > 0 ? configured : 20_000;
 }
 
 const DEFAULT_CONCURRENCY = 2;

@@ -55,9 +55,10 @@ their signed-in account.
 role, department, and permissions. She cannot look up candidate records, resume
 files, applicant scores, calendars, balances, or other live business records.
 
-**What is the current bulk screening limit?** The current Pilot limit is 4 files
-per batch, with PDF, DOC, and DOCX accepted up to 10 MB per file. The limit is
-shared by computer upload, Google Drive import, and OneDrive import.
+**What is the current bulk screening limit?** The current Pilot limit is
+{{BULK_FILE_LIMIT}} files per batch, with PDF, DOC, and DOCX accepted up to
+10 MB per file. The limit is shared by computer upload, Google Drive import,
+and OneDrive import.
 
 ---
 
@@ -258,8 +259,8 @@ rejection. HR must review the evidence and record the decision.
 
 From **Resume Screening**, HR can choose one of three intake options:
 
-1. **Upload from your computer** — select up to 8 PDF, DOC, or DOCX resumes for
-   one published role and start screening.
+1. **Upload from your computer** — select up to {{BULK_FILE_LIMIT}} PDF, DOC, or
+   DOCX resumes for one published role and start screening.
 2. **Import from Google Drive** — connect Google Drive, choose files from the
    folder browser, and import them for the selected published role.
 3. **Import from OneDrive** — connect OneDrive and choose files from the folder
@@ -271,6 +272,13 @@ charged. A successful screening is charged once; a failed or invalid file is not
 charged. Candidates can also submit one resume through an application page, but
 that is a separate candidate-intake route rather than a fourth HR bulk option.
 
+The optional resume-led question preview on the single-resume form does not save
+a screening record or use credits. To run the billable CV screening, complete the
+form and select **Save Screening Record**. In legacy mode, 1 credit is deducted
+after the screening workflow accepts the application. In Postgres target mode,
+the application is queued first and 1 credit is deducted when the screening
+result is successfully committed. Failed or invalid screening is not charged.
+
 ---
 
 ## How bulk resume upload works
@@ -281,7 +289,7 @@ Upload from your computer:
 
 1. Choose the published role that matches every resume in the batch.
 2. Add the files — drag them in or click the box. PDF, DOC, and DOCX are
-   accepted, up to 8 files at a time, 10 MB per file.
+   accepted, up to {{BULK_FILE_LIMIT}} files at a time, 10 MB per file.
 3. Select **Start screening**. The portal queues each file for processing.
 4. Watch progress — the list updates automatically, or choose **Refresh status**.
 5. When processing is complete, choose **View Processed Applicants** to begin the
@@ -298,6 +306,10 @@ final decision.
 ---
 
 ## How Google Drive import works
+
+Current launch limit: select no more than 6 files per bulk submission across
+local upload, Google Drive, and OneDrive. Older 8-file measurements are
+historical validation evidence, not the current limit.
 
 If your team uses the shared Google Drive resume folder, first connect Google
 Drive (HR uses "Connect Google Drive"; this uses a read-only permission). Then in

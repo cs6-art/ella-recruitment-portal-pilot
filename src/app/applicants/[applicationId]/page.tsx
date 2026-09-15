@@ -6,6 +6,7 @@ import AppShell from "@/components/AppShell";
 import ApplicantDetailActions from "@/components/ApplicantDetailActions";
 import ApplicantDecisionPanel from "@/components/ApplicantDecisionPanel";
 import ApplicantLiveRefresh from "@/components/ApplicantLiveRefresh";
+import CandidateHistoryTimeline from "@/components/CandidateHistoryTimeline";
 import UiIcon, { type UiIconName } from "@/components/UiIcon";
 import { canDecideApplicant, canEditApplicant, canViewApplicant } from "@/lib/access-control";
 import {
@@ -154,7 +155,21 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
   // error on our side. Distinct from voiceNotConducted so HR sees a call that
   // needs an infra fix (retry/redispatch), not one waiting on the candidate.
   const voiceSystemFailure = /(?:^|[^a-z])failed(?:[^a-z]|$)|blocked|system[_ -]?failure|provider[_ -]?failure|technical[_ -]?failure|dispatch[_ -]?fail/i.test(voiceCallStatus);
-  const voiceScorePending = voiceNotConducted || voiceSystemFailure ? "Not evaluated — no completed interview" : "Awaiting AI evaluation";
+  // The call finished but no score/recommendation ever came back (e.g. the
+  // candidate hung up seconds in) — that is a completed, ungraded interview,
+  // not one still waiting on the AI. Say so plainly instead of implying the
+  // evaluation is still coming.
+  const voiceCompletedNoScore = voiceCallStatus.trim().toLowerCase() === "completed" && !applicant.voiceScore.trim() && !voiceNotConducted && !voiceSystemFailure;
+  const voiceScorePending = voiceNotConducted || voiceSystemFailure
+    ? "Not evaluated — no completed interview"
+    : voiceCompletedNoScore
+      ? "0 — call too short to evaluate"
+      : "Awaiting AI evaluation";
+  const voiceRecommendationPending = voiceNotConducted || voiceSystemFailure
+    ? "Not evaluated — no completed interview"
+    : voiceCompletedNoScore
+      ? "No recommendation — not enough interview content to evaluate"
+      : "Awaiting AI evaluation";
   return <section className="card applicant-detail-card applicant-screening-evidence-card">
     <DetailCardHeader icon="document" title="AI Screening Evidence" description="CV analysis and voice interview evidence for one complete HR review." />
     <div className="applicant-detail-content">
@@ -179,10 +194,10 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
           <DetailField label="Scheduled" value={scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />
           <DetailField label="Timezone" value={recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || applicant.voiceTimezone || "Not provided"} />
           <DetailField label="Voice AI Score" value={applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : voiceScorePending} />
-          <DetailField label="AI Recommendation" value={applicant.voiceRecommendation || voiceScorePending} />
+          <DetailField label="AI Recommendation" value={applicant.voiceRecommendation || voiceRecommendationPending} />
         </div>
         {voiceBookingLink && <div className="applicant-copy-block"><span>Candidate booking page</span><p><Link href={voiceBookingLink} target="_blank" rel="noreferrer">Open the candidate booking page</Link></p></div>}
-        <div className="applicant-copy-block"><span>AI Summary</span><p>{applicant.voiceSummary || (voiceSystemFailure ? "The call did not go through due to a system or dispatch error — the candidate was never reached, so there is no AI summary. Check the voice call logs, or ask a developer to, for the failure reason and consider re-sending the booking link." : voiceNotConducted ? "No interview took place, so there is no AI summary." : "No AI summary is available.")}</p></div>
+        <div className="applicant-copy-block"><span>AI Summary</span><p>{applicant.voiceSummary || (voiceSystemFailure ? "The call did not go through due to a system or dispatch error — the candidate was never reached, so there is no AI summary. Check the voice call logs, or ask a developer to, for the failure reason and consider re-sending the booking link." : voiceNotConducted ? "No interview took place, so there is no AI summary." : voiceCompletedNoScore ? "The call ended before the candidate answered enough questions to evaluate, so there is no AI summary." : "No AI summary is available.")}</p></div>
         <div className="applicant-copy-columns"><div><span>Strengths</span><ReadableList value={applicant.voiceStrengths} empty="No strengths recorded." /></div><div><span>Concerns</span><ReadableList value={applicant.voiceConcerns} empty="No concerns recorded." /></div></div>
         <div className="applicant-copy-columns"><div><span>Communication Quality</span><p>{applicant.voiceCommunicationQuality || "Not provided."}</p></div><div><span>Answer Completeness</span><p>{applicant.voiceAnswerCompleteness || "Not provided."}</p></div></div>
         {applicant.voiceEvaluationFields.length > 0 && <div className="applicant-copy-columns">{applicant.voiceEvaluationFields.map((evaluation) => <div key={evaluation.key}><span>{evaluation.label}</span><p>{evaluation.value}</p></div>)}</div>}
@@ -204,14 +219,6 @@ function InterviewQuestions({ value }: { value: string }) {
   const items = questionItems(value);
   if (items.length === 0) return <div className="applicant-empty-content"><UiIcon name="document" size={20} /><span>No interview questions are available.</span></div>;
   return <ol className="applicant-question-list">{items.map((question, index) => <li key={`${question}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span><p>{question}</p></li>)}</ol>;
-}
-
-function HistoryTimeline({ history }: { history: CandidateStatusHistoryEntry[] }) {
-  if (history.length === 0) {
-    return <section className="card applicant-detail-card history-card"><div className="card-header applicant-section-header"><div className="applicant-section-heading"><span className="applicant-section-icon"><UiIcon name="clock" size={17} /></span><div><h2>Candidate Status History</h2><p>Review the candidate audit trail.</p></div></div></div><div className="empty">No candidate status history is available.</div></section>;
-  }
-
-  return <section className="card applicant-detail-card history-card"><div className="card-header applicant-section-header"><div className="applicant-section-heading"><span className="applicant-section-icon"><UiIcon name="clock" size={17} /></span><div><h2>Candidate Status History</h2><p>Review the candidate audit trail.</p></div></div></div><div className="history-timeline">{history.map((entry, index) => <article className="timeline-entry" key={`${entry.historyId || entry.changedAt}-${index}`}><span className="timeline-marker" aria-hidden="true" /><div className="timeline-content"><div className="timeline-top"><div><h3>{entry.previousStatus ? `${applicantStageLabel(entry.previousStatus)} → ${applicantStageLabel(entry.newStatus)}` : applicantStageLabel(entry.newStatus) || entry.action}</h3><span className="timeline-action">{applicantStageLabel(entry.stage)} · {entry.action}</span></div><time dateTime={entry.changedAt}>{dateValue(entry.changedAt)}</time></div><div className="timeline-performer"><strong>{entry.changedByName}</strong><span>{entry.changedByEmail}</span></div><div className="timeline-meta">{[entry.roleId, entry.actionSource].filter(Boolean).join(" · ")}</div>{entry.comments && <p className="timeline-comments">{entry.comments}</p>}{entry.rejectionReason && <div className="history-entry-comments"><span>Rejection reason</span><p>{entry.rejectionReason}</p></div>}</div></article>)}</div></section>;
 }
 
 export default async function ApplicantDetailsPage({ params }: { params: Promise<{ applicationId: string }> }) {
@@ -239,7 +246,7 @@ export default async function ApplicantDetailsPage({ params }: { params: Promise
       <ApplicantDecisionPanel applicationId={applicant.applicationId} currentStage={applicant.currentStage} resumeDecision={applicant.resumeDecision} resumeComments={resumeComments} voiceDecision={applicant.voiceDecision} voiceComments={voiceComments} voiceStatus={applicant.voiceCallStatus || applicant.voiceStatus} finalInterviewStatus={applicant.finalInterviewStatus} finalStatus={applicant.finalStatus} finalComments={finalComments} finalBookingLink={applicant.finalBookingLink} canReview={canDecideApplicant(user)} />
       <section className="card applicant-detail-card"><DetailCardHeader icon="document" title="Resume / CV" description="The candidate's submitted resume document." /><ResumeResource value={applicant.resumeText} fileId={applicant.resumeFileId} fileName={applicant.resumeFileName} expiresAt={applicant.resumeFileExpiresAt} /></section>
       <section className="card applicant-detail-card"><DetailCardHeader icon="microphone" title="Interview Questions" description="Questions prepared for the candidate's interview." /><InterviewQuestions value={applicant.interviewQuestions} /></section>
-      <HistoryTimeline history={history} />
+      <CandidateHistoryTimeline history={history} />
     </div><aside className="applicant-detail-side">
       {applicant.voiceDecision.toLowerCase() === "approve" && <FinalInterviewCard applicant={applicant} role={role} />}
       <section className="card applicant-detail-card"><DetailCardHeader icon="clock" title="Status Tracking" description="Current progress through the candidate workflow." /><div className="applicant-timeline"><div><strong>1. AI CV Analysis</strong><span>{applicantDecisionLabel(applicant.resumeStatus) || "Not Started"}</span></div><div><strong>2. Voice Interview</strong><span>{applicantStageLabel(applicant.voiceCallStatus || applicant.voiceStatus) || "Not Started"}</span></div><div><strong>3. Voice HR Review</strong><span>{applicantDecisionLabel(applicant.voiceDecision) || "Pending"}</span></div><div><strong>4. Face-to-Face Interview</strong><span>{applicantStageLabel(applicant.finalInterviewStatus) || "Not Started"}</span></div><div><strong>Last Updated</strong><span>{dateValue(applicant.lastUpdated)}</span></div></div></section>

@@ -23,13 +23,16 @@ test("target intake creates the queue only after target storage and application 
   assert.doesNotMatch(source, /recordDeduction/);
 });
 
-test("duplicate completed role screening is reused for the new application without a second charge", () => {
+test("target manual intake charges fresh screening results in the worker and reused results atomically", () => {
   const portal = read("src/lib/recruitment-target-portal.ts");
   const applicants = read("src/app/api/applicants/route.ts");
   const queries = read("src/lib/internal-recruitment-queries.ts");
   assert.match(portal, /copyScreeningResult/);
   assert.match(portal, /screeningReused/);
+  assert.match(portal, /Postgres target reused resume screening/);
   assert.match(queries, /export async function copyScreeningResult/);
-  assert.match(applicants, /if \(!created\.screeningReused\) await recordDeduction/);
-  assert.match(applicants, /creditsCharged: created\.screeningReused \? 0/);
+  assert.match(queries, /appendAccountLedgerEntryOnExecutor\(tx/);
+  assert.match(applicants, /await targetCreateApplication/);
+  assert.match(applicants, /queued for CV analysis/);
+  assert.match(applicants, /creditsCharged: reused \? await creditCostFor\("cv_analysis"\) : 0/);
 });

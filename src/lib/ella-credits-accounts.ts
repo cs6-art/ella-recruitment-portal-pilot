@@ -17,12 +17,6 @@ function int(value: unknown) {
   return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
 }
 
-function email(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (!normalized || !normalized.includes("@")) throw new Error("A valid credit account owner email is required.");
-  return normalized;
-}
-
 function organization(value: string) {
   const normalized = value.trim();
   if (!normalized) throw new Error("An organization is required for credit operations.");
@@ -47,6 +41,13 @@ function entry(row: Record<string, unknown>): LedgerEntry {
   };
 }
 
+/**
+ * Whether credits are metered against the Postgres `credit_accounts` table
+ * (one shared balance per organization -- see migration 0015) instead of the
+ * legacy single global Google Sheet. Despite the env var's name, the account
+ * this enables is scoped to the organization, not the individual user; every
+ * signed-in user in the same org shares one balance.
+ */
 export function perUserCreditsEnabled() {
   const configured = (process.env.CREDITS_SCOPE || "").trim().toLowerCase();
   if (configured) return configured === "per_user";
@@ -56,13 +57,12 @@ export function perUserCreditsEnabled() {
   return (process.env.RECRUITMENT_BACKEND || "").trim().toLowerCase() === "postgres";
 }
 
-export async function getAccountCreditBalance(input: { organizationId: string; ownerEmail: string }): Promise<CreditBalance> {
+export async function getAccountCreditBalance(input: { organizationId: string }): Promise<CreditBalance> {
   const db = getDb();
   const orgId = organization(input.organizationId);
-  const owner = email(input.ownerEmail);
   const [account] = rowsOf(await db.execute(sql`
     SELECT "id", "balance" FROM "credit_accounts"
-    WHERE "organization_id" = ${orgId} AND "owner_email" = ${owner}
+    WHERE "organization_id" = ${orgId}
     LIMIT 1
   `));
   const totals = rowsOf(await db.execute(sql`
@@ -87,18 +87,17 @@ export async function getAccountCreditBalance(input: { organizationId: string; o
 
 export async function appendAccountLedgerEntryOnExecutor(
   executor: Executor,
-  input: { organizationId: string; ownerEmail: string; entry: LedgerAppend },
+  input: { organizationId: string; entry: LedgerAppend },
   options: { guard: boolean } = { guard: true },
 ) {
   const orgId = organization(input.organizationId);
-  const owner = email(input.ownerEmail);
   const delta = Math.trunc(input.entry.creditsDelta);
   const units = Math.trunc(input.entry.units);
   const guard = options.guard ? sql` AND "credit_accounts"."balance" + ${delta} >= 0` : sql``;
   const result = await executor.execute(sql`
     WITH account AS (
       SELECT "id" FROM "credit_accounts"
-      WHERE "organization_id" = ${orgId} AND "owner_email" = ${owner}
+      WHERE "organization_id" = ${orgId}
       FOR UPDATE
     ),
     existed AS (
@@ -143,11 +142,11 @@ export async function appendAccountLedgerEntryOnExecutor(
   if (inserted > 0) return { balanceAfter, applied: true };
   if (existed) return { balanceAfter, applied: false };
   if (options.guard) throw new EllaCreditsError(Math.abs(delta), balanceAfter);
-  throw new Error(`Credit account is not provisioned for ${owner}.`);
+  throw new Error(`Credit account is not provisioned for organization ${orgId}.`);
 }
 
 export async function appendAccountLedgerEntry(
-  input: { organizationId: string; ownerEmail: string; entry: LedgerAppend },
+  input: { organizationId: string; entry: LedgerAppend },
   options: { guard: boolean } = { guard: true },
 ) {
   return appendAccountLedgerEntryOnExecutor(getDb(), input, options);

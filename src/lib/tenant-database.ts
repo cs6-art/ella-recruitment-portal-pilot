@@ -5,42 +5,28 @@ export const DEFAULT_ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
 
 type TenantContext = { organizationId: string };
 const tenantContext = new AsyncLocalStorage<TenantContext>();
-let parsedUrls: Record<string, string> | null | undefined;
 
 function normalizedId(value: string | undefined) {
   return value?.trim() || DEFAULT_ORGANIZATION_ID;
-}
-
-function tenantDatabaseUrls(): Record<string, string> {
-  if (parsedUrls) return parsedUrls;
-  if (parsedUrls === null) return {};
-  const raw = process.env.TENANT_DATABASE_URLS?.trim();
-  if (!raw) {
-    parsedUrls = null;
-    return {};
-  }
-  try {
-    const value = JSON.parse(raw) as unknown;
-    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("must be an object");
-    parsedUrls = Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0).map(([key, url]) => [key.trim(), url.trim()]));
-    return parsedUrls;
-  } catch (error) {
-    throw new Error(`TENANT_DATABASE_URLS must be valid JSON: ${error instanceof Error ? error.message : "invalid object"}`);
-  }
 }
 
 export function currentTenantOrganizationId() {
   return tenantContext.getStore()?.organizationId || DEFAULT_ORGANIZATION_ID;
 }
 
-export function configuredTenantOrganizationIds() {
-  return Object.keys(tenantDatabaseUrls()).filter((id) => id !== DEFAULT_ORGANIZATION_ID);
-}
-
 /**
- * Run all tenant-owned queries inside the selected physical database context.
+ * Run all tenant-owned queries inside the selected organization's context.
  * The context is request-local, so concurrent client requests cannot switch
- * each other's database.
+ * each other's organization.
+ *
+ * Every organization shares one physical database (see `/api/organizations`
+ * POST -- new orgs are created in "shared" mode and nothing else provisions
+ * them). Isolation between organizations is enforced entirely by the
+ * `organization_id` column on every tenant-owned table plus the query
+ * predicates in `internal-recruitment-queries.ts` / `recruitment-target-portal.ts`
+ * -- this function's only remaining job is to carry *which* organization_id
+ * a request is acting as through async calls that don't thread it explicitly
+ * (e.g. `getTenantDb()`, credit balance lookups).
  */
 export function runWithTenantDatabase<T>(organizationId: string, callback: () => Promise<T> | T): Promise<T> | T {
   const id = normalizedId(organizationId);
@@ -52,20 +38,11 @@ export function enterTenantDatabase(organizationId: string) {
   tenantContext.enterWith({ organizationId: normalizedId(organizationId) });
 }
 
-export function tenantDatabaseUrl(organizationId = currentTenantOrganizationId()): string | undefined {
-  const id = normalizedId(organizationId);
-  if (id === DEFAULT_ORGANIZATION_ID) return process.env.DATABASE_URL?.trim();
-  // Interim shared-database mode: organizations without an explicit physical
-  // URL use the control database, while every tenant-owned query still carries
-  // its organization_id predicate. A mapped URL transparently upgrades one
-  // organization to a separate physical database later.
-  return tenantDatabaseUrls()[id] || process.env.DATABASE_URL?.trim();
+/** Every organization currently shares this one physical database. */
+export function tenantDatabaseUrl(): string | undefined {
+  return process.env.DATABASE_URL?.trim();
 }
 
-export function isTenantDatabaseConfigured(organizationId = currentTenantOrganizationId()) {
-  return Boolean(tenantDatabaseUrl(organizationId));
-}
-
-export function resetTenantDatabaseConfigForTests() {
-  parsedUrls = undefined;
+export function isTenantDatabaseConfigured() {
+  return Boolean(tenantDatabaseUrl());
 }

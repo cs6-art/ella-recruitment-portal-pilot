@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { google } from "googleapis";
 import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account";
-import { bulkResumeSpreadsheetId } from "@/lib/bulk-resume-config";
+import { bulkResumeSpreadsheetId, STALE_PROCESSING_MS } from "@/lib/bulk-resume-config";
 import { cachedSheetsRead, freshSheetsRead, withSheetsBackoff } from "@/lib/sheets-cache";
 import { demoActiveBookingLinkRoleIds, demoApplicantRows, demoInterviewBookings } from "@/lib/demo-data";
 import { isDemoMode, isDemoWindowRecord } from "@/lib/demo-mode";
@@ -168,6 +168,7 @@ export type InterviewBooking = {
 };
 
 export type BulkResumeQueueItem = {
+  dedupeKey?: string;
   driveFileId: string;
   driveFileName: string;
   driveFileUrl: string;
@@ -733,6 +734,7 @@ export async function getBulkResumeQueue(roleId = "", options: { fresh?: boolean
   };
   rows
     .map((record) => ({
+      dedupeKey: field(record, "Dedupe_Key", "Dedupe Key", "dedupeKey"),
       driveFileId: field(record, "Drive_File_ID", "Drive File ID", "driveFileId"),
       driveFileName: field(record, "Drive_File_Name", "Drive File Name", "driveFileName"),
       driveFileUrl: field(record, "Drive_File_URL", "Drive File URL", "driveFileUrl"),
@@ -766,6 +768,55 @@ export async function getBulkResumeQueue(roleId = "", options: { fresh?: boolean
       }
     });
   return [...latestByFile.values()].sort((left, right) => eventTimestamp(right) - eventTimestamp(left));
+}
+
+/**
+ * Persist the same stale-queue reconciliation used by the status endpoint.
+ * This is append-only in Sheets mode and an idempotent status update in
+ * Postgres mode: it never retries n8n and never charges credits.
+ */
+export async function reconcileBulkResumeQueue() {
+  const queueItems = await getBulkResumeQueue("", { fresh: true });
+  const now = Date.now();
+  const stale = queueItems.filter((item) => {
+    if (item.status.toLowerCase() !== "processing") return false;
+    const timestamp = Date.parse(item.lastUpdated || item.processingStartedAt || item.discoveredAt);
+    return !Number.isFinite(timestamp) || now - timestamp >= STALE_PROCESSING_MS;
+  });
+  if (stale.length === 0) return { inspected: queueItems.length, reconciled: 0, screened: 0, failed: 0 };
+
+  const evidence = await getBulkResumeScreeningEvidence(stale);
+  let screened = 0;
+  let failed = 0;
+  if (isPostgresRecruitmentTarget()) {
+    const { updateBulkQueueStatus } = await import("@/lib/internal-recruitment-queries");
+    for (const item of stale) {
+      const hasEvidence = evidence.has(bulkQueueKey(item));
+      const status = hasEvidence ? "screened" : "failed";
+      await updateBulkQueueStatus({
+        dedupeKey: item.dedupeKey || item.driveFileId,
+        status,
+        applicationId: item.applicationId || undefined,
+        errorMessage: hasEvidence ? "" : "Screening did not produce a saved result within 10 minutes.",
+      });
+      if (hasEvidence) screened += 1;
+      else failed += 1;
+    }
+  } else {
+    for (const item of stale) {
+      const hasEvidence = evidence.has(bulkQueueKey(item));
+      await appendBulkResumeQueueEvent({
+        ...item,
+        status: hasEvidence ? "Screened" : "Failed",
+        errorMessage: hasEvidence ? "" : "Screening did not produce a saved result within 10 minutes.",
+        processedAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+      });
+      if (hasEvidence) screened += 1;
+      else failed += 1;
+    }
+  }
+  return { inspected: queueItems.length, reconciled: screened + failed, screened, failed };
 }
 
 // Google Sheets' append() picks "the next empty row" per request; two calls

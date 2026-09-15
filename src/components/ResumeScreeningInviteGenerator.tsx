@@ -90,8 +90,8 @@ export default function ResumeScreeningInviteGenerator({ roleOptions }: { roleOp
           </div>
           <small>Send this link to the candidate. It can only be used once and expires {new Date(result.expiresAt).toLocaleString()}.</small>
           {result.emailStatus === "sent" && <small className="invite-email-success">Email sent to {candidateEmail}.</small>}
-          {result.emailStatus === "not_configured" && <small>Link created. Copy it and send it privately to the candidate.</small>}
-          {result.emailStatus === "failed" && <small className="invite-email-warning">Link created, but the email could not be sent. Copy the link and send it privately.</small>}
+          {result.emailStatus === "not_configured" && <small className="invite-email-warning">Email was not sent: the invitation email workflow is not configured in this deployment. Copy the link or configure the n8n invite-email webhook.</small>}
+          {result.emailStatus === "failed" && <small className="invite-email-warning">Email was not sent{result.emailError ? `: ${result.emailError}` : "."} Copy the link and send it privately.</small>}
         </div>
       )}
     </section>

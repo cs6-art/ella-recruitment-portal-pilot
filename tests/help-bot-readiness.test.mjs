@@ -45,13 +45,43 @@ test("the endpoint is rate limited per user and degrades on provider rate limits
   assert.match(route, /status: 502/); // generic provider failure fallback
 });
 
-test("only static knowledge + safe signed-in context reach the model — no applicant / Sheets / DB / n8n data", () => {
+test("the static knowledge/prompt path has no direct applicant / Sheets / DB / n8n access", () => {
+  // Phase 2 (2026-09-14) intentionally added a narrow, whitelisted live-data
+  // path -- see the next test. This test's job is narrower now: the STATIC
+  // grounding (knowledge.ts, and the route's own code outside that path)
+  // must still never reach a database, Sheets, or n8n directly.
   const route = read("src/app/api/help-bot/route.ts");
   assert.match(route, /retrieveContext\(question\)/);
   assert.match(route, /userContext/);
   assert.doesNotMatch(route, /getApplicant|getRoleRequest|google-sheets|getDb\(|N8N_|webhook/);
   const knowledge = read("src/lib/help-bot/knowledge.ts");
   assert.doesNotMatch(knowledge, /fetch\(|getDb\(|googleapis|neon\(/);
+  const prompt = read("src/lib/help-bot/prompt.ts");
+  assert.doesNotMatch(prompt, /fetch\(|getDb\(|googleapis|neon\(/);
+});
+
+test("live data access is confined to the whitelisted, zero-parameter, RBAC-gated live-tools registry", () => {
+  const route = read("src/app/api/help-bot/route.ts");
+  // route.ts is the one sanctioned wiring point for the real data-fetching
+  // functions (live-tools.ts and conversation.ts stay decoupled from them so
+  // they're unit-testable under plain Node -- see the comment at the top of
+  // live-tools.ts). It must wire them only into liveToolDeps, passed straight
+  // into the conversation loop -- never call them directly itself, and never
+  // import a broader surface (raw Sheets/DB access, applicant/role queries).
+  assert.match(route, /const liveToolDeps: LiveToolDependencies = \{ getCreditBalance, bulkQueueStatusSummary, voiceAttemptStatusSummary \};/);
+  assert.match(route, /runHelpBotConversation\(\s*client,[\s\S]*?liveToolDeps,?\s*\)/);
+  assert.doesNotMatch(route, /getApplicant|getRoleRequest|google-sheets|listBulkQueueForPortal|listApplications/);
+
+  const liveTools = read("src/lib/help-bot/live-tools.ts");
+  assert.match(liveTools, /canManagePipeline/); // reuses existing RBAC, doesn't invent new logic
+  assert.match(liveTools, /additionalProperties: false/); // zero-argument tool schemas
+  // The three approved capabilities only -- nothing else is live-reachable.
+  for (const name of ["get_credit_balance", "get_bulk_queue_summary", "get_interview_status_summary"]) {
+    assert.match(liveTools, new RegExp(name));
+  }
+  // Field-access shape, not prose: catches an actual PII column reference
+  // without false-flagging the word "transcript" used in an explanatory comment.
+  assert.doesNotMatch(liveTools, /\.candidateName|\.candidateEmail|\.transcript|\.recordingUrl|candidateName:|candidateEmail:/);
 });
 
 test("auth is required to use the assistant", () => {

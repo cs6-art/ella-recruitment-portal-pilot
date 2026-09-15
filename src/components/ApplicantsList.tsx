@@ -10,7 +10,7 @@ import type { ApplicantMetrics, ApplicantSummary } from "@/lib/candidate-applica
 import Pagination from "@/components/Pagination";
 import { formatMatchScore } from "@/lib/score-format";
 import { formatPortalDateTime } from "@/lib/portal-time";
-import { isNewApplicant, readApplicantsLastSeen, writeApplicantsLastSeen } from "@/lib/new-applicants";
+import { isNewApplicant, writeApplicantsLastSeen } from "@/lib/new-applicants";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 
 type Props = {
@@ -110,15 +110,14 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
   const [actionMessage, setActionMessage] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
-  // The "new since your last visit" watermark, read once on mount and then
-  // advanced so the next visit starts clean (and the header bell count clears).
-  // Holding it fixed for the visit keeps the row highlight stable even when the
-  // applicants prop is replaced by a router.refresh() (e.g. after a delete).
+  // Opening Applicants records the current visit as the viewed watermark.
+  // Applicants arriving after that timestamp remain highlighted during this visit.
   const [seenWatermark, setSeenWatermark] = useState<number | null>(null);
 
   useEffect(() => {
-    setSeenWatermark(readApplicantsLastSeen(userEmail));
-    writeApplicantsLastSeen(userEmail);
+    const seenAt = Date.now();
+    writeApplicantsLastSeen(userEmail, seenAt);
+    setSeenWatermark(seenAt);
   }, [userEmail]);
 
   const newApplicantIds = useMemo(() => {
@@ -210,7 +209,7 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
   const voiceCount = activeApplicants.filter((applicant) => applicant.voiceStatus || applicant.finalStatus.toLowerCase().includes("voice")).length;
   const finalInterviewCount = activeApplicants.filter((applicant) => applicant.finalInterviewStatus && applicant.finalInterviewStatus.toLowerCase() !== "pending").length;
   const summaryTotal = historyMetrics?.total ?? activeApplicants.length;
-  const summaryScreened = historyMetrics?.screened ?? activeApplicants.filter((applicant) => ["processed", "for hr review", "pending hr review"].includes(applicant.resumeStatus.trim().toLowerCase())).length;
+  const summaryScreened = historyMetrics?.screened ?? activeApplicants.filter((applicant) => applicant.resumeStatus.trim().toLowerCase() === "processed").length;
   const summaryVoice = historyMetrics?.voiceActivity ?? voiceCount;
   const summaryHr = historyMetrics?.hrActivity ?? finalInterviewCount;
   // Keep the pipeline headline aligned with the history-backed summary. Demo

@@ -19,13 +19,13 @@ the `payment_events.dedupe_key` unique conflict; other database errors return a
 failure so HitPay can retry.
 
 The manual credit UI accepts positive whole-number additions and a required
-reason. Credit management is limited to the Admin preset with settings access
-and HR users with review access. Recruiter, Interviewer, Hiring Manager,
+reason. Credit management is limited to the CEO or Admin preset with settings
+access and HR users with review access. Recruiter, Interviewer, Hiring Manager,
 Management, HOD, and requester users are denied. There is no separate IT Admin
-preset in the pilot; Admin is the administrative path.
+preset in the pilot; CEO and Admin are the administrative paths.
 
 All authenticated users can open `/credits` and start a server-priced HitPay
-purchase. Only Admin and authorized HR users see the manual top-up control.
+purchase. Only CEO, Admin, and authorized HR users see the manual top-up control.
 Payment status and reconciliation are limited to the purchaser, except that
 authorized credit managers may review payments. Credits are granted only by
 the verified webhook transition.

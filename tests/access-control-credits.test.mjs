@@ -10,7 +10,8 @@ const perms = (value) => {
   return { accessRole: preset.value, canEditSettings: preset.canEditSettings, canReviewRole: preset.canReviewRole };
 };
 
-test("canManageCredits: only the Admin and HR paths may manage credits", () => {
+test("canManageCredits: only the CEO, Admin, and HR paths may manage credits", () => {
+  assert.equal(canManageCredits(perms("CEO")), true);
   assert.equal(canManageCredits(perms("Admin")), true);
   assert.equal(canManageCredits(perms("HR")), true);
   for (const role of ["Recruiter", "Interviewer", "Hiring Manager", "Management", "HOD", "Requester", "Finance Reviewer", "Auditor"]) {
@@ -23,6 +24,7 @@ test("canManageCredits does not use broad capability flags alone", () => {
   assert.equal(canManageCredits({ accessRole: "HR", canEditSettings: false, canReviewRole: false }), false);
   assert.equal(canManageCredits({ accessRole: "Recruiter", canEditSettings: false, canReviewRole: true }), false);
   assert.equal(canManageCredits({ accessRole: "Admin", canEditSettings: true, canReviewRole: false }), true);
+  assert.equal(canManageCredits({ accessRole: "CEO", canEditSettings: true, canReviewRole: false }), true);
   assert.equal(canManageCredits({ accessRole: "HR", canEditSettings: false, canReviewRole: true }), true);
 });
 

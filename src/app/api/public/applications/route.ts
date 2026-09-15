@@ -105,9 +105,10 @@ export async function POST(request: Request) {
       }
       const applicationId = `APP-${crypto.randomUUID()}`;
       if (intake.resumeFile) storedResume = await storeResumeFile(intake.resumeFile);
-      await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: invitation ? "hr_invitation" : "direct", sourceDetail: invitation?.invitationId || "public", consentAt: new Date().toISOString(), creditOwnerEmail: role.requesterEmail, organizationId: role.organizationId, resume: storedResume ? { ...storedResume.record, extractedText: storedResume.extractedText } : undefined });
+      const created = await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: invitation ? "hr_invitation" : "direct", sourceDetail: invitation?.invitationId || "public", consentAt: new Date().toISOString(), creditOwnerEmail: role.requesterEmail, organizationId: role.organizationId, resume: storedResume ? { ...storedResume.record, extractedText: storedResume.extractedText } : undefined });
       if (inviteToken) await markResumeScreeningInvitationUsed(inviteToken, applicationId);
-      return withPublicCors(request, NextResponse.json({ success: true, applicationId, roleId, status: "Pending CV Analysis", message: "Application submitted successfully and queued for CV analysis." }, { status: 201 }));
+      const reused = created.screeningReused === true;
+      return withPublicCors(request, NextResponse.json({ success: true, applicationId, roleId, status: reused ? "CV Analysis Complete" : "Pending CV Analysis", message: reused ? "Application submitted successfully. An existing CV analysis was reused." : "Application submitted successfully and queued for CV analysis.", screeningQueued: created.screeningQueued === true, screeningReused: reused }, { status: 201 }));
     }
 
     const webhookUrl = await getPortalConfigValue("N8N_Candidate_Application_Webhook_URL");

@@ -98,8 +98,9 @@ test("each per-file screening webhook is time-bounded so one stuck n8n call cann
   assert.match(route, /const abort = new AbortController\(\)/);
   assert.match(route, /signal: abort\.signal/);
   assert.match(route, /did not respond within \$\{Math\.round\(timeoutMs \/ 1000\)\}s/);
-  // default 60s, same as the single-application path
-  assert.match(route, /: 60_000;/);
+  // default 20s -- lowered for the Vercel Hobby plan's 60s function ceiling,
+  // see the comment on bulkWebhookTimeoutMs
+  assert.match(route, /: 20_000;/);
 });
 
 test("a resume the workflow rejects synchronously is not billed", () => {
@@ -255,6 +256,7 @@ test("bulk upload is wired into the live Resume Screening page", () => {
 test("invite links can use a separate candidate page origin without breaking portal API CORS", () => {
   const inviteRoute = read("src/app/api/roles/[roleId]/resume-screening/invite/route.ts");
   const inviteStore = read("src/lib/resume-screening-invite.ts");
+  const emailSender = read("src/lib/application-invite-email.ts");
   const applications = read("src/app/api/public/applications/route.ts");
   const inviteLookup = read("src/app/api/public/resume-screening-invite/[token]/route.ts");
   const candidatePage = read("public/index.html");
@@ -274,6 +276,12 @@ test("invite links can use a separate candidate page origin without breaking por
   assert.match(candidatePage, /api\/public\/applications/);
   assert.match(candidatePage, /const configuredPortalApi =/);
   assert.match(candidatePage, /ella-recruitment-portal-pilot\.vercel\.app/);
+  assert.match(candidatePage, /inviteQuery\.get\("portalApi"\)/);
+  assert.match(inviteStore, /applicationInviteLink\(input\.baseUrl, target\.token, input\.apiBaseUrl\)/);
+  assert.match(inviteRoute, /apiBaseUrl/);
+  assert.match(emailSender, /fallbackUrl = \(await getPortalConfigValue\("N8N_Application_Invite_Email_Webhook_URL"\)\)/);
+  assert.match(emailSender, /response\.status !== 404/);
+  assert.match(emailSender, /fallbackUrl/);
   assert.match(publicCors, /new URL\(cleanValue\)\.origin/);
   assert.match(applications, /intake\.body\.candidateName = invitation\.candidateName/);
   assert.match(applications, /intake\.body\.candidateEmail = invitation\.candidateEmail/);

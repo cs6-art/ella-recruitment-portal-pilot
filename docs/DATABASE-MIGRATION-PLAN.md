@@ -1217,30 +1217,39 @@ retry/no-show lifecycle.
 
 ---
 
-## 16. Physical tenant database implementation
+## 16. Tenant isolation: shared database, no physical split
 
-### Interim shared-database mode
+**2026-09-15: the physical-per-org-database path described in earlier
+revisions of this section was retired, not built out.** `TENANT_DATABASE_URLS`
+was a static env var the running app only ever read once at boot, so it could
+never actually pick up a newly provisioned tenant database without a redeploy
+— nothing exercised it, and `npm run db:provision:organization` (which required
+you to hand it a fresh, separately-hosted Postgres URL) has been removed along
+with it. Every organization — McLink included — now shares one physical
+database (`DATABASE_URL`) permanently, isolated entirely by the
+`organization_id` column on every tenant-owned table. If per-org physical
+isolation is ever actually needed for a client, it needs to be built properly
+(a real provisioning API — e.g. against Neon's own API — that writes the new
+database's URL somewhere the running app re-reads per-request, such as the
+`organizations` row itself, not an env var) rather than resurrected as-is.
 
-Organizations can be created and used immediately without a second database.
-When an organization has no `TENANT_DATABASE_URLS` entry, tenant queries use
-`DATABASE_URL` and remain isolated by `organization_id` on the tenant tables.
-The User Accounts screen lets a McLink platform administrator select an
-organization and add its users. A later physical split is opt-in: adding the
-organization ID and URL to `TENANT_DATABASE_URLS` moves that tenant's database
-connection without changing its organization identity.
+Organizations are created and used immediately with no second database:
+`POST /api/organizations` (McLink platform admin only) creates the row, then
+the User Accounts screen's "Manage users for" picker lets that admin add users
+under it through the same `/api/user-directory` upsert every organization
+uses. A new organization is a fully isolated, empty workspace (zero
+applicants, zero role requests, one credit balance starting at 0) the moment
+its first user is added — no separate provisioning step, script, or database.
 
-The control-plane `organizations` table now records `database_key` and
-`database_status` (`drizzle/0014_physical_tenant_databases.sql`). McLink keeps
-using `DATABASE_URL`. A client organization is routed to its own Postgres URL
-through `TENANT_DATABASE_URLS`, keyed by organization ID. The URL is supplied
-through deployment secrets and is never stored in Postgres.
-
-Provision a client with `npm run db:provision:organization` and provide a fresh,
-different `--database-url`. The command applies every migration to that client
-database, creates its local organization and first HR directory account, and
-creates the control-plane membership and credit account. Internal n8n/Vapi
-requests for a client must send `X-Organization-Id`.
+The control-plane `organizations` table still records `database_key` and
+`database_status` (`drizzle/0014_physical_tenant_databases.sql`); both are now
+inert bookkeeping columns, kept only because dropping them buys nothing.
+Internal n8n/Vapi requests for a client must still send `X-Organization-Id`.
 
 The original plan above remains the historical record for the recruitment
-cutover and credits decisions; physical routing does not change RBAC or the
-existing McLink Sheet directory path.
+cutover and credits decisions; tenant isolation does not change RBAC or the
+existing McLink Sheet directory path. Credits are also no longer per-user
+within an organization: migration `0015_org_scoped_credits.sql` consolidated
+`credit_accounts` from `(organization_id, owner_email)` to one row per
+`organization_id`, shared by every user in that org — see
+`src/lib/ella-credits-accounts.ts`.
