@@ -68,6 +68,21 @@ const VOICE_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   in_progress: ["completed", "no_show", "cancelled", "failed"],
   completed: [], no_show: [], cancelled: [], failed: [],
 };
+// Allowed values for voice_call_attempts.outcome, enforced by the
+// voice_call_attempts_outcome_check constraint (drizzle/0006_voice_attempt_
+// dispatch_states.sql). This is a narrower, attempt-level vocabulary than
+// VoiceInterviewBillingOutcome ("completed" | "no_answer" | "incomplete"),
+// which classifies a call for *credit billing* purposes. "incomplete" is a
+// billing-only distinction — the attempt itself still connected and ended,
+// so it maps to the attempt-level "completed" here, matching the mapping
+// settledVoiceAttempt() already uses when settling from a voice result.
+const VOICE_ATTEMPT_OUTCOME_VALUES = new Set(["completed", "no_answer", "busy", "wrong_person", "no_show", "cancelled", "system_failure"]);
+function normalizeVoiceAttemptOutcome(outcome: string | undefined | null): string | null {
+  const value = String(outcome ?? "").trim();
+  if (!value) return null;
+  if (value === "incomplete") return "completed";
+  return VOICE_ATTEMPT_OUTCOME_VALUES.has(value) ? value : null;
+}
 const ROLE_STATUSES = ["draft", "pending_hr_discussion", "approved", "recruitment_setup", "job_posted", "returned_for_revision", "on_hold", "rejected"] as const;
 const RECRUITMENT_SETUP_STATUSES = ["draft", "recruitment_ready", "ready_for_publishing", "published"] as const;
 export type BookingTokenKind = "voice" | "final" | "avatar";
@@ -1001,7 +1016,7 @@ export async function updateVoiceAttemptStatus(input: { attemptId: string; statu
   const db = getDb();
   const previousStatuses = Object.entries(VOICE_STATUS_TRANSITIONS).filter(([, next]) => next.includes(input.status)).map(([status]) => status);
   const allowedWhere = previousStatuses.length > 0 ? sql`status IN (${sql.join(previousStatuses.map((status) => sql`${status}`), sql`, `)})` : sql`false`;
-  const result = await db.execute(sql`UPDATE voice_call_attempts SET status = ${input.status}, outcome = ${input.outcome || null}, provider_call_id = COALESCE(NULLIF(${input.providerCallId || ""}, ''), provider_call_id), retry_after = ${isoOrNull(input.retryAfter)}, updated_at = now() WHERE id = ${input.attemptId} AND (status = ${input.status} OR ${allowedWhere}) RETURNING id`);
+  const result = await db.execute(sql`UPDATE voice_call_attempts SET status = ${input.status}, outcome = ${normalizeVoiceAttemptOutcome(input.outcome)}, provider_call_id = COALESCE(NULLIF(${input.providerCallId || ""}, ''), provider_call_id), retry_after = ${isoOrNull(input.retryAfter)}, updated_at = now() WHERE id = ${input.attemptId} AND (status = ${input.status} OR ${allowedWhere}) RETURNING id`);
   const updated = rowsOf(result).length > 0;
   // The n8n dispatch worker calls Vapi itself and is the only place that ever
   // sees *why* a dispatch failed (a rejected phone number, a provider error,

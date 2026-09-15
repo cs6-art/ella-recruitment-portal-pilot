@@ -98,3 +98,40 @@ test("voice result and log routes expose outcome billing fields", () => {
     assert.match(source, /billingOutcome/);
   }
 });
+
+// Regression for a 2026-09-15 pilot incident: n8n's POST to
+// /voice/attempts/status legitimately sends outcome: "incomplete" (a
+// VoiceInterviewBillingOutcome value, produced by
+// classifyVoiceInterviewBillingOutcome) straight through to
+// updateVoiceAttemptStatus(), which wrote it unmapped into
+// voice_call_attempts.outcome — a column with its own, narrower CHECK
+// constraint that has never allowed "incomplete" (only 'completed',
+// 'no_answer', 'busy', 'wrong_person', 'no_show', 'cancelled',
+// 'system_failure' — see drizzle/0006_voice_attempt_dispatch_states.sql).
+// Every real call had silently gone through the *other* path
+// (settleVoiceAttemptFromResult, which already maps "incomplete" to the
+// attempt-level "completed") until this exact endpoint ran for the first
+// time and threw an unhandled constraint violation. Reproduced directly
+// against the real database with tsx before this fix; confirmed fixed after.
+test("voice attempt outcome is normalized before it reaches the DB CHECK constraint", () => {
+  const queries = readFileSync(new URL("../src/lib/internal-recruitment-queries.ts", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../drizzle/0006_voice_attempt_dispatch_states.sql", import.meta.url), "utf8");
+
+  assert.match(queries, /function normalizeVoiceAttemptOutcome/);
+  assert.match(queries, /if \(value === "incomplete"\) return "completed";/);
+  // The UPDATE must run every outcome through the normalizer, never the raw
+  // caller-supplied value.
+  assert.match(queries, /outcome = \$\{normalizeVoiceAttemptOutcome\(input\.outcome\)\}/);
+  assert.doesNotMatch(queries, /outcome = \$\{input\.outcome \|\| null\}/);
+
+  // Cross-check: every value the code treats as already-valid must actually
+  // be present in the live DB constraint, so a future migration edit that
+  // narrows the allowed set (without updating the code) fails this test
+  // instead of failing silently in production again.
+  const constraintBlock = migration.slice(migration.indexOf("voice_call_attempts_outcome_check"));
+  const allowedInDb = [...constraintBlock.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]);
+  const codeSetMatch = queries.match(/VOICE_ATTEMPT_OUTCOME_VALUES = new Set\(\[([^\]]+)\]\)/);
+  assert.ok(codeSetMatch, "expected VOICE_ATTEMPT_OUTCOME_VALUES to be defined");
+  const allowedInCode = [...codeSetMatch[1].matchAll(/"([a-z_]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(new Set(allowedInCode), new Set(allowedInDb));
+});

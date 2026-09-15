@@ -166,6 +166,67 @@ Related: `updateRoleRequestFields()` appends any column it cannot find. If a
 header name in the code ever drifts from the sheet, the mismatch appears as a new
 column at the far right of `Role_Requests` rather than as an error.
 
+## 8. Voice result webhook pointed at a retired URL with no secret, and a second `outcome` constraint bug it exposed — FIXED
+
+**Status (2026-09-15):** both fixed. n8n's outbound Vapi call node now points
+at the current result webhook and sends its secret; `updateVoiceAttemptStatus`
+now normalizes `outcome` before writing it. See item 7 above for the prompt
+side of this same incident (same applicant, same day).
+
+**Severity:** high — every pilot voice call dispatched between
+2026-09-14T01:01Z and the fix stayed stuck at "Voice Interview Scheduled" /
+call status "In Progress" forever, with no transcript or evaluation ever
+reaching HR.
+
+**Observed.** Applicant `APP-1abbc639-45d6-49dc-80ab-f5b9fb78a499` (Julio UAT
+Test, General Manager) stayed at "Voice Interview Scheduled" / "In Progress"
+long after its call had actually completed.
+
+**Root cause 1 — dead webhook, no secret.** The pilot outbound-call workflow
+(`[TARGET-PG][PILOT] AI Voice Interview Scheduled Calling (Pilot)`,
+`sJM0djTE8oIjpPvo`, node **Call Vapi with n8n credential (Pilot)**) set
+`assistantOverrides.server.url` to a retired webhook path
+(`.../webhook/target-pg-m9hyanrov4tcpfiq`). The live result-webhook workflow
+(`[TARGET-PG][PILOT] Phase 5 - Scheduled Vapi Result Polling (Pilot)`,
+`m4KFJIOIqo1VMc6g`) had since rotated to a different path and its Normalize
+code node silently discards (`return []`, no error) any request whose
+`x-vapi-secret` header doesn't match a fixed value — never sent either. Zero
+successful executions on that webhook from 2026-09-14T01:01:54Z onward
+despite many calls dispatched in that window. **Fix:** the node now sets the
+correct URL and `server.secret`.
+
+**Root cause 2 — a second, previously-unexercised bug this uncovered.**
+Fixing the webhook let real traffic reach `POST
+/api/internal/recruitment/voice/attempts/status` (`updateVoiceAttemptStatus`)
+for the first time with `outcome: "incomplete"` — a legitimate
+`VoiceInterviewBillingOutcome` value n8n sends straight through. That
+function wrote it unmapped into `voice_call_attempts.outcome`, whose CHECK
+constraint (`drizzle/0006_voice_attempt_dispatch_states.sql`) has never
+allowed `"incomplete"` (only `completed`, `no_answer`, `busy`,
+`wrong_person`, `no_show`, `cancelled`, `system_failure`) — a 500,
+masked as a generic `{"error":"internal_error"}` by `withInternalAuth`'s
+catch-all. The sibling function `settleVoiceAttemptFromResult` (used by
+`/voice/results`, which is why it never hit this) already maps
+`"incomplete"` billing outcome to the attempt-level `"completed"` outcome —
+`updateVoiceAttemptStatus` just never got the same treatment. Reproduced
+locally against the real database with `tsx` (`DrizzleQueryError` ->
+`23514 violates check constraint "voice_call_attempts_outcome_check"`)
+before fixing it, and confirmed fixed after.
+
+**Fix.** `normalizeVoiceAttemptOutcome()` (`src/lib/internal-recruitment-
+queries.ts`) now maps `"incomplete"` to `"completed"` and drops anything else
+not in the DB's allowed set, and `updateVoiceAttemptStatus`'s UPDATE routes
+every `outcome` through it. `tests/voice-credit-outcomes.test.mjs` adds a
+regression test that also cross-checks the code's allowed-values set against
+the actual CHECK constraint SQL, so a future migration change that narrows
+the constraint without updating the code fails the test suite instead of
+failing silently in production again.
+
+**Also recovered:** Julio's specific stuck call was backfilled from Vapi's
+real call record (a 5-second call, `customer-ended-call`, transcript "Hi." —
+not a real interview, but real data instead of a permanently empty "Awaiting
+AI evaluation").
+
 ## 7. Pilot voice calls ran under the wrong Vapi assistant prompt — FIXED
 
 **Status (2026-09-14):** fixed the same day it was found. The portal now
