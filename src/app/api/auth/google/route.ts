@@ -90,10 +90,10 @@ export async function POST(request: Request) {
 
     // The directory, not the Google hosted domain, is the access boundary.
     // Sheet rows belong to the default tenant; Postgres rows carry their own
-    // tenant. Existing memberships take precedence so a stale duplicate row
-    // cannot move a user into a different organization.
+    // tenant. Only an active Sheet row claims McLink's default tenant, so a
+    // deactivated legacy row can fall through to an active client membership.
     const sheetDirectoryUser = await findDirectoryUser(normalizedEmail);
-    let organizationId = await resolveOrganizationForLogin(normalizedEmail, Boolean(sheetDirectoryUser));
+    let organizationId = await resolveOrganizationForLogin(normalizedEmail, sheetDirectoryUser?.active === true);
     let directoryUser = sheetDirectoryUser;
 
     if (!organizationId || organizationId !== DEFAULT_ORGANIZATION_ID || !directoryUser) {

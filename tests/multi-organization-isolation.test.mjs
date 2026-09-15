@@ -56,6 +56,11 @@ test("client organizations can log in without a row in McLink's own user directo
   assert.match(directory, /eq\(users\.organizationId, organizationId\)/);
 });
 
+test("deactivated McLink identities can resolve to an active client tenant", () => {
+  const auth = read("src/app/api/auth/google/route.ts");
+  assert.match(auth, /sheetDirectoryUser\?\.active === true/);
+});
+
 test("user identities are unique within a tenant and McLink login wins for shared test identities", () => {
   const schema = read("src/db/schema-recruitment.ts");
   const migration = read("drizzle/0016_tenant_user_identity.sql");
