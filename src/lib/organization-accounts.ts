@@ -63,16 +63,18 @@ export async function syncOrganizationMembership(input: {
           target: [organizationMemberships.organizationId, organizationMemberships.email],
           set: { active: input.active, updatedAt: new Date() },
         });
+      // One shared balance per organization (migration 0015) -- ensure the
+      // org's single row exists; it is not keyed by which user logged in.
       if (organizationId === DEFAULT_ORGANIZATION_ID) {
         await tx
           .insert(creditAccounts)
-          .values({ organizationId, ownerEmail: email, balance: 0 })
-          .onConflictDoNothing({ target: [creditAccounts.organizationId, creditAccounts.ownerEmail] });
+          .values({ organizationId, ownerEmail: "org", balance: 0 })
+          .onConflictDoNothing({ target: creditAccounts.organizationId });
       }
     });
     if (organizationId !== DEFAULT_ORGANIZATION_ID) {
       await runWithTenantDatabase(organizationId, async () => {
-        await getTenantDb().insert(creditAccounts).values({ organizationId, ownerEmail: email, balance: 0 }).onConflictDoNothing({ target: [creditAccounts.organizationId, creditAccounts.ownerEmail] });
+        await getTenantDb().insert(creditAccounts).values({ organizationId, ownerEmail: "org", balance: 0 }).onConflictDoNothing({ target: creditAccounts.organizationId });
       });
     }
   } catch (error) {

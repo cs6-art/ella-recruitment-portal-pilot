@@ -529,7 +529,6 @@ export async function copyScreeningResult(input: { sourceApplicationId: string; 
       if (perUserCreditsEnabled()) {
         await appendAccountLedgerEntryOnExecutor(tx, {
           organizationId: target.organizationId,
-          ownerEmail: target.creditOwnerEmail,
           entry: input.ledger,
         }, { guard: true });
       } else {
@@ -843,7 +842,7 @@ export async function upsertScreeningResult(input: { applicationExternalId: stri
           sourceEntryId: `LDG-${crypto.createHash("sha256").update(`cv:${input.applicationExternalId}`).digest("hex")}`,
         };
         credit = perUserCreditsEnabled()
-          ? await appendAccountLedgerEntryOnExecutor(tx, { organizationId: application.organizationId, ownerEmail: application.creditOwnerEmail, entry: ledger }, { guard: true })
+          ? await appendAccountLedgerEntryOnExecutor(tx, { organizationId: application.organizationId, entry: ledger }, { guard: true })
           : await appendPostgresLedgerEntryOnExecutor(tx, ledger, { guard: true });
       }
     await tx.insert(applicationStatusHistory).values({
@@ -1474,7 +1473,7 @@ export async function finalizeBulkScreening(input: {
     if (!result) return { processed: false, duplicate: true, error: null };
 
     const credit = perUserCreditsEnabled()
-      ? await appendAccountLedgerEntryOnExecutor(tx, { organizationId: application.organizationId, ownerEmail: application.creditOwnerEmail, entry: input.ledger }, { guard: true })
+      ? await appendAccountLedgerEntryOnExecutor(tx, { organizationId: application.organizationId, entry: input.ledger }, { guard: true })
       : await appendPostgresLedgerEntryOnExecutor(tx, input.ledger, { guard: true });
     const actionRequestId = `screening:${input.dedupeKey.trim()}`;
     await tx.insert(applicationStatusHistory).values({

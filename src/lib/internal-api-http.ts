@@ -47,7 +47,7 @@ export function withInternalAuth(
     if (!authorization.allowed) return internalJson({ ok: false, error: authorization.error }, authorization.status);
     try {
       const organizationId = request.headers.get("x-organization-id")?.trim() || DEFAULT_ORGANIZATION_ID;
-      if (!isTenantDatabaseConfigured(organizationId)) return internalConfigurationFailure("tenant_database_not_configured");
+      if (!isTenantDatabaseConfigured()) return internalConfigurationFailure("tenant_database_not_configured");
       return await runWithTenantDatabase(organizationId, () => handler(request));
     } catch (error) {
       console.error(`[Internal API ${entity}] handler failed:`, error);

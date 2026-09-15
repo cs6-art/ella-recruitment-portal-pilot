@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     const input = organizationSchema.parse(await request.json());
     if (input.slug === "mclinkgroup") return errorResponse("The McLink organization already exists.", 409);
     const [organization] = await getDb().insert(organizations).values({ id: randomUUID(), name: input.name, slug: input.slug, databaseKey: input.slug, databaseStatus: "shared", active: input.active }).returning({ id: organizations.id, name: organizations.name, slug: organizations.slug, databaseKey: organizations.databaseKey, databaseStatus: organizations.databaseStatus, active: organizations.active });
-    return NextResponse.json({ success: true, organization, message: "Organization created in shared-database mode. You can add users now; a separate database can be attached later." }, { status: 201, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ success: true, organization, message: "Organization created. Add its first user now -- roles, applicants, and credits start empty and are fully isolated from every other organization." }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof z.ZodError) return errorResponse(error.issues[0]?.message || "Enter a valid organization name and slug.", 400);
     if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "23505") return errorResponse("An organization with that slug already exists.", 409);

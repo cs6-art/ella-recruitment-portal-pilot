@@ -73,14 +73,16 @@ async function mirrorToPostgres(entry: LedgerAppend): Promise<void> {
 
 // --- Reads --------------------------------------------------------------------
 
+// `ownerEmail` is kept on the scope only for actor attribution on the ledger
+// entry -- since migration 0015 the credit balance itself is keyed on
+// `organizationId` alone, shared by every user in the organization.
 type CreditScope = { organizationId?: string; ownerEmail?: string };
 
 function accountScope(scope: CreditScope) {
   if (!perUserCreditsEnabled()) return null;
   const organizationId = scope.organizationId?.trim();
-  const ownerEmail = scope.ownerEmail?.trim().toLowerCase();
-  if (!organizationId || !ownerEmail) throw new Error("An organization and owner are required for per-user credits.");
-  return { organizationId, ownerEmail };
+  if (!organizationId) throw new Error("An organization is required for org-scoped credits.");
+  return { organizationId };
 }
 
 export async function getCreditBalance(options: { fresh?: boolean } & CreditScope = {}): Promise<CreditBalance> {
@@ -166,7 +168,7 @@ export async function assertCreditsAvailable(units: number, event: CreditEvent, 
 async function append(entry: LedgerAppend, opts: { guard: boolean }, scope: CreditScope = {}): Promise<{ balanceAfter: number }> {
   const account = accountScope(scope);
   if (account) {
-    const { balanceAfter } = await runWithTenantDatabase(account.organizationId, () => appendAccountLedgerEntry({ ...account, entry }, opts));
+    const { balanceAfter } = await runWithTenantDatabase(account.organizationId, () => appendAccountLedgerEntry({ organizationId: account.organizationId, entry }, opts));
     return { balanceAfter };
   }
   const backend = creditsBackend();

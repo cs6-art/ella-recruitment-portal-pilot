@@ -40,9 +40,10 @@ function directoryUserFromRow(row: {
  * for a non-default organization, i.e. a client tenant that has no Sheet row and
  * never will. It intentionally does not touch, replace, or race the Sheet path.
  *
- * A client's first HR account is provisioned by
- * `npm run db:provision:organization` (src/db/provision-client-organization.mjs),
- * which writes the matching `users` row this reads.
+ * A client's first HR account (and every account after it) is created the
+ * same way as any McLink account: via the Directory accounts UI in Settings
+ * (`/api/user-directory`, `upsertPostgresDirectoryUser` below) once a
+ * platform admin has created the organization itself (`/api/organizations`).
  */
 export async function findPostgresDirectoryUser(email: string, organizationId: string): Promise<DirectoryUser | null> {
   if (!isDatabaseConfigured()) return null;
