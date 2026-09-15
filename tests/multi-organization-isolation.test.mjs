@@ -56,6 +56,19 @@ test("client organizations can log in without a row in McLink's own user directo
   assert.match(directory, /eq\(users\.organizationId, organizationId\)/);
 });
 
+test("user identities are unique within a tenant and McLink login wins for shared test identities", () => {
+  const schema = read("src/db/schema-recruitment.ts");
+  const migration = read("drizzle/0016_tenant_user_identity.sql");
+  const directory = read("src/lib/postgres-directory.ts");
+  const orgs = read("src/lib/organization-accounts.ts");
+  assert.doesNotMatch(schema, /email: text\("email"\)\.notNull\(\)\.unique\(\)/);
+  assert.match(schema, /users_organization_email_uidx/);
+  assert.match(migration, /DROP CONSTRAINT IF EXISTS "users_email_key"/);
+  assert.match(migration, /ON "users" \("organization_id", "email"\)/);
+  assert.match(directory, /eq\(users\.organizationId, organizationId\)/);
+  assert.match(orgs, /if \(hasDefaultDirectoryUser\) return DEFAULT_ORGANIZATION_ID/);
+});
+
 test("a new organization and its first user are self-service, no separate database needed", () => {
   const organizationsRoute = read("src/app/api/organizations/route.ts");
   const orgs = read("src/lib/organization-accounts.ts");

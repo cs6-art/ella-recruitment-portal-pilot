@@ -15,13 +15,15 @@ export async function findActiveOrganizationMembership(email: string) {
   if (!isDatabaseConfigured()) return null;
   const db = getDb();
   try {
-    const [membership] = await db
+    const memberships = await db
       .select({ organizationId: organizationMemberships.organizationId, organizationActive: organizations.active })
       .from(organizationMemberships)
       .innerJoin(organizations, eq(organizations.id, organizationMemberships.organizationId))
       .where(and(eq(organizationMemberships.email, normalizedEmail(email)), eq(organizationMemberships.active, true), eq(organizations.active, true)))
-      .limit(1);
-    return membership ?? null;
+      .limit(2);
+    // A client identity must not be assigned to an arbitrary tenant when it
+    // has active memberships in more than one organization.
+    return memberships.length === 1 ? memberships[0] : null;
   } catch (error) {
     // The membership table is introduced by the opt-in migration. Login must
     // retain the legacy behaviour until that migration is deliberately run.
@@ -93,9 +95,13 @@ export async function syncOrganizationMembership(input: {
  * a Postgres directory row supplies its own tenant in the auth route.
  */
 export async function resolveOrganizationForLogin(email: string, hasDefaultDirectoryUser: boolean) {
+  // McLink's legacy Sheet directory is the canonical login source for its
+  // staff. This is also deterministic when a person is invited into a client
+  // organization with the same Google identity for testing or consulting.
+  if (hasDefaultDirectoryUser) return DEFAULT_ORGANIZATION_ID;
   const membership = await findActiveOrganizationMembership(email);
   if (membership) return membership.organizationId;
-  return hasDefaultDirectoryUser ? DEFAULT_ORGANIZATION_ID : null;
+  return null;
 }
 
 export function isDefaultOrganization(organizationId: string | undefined) {

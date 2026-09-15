@@ -109,10 +109,9 @@ export async function upsertPostgresDirectoryUser(organizationId: string, user: 
   const db = getTenantDb();
   const email = user.email.trim().toLowerCase();
   const previousEmail = originalEmail?.trim().toLowerCase();
-  const [existingEmail] = await db.select({ id: users.id, organizationId: users.organizationId }).from(users).where(eq(users.email, email)).limit(1);
-  if (existingEmail && existingEmail.organizationId !== organizationId) throw new Error("The email already belongs to another organization.");
+  const [existingEmail] = await db.select({ id: users.id, organizationId: users.organizationId }).from(users).where(and(eq(users.email, email), eq(users.organizationId, organizationId))).limit(1);
   const [existing] = previousEmail
-    ? await db.select({ id: users.id, organizationId: users.organizationId }).from(users).where(eq(users.email, previousEmail)).limit(1)
+    ? await db.select({ id: users.id, organizationId: users.organizationId }).from(users).where(and(eq(users.email, previousEmail), eq(users.organizationId, organizationId))).limit(1)
     : [];
   if (previousEmail && (!existing || existing.organizationId !== organizationId)) throw new Error("The account being edited no longer exists.");
   if (!previousEmail && existingEmail) throw new Error("An account already exists for that email address.");
@@ -157,10 +156,9 @@ export async function upsertPostgresDirectoryUser(organizationId: string, user: 
 /**
  * Find a directory row by identity when the membership mirror is missing.
  * The users table is itself a tenant-scoped directory, so an active
- * organization row is required before it can grant access. The current
- * schema keeps user email globally unique; limiting this query to one row
- * also fails closed if that invariant is ever relaxed without adding tenant
- * selection to the session model.
+ * organization row is required before it can grant access. If an identity
+ * belongs to multiple client organizations, login must select a tenant before
+ * this fallback can safely choose a directory row; returning null fails closed.
  */
 export async function findPostgresDirectoryUserByEmail(email: string): Promise<{ organizationId: string; user: DirectoryUser } | null> {
   if (!isDatabaseConfigured()) return null;

@@ -950,13 +950,28 @@ a { color: inherit; text-decoration: none; }
 .settings-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 22px; padding-bottom: 12px; color: var(--muted); font-size: 12px; }
 @media (max-width: 700px) { .settings-header { align-items: flex-start; flex-direction: column; } .settings-grid { grid-template-columns: 1fr; padding: 18px; } .settings-actions { align-items: flex-start; flex-direction: column; } .settings-integration-grid { grid-template-columns: 1fr; padding: 18px; } }
 
+.user-accounts-page { --user-account-card-padding: 24px; }
 .user-accounts-header { align-items: flex-end; }
 .user-accounts-header .eyebrow-dark { display: block; margin-bottom: 8px; }
-.user-accounts-guide { margin-bottom: 22px; }
+.user-accounts-header > div { min-width: 0; }
+.user-accounts-header p { max-width: 680px; line-height: 1.5; }
+.user-accounts-guide { margin-bottom: 24px; }
+.user-accounts-guide > div { min-width: 0; }
+.user-accounts-guide p { max-width: 100%; }
 .user-account-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }
-.user-account-stats .stat-card { display: grid; gap: 6px; padding: 18px 20px; }
+.user-account-stats .stat-card { display: grid; align-content: space-between; gap: 12px; min-height: 108px; padding: 18px 20px; }
 .user-account-stats .stat-card span { color: var(--muted); font-size: 12px; }
 .user-account-stats .stat-card strong { color: var(--navy); font-size: 28px; line-height: 1; }
+.organization-admin-card { margin-top: 0; }
+.organization-card-header, .directory-card-header { align-items: flex-start; gap: 24px; }
+.organization-card-heading, .directory-card-heading { min-width: 0; }
+.organization-card-heading p, .directory-card-heading p { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.organization-card-heading p { max-width: 760px; }
+.organization-admin-card > .table-wrap { margin-top: 0; }
+.organization-admin-card .user-account-table { min-width: 660px; }
+.organization-admin-card .user-account-table th:last-child, .organization-admin-card .user-account-table td:last-child { width: 130px; text-align: right; }
+.organization-admin-card .user-account-table td { vertical-align: middle; }
+.organization-card-note { display: block; margin: 0; padding: 16px var(--user-account-card-padding) 20px; color: var(--muted); font-size: 13px; line-height: 1.55; }
 .user-account-modal-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(10, 31, 50, .48); backdrop-filter: blur(3px); }
 .user-account-modal-backdrop .user-account-form-card { width: min(720px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; margin-top: 0; box-shadow: 0 24px 80px rgba(5, 37, 68, .28); }
 .user-account-list-card { margin-top: 22px; }
@@ -971,20 +986,36 @@ a { color: inherit; text-decoration: none; }
 .user-account-table { min-width: 920px; }
 .user-account-table td:first-child { display: grid; gap: 4px; }
 .user-account-table td:first-child span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.user-account-table td { vertical-align: middle; }
 .user-account-status { display: inline-flex; width: fit-content; padding: 5px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; }
 .user-account-status.is-active { color: #137653; background: #e8f7ef; }
 .user-account-status.is-inactive { color: #7b5a1c; background: #fff4d6; }
 .user-account-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.directory-card-actions { display: flex; align-items: flex-end; justify-content: flex-end; flex: 0 0 auto; gap: 10px; }
+.user-account-organization-picker { width: min(230px, 34vw); min-width: 180px; gap: 6px; }
+.user-account-organization-picker label { color: var(--navy); font-size: 12px; font-weight: 800; }
+.user-account-organization-picker select { width: 100%; min-height: 42px; padding: 0 34px 0 12px; border: 1px solid #cbd9e7; border-radius: 9px; background: #fff; color: var(--navy); }
+.directory-refresh-button { min-width: 96px; min-height: 42px; }
 .btn-small { min-height: 34px; padding: 7px 11px; font-size: 12px; }
 .btn-danger-outline { color: #a12b22; border: 1px solid #e6a09a; background: #fff; }
 .btn-danger-outline:hover { color: #fff; border-color: #b4382f; background: #b4382f; }
 @media (max-width: 760px) {
   .user-accounts-header { align-items: flex-start; flex-direction: column; gap: 16px; }
   .user-account-stats { grid-template-columns: 1fr; }
+  .organization-card-header, .directory-card-header { flex-direction: column; gap: 16px; }
+  .organization-card-header > .btn { width: 100%; }
+  .directory-card-actions { width: 100%; justify-content: stretch; }
+  .user-account-organization-picker { width: auto; flex: 1 1 auto; }
+  .directory-refresh-button { flex: 0 0 auto; }
   .user-account-form { grid-template-columns: 1fr; padding: 18px; }
   .user-account-permissions { grid-template-columns: 1fr; }
   .user-account-form-actions { justify-content: stretch; }
   .user-account-form-actions .btn { width: 100%; }
+}
+@media (max-width: 480px) {
+  .directory-card-actions { align-items: stretch; flex-direction: column; }
+  .user-account-organization-picker { width: 100%; }
+  .directory-refresh-button { width: 100%; }
 }
 @media (max-width: 600px) { .booking-card { padding: 24px 20px; } .booking-slot-grid { grid-template-columns: 1fr; } .applicant-decision-row { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 620px) { .vapi-suggested-questions li { grid-template-columns: 28px minmax(0, 1fr); } .vapi-suggested-questions li .btn { grid-column: 2; justify-self: start; } }

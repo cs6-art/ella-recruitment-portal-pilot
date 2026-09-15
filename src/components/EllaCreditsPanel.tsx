@@ -49,6 +49,7 @@ const eventLabels: Record<string, string> = {
 };
 
 const nf = new Intl.NumberFormat("en-US");
+const ACTIVITY_PAGE_SIZE = 10;
 
 function formatWhen(value: string) {
   const time = Date.parse(value);
@@ -64,6 +65,7 @@ export default function EllaCreditsPanel() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [message, setMessage] = useState("");
+  const [activityPage, setActivityPage] = useState(1);
 
   async function load() {
     try {
@@ -117,6 +119,10 @@ export default function EllaCreditsPanel() {
   const balance = data?.balance ?? 0;
   const pricing = data?.pricing;
   const headlineTone = balance <= 0 ? styles.empty : balance < 50 ? styles.low : "";
+  const activityTotalPages = data ? Math.max(1, Math.ceil(data.entries.length / ACTIVITY_PAGE_SIZE)) : 1;
+  const visibleActivityPage = Math.min(activityPage, activityTotalPages);
+  const activityStart = (visibleActivityPage - 1) * ACTIVITY_PAGE_SIZE;
+  const visibleEntries = data?.entries.slice(activityStart, activityStart + ACTIVITY_PAGE_SIZE) ?? [];
 
   return (
     <section className={`card ${styles.panel}`}>
@@ -170,7 +176,7 @@ export default function EllaCreditsPanel() {
           ? <p className={styles.empty}>No credit activity yet. Add a starting balance above to begin.</p>
           : <div className={styles.tableWrap}><table className={styles.table}>
             <thead><tr><th>When</th><th>Event</th><th>Change</th><th>Balance</th><th>Reference</th><th>By</th></tr></thead>
-            <tbody>{data.entries.map((entry) => (
+            <tbody>{visibleEntries.map((entry) => (
               <tr key={entry.entryId}>
                 <td>{formatWhen(entry.timestamp)}</td>
                 <td>{eventLabels[entry.event] || entry.event}{entry.note ? ` — ${entry.note}` : ""}</td>
@@ -181,6 +187,12 @@ export default function EllaCreditsPanel() {
               </tr>
             ))}</tbody>
           </table></div>}
+        {data.entries.length > ACTIVITY_PAGE_SIZE && <div className={styles.pagination} aria-label="Credit activity pagination">
+          <span>Showing {activityStart + 1}–{Math.min(activityStart + ACTIVITY_PAGE_SIZE, data.entries.length)} of {data.entries.length}</span>
+          <button type="button" className="btn btn-secondary btn-small" disabled={visibleActivityPage === 1} onClick={() => setActivityPage((current) => Math.max(1, current - 1))}>Previous</button>
+          <span>Page {visibleActivityPage} of {activityTotalPages}</span>
+          <button type="button" className="btn btn-secondary btn-small" disabled={visibleActivityPage === activityTotalPages} onClick={() => setActivityPage((current) => Math.min(activityTotalPages, current + 1))}>Next</button>
+        </div>}
       </>}
     </section>
   );

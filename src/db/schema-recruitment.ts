@@ -28,7 +28,7 @@ export const users = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     organizationId: uuid("organization_id").notNull().references(() => organizations.id),
-    email: text("email").notNull().unique(),
+    email: text("email").notNull(),
     fullName: text("full_name").notNull().default(""),
     accessRole: text("access_role").notNull().default(""),
     departmentId: uuid("department_id").references(() => departments.id),
@@ -42,7 +42,7 @@ export const users = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
     updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
   },
-  (t) => [index("users_active_idx").on(t.active), index("users_department_id_idx").on(t.departmentId)],
+  (t) => [index("users_active_idx").on(t.active), index("users_department_id_idx").on(t.departmentId), uniqueIndex("users_organization_email_uidx").on(t.organizationId, t.email)],
 );
 
 export const oauthConnections = pgTable("oauth_connections", {

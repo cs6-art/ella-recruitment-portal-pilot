@@ -32,3 +32,11 @@ test("the purchase UI is separate from manual credit management", () => {
   assert.match(panel, /\/api\/ella-credits/);
   assert.match(read("src/app/credits/page.tsx"), /canManage && <EllaCreditsPanel \/>/);
 });
+
+test("credit activity is paginated in the UI", () => {
+  const panel = read("src/components/EllaCreditsPanel.tsx");
+  assert.match(panel, /ACTIVITY_PAGE_SIZE = 10/);
+  assert.match(panel, /visibleEntries = data\?\.entries\.slice\(activityStart/);
+  assert.match(panel, /Credit activity pagination/);
+  assert.match(panel, /Showing \{activityStart \+ 1\}/);
+});

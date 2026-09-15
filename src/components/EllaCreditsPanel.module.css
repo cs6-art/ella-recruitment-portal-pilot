@@ -100,6 +100,7 @@
 
 .empty { margin: 0; padding: 4px 22px 22px; color: var(--muted, #5e6b78); font-size: 13px; }
 .loading { padding: 22px; color: var(--muted, #5e6b78); }
+.pagination { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; padding: 0 22px 20px; color: #5b6f83; font-size: 12px; font-weight: 700; }
 
 @media (max-width: 700px) {
   .stats { grid-template-columns: 1fr; }
