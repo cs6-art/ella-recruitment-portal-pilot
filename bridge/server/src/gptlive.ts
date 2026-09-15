@@ -131,6 +131,7 @@ export class GptLiveBridge {
   private ws: WebSocket | null = null;
   private sessionId: string | null = null;
   private closedByServer: (() => void) | null = null;
+  private stopping = false;
 
   private readonly turns: TurnProjector;
   // call_ids already answered. Tool calls are driven only from the nested
@@ -177,7 +178,9 @@ export class GptLiveBridge {
           this.log("gptlive error: malformed event");
         }
       });
-      ws.on("error", (err) => this.events.onError(err.message));
+      ws.on("error", (err) => {
+        if (!this.stopping) this.events.onError(err.message);
+      });
       ws.on("close", () => {
         this.ws = null;
         this.turns.dispose();
@@ -220,6 +223,7 @@ export class GptLiveBridge {
    * the transport itself — the timeout is for a session that will not close.
    */
   async close(): Promise<void> {
+    this.stopping = true;
     const ws = this.ws;
     if (!ws) return;
     // Listener installed before the command goes out, per the guide.
@@ -396,7 +400,7 @@ export class GptLiveBridge {
         // The whole payload, not just the message: a rejected command's error
         // carries code/param/client_event_id that say WHICH send was wrong.
         this.log(`gptlive error: ${JSON.stringify(event).slice(0, 600)}`);
-        this.events.onError(String(event.error?.message ?? "GPT-Live error"));
+        if (!this.stopping) this.events.onError(String(event.error?.message ?? "GPT-Live error"));
         break;
 
       default:

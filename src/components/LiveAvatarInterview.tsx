@@ -71,23 +71,33 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       if (!tokenResponse.ok || !tokenBody?.success) throw new Error(tokenBody?.error || "Ella isn't available right now.");
 
       if (tokenBody.mode === "VERCEL_BRIDGE") {
+        const reportBridgeError = (message: string) => {
+          setError(message);
+          setState("error");
+          bridgeSocketRef.current?.close();
+        };
         bridgeSessionRef.current = true;
         vercelBridgeRef.current = true;
         bridgeSocketRef.current = openVercelBridgeSocket(tokenBody.sessionToken, {
           onStarted: ({ sessionId, livekitUrl, livekitClientToken }) => {
             sessionIdRef.current = sessionId;
-            void joinBridgeRoom(livekitUrl, livekitClientToken, videoRef.current!)
+            const video = videoRef.current;
+            if (!video) {
+              reportBridgeError("Avatar video could not be initialized. Please try again.");
+              return;
+            }
+            void joinBridgeRoom(livekitUrl, livekitClientToken, video)
               .then((disconnect) => { bridgeRoomRef.current = disconnect; })
-              .catch((caught) => setError(caught instanceof Error ? `Avatar video unavailable: ${caught.message}` : "Avatar video unavailable."));
+              .catch((caught) => reportBridgeError(caught instanceof Error ? `Avatar video unavailable: ${caught.message}` : "Avatar video unavailable."));
           },
           onReady: () => {
             setState("live");
             void startBridgeMicCapture((audio) => bridgeSocketRef.current?.sendMicAudio(audio))
               .then((capture) => { bridgeMicRef.current = capture; })
-              .catch((caught) => setError(caught instanceof Error ? `Microphone unavailable: ${caught.message}` : "Microphone unavailable."));
+              .catch((caught) => reportBridgeError(caught instanceof Error ? `Microphone unavailable: ${caught.message}` : "Microphone unavailable."));
           },
           onTurn: (turn) => { if (turn.role === "user" && turn.text) setLastResponse(turn.text); },
-          onError: (message) => setError(message),
+          onError: reportBridgeError,
           onClose: () => { if (!endingRef.current) setState("ended"); },
         });
         setState("connecting");
@@ -95,6 +105,11 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       }
 
       if (tokenBody.mode === "BRIDGE") {
+        const reportBridgeError = (message: string) => {
+          setError(message);
+          setState("error");
+          bridgeSocketRef.current?.close();
+        };
         bridgeSessionRef.current = true;
         vercelBridgeRef.current = false;
         sessionIdRef.current = typeof tokenBody.sessionId === "string" ? tokenBody.sessionId : "";
@@ -104,10 +119,10 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
             setState("live");
             void startBridgeMicCapture((audio) => bridgeSocketRef.current?.sendMicAudio(audio))
               .then((capture) => { bridgeMicRef.current = capture; })
-              .catch((caught) => setError(caught instanceof Error ? `Microphone unavailable: ${caught.message}` : "Microphone unavailable."));
+              .catch((caught) => reportBridgeError(caught instanceof Error ? `Microphone unavailable: ${caught.message}` : "Microphone unavailable."));
           },
           onTurn: (turn) => { if (turn.role === "user" && turn.text) setLastResponse(turn.text); },
-          onError: (message) => setError(message),
+          onError: reportBridgeError,
           onClose: () => { if (!endingRef.current) setState("ended"); },
         });
         setState("connecting");
