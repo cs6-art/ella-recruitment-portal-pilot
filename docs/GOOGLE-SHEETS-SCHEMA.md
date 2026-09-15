@@ -222,22 +222,14 @@ workflow. Columns used by the portal:
 `Voice_Call_Max_Attempts`, `Voice_Call_Scheduled_At`, `Last_Updated`.
 
 `Voice_Call_Status` lifecycle: `Scheduled` → `Queued` → `Calling` /
-`Initiated` / `In Progress` → `Completed`, or `Retry Scheduled` (a missed call
-with attempts remaining) → eventually `No Show` (terminal) or `Cancelled`
-(rebooked / superseded).
+`Initiated` / `In Progress` → `Completed`, or `No Show` / `Cancelled`.
 
-**Attempt 1–N retry lifecycle (URS Phase 1).** The portal sets
-`Voice_Call_Max_Attempts` from Settings (`Voice_Call_Max_Attempts`, default 3)
-when it creates the row. When a call is missed and
-`Voice_Call_Attempts < Voice_Call_Max_Attempts`, the portal (via the manual
-"Mark No Show" action or the automatic past-day sweep) increments
-`Voice_Call_Attempts`, sets `Voice_Call_Status = Retry Scheduled`, and pushes
-`Voice_Call_Scheduled_At` forward by `Voice_Call_Retry_Gap_Hours` (default 24).
-Only when the attempts are exhausted does it become a terminal `No Show`
-(`Interview_Slots.Status = No Show`, `High_Match_Profile` voice status
-`No Show`), at which point the candidate may rebook with the original link.
-The n8n calling workflow must honour `Voice_Call_Max_Attempts > 1` and re-call
-at `Voice_Call_Scheduled_At` for a `Retry Scheduled` row.
+**Human-controlled rebooking.** An unanswered or incomplete call closes the
+current booking as `No Show`; it never creates a future retry or places an
+unprompted callback. HR must choose **Send booking link** in the applicant's
+Voice Interview Review. The portal revokes the old booking token, creates a
+fresh expiring link, and queues the invitation email. A new call attempt is
+created only after the candidate uses that link to select a new time.
 
 ## Drive_Connections
 

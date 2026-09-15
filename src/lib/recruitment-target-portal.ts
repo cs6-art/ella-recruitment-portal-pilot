@@ -672,6 +672,44 @@ export async function targetRecordApplicantDecision(input: { applicationId: stri
   return result;
 }
 
+export async function targetSendVoiceBookingInvitation(input: { applicationId: string; reviewer: { name: string; email: string } }) {
+  const row = await getApplication(input.applicationId);
+  if (!row || rowOrganizationId(row.application) !== await targetOrganizationId()) throw new Error("Applicant not found.");
+  const review = await applicationVoiceReview(input.applicationId);
+  const attempt = review?.attempt;
+  const result = review?.result;
+  const outcome = attempt || result
+    ? classifyVoiceInterviewBillingOutcome({
+        outcome: text(attempt?.outcome),
+        callStatus: text(result?.callStatus),
+        callFinalStatus: text(result?.callFinalStatus),
+        transcript: text(result?.transcript),
+      })
+    : null;
+  const attemptStatus = text(attempt?.status).toLowerCase();
+  if (["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "retry_scheduled"].includes(attemptStatus)) {
+    throw new Error("A voice interview is still scheduled or in progress.");
+  }
+  const retryable = outcome === "no_answer" || outcome === "incomplete"
+    || /no[_ -]?show|no[_ -]?answer|incomplete|not connected|voicemail|busy|declined|cancelled/i.test(`${attemptStatus} ${text(attempt?.outcome)} ${text(result?.callStatus)} ${text(result?.callFinalStatus)}`);
+  if (!retryable) throw new Error("A new booking link is available only after an unanswered or incomplete voice interview.");
+  const expiryDays = await getPortalConfigNumber("Booking_Link_Expiry_Days", 7);
+  const expiresAt = new Date(Date.now() + Math.max(1, Math.min(30, expiryDays)) * 24 * 60 * 60 * 1000).toISOString();
+  const invitation = await createBookingToken({
+    applicationExternalId: input.applicationId,
+    kind: "voice",
+    expiresAt,
+    forceNew: true,
+  });
+  if (!invitation.token) throw new Error(invitation.error || "Unable to create the voice interview booking invitation.");
+  return {
+    bookingLink: invitation.token.link,
+    notificationHistoryId: invitation.notificationHistoryId,
+    notificationQueued: Boolean(invitation.notificationHistoryId),
+    sentBy: input.reviewer.email,
+  };
+}
+
 export async function targetCreateScreeningInvitation(input: { roleId: string; candidateEmail: string; createdBy: string; expiresAt?: string; organizationId?: string }) {
   const token = crypto.randomBytes(32).toString("hex");
   const create = () => createScreeningInvitation({ roleExternalId: input.roleId, tokenHash: crypto.createHash("sha256").update(token).digest("hex"), email: input.candidateEmail, createdBy: input.createdBy, expiresAt: input.expiresAt });

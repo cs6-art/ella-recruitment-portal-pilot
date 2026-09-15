@@ -21,6 +21,8 @@ type Props = {
   finalStatus: string;
   finalComments: string;
   finalBookingLink: string;
+  voiceBookingLink: string;
+  voiceRetryEligible: boolean;
   canReview: boolean;
 };
 
@@ -53,11 +55,11 @@ function reviewStage(props: Props): Stage {
   return "resume";
 }
 
-function CompletedDecision({ title, decision, comments, link }: { title: string; decision: string; comments: string; link?: string }) {
-  return <div className="applicant-completed-decision"><div className="applicant-decision-title"><strong>{title}</strong><span className={`applicant-decision-badge ${isRejectedDecision(decision) ? "is-rejected" : ""}`}>{applicantDecisionLabel(decision)}</span></div>{link && <a className="applicant-booking-link" href={link} target="_blank" rel="noreferrer">Open Face-to-Face Interview Booking Link</a>}{comments ? <div className="applicant-completed-comments"><span>Comments</span><p>{comments}</p></div> : <p className="applicant-completed-empty">No comments were recorded for this decision.</p>}</div>;
+function CompletedDecision({ title, decision, comments, link, linkLabel = "Open Face-to-Face Interview Booking Link" }: { title: string; decision: string; comments: string; link?: string; linkLabel?: string }) {
+  return <div className="applicant-completed-decision"><div className="applicant-decision-title"><strong>{title}</strong><span className={`applicant-decision-badge ${isRejectedDecision(decision) ? "is-rejected" : ""}`}>{applicantDecisionLabel(decision)}</span></div>{link && <a className="applicant-booking-link" href={link} target="_blank" rel="noreferrer">{linkLabel}</a>}{comments ? <div className="applicant-completed-comments"><span>Comments</span><p>{comments}</p></div> : <p className="applicant-completed-empty">No comments were recorded for this decision.</p>}</div>;
 }
 
-function DecisionRow({ stage, title, description, current, link, enabled = true, applicationId, canReview, onSaved }: {
+function DecisionRow({ stage, title, description, current, link, enabled = true, applicationId, canReview, retryEligible = false, onSaved }: {
   stage: Stage;
   title: string;
   description: string;
@@ -66,13 +68,31 @@ function DecisionRow({ stage, title, description, current, link, enabled = true,
   enabled?: boolean;
   applicationId: string;
   canReview: boolean;
+  retryEligible?: boolean;
   onSaved: (message: string, decision: string, comments: string) => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [comments, setComments] = useState("");
   const [error, setError] = useState("");
+  const [retryBusy, setRetryBusy] = useState(false);
+  const [retryError, setRetryError] = useState("");
+  const [retryMessage, setRetryMessage] = useState("");
   const decided = isDecided(current);
+
+  async function sendBookingLink() {
+    setRetryBusy(true); setRetryError(""); setRetryMessage("");
+    try {
+      const response = await fetch(`/api/applicants/${encodeURIComponent(applicationId)}/voice-booking`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || "Unable to send a new booking link.");
+      setRetryMessage("A fresh booking link was queued for delivery. No call will be placed until the candidate books a new time.");
+      router.refresh();
+      router.replace(`/applicants/${encodeURIComponent(applicationId)}?bookingSent=${Date.now()}`);
+    } catch (retryRequestError) {
+      setRetryError(retryRequestError instanceof Error ? retryRequestError.message : "Unable to send a new booking link.");
+    } finally { setRetryBusy(false); }
+  }
 
   async function decide(decision: "Approve" | "Reject") {
     const trimmed = comments.trim();
@@ -105,6 +125,9 @@ function DecisionRow({ stage, title, description, current, link, enabled = true,
       <div className="applicant-decision-title"><strong>{title}</strong>{current && <span className={`applicant-decision-badge ${isRejectedDecision(current) ? "is-rejected" : "is-approved"}`}>{applicantDecisionLabel(current)}</span>}</div>
       <p>{description}</p>
       {link && <a className="applicant-booking-link" href={link} target="_blank" rel="noreferrer">Open Booking Link</a>}
+      {stage === "voice" && retryEligible && canReview && enabled && !decided && <div className="applicant-voice-retry"><button type="button" className="btn btn-secondary" disabled={retryBusy || busy} onClick={() => void sendBookingLink()}>{retryBusy ? "Sending..." : "Send booking link"}</button><span>Creates a fresh link and emails it to the candidate. It will not call them automatically.</span></div>}
+      {retryMessage && <ActionFeedback kind="success" className="applicant-decision-success">{retryMessage}</ActionFeedback>}
+      {retryError && <ValidationSummary error={retryError} title="Booking link failed" />}
       <label className="field applicant-decision-comments" htmlFor={`${stage}-decision-comments`}><span>Comments *</span><textarea id={`${stage}-decision-comments`} value={comments} disabled={busy || !canReview || !enabled || decided} minLength={1} maxLength={5000} required placeholder="Explain the decision." onChange={(event) => { setComments(event.target.value); setError(""); }} /></label>
       {error && <ValidationSummary error={error} title="Decision save failed" />}
       {canReview && enabled && !decided && <div className="applicant-decision-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => void decide("Approve")}>{busy ? "Saving..." : "Approve"}</button><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void decide("Reject")}>Reject</button></div>}
@@ -128,7 +151,7 @@ export default function ApplicantDecisionPanel(props: Props) {
   const finalComments = savedDecisions.final?.comments || props.finalComments;
   return <section className="card applicant-decision-card"><div className="card-header"><div><h2>HR Decisions</h2><p>Review the applicant&apos;s current workflow stage. Comments are required for every decision.</p></div></div>{message && <ActionFeedback kind="success" className="applicant-decision-success">{message}</ActionFeedback>}<div className="applicant-decision-list">
     {stage === "resume" && (isDecided(resumeDecision) ? <CompletedDecision title="AI CV Analysis" decision={resumeDecision} comments={resumeComments} /> : <DecisionRow stage="resume" title="AI CV Analysis" description="Review Ella&apos;s CV analysis recommendation before moving the applicant to the voice interview." current={resumeDecision} applicationId={props.applicationId} canReview={props.canReview} onSaved={saveDecision} />)}
-    {stage === "voice" && <><CompletedDecision title="AI CV Analysis" decision={resumeDecision} comments={resumeComments} />{isDecided(voiceDecision) ? <CompletedDecision title="Voice Interview Review" decision={voiceDecision} comments={voiceComments} link={props.finalBookingLink} /> : <DecisionRow stage="voice" title="Voice Interview Review" description="Review the combined screening evidence below before approving the applicant for the next stage." current={voiceDecision} link={props.finalBookingLink} applicationId={props.applicationId} canReview={props.canReview} onSaved={saveDecision} />}</>}
+    {stage === "voice" && <><CompletedDecision title="AI CV Analysis" decision={resumeDecision} comments={resumeComments} />{isDecided(voiceDecision) ? <CompletedDecision title="Voice Interview Review" decision={voiceDecision} comments={voiceComments} link={props.finalBookingLink} /> : <DecisionRow stage="voice" title="Voice Interview Review" description="Review the combined screening evidence below before approving the applicant for the next stage." current={voiceDecision} link={props.voiceBookingLink} retryEligible={props.voiceRetryEligible} applicationId={props.applicationId} canReview={props.canReview} onSaved={saveDecision} />}</>}
     {stage === "final" && <><CompletedDecision title="Voice Interview Review" decision={voiceDecision} comments={voiceComments} />{isDecided(props.finalStatus) || isDecided(finalDecision) ? <CompletedDecision title="Face-to-Face Interview Decision" decision={props.finalStatus || finalDecision} comments={finalComments} /> : <DecisionRow stage="final" title="Face-to-Face Interview Decision" description="Record the Face-to-Face interview outcome after the interviewer has completed the meeting." current={finalDecision === "Interview Completed" ? "" : finalDecision} enabled applicationId={props.applicationId} canReview={props.canReview} onSaved={saveDecision} />}</>}
   </div></section>;
 }

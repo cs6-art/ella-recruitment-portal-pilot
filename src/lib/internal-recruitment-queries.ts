@@ -1059,6 +1059,10 @@ export async function scheduleVoiceRetry(input: { attemptId: string; retryAfter:
     if (!current) return { scheduled: false, duplicate: false, terminal: false, error: "attempt_not_found" as const };
     if (current.status === "retry_scheduled") return { scheduled: false, duplicate: true, terminal: false, error: null };
     if (current.status !== "no_show") return { scheduled: false, duplicate: false, terminal: false, error: "invalid_retry_transition" as const };
+    // Missed interviews require a human re-invitation. Keeping this internal
+    // endpoint authenticated is still useful for old workers, but it must not
+    // turn a no-show into an unexpected outbound call.
+    return { scheduled: false, duplicate: false, terminal: false, error: "manual_rebooking_required" as const };
     const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, email: applications.email }).from(applications).where(eq(applications.id, current.applicationId)).limit(1);
     if (!application) return { scheduled: false, duplicate: false, terminal: false, error: "application_not_found" as const };
     await tx.insert(applicationStatusHistory).values({
@@ -1558,13 +1562,13 @@ export async function createInterviewSlot(input: {
 export async function bookInterviewSlot(input: { slotId: string; applicationExternalId: string; actorEmail: string; actionRequestId: string }) {
   const db = getDb();
   return db.transaction(async (tx) => {
-    const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, applicantId: applications.applicantId, candidateName: applications.candidateName, email: applications.email, phone: applications.phone, preferredMobile: applications.preferredMobile }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
+    const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, applicantId: applications.applicantId, candidateName: applications.candidateName, email: applications.email, phone: applications.phone, preferredMobile: applications.preferredMobile, currentStage: applications.currentStage }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
     if (!application) return { booked: false, error: "unknown_application" as const };
     const [applicant] = await tx.select({ phoneE164: applicants.phoneE164 }).from(applicants).where(eq(applicants.id, application.applicantId)).limit(1);
     const [slot] = await tx.update(interviewSlots).set({ status: "booked", applicationId: application.id, candidateName: application.candidateName, candidateEmail: application.email, bookedAt: new Date(), updatedAt: new Date() }).where(and(eq(interviewSlots.id, input.slotId), eq(interviewSlots.status, "available"))).returning();
     if (!slot) return { booked: false, error: "slot_unavailable" as const };
     const nextStage = slot.interviewType === "voice" ? "voice_scheduled" : "final_scheduled";
-    const previousStage = slot.interviewType === "voice" ? "voice_booking_pending" : "approved_for_final";
+    const previousStage = application.currentStage;
     await tx.update(applications).set({ currentStage: nextStage, updatedAt: new Date() }).where(eq(applications.id, application.id));
     // The face-to-face booking confirmation is delivered by the Google
     // Calendar invitation (the candidate is added as an attendee), so its
@@ -1575,7 +1579,9 @@ export async function bookInterviewSlot(input: { slotId: string; applicationExte
       const existing = await tx.select({ id: voiceCallAttempts.id }).from(voiceCallAttempts).where(and(eq(voiceCallAttempts.applicationId, application.id), inArray(voiceCallAttempts.status, ["scheduled", "queued", "calling", "initiated", "in_progress"]))).limit(1);
       if (existing.length === 0) {
         const phone = applicant?.phoneE164 || application.preferredMobile || application.phone || "";
-         await tx.insert(voiceCallAttempts).values({ organizationId: application.organizationId, applicationId: application.id, roleId: slot.roleId, attemptNumber: 1, maxAttempts: 3, scheduledAt: slot.startsAt, status: "scheduled", preferredMobile: phone, contactNumber: phone });
+        // A fresh HR booking starts a new call cycle, so its first call is
+        // attempt 1 even when the application has older, closed attempts.
+        await tx.insert(voiceCallAttempts).values({ organizationId: application.organizationId, applicationId: application.id, roleId: slot.roleId, attemptNumber: 1, maxAttempts: 3, scheduledAt: slot.startsAt, status: "scheduled", preferredMobile: phone, contactNumber: phone });
       }
     }
     return { booked: true, slot, error: null };
@@ -1663,13 +1669,22 @@ export async function markInterviewCalendarEvent(input: {
   });
 }
 
-export async function createBookingToken(input: { applicationExternalId: string; kind: BookingTokenKind; tokenHash?: string; link?: string; expiresAt?: string; notify?: boolean }) {
+export async function createBookingToken(input: { applicationExternalId: string; kind: BookingTokenKind; tokenHash?: string; link?: string; expiresAt?: string; notify?: boolean; forceNew?: boolean }) {
   const db = getDb();
   return db.transaction(async (tx) => {
     // Lock before the lookup so concurrent workflow retries cannot create two
     // random tokens for the same application and interview type.
     const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, currentStage: applications.currentStage, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
     if (!application) return { token: null, created: false, notificationHistoryId: null, error: "unknown_application" as const };
+    // A deliberate HR re-invitation closes the previous appointment/token.
+    // No voice-call attempt is created here; that only happens after the
+    // candidate books a replacement slot.
+    if (input.forceNew && input.kind === "voice") {
+      await tx.update(interviewSlots).set({ status: "no_show", updatedAt: new Date() }).where(and(eq(interviewSlots.applicationId, application.id), eq(interviewSlots.interviewType, "voice"), inArray(interviewSlots.status, ["booked", "completed"])));
+    }
+    if (input.forceNew) {
+      await tx.update(bookingTokens).set({ status: "revoked" }).where(and(eq(bookingTokens.applicationId, application.id), eq(bookingTokens.kind, input.kind), inArray(bookingTokens.status, ["pending", "active"])));
+    }
     // Replays reuse the current pending/active token. Once a token has been
     // used, expired, revoked, or otherwise terminally consumed, a deliberate
     // re-invitation must receive a fresh token and notification identity.

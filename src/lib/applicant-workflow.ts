@@ -18,13 +18,13 @@ import { normalizeDateOnly, normalizeTimeOnly } from "@/lib/date-only";
 import { countActiveVoiceInterviews, isActiveVoiceInterviewStatus, MAX_CONCURRENT_VOICE_INTERVIEWS, voiceCapacitySlotId, voiceInterviewConcurrencyKey } from "@/lib/voice-interview-capacity";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isCurrentCalendarMonth, isStandardFinalInterviewSlot, isStandardVoiceInterviewSlot, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { targetBookingContext, targetCreateInterviewSlot, targetDeleteApplicant, targetMarkInterviewNoShow, targetRecordApplicantDecision, targetReserveBooking, targetUpdateApplicantProfile, } from "@/lib/recruitment-target-portal";
+import { targetBookingContext, targetCreateInterviewSlot, targetDeleteApplicant, targetMarkInterviewNoShow, targetRecordApplicantDecision, targetReserveBooking, targetSendVoiceBookingInvitation, targetUpdateApplicantProfile, } from "@/lib/recruitment-target-portal";
 import { listApplicationHistory } from "@/lib/internal-recruitment-queries";
 
 export type BookingKind = "voice" | "final";
 export type ApplicantDecisionStage = "resume" | "voice" | "final";
 export type ApplicantDecision = "Approve" | "Reject" | "Manual Review" | "No Show";
-export type ApplicantHistoryAction = ApplicantDecision | "Completed";
+export type ApplicantHistoryAction = ApplicantDecision | "Completed" | "Booking Link Sent";
 export type CandidateApplicationSource =
   | "Direct Application"
   | "Referral"
@@ -1461,32 +1461,26 @@ export async function markInterviewNoShow(slotId: string, actor: { email: string
 const VOICE_MISS_QUEUE_STATUSES = ["missed", "no show", "retry scheduled"];
 
 /**
- * Decides what a missed AI voice call means given how many attempts the
- * candidate has already used. `priorMisses` = queue rows for this application
- * already in a missed/retry/no-show state. When attempts remain the call is
- * re-queued for n8n; once exhausted it is a terminal No Show.
+ * A missed AI voice call is terminal for the current booking. A new call is
+ * never scheduled automatically; HR must send a fresh booking link and the
+ * candidate must choose a new time first.
  */
 function voiceNoShowOutcome(priorMisses: number, maxAttempts: number, retryGapHours: number) {
+  void retryGapHours;
   const attemptsUsed = Math.max(1, priorMisses + 1);
   const cappedMax = Math.max(1, Math.round(maxAttempts));
-  const terminal = attemptsUsed >= cappedMax;
-  const nextAttemptAt = new Date(Date.now() + Math.max(1, retryGapHours) * 3600_000).toISOString();
   return {
-    terminal,
+    terminal: true,
     attemptsUsed,
     maxAttempts: cappedMax,
-    nextAttemptAt,
-    slotStatus: terminal ? "No Show" : "Booked",
-    status2: terminal ? "No Show" : "Retry Scheduled",
-    bookingStatus: terminal ? "No Show" : "Retry Scheduled",
-    queueStatus: terminal ? "No Show" : "Retry Scheduled",
-    finalStatus: terminal
-      ? "AI Voice Interview No Show"
-      : `AI Voice Interview Retry Scheduled (Attempt ${attemptsUsed + 1} of ${cappedMax})`,
+    nextAttemptAt: "",
+    slotStatus: "No Show",
+    status2: "No Show",
+    bookingStatus: "No Show",
+    queueStatus: "No Show",
+    finalStatus: "AI Voice Interview No Show",
     historyAction: "No Show" as const,
-    historyComment: terminal
-      ? `Final AI voice interview no-show after ${cappedMax} attempt${cappedMax === 1 ? "" : "s"}.`
-      : `AI voice interview attempt ${attemptsUsed} of ${cappedMax} missed. The call is re-queued for a further attempt.`,
+    historyComment: `AI voice interview no-show after attempt ${attemptsUsed}. HR must send a new booking link before another call can be placed.`,
   };
 }
 
@@ -2073,6 +2067,96 @@ export async function synchronizeFinalInterviewSlots({ roleId, hodEmail, availab
  * The final stage has no active n8n owner (Phase 6 is not in production), so the
  * portal still records that outcome itself.
  */
+export async function sendVoiceBookingInvitation(applicationId: string, reviewer: { name: string; email: string }, publicAppBaseUrl = "") {
+  if (isPostgresRecruitmentTarget()) {
+    return targetSendVoiceBookingInvitation({ applicationId, reviewer });
+  }
+  const data = await readSheet("High_Match_Profile", "CZ");
+  const found = findApplicant(data, applicationId);
+  if (!found) throw new Error("Applicant not found.");
+  if (!isDemoSideEffectAllowed(field(found.row, "Date of Application", "Date"))) {
+    throw new Error("This applicant is outside the allowed booking side-effect window.");
+  }
+  const [queueData, slotsData, resultsData] = await Promise.all([
+    readOptionalSheet("Voice_Call_Queue", "X"),
+    readSheet("Interview_Slots", "X"),
+    readOptionalSheet("Voice_Interview_Results", "X"),
+  ]);
+  const applicationKey = applicationId.trim().toLowerCase();
+  const queueRows = (queueData?.rows || []).filter((row) => field(row, "Application_ID", "Application ID").trim().toLowerCase() === applicationKey);
+  const resultRows = (resultsData?.rows || []).filter((row) => field(row, "Application_ID", "Application ID").trim().toLowerCase() === applicationKey);
+  const signals = [
+    field(found.row, "Status 2 (Voice Interview)", "Voice_Interview_Status"),
+    field(found.row, "Voice_Interview_Booking_Status"),
+    ...queueRows.map((row) => field(row, "Voice_Call_Status", "Call Status")),
+    ...resultRows.flatMap((row) => [field(row, "Call Outcome", "Outcome"), field(row, "Call Status"), field(row, "Call Final Status")]),
+  ].join(" ");
+  if (/system[_ -]?failure|provider[_ -]?failure|technical[_ -]?failure|dispatch[_ -]?fail|\bfailed\b/i.test(signals)) {
+    throw new Error("The previous voice interview failed technically. Please resolve the provider issue before sending a new booking link.");
+  }
+  if (!/no[_ -]?show|no[_ -]?answer|incomplete|not connected|voicemail|busy|declined|cancelled/i.test(signals)) {
+    throw new Error("A new booking link is available only after an unanswered or incomplete voice interview.");
+  }
+  const activeStatuses = new Set(["scheduled", "queued", "calling", "initiated", "in progress"]);
+  if (queueRows.some((row) => activeStatuses.has(field(row, "Voice_Call_Status").trim().toLowerCase()))) {
+    throw new Error("A voice interview is still scheduled or in progress.");
+  }
+  const baseUrl = publicAppBaseUrl.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.APP_URL?.trim() || "";
+  if (!baseUrl) throw new Error("The public booking URL is not configured.");
+  const token = crypto.randomBytes(32).toString("hex");
+  const now = new Date().toISOString();
+  const expiryDays = await getPortalConfigNumber("Booking_Link_Expiry_Days", 7);
+  const expiresAt = new Date(Date.now() + Math.max(1, Math.min(30, expiryDays)) * 24 * 60 * 60 * 1000).toISOString();
+  const link = bookingLink(baseUrl, "voice", token);
+  const updates: CellUpdate[] = [
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "Booking_Token", value: token },
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "Booking_Token_Hash", value: hashToken(token) },
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "Booking_Token_Expires_At", value: expiresAt },
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "Booking_Token_Status", value: "Pending" },
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "Voice_Interview_Booking_Link", value: link },
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "Voice_Interview_Booking_Status", value: "Pending" },
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "Status 2 (Voice Interview)", value: "Approved for AI Voice Interview" },
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "Final_Status", value: "AI Voice Interview Booking Link Re-sent" },
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "Voice_Interview_Scheduled_Date", value: "" },
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "Voice_Interview_Scheduled_Time", value: "" },
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "Booking_Completed_At", value: "" },
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "voice_interview_email_sent", value: "" },
+    { tab: "High_Match_Profile", row: found.rowNumber, header: "Last_Updated", value: now },
+  ];
+  slotsData.rows
+    .map((row, index) => ({ row, rowNumber: slotsData.rowNumbers[index] }))
+    .filter(({ row }) => field(row, "Application_ID", "Application ID").trim().toLowerCase() === applicationKey
+      && field(row, "Interview_Type", "Interview Type").toLowerCase().includes("voice")
+      && ["booked", "completed"].includes(field(row, "Status").trim().toLowerCase()))
+    .forEach(({ rowNumber }) => updates.push(
+      { tab: "Interview_Slots", row: rowNumber, header: "Status", value: "No Show" },
+      { tab: "Interview_Slots", row: rowNumber, header: "Last_Updated", value: now },
+    ));
+  queueRows
+    .map((row) => ({ row, rowNumber: queueData?.rowNumbers[(queueData?.rows || []).indexOf(row)] || 0 }))
+    .filter(({ row }) => !["completed", "no show", "missed", "cancelled"].includes(field(row, "Voice_Call_Status").trim().toLowerCase()))
+    .filter(({ rowNumber }) => rowNumber > 0)
+    .forEach(({ rowNumber }) => updates.push(
+      { tab: "Voice_Call_Queue", row: rowNumber, header: "Voice_Call_Status", value: "Cancelled" },
+      { tab: "Voice_Call_Queue", row: rowNumber, header: "Last_Updated", value: now },
+    ));
+  await updateCells(updates);
+  await appendRows("Candidate_Status_History", [candidateHistoryValues(buildCandidateStatusHistoryEntry({
+    applicationId,
+    roleId: field(found.row, "Role_ID", "Role ID"),
+    changedAt: now,
+    previousStatus: field(found.row, "Final_Status"),
+    newStatus: "AI Voice Interview Booking Link Re-sent",
+    stage: "voice",
+    action: "Booking Link Sent",
+    changedByName: reviewer.name,
+    changedByEmail: reviewer.email,
+    comments: "HR sent a fresh voice interview booking link. No call will be placed until the candidate books a new time.",
+    actionSource: "Applicant Review Portal",
+  }))]);
+  return { bookingLink: link, notificationQueued: true };
+}
+
 export async function recordApplicantDecision(applicationId: string, stage: ApplicantDecisionStage, decision: ApplicantDecision, reviewer: { name: string; email: string }, comments: string, publicAppBaseUrl = "") {
   if (isPostgresRecruitmentTarget()) {
     if (decision === "No Show") throw new Error("No-show decisions are recorded by the voice retry workflow.");
