@@ -178,3 +178,12 @@ test("stale provider dispatches become audited failures without entering billing
   assert.match(reconcile, /No terminal provider result was received/);
   assert.doesNotMatch(reconcile, /recordVoiceInterviewDeduction/);
 });
+
+test("face-to-face metric excludes resume and voice-only activity", () => {
+  const source = read("src/lib/recruitment-target-portal.ts");
+  const metrics = source.slice(source.indexOf("export async function targetApplicantMetrics"), source.indexOf("export async function targetApplicantDetails"));
+  assert.match(metrics, /finalInterviewStages = new Set/);
+  assert.match(metrics, /finalInterviewStages\.has\(row\.currentStage\)/);
+  assert.match(metrics, /row\.finalInterviewStatus\.trim\(\)\.toLowerCase\(\)/);
+  assert.doesNotMatch(metrics, /hrActivity: summaries\.filter\(\(row\) => Boolean\(row\.cvRecommendation \|\| row\.voiceStatus \|\| row\.finalInterviewStatus\)\)/);
+});

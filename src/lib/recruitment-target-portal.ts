@@ -977,13 +977,23 @@ export async function targetApplicantMetrics(rows?: Awaited<ReturnType<typeof ta
   const stageCounts = new Map<string, number>();
   for (const row of summaries) stageCounts.set(row.currentStage, (stageCounts.get(row.currentStage) || 0) + 1);
   const stage = (key: string) => stageCounts.get(key) || 0;
+  const finalInterviewStages = new Set(["approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"]);
   return {
     total: summaries.length,
     today: summaries.filter((row) => text(row.appliedAt).slice(0, 10) === new Date().toISOString().slice(0, 10)).length,
     screened: summaries.filter((row) => row.resumeStatus === "Processed").length,
     interviewed: summaries.filter((row) => ["voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"].includes(row.currentStage)).length,
     voiceActivity: summaries.filter((row) => Boolean(row.voiceStatus)).length,
-    hrActivity: summaries.filter((row) => Boolean(row.cvRecommendation || row.voiceStatus || row.finalInterviewStatus)).length,
+    // Face-to-face activity begins only after the voice stage. A CV
+    // recommendation or voice decision must not make every screened applicant
+    // appear as a face-to-face applicant. Include final decisions as well as
+    // the current final-stage pipeline so rejected/completed final interviews
+    // remain represented after their stage changes.
+    hrActivity: summaries.filter((row) => {
+      const finalStatus = row.finalInterviewStatus.trim().toLowerCase();
+      return finalInterviewStages.has(row.currentStage)
+        || (finalStatus !== "" && !["pending", "not started"].includes(finalStatus));
+    }).length,
     resumeApproved: stage("resume_approved"),
     voiceBookingPending: stage("voice_booking_pending"),
     voiceScheduled: stage("voice_scheduled"),
