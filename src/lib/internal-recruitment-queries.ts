@@ -6,7 +6,7 @@ import { getTenantDb as getDb } from "@/db/client";
 import { appendPostgresLedgerEntryOnExecutor } from "@/lib/ella-credits-postgres";
 import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
 import { creditCostFor, recordVoiceInterviewDeduction } from "@/lib/ella-credits";
-import { appendAccountLedgerEntryOnExecutor, perUserCreditsEnabled } from "@/lib/ella-credits-accounts";
+import { appendAccountLedgerEntryOnExecutor, organizationCreditsEnabled } from "@/lib/ella-credits-accounts";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
@@ -533,7 +533,7 @@ export async function copyScreeningResult(input: { sourceApplicationId: string; 
     if (copied && input.ledger) {
       // Keep reused-result billing under the same atomic boundary as the
       // screening row. A concurrent balance change rolls back both writes.
-      if (perUserCreditsEnabled()) {
+      if (organizationCreditsEnabled()) {
         await appendAccountLedgerEntryOnExecutor(tx, {
           organizationId: target.organizationId,
           ownerEmail: target.creditOwnerEmail,
@@ -849,7 +849,7 @@ export async function upsertScreeningResult(input: { applicationExternalId: stri
           note: "Postgres target single resume screening",
           sourceEntryId: `LDG-${crypto.createHash("sha256").update(`cv:${input.applicationExternalId}`).digest("hex")}`,
         };
-        credit = perUserCreditsEnabled()
+        credit = organizationCreditsEnabled()
           ? await appendAccountLedgerEntryOnExecutor(tx, { organizationId: application.organizationId, ownerEmail: application.creditOwnerEmail, entry: ledger }, { guard: true })
           : await appendPostgresLedgerEntryOnExecutor(tx, ledger, { guard: true });
       }
@@ -1549,7 +1549,7 @@ export async function finalizeBulkScreening(input: {
     }).onConflictDoNothing({ target: screeningResults.applicationId }).returning();
     if (!result) return { processed: false, duplicate: true, error: null };
 
-    const credit = perUserCreditsEnabled()
+    const credit = organizationCreditsEnabled()
       ? await appendAccountLedgerEntryOnExecutor(tx, { organizationId: application.organizationId, ownerEmail: application.creditOwnerEmail || input.ledger.actorEmail || "", entry: input.ledger }, { guard: true })
       : await appendPostgresLedgerEntryOnExecutor(tx, input.ledger, { guard: true });
     const actionRequestId = `screening:${input.dedupeKey.trim()}`;

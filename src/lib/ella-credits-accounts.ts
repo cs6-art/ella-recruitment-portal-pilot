@@ -24,9 +24,10 @@ function organization(value: string) {
 }
 
 function ownerEmail(value: string | undefined) {
-  const normalized = value?.trim().toLowerCase() || "";
-  if (!normalized) throw new Error("A credit account owner is required for credit operations.");
-  return normalized;
+  void value;
+  // The public credit APIs still accept the actor email for attribution and
+  // backwards compatibility, but the wallet itself belongs to the tenant.
+  return "org";
 }
 
 function entry(row: Record<string, unknown>): LedgerEntry {
@@ -49,17 +50,24 @@ function entry(row: Record<string, unknown>): LedgerEntry {
 
 /**
  * Whether credits are metered against the Postgres `credit_accounts` table
- * instead of the legacy single global Google Sheet. In this mode each signed-
- * in user has a wallet inside their organization; the organization predicate
- * remains mandatory so an account can never cross tenant boundaries.
+ * instead of the legacy single global Google Sheet. The Postgres pilot uses
+ * one shared wallet per organization; actor attribution remains on ledger
+ * rows, while the organization predicate prevents cross-tenant access.
  */
-export function perUserCreditsEnabled() {
+export function organizationCreditsEnabled() {
   const configured = (process.env.CREDITS_SCOPE || "").trim().toLowerCase();
-  if (configured) return configured === "per_user";
-  // Recruitment Postgres is the Pilot cutover boundary. Production and the
-  // legacy portal keep the existing shared Sheet balance until explicitly
-  // migrated, so this default cannot silently change them.
+  if (["legacy", "sheet", "sheets", "global"].includes(configured)) return false;
+  // `per_user` was the temporary regression setting. Treat it as shared now
+  // so an old deployment variable cannot strand credits in a new empty wallet.
+  if (["organization", "org", "shared", "per_user"].includes(configured)) return true;
+  // Recruitment Postgres is the Pilot cutover boundary. Legacy deployments
+  // continue using the original Google Sheet balance.
   return (process.env.RECRUITMENT_BACKEND || "").trim().toLowerCase() === "postgres";
+}
+
+/** @deprecated Use organizationCreditsEnabled. Kept for external callers during rollout. */
+export function perUserCreditsEnabled() {
+  return false;
 }
 
 export async function getAccountCreditBalance(input: { organizationId: string; ownerEmail: string }): Promise<CreditBalance> {

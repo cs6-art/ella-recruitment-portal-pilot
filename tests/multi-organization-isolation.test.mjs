@@ -16,13 +16,15 @@ test("Pilot provisions a tenant and independent seeded credit accounts", () => {
   assert.match(migration, /ON CONFLICT \("organization_id", "owner_email"\) DO NOTHING/);
 });
 
-test("credit operations carry both tenant and user-wallet scope", () => {
+test("credit operations use one shared wallet per tenant", () => {
   const credits = read("src/lib/ella-credits.ts");
   const accounts = read("src/lib/ella-credits-accounts.ts");
+  assert.match(accounts, /return "org"/);
   assert.match(accounts, /WHERE "organization_id" = \$\{orgId\} AND "owner_email" = \$\{owner\}/);
   assert.match(accounts, /ownerEmail: string/);
   assert.match(accounts, /credit_account_ledger/);
-  assert.match(credits, /A credit account owner is required for per-user credits/);
+  assert.match(credits, /one shared balance inside the signed-in user's organization/);
+  assert.match(credits, /ownerEmail: "org"/);
 });
 
 test("sessions and login resolve an organization before tenant-scoped requests", () => {
@@ -85,17 +87,20 @@ test("a new organization and its first user are self-service, no separate databa
   // Its first (and every later) user is created through the same directory
   // upsert every organization uses -- no separate provisioning script.
   assert.match(directory, /export async function upsertPostgresDirectoryUser/);
-  // Every user gets a wallet inside their organization automatically.
+  // Tenant provisioning creates exactly one shared wallet, irrespective of
+  // which user triggered membership synchronization.
   assert.match(orgs, /insert\(creditAccounts\)/);
-  assert.match(orgs, /creditOwner = perUserCreditsEnabled\(\) \? email : "org"/);
-  assert.match(orgs, /onConflictDoNothing\(\{ target: \[creditAccounts\.organizationId, creditAccounts\.ownerEmail\] \}\)/);
+  assert.match(orgs, /creditOwner = "org"/);
+  assert.match(orgs, /onConflictDoNothing\(\{ target: creditAccounts\.organizationId \}\)/);
 });
 
-test("per-user wallet migration removes the organization-only uniqueness constraint", () => {
-  const migration = read("drizzle/0017_per_user_credit_accounts.sql");
-  assert.match(migration, /DROP INDEX IF EXISTS "credit_accounts_organization_uidx"/);
-  assert.match(migration, /credit_accounts_organization_owner_uidx/);
-  assert.match(migration, /organization_id.*owner_email/);
+test("shared wallet repair preserves balances and reattaches ledger history", () => {
+  const migration = read("drizzle/0019_restore_shared_credit_accounts.sql");
+  assert.match(migration, /sum\("balance"\)/);
+  assert.match(migration, /UPDATE "credit_account_ledger"/);
+  assert.match(migration, /DELETE FROM "credit_accounts"/);
+  assert.match(migration, /owner_email.*= 'org'/);
+  assert.match(migration, /credit_accounts_organization_uidx/);
 });
 
 test("applicants are deduplicated inside each organization", () => {

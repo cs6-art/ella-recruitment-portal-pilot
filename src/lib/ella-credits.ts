@@ -5,7 +5,7 @@ import { getPortalConfig } from "@/lib/portal-config";
 import { isDatabaseConfigured } from "@/db/client";
 import { appendSheetLedgerEntry, getSheetCreditBalance } from "@/lib/ella-credits-sheets";
 import { appendPostgresLedgerEntry, getPostgresCreditBalance } from "@/lib/ella-credits-postgres";
-import { appendAccountLedgerEntry, perUserCreditsEnabled, getAccountCreditBalance } from "@/lib/ella-credits-accounts";
+import { appendAccountLedgerEntry, organizationCreditsEnabled, getAccountCreditBalance } from "@/lib/ella-credits-accounts";
 import { runWithTenantDatabase } from "@/lib/tenant-database";
 import type { CreditBalance, LedgerAppend } from "@/lib/ella-credits-store";
 
@@ -14,7 +14,7 @@ export type { CreditEvent } from "@/lib/ella-credit-math";
 export type { CreditBalance, LedgerEntry } from "@/lib/ella-credits-store";
 
 /**
- * Smile Credits — per-user balances inside the signed-in user's organization.
+ * Smile Credits — one shared balance inside the signed-in user's organization.
  *
  * Storage is switchable via `CREDITS_BACKEND` (Phase 2 backend migration):
  *  - `sheets`   (default): the original Google Sheet ledger.
@@ -73,18 +73,16 @@ async function mirrorToPostgres(entry: LedgerAppend): Promise<void> {
 
 // --- Reads --------------------------------------------------------------------
 
-// Both organizationId and ownerEmail are required in the Postgres Pilot path.
-// The owner is part of the wallet identity, so one HR account cannot spend or
-// display another user's organization wallet.
+// organizationId is required in the Postgres Pilot path. ownerEmail remains in
+// the scope type for API compatibility and ledger attribution, but it is not a
+// wallet boundary: all users in the same organization share one balance.
 type CreditScope = { organizationId?: string; ownerEmail?: string };
 
 function accountScope(scope: CreditScope) {
-  if (!perUserCreditsEnabled()) return null;
+  if (!organizationCreditsEnabled()) return null;
   const organizationId = scope.organizationId?.trim();
   if (!organizationId) throw new Error("An organization is required for org-scoped credits.");
-  const ownerEmail = scope.ownerEmail?.trim().toLowerCase();
-  if (!ownerEmail) throw new Error("A credit account owner is required for per-user credits.");
-  return { organizationId, ownerEmail };
+  return { organizationId, ownerEmail: "org" };
 }
 
 export async function getCreditBalance(options: { fresh?: boolean } & CreditScope = {}): Promise<CreditBalance> {
