@@ -17,7 +17,7 @@ export async function GET() {
     const [{ balance }, pricing] = await Promise.all([getCreditBalance({ organizationId: user.organizationId, ownerEmail: user.email }), getCreditPricing()]);
     return NextResponse.json({ success: true, balance, pricing }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("[API Ella Credits Balance] GET failed:", error);
+    console.error("[API Smile Credits Balance] GET failed:", error);
     return NextResponse.json({ success: false, error: "Unable to load the Smile Credits balance." }, { status: 500 });
   }
 }

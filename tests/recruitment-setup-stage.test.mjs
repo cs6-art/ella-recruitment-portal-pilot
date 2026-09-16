@@ -192,6 +192,14 @@ test("AI voice interview emails disclose the AI interviewer and human review", (
   assert.match(workflow, /AI Interview Notice: This interview will be conducted with the assistance/);
 });
 
+test("live-avatar recruitment fallbacks use the Smile identity", () => {
+  const prompts = fs.readFileSync("bridge/server/src/prompts.ts", "utf8");
+  assert.match(prompts, /You are Smile, a warm and concise AI recruitment interviewer/);
+  assert.match(prompts, /I’m Smile\. I’ll ask one focused question today/);
+  assert.doesNotMatch(prompts, /You are Ella, a warm and concise AI recruitment interviewer/);
+  assert.doesNotMatch(prompts, /I’m Ella\. I’ll ask one focused question today/);
+});
+
 test("evaluation field catalog is shared between the schema, editor, and n8n payload", async () => {
   const schemaSource = fs.readFileSync("src/lib/recruitment-setup-schema.ts", "utf8");
   assert.match(schemaSource, /BASELINE_EVALUATION_FIELDS/);

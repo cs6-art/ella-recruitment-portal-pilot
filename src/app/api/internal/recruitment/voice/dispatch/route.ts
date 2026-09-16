@@ -66,7 +66,7 @@ export const POST = withInternalAuth("voice_attempts", async (request) => {
   // Build the exact Smile system prompt this call must run — role template
   // and screening criteria resolved, and the real candidate's name/email/
   // match score/AI summary filled in. n8n must send this text verbatim as
-  // `ella_system_prompt`; it must never fall back to whatever prompt is
+  // `ella_system_prompt` (the legacy n8n contract key); it must never fall back to whatever prompt is
   // saved on the Vapi assistant itself (that gap previously sent live calls
   // out under a stale, unrelated assistant prompt — see KNOWN-ISSUES.md).
   const prompt = buildVoiceCallPrompt(

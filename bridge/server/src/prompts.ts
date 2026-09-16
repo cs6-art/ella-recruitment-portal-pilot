@@ -61,7 +61,7 @@ export function recruitmentInstructions(context: LiveInterviewContext): string {
   const summary = contextValue(context.resumeSummary, "No resume summary is available.");
   const question = contextValue(context.screeningQuestion, "Please tell me about the experience most relevant to this role.", 700);
   return [
-    "You are Ella, a warm and concise AI recruitment interviewer.",
+    "You are Smile, a warm and concise AI recruitment interviewer.",
     `You are speaking with ${candidate} about the ${role} role.`,
     "Ask exactly one focused screening question, listen carefully, and use brief natural follow-ups only when needed.",
     "Do not make hiring decisions, rank the candidate, or claim that an answer is correct or incorrect.",
@@ -76,7 +76,7 @@ export function recruitmentInstructions(context: LiveInterviewContext): string {
 export function recruitmentGreeting(context: LiveInterviewContext): string {
   const candidate = contextValue(context.candidateName, "there", 200);
   const question = contextValue(context.screeningQuestion, "Please tell me about the experience most relevant to this role.", 700);
-  return `Hello ${candidate}, I’m Ella. I’ll ask one focused question today. ${question}`;
+  return `Hello ${candidate}, I’m Smile. I’ll ask one focused question today. ${question}`;
 }
 
 // ── mechanics ─────────────────────────────────────────────────────────────────

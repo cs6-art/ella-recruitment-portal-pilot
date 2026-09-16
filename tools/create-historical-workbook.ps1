@@ -93,7 +93,7 @@ foreach ($monthStart in $months) {
     $call["Email"] = $email
     $call["Role"] = $role.Name
     $call["Match Score"] = [string]$score
-    $call["Transcript"] = "SYNTHETIC CALL LOG. Ella introduced the role, confirmed candidate availability, and discussed $($role.Skills) Candidate provided concise examples and requested next-step details."
+    $call["Transcript"] = "SYNTHETIC CALL LOG. Smile introduced the role, confirmed candidate availability, and discussed $($role.Skills) Candidate provided concise examples and requested next-step details."
     $call["Recording_URL"] = "https://example.invalid/synthetic-call/$id"
     $call["Call Outcome"] = $outcome
     $call["Appointment Details"] = $appointment

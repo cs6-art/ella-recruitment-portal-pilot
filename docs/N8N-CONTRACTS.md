@@ -111,7 +111,7 @@ HR changes. Return HTTP 200 JSON with `{ "success": true }`.
 
 <!-- Added 2026-09-14 after a pilot incident: this endpoint's response was
      missing entirely from this doc, so the pilot's outbound-call n8n
-     workflow never forwarded a resolved Ella prompt and a live call ran
+     workflow never forwarded a resolved Smile prompt and a live call ran
      under whatever prompt happened to be saved on the Vapi assistant in the
      dashboard instead. See docs/KNOWN-ISSUES.md for the incident record. -->
 
@@ -129,7 +129,7 @@ compute or cache this prompt itself. A successful response looks like:
   "candidate": { "name": "...", "email": "...", "phoneNumber": "+65..." },
   "role": { "externalId": "...", "title": "..." },
   "prompt": {
-    "ellaSystemPrompt": "<the complete rendered Ella prompt, role AND candidate placeholders already resolved>",
+    "ellaSystemPrompt": "<the complete rendered Smile prompt, role AND candidate placeholders already resolved>",
     "jobDescription": "...",
     "screeningCriteria": "...",
     "interviewQuestions": "Q1: ...\nQ2: ...",

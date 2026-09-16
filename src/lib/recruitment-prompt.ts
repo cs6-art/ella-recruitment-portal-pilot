@@ -473,7 +473,7 @@ const UNRESOLVED_TOKEN_PATTERN = /\{\{\s*(candidate_name|email|match_score|ai_su
  * Build the exact Vapi system prompt for one scheduled call: the role's
  * saved Smile prompt template (or the standard default) with both the role
  * placeholders and the real candidate's placeholders resolved. This is the
- * single source of truth for what n8n must send as `ella_system_prompt` in
+ * single source of truth for what n8n must send as the Smile system prompt in
  * `assistantOverrides.variableValues` — n8n must never invent or re-derive
  * this text itself.
  */

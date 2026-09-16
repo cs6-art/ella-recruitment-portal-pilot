@@ -53,7 +53,7 @@ export async function GET() {
       pricing,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("[API Ella Credits] GET failed:", error);
+    console.error("[API Smile Credits] GET failed:", error);
     return NextResponse.json({ success: false, error: "Unable to load the Smile Credits ledger." }, { status: 500 });
   }
 }
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
       reference: parsed.data.reference || "",
     });
   } catch (error) {
-    console.error("[API Ella Credits] POST failed:", error);
+    console.error("[API Smile Credits] POST failed:", error);
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to update the balance." }, { status: 500 });
   }
 }
