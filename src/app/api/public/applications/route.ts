@@ -119,14 +119,14 @@ export async function POST(request: Request) {
 
     // Reapplications are independent records by policy, even when the email
     // and role match an earlier submission.
-    // Screening this application costs 1 Ella Credit. Refuse before storing the
+    // Screening this application costs 1 Smile Credit. Refuse before storing the
     // resume or invoking the workflow if the balance can't cover it; the raw
     // credit reason is logged, not shown to the candidate.
     try {
       await assertCreditsAvailable(1, "cv_analysis", { organizationId: role.organizationId, ownerEmail: role.requesterEmail });
     } catch (creditError) {
       if (creditError instanceof EllaCreditsError) {
-        console.warn("[API Public Applications] Blocked by Ella Credits:", creditError.message);
+        console.warn("[API Public Applications] Blocked by Smile Credits:", creditError.message);
         return responseError(request, "Applications are temporarily paused. Please contact the recruiter who invited you.", 402, { code: creditError.code });
       }
       throw creditError;

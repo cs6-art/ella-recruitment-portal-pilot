@@ -31,7 +31,7 @@ async function currentUser() {
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageCredits(user)) return NextResponse.json({ success: false, error: "Ella Credits permission required." }, { status: 403 });
+  if (!canManageCredits(user)) return NextResponse.json({ success: false, error: "Smile Credits permission required." }, { status: 403 });
   try {
     const [{ balance, totals, entries }, pricing] = await Promise.all([getCreditBalance({ organizationId: user.organizationId, ownerEmail: user.email }), getCreditPricing()]);
     return NextResponse.json({
@@ -43,14 +43,14 @@ export async function GET() {
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API Ella Credits] GET failed:", error);
-    return NextResponse.json({ success: false, error: "Unable to load the Ella Credits ledger." }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Unable to load the Smile Credits ledger." }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageCredits(user)) return NextResponse.json({ success: false, error: "Ella Credits permission required." }, { status: 403 });
+  if (!canManageCredits(user)) return NextResponse.json({ success: false, error: "Smile Credits permission required." }, { status: 403 });
 
   const rate = consumeRateLimit(`ella-credits:${user.email}:${requestClientKey(request)}`, 30, 15 * 60 * 1000);
   if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many credit updates. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });

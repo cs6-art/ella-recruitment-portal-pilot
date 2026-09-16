@@ -391,7 +391,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveR
         <div>
           <span className="form-eyebrow">BULK RESUME SCREENING</span>
           <h2 id="bulk-screening-title">Bulk upload resumes</h2>
-          <p>Select a published role and upload multiple PDF, DOC, or DOCX resumes directly from this page. Ella processes each file once and records its screening status here.</p>
+          <p>Select a published role and upload multiple PDF, DOC, or DOCX resumes directly from this page. Smile processes each file once and records its screening status here.</p>
         </div>
         <span className="bulk-screening-badge">One-time screening</span>
       </div>
@@ -492,7 +492,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveR
           <ol>
             <li>Choose a published role.</li>
             <li>Drag in (or select) multiple PDF, DOC, or DOCX files and start screening.</li>
-            <li>Ella extracts the candidate details, submits each resume to the screening workflow, and updates the queue below in real time.</li>
+            <li>Smile extracts the candidate details, submits each resume to the screening workflow, and updates the queue below in real time.</li>
             <li>Files marked Completed are identified by role and file hash and are never analyzed again for that role. Failed files can be retried without re-uploading the whole batch.</li>
           </ol>
         </div>

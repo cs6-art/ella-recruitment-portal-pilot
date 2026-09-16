@@ -1,5 +1,5 @@
 /**
- * Client-side signalling for the Ella Credits meter. Any component that
+ * Client-side signalling for the Smile Credits meter. Any component that
  * triggers a credit deduction (bulk resume upload, single CV analysis, voice
  * booking) fires this event so the global meter refreshes immediately instead
  * of waiting for its next poll. An optional `optimisticDelta` (negative for a

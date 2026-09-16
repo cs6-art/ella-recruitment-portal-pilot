@@ -18,6 +18,6 @@ export async function GET() {
     return NextResponse.json({ success: true, balance, pricing }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API Ella Credits Balance] GET failed:", error);
-    return NextResponse.json({ success: false, error: "Unable to load the Ella Credits balance." }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Unable to load the Smile Credits balance." }, { status: 500 });
   }
 }

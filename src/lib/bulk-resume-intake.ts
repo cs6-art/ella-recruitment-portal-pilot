@@ -141,9 +141,9 @@ export async function intakeResumeBatch(input: {
     toProcess.push(item);
   }
 
-  // Each resume that reaches the screening workflow costs 1 Ella Credit.
+  // Each resume that reaches the screening workflow costs 1 Smile Credit.
   // Pre-check the whole batch so an under-funded intake is refused before any
-  // file is sent downstream. Callers map EllaCreditsError to a 402.
+  // file is sent downstream. Callers map the credit error to a 402.
   if (toProcess.length > 0) {
     await assertCreditsAvailable(toProcess.length, "cv_analysis", { organizationId: input.organizationId, ownerEmail: input.actorEmail });
   }
@@ -246,7 +246,7 @@ export async function intakeResumeBatch(input: {
       // terminal state in this same response. Read the status first: a
       // synchronous "failed"/"skipped" means the resume was rejected before a
       // screening result was produced (unreadable file, missing candidate
-      // contact details, duplicate) — one Ella Credit buys a completed CV
+      // contact details, duplicate) — one Smile Credit buys a completed CV
       // analysis, so the operator is not billed for these.
       const workflowResult = await response.json().catch(() => ({})) as Record<string, unknown>;
       const reportedStatus = String(workflowResult.status || "").trim();

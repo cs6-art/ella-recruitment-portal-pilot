@@ -6,7 +6,7 @@ import { EllaCreditsError } from "@/lib/ella-credit-math";
 import type { CreditBalance, LedgerAppend, LedgerEntry } from "@/lib/ella-credits-store";
 
 /**
- * Postgres (Neon) storage for the Ella Credit ledger.
+ * Postgres (Neon) storage for the Smile Credit ledger.
  *
  * `credit_balance` (single row, id = 1) is the source of truth for the current
  * balance. Every write moves that row and appends to the immutable

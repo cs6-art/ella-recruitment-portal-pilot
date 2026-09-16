@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { MAX_FILES_PER_SUBMISSION } from "../bulk-resume-limits.ts";
 
 /**
- * Ella help-assistant knowledge base.
+ * Smile help-assistant knowledge base.
  *
  * The approved knowledge source is a single Markdown file
  * (`knowledge.md`, next to this module). It is small enough — a few thousand
@@ -48,7 +48,7 @@ const STOP_WORDS = new Set([
   "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "is", "are",
   "how", "do", "does", "what", "when", "where", "who", "which", "can", "i",
   "my", "me", "we", "you", "your", "it", "this", "that", "with", "as", "be",
-  "at", "by", "from", "about", "portal", "ella", "help",
+  "at", "by", "from", "about", "portal", "smile", "help",
 ]);
 
 function parseSections(markdown: string): KnowledgeSection[] {

@@ -1,5 +1,5 @@
 // Server-only helper for the LiveAvatar (HeyGen) integration that powers the
-// "Meet Ella now" live video interview on the public apply page.
+// "Meet Smile now" live video interview on the public apply page.
 //
 // This never runs in the browser: it holds the LiveAvatar secret API key and
 // talks to https://api.liveavatar.com directly. The browser only ever
@@ -9,7 +9,7 @@
 // Interviewer" voice agent's context uses ${role_title} and
 // ${job_description} placeholders (configured in the LiveAvatar dashboard
 // under Contexts). Every session passes the current role's title and
-// published job description as dynamic_variables, so Ella's greeting and
+// published job description as dynamic_variables, so Smile's greeting and
 // screening questions are generated for that specific role rather than a
 // generic script. See docs/LIVE-AVATAR-INTEGRATION.md for setup details.
 
@@ -44,7 +44,7 @@ function vercelBridgeEnabled(): boolean {
 /**
  * True once an operator has configured the LiveAvatar env vars. The apply
  * page checks this (via the session API route) to decide whether to render
- * the "Meet Ella now" card at all, so the feature stays invisible instead of
+ * the "Meet Smile now" card at all, so the feature stays invisible instead of
  * broken on environments that have not been configured yet.
  */
 export function isLiveAvatarConfigured(): boolean {

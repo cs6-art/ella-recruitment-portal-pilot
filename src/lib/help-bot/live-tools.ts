@@ -12,7 +12,7 @@ import type { SessionUser } from "../session.ts";
 // dependencies of its own (its only imports are `import type`).
 
 /**
- * Ella Help Bot — Phase 2 live-tools registry.
+ * Smile Help Bot — Phase 2 live-tools registry.
  *
  * This is the ONLY place the Help Bot may touch live system state. Every
  * function here is:
@@ -50,7 +50,7 @@ export type LiveToolResult =
 
 const TOOL_DESCRIPTIONS: Record<LiveToolName, string> = {
   get_credit_balance:
-    "Get the signed-in user's organization's current Ella Credits balance. Takes no parameters. Use only when the user asks for their actual current balance, not for an explanation of how credits work.",
+    "Get the signed-in user's organization's current Smile Credits balance. Takes no parameters. Use only when the user asks for their actual current balance, not for an explanation of how credits work.",
   get_bulk_queue_summary:
     "Get aggregate counts of the bulk resume screening queue, grouped by status (e.g. queued, processing, screened, failed, skipped), for the signed-in user's organization. Takes no parameters. Never returns candidate names or files. May be denied if the signed-in user lacks pipeline-management access.",
   get_interview_status_summary:

@@ -1,9 +1,9 @@
 /**
- * Pure Ella Credits arithmetic — no Google Sheets or network dependency, so it
+ * Pure Smile Credits arithmetic — no Google Sheets or network dependency, so it
  * is unit-testable in isolation. The stateful ledger lives in ella-credits.ts.
  */
 
-/** Published Ella Credits per unit of each metered action. */
+/** Published Smile Credits per unit of each metered action. */
 export const CREDIT_COST = {
   cv_analysis: 1,
   phone_interview: 10,
@@ -87,7 +87,7 @@ export class EllaCreditsError extends Error {
   available: number;
 
   constructor(required: number, available: number) {
-    super(`Not enough Ella Credits: ${required} required, ${available} available.`);
+    super(`Not enough Smile Credits: ${required} required, ${available} available.`);
     this.name = "EllaCreditsError";
     this.required = required;
     this.available = available;

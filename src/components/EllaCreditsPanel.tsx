@@ -156,13 +156,13 @@ export default function EllaCreditsPanel() {
 
         <div className={styles.form}>
           <div className={`${styles.field} ${styles.amountField}`}>
-            <label htmlFor="ella-credit-amount">Adjust balance</label>
-            <input id="ella-credit-amount" type="number" min="1" step="1" inputMode="numeric" placeholder="e.g. 2000" value={amount} onChange={(event) => setAmount(event.target.value)} />
+            <label htmlFor="smile-credit-amount">Adjust balance</label>
+            <input id="smile-credit-amount" type="number" min="1" step="1" inputMode="numeric" placeholder="e.g. 2000" value={amount} onChange={(event) => setAmount(event.target.value)} />
             <small>Adds credits only. A single top-up of {nf.format(data.pricing.discountThreshold)}+ credits earns a {nf.format(data.pricing.discountPercent)}% bonus automatically.</small>
           </div>
           <div className={`${styles.field} ${styles.noteField}`}>
-            <label htmlFor="ella-credit-note">Note</label>
-            <input id="ella-credit-note" value={note} maxLength={500} placeholder="Reason for this change" onChange={(event) => setNote(event.target.value)} />
+            <label htmlFor="smile-credit-note">Note</label>
+            <input id="smile-credit-note" value={note} maxLength={500} placeholder="Reason for this change" onChange={(event) => setNote(event.target.value)} />
             <small>Recorded in the ledger for audit. Takes effect immediately for new AI actions.</small>
           </div>
           <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void submit()}>{saving ? "Saving…" : "Update Balance"}</button>

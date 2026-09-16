@@ -984,7 +984,7 @@ async function reserveBookingInternal(kind: BookingKind, token: string, slotId: 
   if (!isDemoSideEffectAllowed(context.appliedAt)) {
     throw new Error("This demo booking link is protected because it belongs to historical data.");
   }
-  // A new AI voice interview costs 10 Ella Credits. Rescheduling an existing
+  // A new AI voice interview costs 10 Smile Credits. Rescheduling an existing
   // booking (context.currentSlot present) is not charged again.
   if (kind === "voice" && !context.currentSlot) {
     try {

@@ -68,7 +68,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
         body: JSON.stringify({ roleId, candidateName, resumeSummary: preparation.resumeSummary, screeningQuestion: preparation.screeningQuestion, avatarToken: accessToken || undefined }),
       });
       const tokenBody = await tokenResponse.json().catch(() => ({}));
-      if (!tokenResponse.ok || !tokenBody?.success) throw new Error(tokenBody?.error || "Ella isn't available right now.");
+      if (!tokenResponse.ok || !tokenBody?.success) throw new Error(tokenBody?.error || "Smile isn't available right now.");
 
       if (tokenBody.mode === "VERCEL_BRIDGE") {
         const reportBridgeError = (message: string) => {
@@ -155,7 +155,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       await session.start();
     } catch (caught) {
       console.error("[LiveAvatarInterview] Failed to start session:", caught);
-      setError(caught instanceof Error ? caught.message : "Ella isn't available right now.");
+      setError(caught instanceof Error ? caught.message : "Smile isn't available right now.");
       setState("error");
       sessionRef.current = null;
     }
@@ -193,7 +193,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
         if (response.ok && result.success === true) break;
         if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 700));
       }
-      if (!response?.ok || result.success !== true) throw new Error(typeof result.error === "string" ? result.error : "Ella could not process the response yet.");
+      if (!response?.ok || result.success !== true) throw new Error(typeof result.error === "string" ? result.error : "Smile could not process the response yet.");
       setEvaluation(result.evaluation as LiveAvatarEvaluation);
       setState("results");
     } catch (caught) {
@@ -211,17 +211,17 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       <div className="card-header">
         <div>
           <span className="form-eyebrow">STEP 2 · LIVE SCREENING</span>
-          <h2 id="live-avatar-title">Meet Ella for one focused question</h2>
+          <h2 id="live-avatar-title">Meet Smile for one focused question</h2>
         </div>
         {state === "live" && <span className="live-avatar-live-pill">Live</span>}
       </div>
       <div className="live-avatar-body">
         {state === "idle" && (
           <>
-            <p>Ella has reviewed the candidate's resume for the <strong>{roleTitle}</strong> role and prepared a question about the experience most relevant to it.</p>
-            <div className="live-avatar-question"><span>Ella will ask</span><strong>{preparation.screeningQuestion}</strong></div>
+            <p>Smile has reviewed the candidate's resume for the <strong>{roleTitle}</strong> role and prepared a question about the experience most relevant to it.</p>
+            <div className="live-avatar-question"><span>Smile will ask</span><strong>{preparation.screeningQuestion}</strong></div>
             <p className="live-avatar-disclosure">This is an AI interview aid. The candidate's response will be transcribed and summarized for the recruitment team. You can stop at any time.</p>
-            <button type="button" className="btn btn-primary" onClick={() => void startInterview()}>Start with Ella</button>
+            <button type="button" className="btn btn-primary" onClick={() => void startInterview()}>Start with Smile</button>
           </>
         )}
 
@@ -229,7 +229,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
           <div className="live-avatar-stage">
             <video ref={videoRef} autoPlay playsInline className={`live-avatar-video ${state === "live" ? "is-ready" : ""}`} />
             {state === "starting" && <div className="live-avatar-stage-overlay">Preparing your private interview…</div>}
-            {state === "connecting" && <div className="live-avatar-stage-overlay">Waiting for Ella to join…</div>}
+            {state === "connecting" && <div className="live-avatar-stage-overlay">Waiting for Smile to join…</div>}
           </div>
         )}
 
@@ -248,7 +248,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
           </div>
         )}
 
-        {state === "ended" && <><p>Ella has ended the session. {accessToken ? "This one-time invitation is now closed." : "You can try the question again or return to the screening record."}</p>{!accessToken && <button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button>}</>}
+        {state === "ended" && <><p>Smile has ended the session. {accessToken ? "This one-time invitation is now closed." : "You can try the question again or return to the screening record."}</p>{!accessToken && <button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button>}</>}
         {state === "error" && <><p className="error-box">{error}</p>{accessToken ? <p>This secure invitation can only be used once. Please contact the recruitment team if you need help.</p> : <button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button>}</>}
       </div>
     </section>

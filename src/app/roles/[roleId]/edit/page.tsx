@@ -78,7 +78,7 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
   };
   const recruitmentSetup = {
     roleTitle: role.jobTitle,
-    aiInterviewerName: "Ella",
+    aiInterviewerName: "Smile",
     aiInterviewerBehavior: role.interviewBehavior || "",
     requiredInterviewQuestion1: role.requiredInterviewQuestion1 || "",
     requiredInterviewQuestion2: role.requiredInterviewQuestion2 || "",

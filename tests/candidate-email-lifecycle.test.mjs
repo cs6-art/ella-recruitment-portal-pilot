@@ -85,7 +85,7 @@ test("notification queue carries ready-to-send candidate email copy per booking 
   const query = read("src/lib/internal-recruitment-queries.ts");
   assert.match(labels, /voice_booking_invitation: "Schedule your AI voice interview with McLink Group"/);
   assert.match(labels, /voice_booking_confirmation: "Your AI voice interview is confirmed"/);
-  assert.match(labels, /Ella, will call you at your preferred mobile number/);
+  assert.match(labels, /Smile, will call you at your preferred mobile number/);
   assert.match(labels, /Please ensure you are available and in a quiet location\./);
   assert.match(labels, /AI Interview Notice: This interview will be conducted with the assistance of an AI interviewing system/);
   assert.match(labels, /cta: "Schedule a call"/);

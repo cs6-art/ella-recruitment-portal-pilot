@@ -142,7 +142,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, roleId, ...intake, results: [...intake.results, ...rejected] }, { status: 202 });
   } catch (error) {
     if (error instanceof EllaCreditsError) {
-      return responseError("Not enough Ella Credits to screen this batch. Top up Ella Credits to continue.", 402, {
+      return responseError("Not enough Smile Credits to screen this batch. Top up Smile Credits to continue.", 402, {
         code: error.code,
         required: error.required,
         available: error.available,

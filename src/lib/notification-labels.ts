@@ -138,7 +138,7 @@ export function notificationEmail(eventType: string | null | undefined, context:
       return {
         ...base,
         heading: "Your AI voice interview is confirmed",
-        message: `Dear ${name},\n\nThis confirms your AI voice interview for ${rolePhrase}.${scheduled ? `\n\nScheduled for: ${scheduled}` : ""}\n\nOur AI interviewer, Ella, will call you at your preferred mobile number around this time. Please ensure you are available and in a quiet location.\n\n${AI_INTERVIEW_NOTICE}`,
+        message: `Dear ${name},\n\nThis confirms your AI voice interview for ${rolePhrase}.${scheduled ? `\n\nScheduled for: ${scheduled}` : ""}\n\nOur AI interviewer, Smile, will call you at your preferred mobile number around this time. Please ensure you are available and in a quiet location.\n\n${AI_INTERVIEW_NOTICE}`,
         cta: "",
         ctaLink: "",
       };

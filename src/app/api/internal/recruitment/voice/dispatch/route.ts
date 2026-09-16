@@ -63,7 +63,7 @@ export const POST = withInternalAuth("voice_attempts", async (request) => {
     throw error;
   }
 
-  // Build the exact Ella system prompt this call must run — role template
+  // Build the exact Smile system prompt this call must run — role template
   // and screening criteria resolved, and the real candidate's name/email/
   // match score/AI summary filled in. n8n must send this text verbatim as
   // `ella_system_prompt`; it must never fall back to whatever prompt is

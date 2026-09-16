@@ -27,7 +27,7 @@ export const organizationMemberships = pgTable(
 /**
  * Phase 2 backend migration — first pilot table.
  *
- * The Ella Credits balance lived in an append-only Google Sheet tab, where the
+ * The Smile Credits balance lived in an append-only Google Sheet tab, where the
  * balance was the sum of every row and concurrent deductions could overspend
  * (Sheets has no atomic increment). Here `credit_balance` is a single row that
  * is the source of truth, updated atomically in the same statement that

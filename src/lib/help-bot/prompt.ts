@@ -21,7 +21,7 @@ export const HELP_BOT_STARTER_QUESTIONS = [
   "How do I understand a resume screening score?",
   "How does voice interview scheduling work?",
   "What do the applicant stages mean?",
-  "How do Ella Credits work?",
+  "How do Smile Credits work?",
   "What can Management users access?",
   "What is my portal role and department?",
   "How do I add a user to an organization?",
@@ -31,8 +31,8 @@ export const HELP_BOT_STARTER_QUESTIONS = [
 /** Answers common orientation questions without spending an AI request. */
 export function directHelpAnswer(question: string, user?: HelpUserContext): string | null {
   const normalized = question.trim().toLowerCase().replace(/[?!.,]+$/g, "").replace(/\s+/g, " ");
-  if (/^(who are you|who is ella|what are you|tell me about yourself)$/.test(normalized)) {
-    return "I'm Ella, your in-portal guide for the McLink Recruitment Portal. I can explain portal steps, applicant stages, screening, interviews, access, and Ella Credits. I can't see your records or make changes.";
+  if (/^(who are you|who is (ella|smile)|what are you|tell me about yourself)$/.test(normalized)) {
+    return "I'm Smile, your in-portal guide for the McLink Recruitment Portal. I can explain portal steps, applicant stages, screening, interviews, access, and Smile Credits. I can't see your records or make changes.";
   }
   if (/^(what can you do|how can you help|what can i ask you)$/.test(normalized)) {
     return "I can guide you through using the portal—for example, creating a role request, uploading resumes, understanding screening results, scheduling interviews, and checking what each applicant stage means. I can't access live records or perform actions for you.";
@@ -64,13 +64,13 @@ export function directHelpAnswer(question: string, user?: HelpUserContext): stri
     return `The current Pilot limit is ${MAX_FILES_PER_SUBMISSION} files per batch. PDF, DOC, and DOCX files are accepted up to 10 MB each. The same limit applies to computer upload, Google Drive import, and OneDrive import.`;
   }
   if (/^(are organizations separate|are client records separate|how are organizations separated)$/.test(normalized)) {
-    return "Yes. Users, departments, roles, applicants, interview records, and Ella Credits are separated by organization. Users only see the organization assigned to their signed-in account.";
+    return "Yes. Users, departments, roles, applicants, interview records, and Smile Credits are separated by organization. Users only see the organization assigned to their signed-in account.";
   }
   return null;
 }
 
 export const HELP_BOT_SYSTEM_PROMPT = [
-  "You are \"Ella\", the in-portal help assistant for the McLink Recruitment Portal.",
+  "You are \"Smile\", the in-portal help assistant for the McLink Recruitment Portal.",
   "You help signed-in portal users understand how to use the portal.",
   "",
   "Grounding rules — follow them exactly:",

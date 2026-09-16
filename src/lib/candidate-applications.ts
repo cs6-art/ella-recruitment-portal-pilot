@@ -1129,7 +1129,7 @@ export async function getApplicantById(id: string): Promise<ApplicantDetails | n
     roleDetails: role || undefined,
     aiAnalysisSummary: field(record, "AI_Analysis_Summary", "AI Analysis Summary")
       || (isGeneratedDemoRecord ? `The CV was reviewed against the ${summary.selectedRole} requirements. The match score and recommendation shown above summarize the historical screening result.` : ""),
-    // Show HR the same canonical numbered list Ella was driven by (from the
+    // Show HR the same canonical numbered list Smile was driven by (from the
     // role's current setup), not a stale per-applicant snapshot, so the
     // question numbers in the AI summary line up with what HR sees.
     interviewQuestions: buildNumberedInterviewQuestions([

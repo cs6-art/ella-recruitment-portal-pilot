@@ -112,7 +112,7 @@ export function filterVisibleApplicants<T extends { department: string }>(applic
   return [];
 }
 
-// Ella Credits — viewing the ledger, manual/demo top-ups, and initiating a
+// Smile Credits — viewing the ledger, manual/demo top-ups, and initiating a
 // paid (HitPay) purchase. This is deliberately narrower than the recruitment
 // reviewer capability: CEO/Admin require their preset plus settings access;
 // HR requires the HR preset plus review access. Recruiter, Interviewer, Hiring

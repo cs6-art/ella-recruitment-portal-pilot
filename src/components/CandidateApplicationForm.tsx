@@ -162,7 +162,7 @@ export default function CandidateApplicationForm({
 
   async function prepareElla() {
     if (!form.candidateName.trim() || !resumeFile) {
-      setError("Enter the candidate name and choose a resume before meeting Ella.");
+      setError("Enter the candidate name and choose a resume before meeting Smile.");
       return;
     }
     setSaving(true);
@@ -175,10 +175,10 @@ export default function CandidateApplicationForm({
       body.append("resumeFile", resumeFile, resumeFile.name);
       const response = await fetch("/api/live-avatar/prepare", { method: "POST", body });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok || result.success !== true || !result.preparation) throw new Error(result.error || "Ella could not prepare the resume yet.");
+      if (!response.ok || result.success !== true || !result.preparation) throw new Error(result.error || "Smile could not prepare the resume yet.");
       setLiveAvatarPreparation(result.preparation as LiveAvatarPreparation);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Ella could not prepare the resume yet.");
+      setError(caught instanceof Error ? caught.message : "Smile could not prepare the resume yet.");
     } finally {
       setSaving(false);
     }
@@ -307,7 +307,7 @@ export default function CandidateApplicationForm({
             </label>
             <small>PDF, DOC, or DOCX · up to 10 MB</small>
             {readFieldError(fieldErrors, "resumeFile") && <small>{readFieldError(fieldErrors, "resumeFile")}</small>}
-            {enableLiveAvatar && <div className="resume-avatar-action"><div><strong>Preview Ella&apos;s resume-led question</strong><small>This preview does not save a screening record or use credits. Select &quot;Save Screening Record&quot; to start the billable CV screening.</small></div><button type="button" className="btn btn-secondary" disabled={saving || !form.candidateName.trim() || !resumeFile} onClick={() => void prepareElla()}>{saving ? "Preparing..." : liveAvatarPreparation ? "Preview ready" : "Preview Ella&apos;s question"}</button></div>}
+            {enableLiveAvatar && <div className="resume-avatar-action"><div><strong>Preview Smile&apos;s resume-led question</strong><small>This preview does not save a screening record or use credits. Select &quot;Save Screening Record&quot; to start the billable CV screening.</small></div><button type="button" className="btn btn-secondary" disabled={saving || !form.candidateName.trim() || !resumeFile} onClick={() => void prepareElla()}>{saving ? "Preparing..." : liveAvatarPreparation ? "Preview ready" : "Preview Smile&apos;s question"}</button></div>}
           </div>
         </div>
 

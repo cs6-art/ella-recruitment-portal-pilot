@@ -26,20 +26,20 @@ export function prepareLiveAvatarScreening(input: { roleTitle: string; roleDescr
   const approved = (input.approvedQuestions || []).map(clean).find(Boolean);
   const screeningQuestion = approved || `You mention ${evidenceText}. How did that experience prepare you for the ${title} role, and what outcome did you achieve?`;
   const matchedText = matched.slice(0, 8).join(", ") || "the experience and skills in your resume";
-  return { resumeSummary: clamp(`Resume focus for ${title}: relevant signals include ${matchedText}. ${evidence.length ? evidence.join(" ") : "Ella will ask you to expand on the most relevant experience in your resume."}`), screeningQuestion: clamp(screeningQuestion, 500) };
+  return { resumeSummary: clamp(`Resume focus for ${title}: relevant signals include ${matchedText}. ${evidence.length ? evidence.join(" ") : "Smile will ask you to expand on the most relevant experience in your resume."}`), screeningQuestion: clamp(screeningQuestion, 500) };
 }
 function meaningfulUserTurns(transcript: LiveAvatarTranscriptTurn[]) { return transcript.filter((turn) => String(turn.role || "").toLowerCase() === "user").map((turn) => clean(turn.transcript)).filter((text) => text.length >= 8 && !/^(yes|no|okay|ok|sure|thanks|thank you)[.!]?$/i.test(text)); }
 export function evaluateLiveAvatarTranscript(input: { roleTitle: string; roleDescription: string; question: string; transcript: LiveAvatarTranscriptTurn[] }): LiveAvatarEvaluation {
   const answer = meaningfulUserTurns(input.transcript).join(" ").slice(0, 5000);
-  if (answer.length < 8) return { score: 0, answered: false, answer: "", summary: "Ella did not capture a complete response. A recruiter may follow up if another interview is needed.", strengths: [], focusAreas: ["Complete the interview question with a specific example and outcome."], recommendation: "Response incomplete — recruiter review recommended." };
+  if (answer.length < 8) return { score: 0, answered: false, answer: "", summary: "Smile did not capture a complete response. A recruiter may follow up if another interview is needed.", strengths: [], focusAreas: ["Complete the interview question with a specific example and outcome."], recommendation: "Response incomplete — recruiter review recommended." };
   const answerTokens = new Set(tokens(answer));
   const keywords = roleKeywords(input.roleTitle, input.roleDescription);
   const relevant = keywords.filter((keyword) => answerTokens.has(keyword));
   const questionKeywords = tokens(input.question).filter((token) => answerTokens.has(token));
   const wordCount = answer.split(/\s+/).filter(Boolean).length;
   const score = Math.max(20, Math.min(100, Math.min(35, Math.round((wordCount / 80) * 35)) + Math.min(45, Math.round((relevant.length / Math.max(3, Math.min(10, keywords.length))) * 45)) + Math.min(20, questionKeywords.length >= 2 ? 20 : questionKeywords.length === 1 ? 12 : 5)));
-  const strengths = [wordCount >= 35 ? "Shared a detailed example rather than a one-line answer." : "Provided a direct response to Ella's question.", relevant.length > 0 ? `Mentioned role-relevant experience: ${relevant.slice(0, 4).join(", ")}.` : "Explained personal experience in their own words."];
+  const strengths = [wordCount >= 35 ? "Shared a detailed example rather than a one-line answer." : "Provided a direct response to Smile's question.", relevant.length > 0 ? `Mentioned role-relevant experience: ${relevant.slice(0, 4).join(", ")}.` : "Explained personal experience in their own words."];
   const missing = keywords.filter((keyword) => !answerTokens.has(keyword)).slice(0, 3);
   const focusAreas = [...(wordCount < 35 ? ["Add more detail about the actions you took and the outcome."] : []), ...(missing.length ? [`Explore evidence of ${missing.join(", ")}.`] : [])];
-  return { score, answered: true, answer, summary: `Ella captured a ${wordCount >= 35 ? "detailed" : "concise"} response with ${relevant.length} clear role-relevant signal${relevant.length === 1 ? "" : "s"}.`, strengths, focusAreas: focusAreas.length ? focusAreas : ["Use the next interview to validate depth and consistency."], recommendation: score >= 70 ? "Strong response — recruiter review recommended." : score >= 45 ? "Promising response — recruiter review recommended." : "More detail would help — recruiter review recommended." };
+  return { score, answered: true, answer, summary: `Smile captured a ${wordCount >= 35 ? "detailed" : "concise"} response with ${relevant.length} clear role-relevant signal${relevant.length === 1 ? "" : "s"}.`, strengths, focusAreas: focusAreas.length ? focusAreas : ["Use the next interview to validate depth and consistency."], recommendation: score >= 70 ? "Strong response — recruiter review recommended." : score >= 45 ? "Promising response — recruiter review recommended." : "More detail would help — recruiter review recommended." };
 }

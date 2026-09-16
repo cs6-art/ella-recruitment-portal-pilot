@@ -14,7 +14,7 @@ export type { CreditEvent } from "@/lib/ella-credit-math";
 export type { CreditBalance, LedgerEntry } from "@/lib/ella-credits-store";
 
 /**
- * Ella Credits — single org-wide balance metering every AI action.
+ * Smile Credits — single org-wide balance metering every AI action.
  *
  * Storage is switchable via `CREDITS_BACKEND` (Phase 2 backend migration):
  *  - `sheets`   (default): the original Google Sheet ledger.

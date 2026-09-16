@@ -7,7 +7,7 @@ import { CREDIT_LEDGER_HEADERS, CREDIT_LEDGER_TAB, creditsSpreadsheetId } from "
 import type { CreditBalance, LedgerAppend, LedgerEntry } from "@/lib/ella-credits-store";
 
 /**
- * Google Sheets storage for the Ella Credit ledger — the original
+ * Google Sheets storage for the Smile Credit ledger — the original
  * implementation, unchanged in behaviour. Append-only tab, balance = sum of
  * every row's delta. Non-atomic: a burst of concurrent deductions can briefly
  * overspend (documented limitation; the Postgres store fixes it).
@@ -19,7 +19,7 @@ const privateKey = getGoogleServiceAccountPrivateKey();
 
 if (!spreadsheetId || !serviceAccountEmail || !privateKey) {
   throw new Error(
-    "Ella Credits ledger access is not configured (need GOOGLE_CREDITS_SPREADSHEET_ID or GOOGLE_SHEETS_SPREADSHEET_ID, plus the Google service account).",
+    "Smile Credits ledger access is not configured (need GOOGLE_CREDITS_SPREADSHEET_ID or GOOGLE_SHEETS_SPREADSHEET_ID, plus the Google service account).",
   );
 }
 

@@ -100,7 +100,7 @@ export async function createCreditPurchase(input: CreatePurchaseInput): Promise<
       referenceNumber: reference,
       email: input.actorEmail,
       name: input.actorName,
-      purpose: `Ella Credits — ${pack.credits} credits`,
+      purpose: `Smile Credits — ${pack.credits} credits`,
       redirectUrl: `${origin}/credits?payment=return&ref=${encodeURIComponent(reference)}`,
       webhookUrl: `${origin}/api/webhooks/hitpay`,
     });

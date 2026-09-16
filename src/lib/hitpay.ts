@@ -99,7 +99,7 @@ export async function createPaymentRequest(input: {
     reference_number: input.referenceNumber,
     redirect_url: input.redirectUrl,
     webhook: input.webhookUrl,
-    purpose: input.purpose || "Ella Credits top-up",
+    purpose: input.purpose || "Smile Credits top-up",
     send_email: "false",
   });
   if (input.email) body.set("email", input.email);

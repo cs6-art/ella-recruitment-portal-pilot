@@ -38,7 +38,7 @@ test("knowledge base parses into sections", () => {
   const headings = knowledgeHeadings();
   assert.ok(headings.length > 10, "expected many FAQ sections");
   assert.ok(headings.includes("How to create a role requisition (role request)"));
-  assert.ok(headings.includes("How credits work (Ella Credits)"));
+  assert.ok(headings.includes("How credits work (Smile Credits)"));
 });
 
 test("retrieval surfaces the relevant section for a question", () => {
@@ -67,7 +67,7 @@ test("retrieval understands common CV and score wording", () => {
 });
 
 test("Ella answers common orientation questions clearly", () => {
-  assert.match(directHelpAnswer("who are you?") || "", /I'm Ella/);
+  assert.match(directHelpAnswer("who are you?") || "", /I'm Smile/);
   assert.match(directHelpAnswer("what can you do?") || "", /guide you through using the portal/);
   assert.equal(directHelpAnswer("what is my applicant score?"), null);
 });

@@ -77,7 +77,7 @@ export async function POST(request: Request) {
   // removed after the initial enabled check; no OpenAI call is made.
   if (!isConfigured()) {
     return NextResponse.json(
-      { success: false, code: "NOT_CONFIGURED", error: "Ella is currently being configured and will be available soon." },
+      { success: false, code: "NOT_CONFIGURED", error: "Smile is currently being configured and will be available soon." },
       { status: 503 },
     );
   }
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
   const directAnswer = directHelpAnswer(question, userContext);
   if (directAnswer) {
     return NextResponse.json(
-      { success: true, answer: directAnswer, sources: ["About Ella"] },
+      { success: true, answer: directAnswer, sources: ["About Smile"] },
       { headers: { "Cache-Control": "no-store" } },
     );
   }

@@ -74,7 +74,7 @@ export async function POST(request: Request) {
   } catch (error) {
     logServerTiming(new URL(request.url).pathname, startedAt, { }, { dbOperations: 0, fileCount, submittedCount });
     if (error instanceof EllaCreditsError) {
-      return responseError("Not enough Ella Credits to screen this batch. Top up Ella Credits to continue.", 402, {
+      return responseError("Not enough Smile Credits to screen this batch. Top up Smile Credits to continue.", 402, {
         code: error.code,
         required: error.required,
         available: error.available,

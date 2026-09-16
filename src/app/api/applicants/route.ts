@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       try {
         await assertCreditsAvailable(1, "cv_analysis", { organizationId: user.organizationId, ownerEmail: user.email });
       } catch (creditError) {
-        if (creditError instanceof EllaCreditsError) return responseError("Not enough Ella Credits to screen this candidate.", 402, { code: creditError.code, required: creditError.required, available: creditError.available });
+        if (creditError instanceof EllaCreditsError) return responseError("Not enough Smile Credits to screen this candidate.", 402, { code: creditError.code, required: creditError.required, available: creditError.available });
         throw creditError;
       }
       const applicationId = `APP-${crypto.randomUUID()}`;
@@ -85,13 +85,13 @@ export async function POST(request: Request) {
       return responseError("The candidate application workflow is not configured.", 503);
     }
 
-    // Screening this candidate costs 1 Ella Credit. Refuse before storing the
+    // Screening this candidate costs 1 Smile Credit. Refuse before storing the
     // resume or invoking the workflow if the balance can't cover it.
     try {
       await assertCreditsAvailable(1, "cv_analysis", { organizationId: user.organizationId, ownerEmail: user.email });
     } catch (creditError) {
       if (creditError instanceof EllaCreditsError) {
-        return responseError("Not enough Ella Credits to screen this candidate. Top up Ella Credits in Settings.", 402, { code: creditError.code, required: creditError.required, available: creditError.available });
+        return responseError("Not enough Smile Credits to screen this candidate. Top up Smile Credits in Settings.", 402, { code: creditError.code, required: creditError.required, available: creditError.available });
       }
       throw creditError;
     }

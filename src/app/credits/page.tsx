@@ -19,7 +19,7 @@ export default async function CreditsPage() {
       <main className="container page settings-page">
         <header className="hero-row settings-header">
           <div>
-            <span className="eyebrow-dark">ELLA CREDITS</span>
+            <span className="eyebrow-dark">SMILE CREDITS</span>
             <h1>Credits</h1>
             <p>Purchase credits securely, or manage authorized manual top-ups.</p>
           </div>

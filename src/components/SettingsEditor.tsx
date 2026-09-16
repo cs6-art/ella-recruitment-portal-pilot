@@ -17,13 +17,13 @@ type Setting = {
   type?: "text" | "url" | "number" | "choice";
 };
 
-const categories = ["Access & Security", "Booking & Interview", "Workflow Rules", "Notifications", "Ella Credits"];
+const categories = ["Access & Security", "Booking & Interview", "Workflow Rules", "Notifications", "Smile Credits"];
 const categoryDescriptions: Record<string, string> = {
   "Access & Security": "Live access controls for the connected recruitment portal.",
   "Booking & Interview": "Defaults for the calendar and candidate booking links.",
   "Workflow Rules": "Live limits and timing rules used by recruitment automation.",
   Notifications: "Live notification behaviour for recruitment operations.",
-  "Ella Credits": "Published pricing is fixed at 1 credit per CV analysis and 10 credits per AI phone interview. The balance is managed in the Ella Credits panel below.",
+  "Smile Credits": "Published pricing is fixed at 1 credit per CV analysis and 10 credits per AI phone interview. The balance is managed in the Smile Credits panel below.",
 };
 
 function labelFor(key: string) {

@@ -1,5 +1,5 @@
 /**
- * Purchasable Ella Credit packs.
+ * Purchasable Smile Credit packs.
  *
  * Pricing is ALWAYS server-side. The client sends only a `packId`; the server
  * looks up the credits and the payable amount here. There is no code path that

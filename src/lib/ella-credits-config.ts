@@ -1,5 +1,5 @@
 /**
- * Where the Ella Credit ledger Google Sheet lives.
+ * Where the Smile Credit ledger Google Sheet lives.
  *
  * Historically the ledger tab (`Ella_Credit_Ledger`) was assumed to be inside
  * the main recruitment workbook (`GOOGLE_SHEETS_SPREADSHEET_ID`) and the portal

@@ -180,8 +180,8 @@ export const PORTAL_CONFIG_CATALOG: PortalConfigEntry[] = [
   {
     key: "Ella_Credit_Cost_CV_Analysis",
     envKeys: [],
-    category: "Ella Credits",
-    description: "Ella Credits consumed per resume screened (AI CV Analysis).",
+    category: "Smile Credits",
+    description: "Smile Credits consumed per resume screened (AI CV Analysis).",
     type: "number",
     default: "1",
     min: 0,
@@ -190,8 +190,8 @@ export const PORTAL_CONFIG_CATALOG: PortalConfigEntry[] = [
   {
     key: "Ella_Credit_Cost_Phone_Interview",
     envKeys: [],
-    category: "Ella Credits",
-    description: "Ella Credits consumed per AI phone interview booked.",
+    category: "Smile Credits",
+    description: "Smile Credits consumed per AI phone interview booked.",
     type: "number",
     default: "10",
     min: 0,
@@ -200,7 +200,7 @@ export const PORTAL_CONFIG_CATALOG: PortalConfigEntry[] = [
   {
     key: "Ella_Credit_Discount_Threshold",
     envKeys: [],
-    category: "Ella Credits",
+    category: "Smile Credits",
     description: "Single top-up amount at or above which the volume discount bonus is added. Set to 0 to disable the discount.",
     type: "number",
     default: "2000",
@@ -210,7 +210,7 @@ export const PORTAL_CONFIG_CATALOG: PortalConfigEntry[] = [
   {
     key: "Ella_Credit_Discount_Percent",
     envKeys: [],
-    category: "Ella Credits",
+    category: "Smile Credits",
     description: "Bonus credits added as a percentage of a qualifying top-up (e.g. 10 = 10% extra).",
     type: "number",
     default: "10",

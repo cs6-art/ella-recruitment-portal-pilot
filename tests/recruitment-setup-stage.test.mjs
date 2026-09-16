@@ -149,7 +149,7 @@ test("editor exposes separate stage actions and readiness", () => {
 
 test("recruitment setup uses one guided editor with simple HR-facing fields", () => {
   assert.match(editor, /Interview Setup/);
-  assert.match(editor, /What should Ella listen for\?/);
+  assert.match(editor, /What should Smile listen for\?/);
   assert.match(editor, /Advanced: edit full script/);
   assert.match(editor, /Publishing checklist/);
   // The raw {{curly_brace}} template stays hidden behind an explicit
@@ -298,7 +298,7 @@ test("buildVoiceCallPrompt fully resolves the Ella prompt for a real call", asyn
   );
 
   assert.equal(resolved.resolved, true);
-  assert.match(resolved.systemPrompt, /You are Ella, McLink Group's professional and inviting AI HR Recruiting Assistant/);
+  assert.match(resolved.systemPrompt, /You are Smile, McLink Group's professional and inviting AI HR Recruiting Assistant/);
   assert.match(resolved.systemPrompt, /Am I speaking with Lihen Bong\?/);
   assert.match(resolved.systemPrompt, /Q1: Tell me about your customer service experience\./);
   assert.match(resolved.systemPrompt, /Q2: How do you handle an upset customer\?/);

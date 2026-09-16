@@ -1,6 +1,6 @@
-# Ella — Recruitment Portal FAQ Knowledge Base
+# Smile — Recruitment Portal FAQ Knowledge Base
 
-This is the approved knowledge source for the "Ella" in-portal help assistant.
+This is the approved knowledge source for the "Smile" in-portal help assistant.
 It is written for portal end users (Creators, HR, Management, HODs, interviewers,
 administrators). It is derived from the McLink Recruitment Portal User Manual, the
 working recruitment workflow notes, and the portal access-control model.
@@ -47,11 +47,11 @@ so its user directory can be created. Editing an organization changes its
 directory metadata; it does not move or delete recruitment records.
 
 **Are client records mixed together?** No. Each organization's users,
-departments, roles, applicants, interview records, and Ella Credits are separated
+departments, roles, applicants, interview records, and Smile Credits are separated
 by the organization's access boundary. A user only sees the organization tied to
 their signed-in account.
 
-**What does Ella know about me?** Ella can explain the signed-in account's access
+**What does Smile know about me?** Smile can explain the signed-in account's access
 role, department, and permissions. She cannot look up candidate records, resume
 files, applicant scores, calendars, balances, or other live business records.
 
@@ -84,7 +84,7 @@ reuse another person's account.
 The portal can serve multiple organizations. A McLink platform administrator can
 open **User Accounts**, add an organization in the **Organizations** section,
 then choose it in **Manage users for** before adding its users. Each organization
-has its own users, departments, roles, applicants, interview records, and Ella
+has its own users, departments, roles, applicants, interview records, and Smile
 Credits. Users cannot manage or view another organization's recruitment records.
 The McLink organization remains the existing organization; adding a client does
 not copy McLink's recruitment records into that client.
@@ -437,11 +437,11 @@ manages Settings to check or reconnect the shared HR calendar.
 
 ---
 
-## How credits work (Ella Credits)
+## How credits work (Smile Credits)
 
-Ella Credits are the portal's usage allowance for AI-assisted recruitment work,
+Smile Credits are the portal's usage allowance for AI-assisted recruitment work,
 such as automated CV screening and AI voice interviews. The current balance is
-shown in the sidebar (the Ella Credits meter) and on the Ella Credits panel.
+shown in the sidebar (the Smile Credits meter) and on the Smile Credits panel.
 
 Current usage costs are:
 
@@ -459,7 +459,7 @@ running an AI voice interview consumes credits. When the balance runs low, ask
 the portal administrator or HR operations to review the top-up; if credits run
 out, AI-assisted steps may be blocked until the balance is restored. Ordinary
 portal actions like creating a role request, commenting, or booking do not consume
-credits. For exact per-action costs and your current allowance, check the Ella
+credits. For exact per-action costs and your current allowance, check the Smile
 Credits panel or contact the portal administrator.
 
 ---

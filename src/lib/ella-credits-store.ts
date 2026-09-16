@@ -1,6 +1,6 @@
 import { EllaCreditsError } from "@/lib/ella-credit-math";
 
-/** Shared types for the Ella Credits storage layer (Sheets and Postgres). */
+/** Shared types for the Smile Credits storage layer (Sheets and Postgres). */
 
 export type LedgerEntry = {
   entryId: string;

@@ -626,7 +626,7 @@ export async function startAvatarInterview(rawToken: string) {
     or(isNull(bookingTokens.expiresAt), gte(bookingTokens.expiresAt, new Date())),
   )).returning({ applicationId: bookingTokens.applicationId });
   if (!claimed) return null;
-  // Choosing Ella is the candidate's alternative to scheduling the call.
+  // Choosing Smile is the candidate's alternative to scheduling the call.
   // Disable the unused phone-call link once the avatar interview starts.
   await db.update(bookingTokens).set({ status: "revoked" }).where(and(
     eq(bookingTokens.applicationId, claimed.applicationId),
@@ -1062,7 +1062,7 @@ export async function voiceAttemptContext(attemptId: string) {
     withdrawn: applications.withdrawn,
     roleExternalId: roles.externalId,
     roleTitle: roles.title,
-    // The role's saved recruitment setup (Ella prompt template, screening
+    // The role's saved recruitment setup (Smile prompt template, screening
     // criteria, approved questions, evaluation fields) and the resume
     // screening result (match score, AI summary) are what the dispatched
     // call's Vapi system prompt must be built from — see voiceCallPromptPayload.

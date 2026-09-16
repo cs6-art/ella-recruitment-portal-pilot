@@ -1891,7 +1891,7 @@ html { scroll-behavior: smooth; }
 .recruitment-editor .setup-footer-status small { color: var(--muted); font-size: 12px; }
 .recruitment-editor .setup-action-bar { align-items: center; justify-content: space-between; }
 
-/* Keep the standalone Ella editor aligned with the other setup sections. */
+/* Keep the standalone Smile editor aligned with the other setup sections. */
 .ella-setup-section .ella-setup-form {
   gap: 18px 16px;
   padding: 22px 24px 24px;
@@ -2065,7 +2065,7 @@ html { scroll-behavior: smooth; }
 .template-preview-text { white-space: pre-wrap; line-height: 1.55; }
 .recruitment-editor .setup-prompt-guidance::after { content: "Recommended format: 1. System Prompt  2. Core Questions  3. Assess  4. Final AI Evaluation"; display: block; padding-top: 4px; color: var(--blue); font-weight: 800; }
 .recruitment-editor .setup-template-heading small::after { content: "Recommended: Proven Vapi Interview Structure"; display: block; padding-top: 3px; color: var(--blue); font-weight: 800; }
-.ella-question-plan-note::after { content: "After the phone interview, Ella sends the recommendation summary to HR. HR approval is required before the final-interview scheduling email is sent."; display: block; padding-top: 4px; color: var(--navy); font-weight: 700; }
+.ella-question-plan-note::after { content: "After the phone interview, Smile sends the recommendation summary to HR. HR approval is required before the final-interview scheduling email is sent."; display: block; padding-top: 4px; color: var(--navy); font-weight: 700; }
 
 @media (max-width: 640px) {
   .recruitment-editor .setup-template { grid-template-columns: 1fr; margin-inline: 16px; }

@@ -508,7 +508,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
         <div>
           <span className="eyebrow-dark">RECRUITMENT SETUP</span>
           <h2>AI Phone Interview Setup</h2>
-          <p className="section-subtitle">Set up what Ella asks and looks for when she calls candidates for this role.</p>
+          <p className="section-subtitle">Set up what Smile asks and looks for when she calls candidates for this role.</p>
           {updatedAt && <small>Last saved {formatDate(updatedAt)}{updatedBy ? ` by ${updatedBy}` : ""}</small>}
         </div>
         <span className="setup-readonly">{editable ? "Editable by HR reviewers" : "Read-only"}</span>
@@ -523,7 +523,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
           <div><span className="vapi-kicker">HR EDITS THESE SECTIONS</span><h3>Screening instructions</h3><p>Add only the guidance that is specific to this role.</p></div>
         </div>
         <div className="form-grid vapi-form-grid vapi-form-grid-single-column">
-          <Field id="vapi-screeningCriteria" label="What should Ella listen for?" value={values.screeningCriteria} onChange={(value) => update("screeningCriteria", value)} disabled={!editable || saving} multiline required placeholder="What evidence should HR and Ella look for in each candidate?" hint="Ella will use this as extra guidance during the call, alongside the fields below." />
+        <Field id="vapi-screeningCriteria" label="What should Smile listen for?" value={values.screeningCriteria} onChange={(value) => update("screeningCriteria", value)} disabled={!editable || saving} multiline required placeholder="What evidence should HR and Smile look for in each candidate?" hint="Smile will use this as extra guidance during the call, alongside the fields below." />
           <Field id="vapi-license" label="License or certificate" value={values.licenseOrCertificateRequired} onChange={(value) => update("licenseOrCertificateRequired", value)} disabled={!editable || saving} required={values.licenseRequirementStatus === "Required"} placeholder="Example: CPA preferred" />
           <Field id="vapi-keywords" label="Keywords to look for" value={values.keywordsToLookFor} onChange={(value) => update("keywordsToLookFor", value)} disabled={!editable || saving} placeholder="Separate keywords with commas" />
            <Field id="vapi-transferable-skills" label="Transferable skills accepted" value={values.transferableSkillsAccepted} onChange={(value) => update("transferableSkillsAccepted", value)} disabled={!editable || saving} multiline placeholder="Describe adjacent experience that may be accepted." />
@@ -535,7 +535,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
 
       <div className="vapi-builder">
         <div className="vapi-section-heading">
-          <div><span className="vapi-kicker">EVALUATION FIELDS</span><h3>What should Ella score or note for this role?</h3><p>Score, recommendation, strengths, and concerns are always included. Add anything extra this role needs — the same list is used for both resume screening and the voice interview.</p></div>
+          <div><span className="vapi-kicker">EVALUATION FIELDS</span><h3>What should Smile score or note for this role?</h3><p>Score, recommendation, strengths, and concerns are always included. Add anything extra this role needs — the same list is used for both resume screening and the voice interview.</p></div>
         </div>
         <div className="vapi-baseline-fields">
           <span className="vapi-kicker">Always included</span>
@@ -562,7 +562,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
           {(values.customEvaluationFields || []).map((customField, index) => (
             <div className="vapi-custom-field-row" key={index}>
               <Field id={`vapi-custom-label-${index}`} label="Field name" value={customField.label} onChange={(value) => updateCustomField(index, { label: value, key: customFieldKey(value) })} disabled={!editable || saving} placeholder="Example: Technical depth" />
-              <Field id={`vapi-custom-desc-${index}`} label="What should Ella assess?" value={customField.description} onChange={(value) => updateCustomField(index, { description: value })} disabled={!editable || saving} placeholder="One plain-English sentence, e.g. Assess how deeply the candidate understands the required technical stack." />
+              <Field id={`vapi-custom-desc-${index}`} label="What should Smile assess?" value={customField.description} onChange={(value) => updateCustomField(index, { description: value })} disabled={!editable || saving} placeholder="One plain-English sentence, e.g. Assess how deeply the candidate understands the required technical stack." />
               <button type="button" className="btn btn-secondary" disabled={!editable || saving} onClick={() => removeCustomField(index)}>Remove</button>
             </div>
           ))}
@@ -574,7 +574,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
 
       <div className="vapi-builder">
         <div className="vapi-section-heading">
-          <div><span className="vapi-kicker">INTERVIEW QUESTIONS</span><h3>What should Ella ask?</h3><p>{(valueText(values.hodScreeningQuestion1) || valueText(values.hodScreeningQuestion2)) ? "HR's questions from the role request come first and can't be edited here. Add your own questions after that, in order — Ella asks all of them exactly as written." : "Write 3 to 5 questions in the order you want them asked. Ella asks them exactly as written, one at a time, and doesn't make up her own."} These questions appear directly in the script preview below.</p></div>
+          <div><span className="vapi-kicker">INTERVIEW QUESTIONS</span><h3>What should Smile ask?</h3><p>{(valueText(values.hodScreeningQuestion1) || valueText(values.hodScreeningQuestion2)) ? "HR's questions from the role request come first and can't be edited here. Add your own questions after that, in order — Smile asks all of them exactly as written." : "Write 3 to 5 questions in the order you want them asked. Smile asks them exactly as written, one at a time, and doesn't make up her own."} These questions appear directly in the script preview below.</p></div>
           <span className={`vapi-count-badge ${questions.length >= 3 ? "complete" : ""}`}>{questions.length} of {questionKeys.length} configured · 3 required</span>
         </div>
         <div className={`vapi-question-guidance${missingRequiredQuestionIndexes.length ? " has-missing" : ""}`} role="status">
@@ -609,7 +609,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
                 {lockedFromHr ? (
                   <p className="vapi-question-locked-text">{lockedFromHr}</p>
                 ) : (
-                  <textarea id={`vapi-question-input-${index + 1}`} value={values[key] ?? ""} disabled={!editable || saving} placeholder="Write the exact question Ella should ask." onChange={(event) => update(key, event.target.value)} />
+                  <textarea id={`vapi-question-input-${index + 1}`} value={values[key] ?? ""} disabled={!editable || saving} placeholder="Write the exact question Smile should ask." onChange={(event) => update(key, event.target.value)} />
                 )}
               </label>
             );
@@ -619,7 +619,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
 
       <div id="vapi-preview" className="vapi-preview">
         <div className="vapi-section-heading">
-          <div><span className="vapi-kicker">{advancedPrompt ? "ADVANCED" : "SCRIPT PREVIEW"}</span><h3>{advancedPrompt ? "Edit the full interview script" : "See what Ella will say"}</h3><p>{advancedPrompt ? "For advanced use only. Keep the marker that says system_prompt exactly where it is — that's where your field answers above get inserted automatically." : "This includes your questions above and everything else Ella will say on the call, after your answers are filled in."}</p></div>
+          <div><span className="vapi-kicker">{advancedPrompt ? "ADVANCED" : "SCRIPT PREVIEW"}</span><h3>{advancedPrompt ? "Edit the full interview script" : "See what Smile will say"}</h3><p>{advancedPrompt ? "For advanced use only. Keep the marker that says system_prompt exactly where it is — that's where your field answers above get inserted automatically." : "This includes your questions above and everything else Smile will say on the call, after your answers are filled in."}</p></div>
           <div className="vapi-preview-actions">
             {advancedPrompt && <button type="button" className="btn btn-secondary" disabled={!editable || saving} onClick={() => setAdvancedPrompt(false)}>Back to simple view</button>}
             {!advancedPrompt && <button type="button" className="btn btn-secondary" disabled={!editable || saving} onClick={openAdvancedPrompt}>Advanced: edit full script</button>}
@@ -630,7 +630,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
         ) : (
           <details className="vapi-prompt-preview">
             <summary>See a sample call with an example candidate</summary>
-            <small>This shows what Ella would say on a real call, using a made-up candidate (&quot;Jamie Cruz&quot;) so you can read it as plain text.</small>
+            <small>This shows what Smile would say on a real call, using a made-up candidate (&quot;Jamie Cruz&quot;) so you can read it as plain text.</small>
             <pre>{generatedSample}</pre>
           </details>
         )}
@@ -683,7 +683,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
       </div>
 
       <div className="setup-action-bar">
-        <div className="vapi-save-note"><strong>{editable ? "Review the prompt before saving." : status === "Job Posted" ? "Read-only — this role is already published" : "Read-only setup"}</strong><small>{status === "Job Posted" ? `This is the setup Ella uses for applicants to this role.${updatedByEmail ? ` Last updated by ${updatedByEmail}.` : ""}` : updatedByEmail ? `Last updated by ${updatedByEmail}` : "The standard template remains available for this role."}</small></div>
+        <div className="vapi-save-note"><strong>{editable ? "Review the prompt before saving." : status === "Job Posted" ? "Read-only — this role is already published" : "Read-only setup"}</strong><small>{status === "Job Posted" ? `This is the setup Smile uses for applicants to this role.${updatedByEmail ? ` Last updated by ${updatedByEmail}.` : ""}` : updatedByEmail ? `Last updated by ${updatedByEmail}` : "The standard template remains available for this role."}</small></div>
         <div className="vapi-save-actions">
           {editable && <>
             {setupHasChanges && <button type="button" className="btn btn-secondary" disabled={saving} onClick={resetChanges}>Reset changes</button>}
