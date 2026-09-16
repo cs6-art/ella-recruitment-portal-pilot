@@ -1,10 +1,14 @@
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import type { SessionUser } from "@/lib/session";
 
-// Three distinct tiers share this module:
-// - canReviewRole: HR/Admin. Company-wide pipeline management — recruitment
+// Capability checks are deliberately independent. The access-role label is a
+// human-readable preset, not an authorization shortcut. HR is the only access
+// administrator; all other access comes from explicit capability flags.
+//
+// Three recruitment tiers share this module:
+// - canReviewRole: HR. Company-wide pipeline management — recruitment
 //   setup, applicant records, interview scheduling — plus HR-stage review.
-// - canApproveRole: Management/Admin. Company-wide visibility, but limited to
+// - canApproveRole: decision-only users. Company-wide visibility, but limited to
 //   reviewing and approving/rejecting/returning role requests and hiring
 //   decisions. Does not edit recruitment setup, applicant records, or
 //   bookings (see canEditApplicant, canEditRecruitmentSetup, bookings routes).
@@ -18,6 +22,12 @@ function sameDepartment(user: Pick<SessionUser, "department">, department: strin
 
 export function canViewRoleList(user: SessionUser): boolean {
   return user.canReviewRole === true || user.canApproveRole === true || user.canCreateRole === true || user.canReviewDepartmentRole === true;
+}
+
+/** HR is the sole access administrator. Other account types cannot grant or
+ * change portal capabilities, even if they have a descriptive "Admin" label. */
+export function canAdministerAccess(user: { accessRole?: string; canReviewRole?: boolean }): boolean {
+  return user.accessRole?.trim().toLowerCase() === "hr" && user.canReviewRole === true;
 }
 
 export function isCreatorOnly(user: SessionUser): boolean {
@@ -91,13 +101,10 @@ export function canDeleteApplicant(user: Pick<SessionUser, "canReviewRole">): bo
   return canEditApplicant(user);
 }
 
-// Approving, rejecting, or returning an applicant at any pipeline stage
-// (resume, voice, final) is a company-wide pipeline decision reserved for the
-// HR tier. Management (canApproveRole) is view-only everywhere in the
-// pipeline — the Management-approval step was removed and Management holds no
-// applicant hiring-decision rights.
-export function canDecideApplicant(user: Pick<SessionUser, "canReviewRole">): boolean {
-  return user.canReviewRole === true;
+// Applicant decisions are available to the HR operational tier or to an
+// explicit decision tier. Operational editing remains restricted to HR.
+export function canDecideApplicant(user: Pick<SessionUser, "canReviewRole" | "canApproveRole">): boolean {
+  return user.canReviewRole === true || user.canApproveRole === true;
 }
 
 export function canViewApplicant(user: SessionUser, applicant: { department: string }): boolean {
@@ -113,17 +120,11 @@ export function filterVisibleApplicants<T extends { department: string }>(applic
 }
 
 // Smile Credits — viewing the ledger, manual/demo top-ups, and initiating a
-// paid (HitPay) purchase. This is deliberately narrower than the recruitment
-// reviewer capability: CEO/Admin require their preset plus settings access;
-// HR requires the HR preset plus review access. Recruiter, Interviewer, Hiring
-// Manager, Management, HOD, and requesters do not qualify. There is no separate
-// IT Admin preset; Admin is the administrative path for this pilot.
-export function canManageCredits(
-  user: Pick<SessionUser, "accessRole" | "canEditSettings" | "canReviewRole">,
-): boolean {
-  const role = user.accessRole.trim().toLowerCase();
-  if (role === "admin" || role === "ceo") return user.canEditSettings === true;
-  return role === "hr" && user.canReviewRole === true;
+// paid (HitPay) purchase. This is an explicit capability so HR can delegate
+// credits to a narrowly scoped Admin account without granting recruitment,
+// settings, or user-management access.
+export function canManageCredits(user: Pick<SessionUser, "canManageCredits">): boolean {
+  return user.canManageCredits === true;
 }
 
 export function canUseRecruitmentSetup(status: string): boolean {

@@ -4,6 +4,7 @@ import { getDb, getTenantDb, isDatabaseConfigured } from "@/db/client";
 import { organizations } from "@/db/schema";
 import { departments, users } from "@/db/schema-recruitment";
 import type { DirectoryUser } from "@/lib/google-sheets";
+import { applyAccessRolePolicy } from "@/lib/access-roles";
 
 function directoryUserFromRow(row: {
   email: string;
@@ -15,10 +16,11 @@ function directoryUserFromRow(row: {
   canApproveRole: boolean;
   canEditSettings: boolean;
   canManageUsers: boolean;
+  canManageCredits: boolean;
   canReviewDepartmentRole: boolean;
   active: boolean;
 }): DirectoryUser {
-  return {
+  return applyAccessRolePolicy({
     email: row.email.trim().toLowerCase(),
     fullName: row.fullName || "",
     accessRole: row.accessRole || "",
@@ -28,9 +30,10 @@ function directoryUserFromRow(row: {
     canApproveRole: row.canApproveRole,
     canEditSettings: row.canEditSettings,
     canManageUsers: row.canManageUsers,
+    canManageCredits: row.canManageCredits,
     canReviewDepartmentRole: row.canReviewDepartmentRole,
     active: row.active,
-  };
+  });
 }
 
 /**
@@ -63,6 +66,7 @@ export async function findPostgresDirectoryUser(email: string, organizationId: s
         canApproveRole: users.canApproveRole,
         canEditSettings: users.canEditSettings,
         canManageUsers: users.canManageUsers,
+        canManageCredits: users.canManageCredits,
         canReviewDepartmentRole: users.canReviewDepartmentRole,
         active: users.active,
       })
@@ -94,6 +98,7 @@ export async function getPostgresDirectoryUsers(organizationId: string): Promise
       canApproveRole: users.canApproveRole,
       canEditSettings: users.canEditSettings,
       canManageUsers: users.canManageUsers,
+      canManageCredits: users.canManageCredits,
       canReviewDepartmentRole: users.canReviewDepartmentRole,
       active: users.active,
     })
@@ -142,6 +147,7 @@ export async function upsertPostgresDirectoryUser(organizationId: string, user: 
     canApproveRole: user.canApproveRole,
     canEditSettings: user.canEditSettings,
     canManageUsers: user.canManageUsers,
+    canManageCredits: user.canManageCredits,
     canReviewDepartmentRole: user.canReviewDepartmentRole,
     active: user.active,
     updatedAt: new Date(),
@@ -180,6 +186,7 @@ export async function findPostgresDirectoryUserByEmail(email: string): Promise<{
         canApproveRole: users.canApproveRole,
         canEditSettings: users.canEditSettings,
         canManageUsers: users.canManageUsers,
+        canManageCredits: users.canManageCredits,
         canReviewDepartmentRole: users.canReviewDepartmentRole,
         active: users.active,
       })
@@ -192,7 +199,7 @@ export async function findPostgresDirectoryUserByEmail(email: string): Promise<{
     if (!row) return null;
     return {
       organizationId: row.organizationId,
-      user: {
+      user: applyAccessRolePolicy({
         email: normalizedEmail,
         fullName: row.fullName || "",
         accessRole: row.accessRole || "",
@@ -202,9 +209,10 @@ export async function findPostgresDirectoryUserByEmail(email: string): Promise<{
         canApproveRole: row.canApproveRole,
         canEditSettings: row.canEditSettings,
         canManageUsers: row.canManageUsers,
+        canManageCredits: row.canManageCredits,
         active: row.active,
         canReviewDepartmentRole: row.canReviewDepartmentRole,
-      },
+      }),
     };
   } catch (error) {
     // The recruitment-core tables are optional until the reviewed cutover.

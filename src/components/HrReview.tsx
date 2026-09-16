@@ -42,6 +42,7 @@ type HrReviewProps = {
   roleId: string;
   status: string;
   canReviewRole: boolean;
+  canApproveRole: boolean;
   history: RoleStatusHistoryEntry[];
   onSuccess: (message: string, warning?: string, status?: string, roleId?: string) => void;
   onConflict?: () => void;
@@ -65,6 +66,7 @@ export default function HrReview({
   roleId,
   status,
   canReviewRole,
+  canApproveRole,
   history,
   onSuccess,
   onConflict,
@@ -78,20 +80,14 @@ export default function HrReview({
 
   const hold = latestHold(history);
 
-  // The Management-approval step was removed: an HR reviewer approves or
-  // rejects directly from HR discussion, and every hold/return resumes to HR
-  // discussion.
-  const actions =
-    status === "Pending HR Discussion" && canReviewRole
-      ? [
-          "approve_role",
-          "reject_role",
-          "return_for_revision_hr",
-          "place_on_hold_hr",
-        ]
-      : (status === "Returned for Revision" || status === "On Hold") && canReviewRole
-        ? ["resume_hr_review"]
-        : [];
+  const actions = status === "Pending HR Discussion"
+    ? [
+        ...(canApproveRole ? ["approve_role", "reject_role"] : []),
+        ...(canReviewRole ? ["return_for_revision_hr", "place_on_hold_hr"] : []),
+      ]
+    : (status === "Returned for Revision" || status === "On Hold") && canReviewRole
+      ? ["resume_hr_review"]
+      : [];
 
   async function submitAction(action: string) {
     if (submissionLock.current) return;

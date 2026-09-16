@@ -27,10 +27,9 @@ export const dynamic = "force-dynamic";
 
 // Status transitions are handled by this dynamic API route.
 
-// The Management-approval step was removed (URS Phase 1): an HR reviewer now
-// approves or rejects a role directly from the HR discussion stage. The
-// "Pending Management Approval" status and its management-only actions no
-// longer exist.
+// The old Management-approval status was removed. Approval is now an explicit
+// capability on the HR-stage transition, while review-only users can return or
+// hold a requisition without approving it.
 const transitions = {
   submit_draft_for_hr: {
     source: ["Draft"],
@@ -40,12 +39,12 @@ const transitions = {
   approve_role: {
     source: ["Pending HR Discussion"],
     target: "Approved",
-    permission: "review",
+    permission: "approve",
   },
   reject_role: {
     source: ["Pending HR Discussion"],
     target: "Rejected",
-    permission: "review",
+    permission: "approve",
   },
   return_for_revision_hr: {
     source: ["Pending HR Discussion"],
@@ -159,7 +158,9 @@ export async function POST(
     const transition = transitions[action];
     const permitted = transition.permission === "review"
       ? user.canReviewRole === true
-      : user.canCreateRole === true;
+      : transition.permission === "approve"
+        ? user.canApproveRole === true
+        : user.canCreateRole === true;
 
     if (!permitted) {
       return jsonError("You do not have permission to perform this action.", 403);

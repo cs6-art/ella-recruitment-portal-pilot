@@ -33,7 +33,7 @@ type RoleRequestDetails = {
 };
 
 type ApiResponse = { success?: boolean; role?: RoleRequestDetails; history?: RoleStatusHistoryEntry[]; error?: string };
-type Props = { roleId: string; userEmail: string; canReviewRole: boolean };
+type Props = { roleId: string; userEmail: string; canReviewRole: boolean; canApproveRole: boolean };
 
 function hasValue(value: string | number | undefined | null) { return value !== undefined && value !== null && String(value).trim() !== ""; }
 function dateValue(value?: string) {
@@ -104,7 +104,7 @@ function HistoryTimeline({ history }: { history: RoleStatusHistoryEntry[] }) {
   })}</div>{history.length > HISTORY_PAGE_SIZE && <nav className="history-pagination" aria-label="Status history pagination"><span>Showing {pageStart + 1}–{Math.min(pageStart + HISTORY_PAGE_SIZE, history.length)} of {history.length} records</span><div><button type="button" className="btn btn-secondary btn-small" disabled={currentPage === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Newer</button><span aria-live="polite">Page {currentPage + 1} of {pageCount}</span><button type="button" className="btn btn-secondary btn-small" disabled={currentPage >= pageCount - 1} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>Older</button></div></nav>}</>}</Card>;
 }
 
-export default function RoleDetails({ roleId, userEmail, canReviewRole }: Props) {
+export default function RoleDetails({ roleId, userEmail, canReviewRole, canApproveRole }: Props) {
   const router = useRouter();
   const { confirm } = useConfirmation();
   const [role, setRole] = useState<RoleRequestDetails | null>(null); const [history, setHistory] = useState<RoleStatusHistoryEntry[]>([]);
@@ -146,7 +146,7 @@ export default function RoleDetails({ roleId, userEmail, canReviewRole }: Props)
     </div><aside className="role-side-column"><Card title="People and Audit"><DefinitionList><Field label="Requester Name" value={role.requesterName}/><Field label="Requester Email" value={role.requesterEmail}/><Field label="Requester Type" value={role.requesterType}/><Field label="Submitted By" value={role.submittedByName}/><Field label="Submitted By Email" value={role.submittedByEmail}/><Field label="Created At" value={dateValue(role.createdAt)}/><Field label="Last Updated" value={dateValue(role.lastUpdatedAt)}/><Field label="Last Updated By" value={role.lastUpdatedByName}/><Field label="Last Updated By Email" value={role.lastUpdatedByEmail}/></DefinitionList></Card><Card title="Approval Details">{hasValue(role.approvedBy) || hasValue(role.approvedAt) || hasValue(role.managementComments) ? <DefinitionList><Field label="Approval Comments" value={role.managementComments} wide/><Field label="Approved By" value={role.approvedBy}/><Field label="Approved At" value={dateValue(role.approvedAt)}/></DefinitionList> : <div className="empty">{role.status === "Rejected" ? "This request was rejected during HR review." : "Not yet approved."}</div>}</Card></aside></div>
     {/* Role request fields stay read-only here; setup editing is limited to pre-publish HR stages. */}
     <RecruitmentSetupEditor roleId={role.roleId} status={role.status} editable={canReviewRole} updatedAt={role.recruitmentSetupUpdatedAt} updatedBy={role.recruitmentSetupUpdatedByName} updatedByEmail={role.recruitmentSetupUpdatedByEmail} onSaved={() => { void loadRole(true).then(() => router.refresh()); }} setup={setup}/>
-    <HrReview roleId={role.roleId} status={role.status} canReviewRole={canReviewRole} history={history} onSuccess={(message, warning, updatedStatus, updatedRoleId) => { setSuccessMessage(message); setWarningMessage(warning || ""); if (updatedStatus || updatedRoleId) setRole((current) => current ? { ...current, ...(updatedStatus ? { status: updatedStatus } : {}), ...(updatedRoleId ? { roleId: updatedRoleId } : {}) } : current); if (updatedRoleId && updatedRoleId !== role.roleId) { router.replace(`/roles/${encodeURIComponent(updatedRoleId)}`); router.refresh(); } else { void loadRole(true, updatedStatus || "").then(() => router.refresh()); } }} onConflict={() => void loadRole()}/>
+    <HrReview roleId={role.roleId} status={role.status} canReviewRole={canReviewRole} canApproveRole={canApproveRole} history={history} onSuccess={(message, warning, updatedStatus, updatedRoleId) => { setSuccessMessage(message); setWarningMessage(warning || ""); if (updatedStatus || updatedRoleId) setRole((current) => current ? { ...current, ...(updatedStatus ? { status: updatedStatus } : {}), ...(updatedRoleId ? { roleId: updatedRoleId } : {}) } : current); if (updatedRoleId && updatedRoleId !== role.roleId) { router.replace(`/roles/${encodeURIComponent(updatedRoleId)}`); router.refresh(); } else { void loadRole(true, updatedStatus || "").then(() => router.refresh()); } }} onConflict={() => void loadRole()}/>
     <HistoryTimeline history={history}/>
   </main>;
 }

@@ -1,35 +1,57 @@
-# Recommended portal access model
+# Portal access model
 
-The portal currently exposes five boolean permissions in `User_Directory`:
+The portal uses a simple capability model. `Access_Role` is a display label
+and starting preset; the boolean capabilities below are the authorization
+source of truth. HR is the only access administrator and assigns capabilities
+when adding or editing an account.
 
-- `canCreateRole` — submit and track role requests.
-- `canReviewRole` — review roles, edit Recruitment Setup, review applicants, and manage interview operations.
-- `canApproveRole` — approve or reject management-stage role decisions and review organization-wide records.
-- `canEditSettings` — edit portal settings and connect or disconnect the shared HR Google Calendar.
-- `canManageUsers` — manage user accounts and permissions.
+## Directory schema
 
-## Recommended roles
+`User_Directory` stores:
 
-| Access role | Create roles | Review HR setup/applicants | Approve roles | Edit settings | Manage users |
-| --- | --- | --- | --- | --- | --- |
-| CEO | Yes | Yes | Yes | Yes | Yes |
-| Admin | Yes | Yes | Yes | Yes | Yes |
-| HR | Yes | Yes | No | No | No |
-| Management | No | View-only | Yes | No | No |
-| HOD / Department Head | Yes | Department view-only | No | No | No |
-| Recruiter | Yes | Yes | No | No | No |
-| Interviewer | No | Yes | No | No | No |
-| Hiring Manager | No | Yes | Yes | No | No |
-| Finance Reviewer | No | No | No | No | No |
-| Auditor / Read-only | No | No | No | No | No |
-| Requester / Employee | Yes | No | No | No | No |
+`Email`, `Full_Name`, `Access_Role`, `Department`, `Can_Create_Role`,
+`Can_Review_Role`, `Can_Approve_Role`, `Can_Edit_Settings`,
+`Can_Manage_Users`, `Active`, `Can_Review_Department_Role`,
+`Can_Manage_Credits`.
 
-The account editor exposes these roles in a dropdown and applies the listed
-permissions as a starting point. Administrators can fine-tune the checkboxes
-for a specific person without changing the role label.
+The Postgres `users` table stores the same capabilities using snake_case
+columns. `Can_Manage_Credits` is intentionally separate from settings,
+recruitment, and user administration.
 
-## Calendar ownership
+## Presets
 
-HR interviews use the shared calendar configured by `Final_Interview_Calendar_Email` and `Final_Interview_Calendar_ID` in Settings. The current connected Google account is visible read-only to every signed-in user; only Admin (or a specifically trusted HR operations administrator) can connect, disconnect, or change that Google account. Other users should receive access through Google Calendar sharing rather than connecting personal calendars to the portal.
+| Preset | Starting capabilities |
+| --- | --- |
+| HR | Manage access, create/review recruitment, applicant and interview operations |
+| Admin | Manage Smile Credits only |
+| Custom access | No elevated access; HR selects the minimum required capabilities |
 
-If the organization later needs a separate calendar per interviewer, replace the shared setting with an explicit role-to-interviewer assignment and require each assigned interviewer to connect their own account. Do not infer calendar ownership from the person who created the role.
+Presets are starting points. HR may grant a custom account additional
+capabilities when the business requires it, and the resulting booleans are
+what the API enforces.
+
+## Capability meanings
+
+| Capability | Grants |
+| --- | --- |
+| Create role | Create and submit role requests, scoped to the user's own drafts where applicable |
+| Review recruitment | Company-wide recruitment setup, role review, applicants, screening, bookings, and applicant workflow operations |
+| Review own department | Read-only roles and candidates in the user's department |
+| Approve role / hiring decisions | Decision actions reserved for the approval tier; this is separate from HR operational review |
+| Manage Smile Credits | Manual credit administration and authorized credit purchases |
+| Edit settings | Portal settings and shared HR calendar connection management |
+| Manage users | Retained as a compatibility field; effective account administration is HR-only |
+
+## Enforcement rules
+
+- Every protected API route checks the signed-in session server-side.
+- HR access administration is limited to an active account labelled `HR` with
+  recruitment review access.
+- An `Admin` preset does not receive recruitment, settings, or user-management
+  access; it receives only the explicit Smile Credits capability.
+- Organization and user data remain tenant-scoped.
+- Account deactivation is reversible and preserves history.
+
+The account editor applies HR, Admin, or Custom starting values, then permits
+HR to adjust the individual capability switches. Permission changes should be
+audited and should invalidate existing sessions in a future hardening pass.

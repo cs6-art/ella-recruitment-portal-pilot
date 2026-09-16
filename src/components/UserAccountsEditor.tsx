@@ -19,6 +19,7 @@ type DirectoryUser = {
   canApproveRole: boolean;
   canEditSettings: boolean;
   canManageUsers: boolean;
+  canManageCredits: boolean;
   canReviewDepartmentRole: boolean;
   active: boolean;
 };
@@ -51,6 +52,7 @@ const emptyForm: AccountForm = {
   canApproveRole: false,
   canEditSettings: false,
   canManageUsers: false,
+  canManageCredits: false,
   canReviewDepartmentRole: false,
   active: true,
 };
@@ -78,6 +80,7 @@ function permissionLabels(user: DirectoryUser) {
     user.canApproveRole && "Approve roles",
     user.canEditSettings && "Edit settings",
     user.canManageUsers && "Manage users",
+    user.canManageCredits && "Manage Smile Credits",
   ].filter(Boolean).join(" · ") || "No elevated permissions";
 }
 
@@ -209,6 +212,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
         canApproveRole: preset.canApproveRole,
         canEditSettings: preset.canEditSettings,
         canManageUsers: preset.canManageUsers,
+        canManageCredits: preset.canManageCredits,
         canReviewDepartmentRole: preset.canReviewDepartmentRole,
       } : {}),
     }));
@@ -385,7 +389,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
             <div className="field"><label htmlFor="user-email">Email address</label><input id="user-email" type="email" value={form.email} onChange={(event) => updateForm("email", event.target.value)} required aria-invalid={Boolean(fieldErrors.email)} />{fieldErrors.email && <small className="field-error">{fieldErrors.email}</small>}</div>
             <div className="field"><label htmlFor="user-access-role">Access role</label><select id="user-access-role" value={form.accessRole} onChange={(event) => updateAccessRole(event.target.value)} required aria-invalid={Boolean(fieldErrors.accessRole)}>{form.accessRole && !getAccessRolePreset(form.accessRole) && <option value={form.accessRole}>{form.accessRole} (existing)</option>}{ACCESS_ROLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{getAccessRolePreset(form.accessRole) && <small className="field-hint">{getAccessRolePreset(form.accessRole)?.description} Selecting a role applies recommended permissions; you can adjust them below.</small>}{fieldErrors.accessRole && <small className="field-error">{fieldErrors.accessRole}</small>}</div>
             <div className="field"><label htmlFor="user-department">Department</label><select id="user-department" value={form.department} onChange={(event) => updateForm("department", event.target.value)}><option value="">Select a department</option>{form.department && !isKnownDepartment(form.department) && <option value={form.department}>{form.department} (existing)</option>}{DEPARTMENT_OPTIONS.map((department) => <option key={department} value={department}>{department}</option>)}</select></div>
-            <fieldset className="user-account-permissions"><legend>Permissions</legend><label><input type="checkbox" checked={form.canCreateRole} onChange={(event) => updateForm("canCreateRole", event.target.checked)} /> Create role requests</label><label><input type="checkbox" checked={form.canReviewRole} onChange={(event) => updateForm("canReviewRole", event.target.checked)} /> Review role requests (company-wide: recruitment setup, applicants, bookings)</label><label><input type="checkbox" checked={form.canReviewDepartmentRole} onChange={(event) => updateForm("canReviewDepartmentRole", event.target.checked)} /> Review own department only (HOD: read-only roles and candidates)</label><label><input type="checkbox" checked={form.canApproveRole} onChange={(event) => updateForm("canApproveRole", event.target.checked)} /> Approve role requests and hiring decisions</label><label><input type="checkbox" checked={form.canEditSettings} onChange={(event) => updateForm("canEditSettings", event.target.checked)} /> Edit settings</label><label><input type="checkbox" checked={form.canManageUsers} onChange={(event) => updateForm("canManageUsers", event.target.checked)} /> Manage user accounts and roles</label></fieldset>
+            <fieldset className="user-account-permissions"><legend>Permissions</legend><p className="field-hint">HR is the only access administrator. Accounts named HR with recruitment review access can manage this list.</p><label><input type="checkbox" checked={form.canCreateRole} onChange={(event) => updateForm("canCreateRole", event.target.checked)} /> Create role requests</label><label><input type="checkbox" checked={form.canReviewRole} onChange={(event) => updateForm("canReviewRole", event.target.checked)} /> Review recruitment (company-wide: setup, applicants, bookings)</label><label><input type="checkbox" checked={form.canReviewDepartmentRole} onChange={(event) => updateForm("canReviewDepartmentRole", event.target.checked)} /> Review own department only</label><label><input type="checkbox" checked={form.canApproveRole} onChange={(event) => updateForm("canApproveRole", event.target.checked)} /> Approve role requests and hiring decisions</label><label><input type="checkbox" checked={form.canManageCredits} onChange={(event) => updateForm("canManageCredits", event.target.checked)} /> Manage Smile Credits</label><label><input type="checkbox" checked={form.canEditSettings} onChange={(event) => updateForm("canEditSettings", event.target.checked)} /> Edit settings</label></fieldset>
             <label className="user-account-active"><input type="checkbox" checked={form.active} onChange={(event) => updateForm("active", event.target.checked)} /> Account is active</label>
             <div className="user-account-form-actions"><button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : "Save account"}</button></div>
           </form>

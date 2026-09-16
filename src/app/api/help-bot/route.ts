@@ -121,6 +121,7 @@ export async function POST(request: Request) {
     canApproveRole: user.canApproveRole,
     canEditSettings: user.canEditSettings,
     canManageUsers: user.canManageUsers,
+    canManageCredits: user.canManageCredits,
     canReviewDepartmentRole: user.canReviewDepartmentRole,
   };
 

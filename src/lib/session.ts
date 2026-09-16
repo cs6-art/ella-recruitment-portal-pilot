@@ -17,6 +17,7 @@ export type SessionUser = {
   canApproveRole: boolean;
   canEditSettings: boolean;
   canManageUsers?: boolean;
+  canManageCredits?: boolean;
   // HOD-tier: read-only visibility (plus interview participation) scoped to
   // the user's own department, distinct from canReviewRole's company-wide
   // pipeline management rights. See access-control.ts.

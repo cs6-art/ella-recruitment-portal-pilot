@@ -36,10 +36,12 @@ Nothing in the code is environment-specific — every difference is an env var.
    - `Ella_Credit_Ledger` does **not** need creating — the portal adds it on first use.
 3. **Share the workbook with the existing service account email** (`GOOGLE_SERVICE_ACCOUNT_EMAIL`)
    as **Editor**.
-4. Seed `User_Directory` with at least one active row that is a reviewer **and** settings editor
-   (so you can log in, see roles, and open Settings → Ella Credits). Columns:
+4. Seed `User_Directory` with at least one active HR row with recruitment review access
+   (so HR can log in and administer access). Columns:
    `Email, Full_Name, Access_Role, Department, Can_Create_Role, Can_Review_Role, Can_Approve_Role,
-   Can_Edit_Settings, Can_Manage_Users, Active` → set the boolean columns to `TRUE`.
+   Can_Edit_Settings, Can_Manage_Users, Active, Can_Review_Department_Role, Can_Manage_Credits`.
+   Use `HR` for `Access_Role`, set `Can_Review_Role` to `TRUE`, and grant
+   `Can_Manage_Credits` only to a separate credits administrator when needed.
 5. Copy the spreadsheet ID from its URL (`/d/<ID>/edit`).
 6. Verify access before deploying:
    ```bash

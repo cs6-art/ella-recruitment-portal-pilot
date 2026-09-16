@@ -133,6 +133,7 @@ export async function POST(request: Request) {
       canApproveRole: directoryUser?.canApproveRole,
       canEditSettings: directoryUser?.canEditSettings,
       canManageUsers: directoryUser?.canManageUsers,
+      canManageCredits: directoryUser?.canManageCredits,
       active: directoryUser?.active,
     });
 
@@ -184,6 +185,7 @@ export async function POST(request: Request) {
       canApproveRole: directoryUser.canApproveRole,
       canEditSettings: directoryUser.canEditSettings,
       canManageUsers: directoryUser.canManageUsers,
+      canManageCredits: directoryUser.canManageCredits,
       canReviewDepartmentRole: directoryUser.canReviewDepartmentRole,
     });
 
@@ -199,6 +201,7 @@ export async function POST(request: Request) {
         canApproveRole: directoryUser.canApproveRole,
         canEditSettings: directoryUser.canEditSettings,
         canManageUsers: directoryUser.canManageUsers,
+        canManageCredits: directoryUser.canManageCredits,
         canReviewDepartmentRole: directoryUser.canReviewDepartmentRole,
         active: directoryUser.active,
       },

@@ -8,6 +8,7 @@ import { demoRoleSummaries } from "@/lib/demo-data";
 import { isDemoMode, isDemoWindowRecord } from "@/lib/demo-mode";
 import { normalizeDateOnly } from "@/lib/date-only";
 import { PORTAL_CONFIG_CATALOG } from "@/lib/portal-config-catalog";
+import { applyAccessRolePolicy } from "@/lib/access-roles";
 import { isPublishedRoleForIntake as isPublishedRoleForIntakeShared } from "@/lib/recruitment-role-eligibility";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { configureGoogleApiTimeout } from "@/lib/google-api-options";
@@ -64,6 +65,7 @@ export type DirectoryUser = {
   canApproveRole: boolean;
   canEditSettings: boolean;
   canManageUsers: boolean;
+  canManageCredits: boolean;
   active: boolean;
   // HOD-tier: read-only visibility scoped to the user's own department.
   // Stored in column K; missing on legacy rows (defaults false).
@@ -754,10 +756,10 @@ export async function findDirectoryUser(
   // Cached: this runs on essentially every authenticated request, so it is
   // the single hottest read in the app. A short cache turns repeated
   // per-request permission checks into one real API read per TTL window.
-  const rows = await cachedSheetsRead(`User_Directory:K:${spreadsheetId}`, async () => {
+  const rows = await cachedSheetsRead(`User_Directory:L:${spreadsheetId}`, async () => {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: "User_Directory!A2:K",
+      range: "User_Directory!A2:L",
     });
     return response.data.values ?? [];
   });
@@ -784,6 +786,7 @@ export async function findDirectoryUser(
       canManageUsers,
       active,
       canReviewDepartmentRole,
+      canManageCredits,
     ] = row;
     const legacyDirectoryRow = row.length < 10;
     const activeValue = legacyDirectoryRow ? canManageUsers : active;
@@ -811,6 +814,7 @@ export async function findDirectoryUser(
       canManageUsers: toText(manageUsersValue) === ""
         ? toBoolean(canEditSettings)
         : toBoolean(manageUsersValue),
+      canManageCredits: toBoolean(canManageCredits),
       active: toBoolean(activeValue),
       canReviewDepartmentRole: toBoolean(canReviewDepartmentRole),
     };
@@ -826,7 +830,7 @@ export async function findDirectoryUser(
       },
     );
 
-    return user;
+    return applyAccessRolePolicy(user);
   }
 
   console.log(
@@ -848,8 +852,9 @@ function directoryUserFromRow(row: unknown[]): DirectoryUser | null {
     canApproveRole,
     canEditSettings,
     canManageUsers,
-    active,
-    canReviewDepartmentRole,
+      active,
+      canReviewDepartmentRole,
+      canManageCredits,
   ] = row;
   const normalizedEmail = toText(sheetEmail).toLowerCase();
   const legacyDirectoryRow = row.length < 10;
@@ -860,7 +865,7 @@ function directoryUserFromRow(row: unknown[]): DirectoryUser | null {
     return null;
   }
 
-  return {
+  return applyAccessRolePolicy({
     email: normalizedEmail,
     fullName: toText(fullName),
     accessRole: toText(accessRole),
@@ -872,16 +877,17 @@ function directoryUserFromRow(row: unknown[]): DirectoryUser | null {
     canManageUsers: toText(manageUsersValue) === ""
       ? toBoolean(canEditSettings)
       : toBoolean(manageUsersValue),
+    canManageCredits: toBoolean(canManageCredits),
     active: toBoolean(activeValue),
     canReviewDepartmentRole: toBoolean(canReviewDepartmentRole),
-  };
+  });
 }
 
 export async function getDirectoryUsers(): Promise<DirectoryUser[]> {
-  const rows = await cachedSheetsRead(`User_Directory:K:${spreadsheetId}`, async () => {
+  const rows = await cachedSheetsRead(`User_Directory:L:${spreadsheetId}`, async () => {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: "User_Directory!A2:K",
+      range: "User_Directory!A2:L",
     });
     return response.data.values ?? [];
   });
@@ -892,10 +898,10 @@ export async function getDirectoryUsers(): Promise<DirectoryUser[]> {
 }
 
 export async function upsertDirectoryUser(user: DirectoryUser): Promise<void> {
-  const rows = await cachedSheetsRead(`User_Directory:K:${spreadsheetId}`, async () => {
+  const rows = await cachedSheetsRead(`User_Directory:L:${spreadsheetId}`, async () => {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: "User_Directory!A2:K",
+      range: "User_Directory!A2:L",
     });
     return response.data.values ?? [];
   });
@@ -912,6 +918,7 @@ export async function upsertDirectoryUser(user: DirectoryUser): Promise<void> {
     user.canManageUsers,
     user.active,
     user.canReviewDepartmentRole,
+    user.canManageCredits,
   ]];
   const rowIndex = rows.findIndex((row) => toText(row[0]).toLowerCase() === normalizedEmail);
 
@@ -919,14 +926,14 @@ export async function upsertDirectoryUser(user: DirectoryUser): Promise<void> {
     const sheetRow = rowIndex + 2;
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `User_Directory!A${sheetRow}:K${sheetRow}`,
+      range: `User_Directory!A${sheetRow}:L${sheetRow}`,
       valueInputOption: "RAW",
       requestBody: { values: rowValues },
     });
   } else {
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: "User_Directory!A:K",
+      range: "User_Directory!A:L",
       valueInputOption: "RAW",
       insertDataOption: "INSERT_ROWS",
       requestBody: { values: rowValues },
@@ -937,10 +944,10 @@ export async function upsertDirectoryUser(user: DirectoryUser): Promise<void> {
 }
 
 export async function updateDirectoryUser(originalEmail: string, user: DirectoryUser): Promise<void> {
-  const rows = await cachedSheetsRead(`User_Directory:K:${spreadsheetId}`, async () => {
+  const rows = await cachedSheetsRead(`User_Directory:L:${spreadsheetId}`, async () => {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: "User_Directory!A2:K",
+      range: "User_Directory!A2:L",
     });
     return response.data.values ?? [];
   });
@@ -960,10 +967,11 @@ export async function updateDirectoryUser(originalEmail: string, user: Directory
     user.canManageUsers,
     user.active,
     user.canReviewDepartmentRole,
+    user.canManageCredits,
   ]];
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `User_Directory!A${rowIndex + 2}:K${rowIndex + 2}`,
+    range: `User_Directory!A${rowIndex + 2}:L${rowIndex + 2}`,
     valueInputOption: "RAW",
     requestBody: { values: rowValues },
   });

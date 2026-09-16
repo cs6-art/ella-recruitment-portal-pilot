@@ -1,7 +1,10 @@
 /**
- * Recruitment access-role catalog used by account administration. The
- * permissions remain independently editable because a department may need a
- * small variation from the recommended default for that role.
+ * Small preset catalog for account administration.
+ *
+ * The accessRole value is a label, while the capability booleans are the
+ * authorization source of truth. HR can start from a preset and then tune an
+ * individual account. HR is the only access administrator; Admin is a
+ * credits-only starting preset.
  */
 export type AccessRolePermissions = {
   canCreateRole: boolean;
@@ -9,10 +12,7 @@ export type AccessRolePermissions = {
   canApproveRole: boolean;
   canEditSettings: boolean;
   canManageUsers: boolean;
-  // HOD-tier: view (not edit) roles, candidates, and interviews limited to
-  // the holder's own department. Distinct from canReviewRole, which grants
-  // company-wide pipeline management (recruitment setup, applicants,
-  // bookings). See src/lib/access-control.ts for the enforcement.
+  canManageCredits: boolean;
   canReviewDepartmentRole: boolean;
 };
 
@@ -22,126 +22,66 @@ export type AccessRoleOption = AccessRolePermissions & {
   description: string;
 };
 
+type AccessControlledUser = AccessRolePermissions & { accessRole: string };
+
+/** Apply the two safety invariants to both legacy Sheet rows and Postgres rows.
+ * Custom access remains explicitly capability-driven; named Admin and HR
+ * presets cannot accidentally inherit an older, broader permission set. */
+export function applyAccessRolePolicy<T extends AccessControlledUser>(user: T): T {
+  const role = user.accessRole.trim().toLowerCase();
+  if (role === "admin") {
+    return {
+      ...user,
+      canCreateRole: false,
+      canReviewRole: false,
+      canApproveRole: false,
+      canEditSettings: false,
+      canManageUsers: false,
+      canManageCredits: true,
+      canReviewDepartmentRole: false,
+    };
+  }
+  if (role === "hr") {
+    return { ...user, canManageUsers: true };
+  }
+  return { ...user, canManageUsers: false };
+}
+
 export const ACCESS_ROLE_OPTIONS: AccessRoleOption[] = [
   {
-    value: "CEO",
-    label: "CEO",
-    description: "Full access to users, settings, credits, and all recruitment workflows.",
+    value: "HR",
+    label: "HR",
+    description: "Manage user access and the recruitment workflow.",
     canCreateRole: true,
     canReviewRole: true,
-    canApproveRole: true,
-    canEditSettings: true,
+    canApproveRole: false,
+    canEditSettings: false,
     canManageUsers: true,
-    canReviewDepartmentRole: true,
+    canManageCredits: false,
+    canReviewDepartmentRole: false,
   },
   {
     value: "Admin",
     label: "Admin",
-    description: "Manage users, portal settings, and all recruitment workflows.",
-    canCreateRole: true,
-    canReviewRole: true,
-    canApproveRole: true,
-    canEditSettings: true,
-    canManageUsers: true,
-    canReviewDepartmentRole: true,
-  },
-  {
-    value: "HR",
-    label: "HR",
-    description: "Create and review role requests, candidates, and interviews.",
-    canCreateRole: true,
-    canReviewRole: true,
-    canApproveRole: false,
-    canEditSettings: false,
-    canManageUsers: false,
-    canReviewDepartmentRole: false,
-  },
-  {
-    value: "Management",
-    label: "Management",
-    description: "Review role requests and candidates, and approve, reject, or return them as the management decision-maker. Does not edit recruitment setup, applicant records, or interview scheduling.",
-    canCreateRole: false,
-    canReviewRole: false,
-    canApproveRole: true,
-    canEditSettings: false,
-    canManageUsers: false,
-    canReviewDepartmentRole: false,
-  },
-  {
-    value: "HOD",
-    label: "HOD / Department Head",
-    description: "Create role requests and view hiring activity for your own department. Read-only for roles and candidates; does not edit recruitment setup, applicant records, or other departments' work.",
-    canCreateRole: true,
-    canReviewRole: false,
-    canApproveRole: false,
-    canEditSettings: false,
-    canManageUsers: false,
-    canReviewDepartmentRole: true,
-  },
-  {
-    value: "Recruiter",
-    label: "Recruiter",
-    description: "Manage candidate screening, interviews, and recruitment activity.",
-    canCreateRole: true,
-    canReviewRole: true,
-    canApproveRole: false,
-    canEditSettings: false,
-    canManageUsers: false,
-    canReviewDepartmentRole: false,
-  },
-  {
-    value: "Interviewer",
-    label: "Interviewer",
-    description: "Review candidates and conduct assigned interviews.",
-    canCreateRole: false,
-    canReviewRole: true,
-    canApproveRole: false,
-    canEditSettings: false,
-    canManageUsers: false,
-    canReviewDepartmentRole: false,
-  },
-  {
-    value: "Hiring Manager",
-    label: "Hiring Manager",
-    description: "Review role requirements and make hiring approvals.",
-    canCreateRole: false,
-    canReviewRole: true,
-    canApproveRole: true,
-    canEditSettings: false,
-    canManageUsers: false,
-    canReviewDepartmentRole: false,
-  },
-  {
-    value: "Finance Reviewer",
-    label: "Finance Reviewer",
-    description: "Read recruitment information for budget and salary review.",
+    description: "Manage Smile Credits only. HR controls this account's other access.",
     canCreateRole: false,
     canReviewRole: false,
     canApproveRole: false,
     canEditSettings: false,
     canManageUsers: false,
+    canManageCredits: true,
     canReviewDepartmentRole: false,
   },
   {
-    value: "Auditor",
-    label: "Auditor / Read-only",
-    description: "View permitted records without changing recruitment data.",
+    value: "Custom",
+    label: "Custom access",
+    description: "Start with no elevated access and select only the capabilities required.",
     canCreateRole: false,
     canReviewRole: false,
     canApproveRole: false,
     canEditSettings: false,
     canManageUsers: false,
-    canReviewDepartmentRole: false,
-  },
-  {
-    value: "Requester",
-    label: "Requester / Employee",
-    description: "Submit and track the requester’s own role requests.",
-    canCreateRole: true,
-    canReviewRole: false,
-    canApproveRole: false,
-    canEditSettings: false,
-    canManageUsers: false,
+    canManageCredits: false,
     canReviewDepartmentRole: false,
   },
 ];

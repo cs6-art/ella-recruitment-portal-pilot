@@ -11,6 +11,7 @@ export type HelpUserContext = {
   canApproveRole?: boolean;
   canEditSettings?: boolean;
   canManageUsers?: boolean;
+  canManageCredits?: boolean;
   canReviewDepartmentRole?: boolean;
 };
 
@@ -48,6 +49,7 @@ export function directHelpAnswer(question: string, user?: HelpUserContext): stri
       user.canApproveRole && "approve or reject role decisions",
       user.canEditSettings && "edit portal settings",
       user.canManageUsers && "manage user accounts",
+      user.canManageCredits && "manage Smile Credits",
     ].filter(Boolean);
     return `Your portal access role is ${user.accessRole || "not specified"}${user.department ? ` in ${user.department}` : ""}. You can ${permissions.length ? permissions.join(", ") : "use the areas currently available to your account"}.`;
   }
@@ -55,10 +57,10 @@ export function directHelpAnswer(question: string, user?: HelpUserContext): stri
     return user.department ? `Your assigned department is ${user.department}.` : "No department is currently assigned to your portal account. Ask an administrator to update your user account.";
   }
   if (/^(how do i add a user|how do i add a user account|how do i add users?)$/.test(normalized)) {
-    return "Open User Accounts and choose Add user account. Enter the person's name, email, access role, department, permissions, and active status, then save. A McLink platform administrator can choose the organization first under Manage users for.";
+    return "An HR access administrator can open User Accounts and choose Add user account. Enter the person's name, email, access label, department, permissions, and active status, then save. For McLink platform organizations, HR can choose the organization before adding its users.";
   }
   if (/^(how do i add an organization|how do i create an organization|how do i add a client)$/.test(normalized)) {
-    return "Open User Accounts and use Add organization. Enter the organization name and lowercase slug, save it, then choose the organization under Manage users for before adding its users.";
+    return "An HR access administrator can open User Accounts and use Add organization. Enter the organization name and lowercase slug, save it, then choose the organization before adding its users.";
   }
   if (/^(how many resumes can i upload|what is the bulk screening limit|how many files can i screen at once)$/.test(normalized)) {
     return `The current Pilot limit is ${MAX_FILES_PER_SUBMISSION} files per batch. PDF, DOC, and DOCX files are accepted up to 10 MB each. The same limit applies to computer upload, Google Drive import, and OneDrive import.`;
@@ -136,6 +138,7 @@ export function buildUserPrompt(context: RetrievedContext, question: string, use
         user.canApproveRole && "approve or reject role decisions",
         user.canEditSettings && "edit settings",
         user.canManageUsers && "manage users",
+        user.canManageCredits && "manage Smile Credits",
       ].filter(Boolean).join(", ") || "No elevated permissions listed"}`,
       "Do not infer live records, balances, organization names, or other facts from this context.",
       "",

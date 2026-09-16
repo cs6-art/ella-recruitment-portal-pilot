@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { getDb } from "@/db/client";
 import { organizations } from "@/db/schema";
+import { canAdministerAccess } from "@/lib/access-control";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -25,7 +26,7 @@ function errorResponse(error: string, status: number) {
 async function requirePlatformAdmin() {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return { error: errorResponse("Authentication required.", 401) } as const;
-  if (user.organizationId !== DEFAULT_ORGANIZATION_ID || user.canManageUsers !== true) {
+  if (user.organizationId !== DEFAULT_ORGANIZATION_ID || !canAdministerAccess(user)) {
     return { error: errorResponse("Only a McLink platform administrator can manage organizations.", 403) } as const;
   }
   return { user } as const;

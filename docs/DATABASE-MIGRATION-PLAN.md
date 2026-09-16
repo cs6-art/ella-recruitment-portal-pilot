@@ -206,7 +206,7 @@ spreadsheet used by the Drive poller for dedupe and by
 
 | Area | Sheet / Tab | Read | Write | Critical? | Current caller | Migration risk |
 |---|---|---|---|---|---|---|
-| Auth / RBAC directory | `User_Directory` (`A2:K`, **positional columns**) | ✅ (hottest read — per request) | upsert / update by row | ✅ auth | `findDirectoryUser` (`/api/auth/google` every request), `/api/user-directory` | **High — auth on every request; positional (not header-mapped); legacy <10-col rows** |
+| Auth / RBAC directory | `User_Directory` (`A2:L`, **positional columns**) | ✅ (hottest read — per request) | upsert / update by row | ✅ auth | `findDirectoryUser` (`/api/auth/google` every request), `/api/user-directory` | **High — auth on every request; positional (not header-mapped); legacy <10-col rows** |
 | Portal / infra settings | `Settings` (`A1:F`, banner row 1, header row 2) | ✅ | append / block overwrite by row | ✅ | `getPortalSettings` → `portal-config.ts`; `/api/settings` | Med — env fallback chain; row-number block write |
 | Calendar OAuth tokens | `Calendar_Connections` (`A1:G`, AES-256-GCM encrypted) | ✅ | upsert / `values.clear` by row | ✅ | `calendar-tokens.ts`, `/api/auth/google-calendar/*` | Med — secrets at rest; per-HR-user row; "Phase 2 → Postgres" already planned |
 | Drive OAuth tokens | `Drive_Connections` | ✅ | upsert / clear by row | ✅ | `drive-tokens.ts`, `/api/auth/google-drive/*` | Med — as above |
@@ -431,7 +431,7 @@ genuinely optional and earn a table only on evidence of a query need.
 - PK `id` uuid; `email` citext **U** (identity); `full_name`
 - `access_role` text (preset label, informational); `department_id` FK→departments (nullable)
 - `can_create_role`, `can_review_role`, `can_approve_role`, `can_edit_settings`,
-  `can_manage_users`, `can_review_department_role` — bool NOT NULL DEFAULT false
+  `can_manage_users`, `can_review_department_role`, `can_manage_credits` — bool NOT NULL DEFAULT false
   ◇ (**exact** current semantics: HR review/decide company-wide; Management
   approve = view + role-status only; HOD review-department read-only)
 - `active` bool ◇, `created_at`, `updated_at`
@@ -779,7 +779,7 @@ recruitment migration; credits stay on `dual`.
 | `Bulk_Role_Folder_Map.*` | `bulk_role_folders` | matching | `Active` → bool | Low — n8n reader |
 | `Resume_Screening_Invitations.*` | (new) `screening_invitations` table (same shape) | matching | `Token`→hash, `Status`→enum, `Expires_At`→timestamptz | Medium — single-use; `Application_ID` back-ref |
 | `Ella_Credit_Ledger.*` | `credit_ledger` / `credit_balance` | **already mapped** (backfill script) | — | Lowest — done; keep `dual` |
-| `User_Directory.*` (positional A–K) | `users` (+ `departments`) | matching | **positional → named**; legacy <10-col rows: col-9 = `Active`, `Can_Manage_Users` inherits `Can_Edit_Settings`, col-K `Can_Review_Department_Role` default false | **High** — auth on every request; positional parsing; RBAC must match exactly |
+| `User_Directory.*` (positional A–L) | `users` (+ `departments`) | matching | **positional → named**; legacy <10-col rows: col-9 = `Active`, `Can_Manage_Users` inherits `Can_Edit_Settings`, col-K `Can_Review_Department_Role` and col-L `Can_Manage_Credits` default false | **High** — auth on every request; positional parsing; RBAC must match exactly |
 | `Settings.*` (banner row 1, header row 2) | `portal_settings` | matching | drop the banner-row quirk | Medium — env-fallback chain stays in code |
 | `Calendar_/Drive_/Microsoft_Drive_Connections.*` | `oauth_connections` | matching | keep AES-256-GCM ciphertext as `bytea`; `(user_email, provider)` → **U** | Medium — secrets; per-user row |
 | `Recruitment_Templates.*` | `recruitment_templates` | matching | `Setup_JSON` → jsonb | Low |

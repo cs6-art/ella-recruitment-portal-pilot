@@ -10,6 +10,7 @@ import HelpBot from "./HelpBot";
 import NewApplicantsBell, { useNewApplicantFeed } from "./NewApplicantsBell";
 import { ConfirmationProvider } from "./ConfirmationModal";
 import styles from "./AppShell.module.css";
+import { canAdministerAccess } from "@/lib/access-control";
 
 type AppShellUser = {
   name?: string;
@@ -21,6 +22,7 @@ type AppShellUser = {
   canApproveRole?: boolean;
   canEditSettings?: boolean;
   canManageUsers?: boolean;
+  canManageCredits?: boolean;
   canReviewDepartmentRole?: boolean;
   active?: boolean;
 };
@@ -108,7 +110,7 @@ export default function AppShell({ user, children }: AppShellProps) {
           </div>}
           {user.canEditSettings === true && <Link href="/settings" onClick={closeSidebar} className={`${styles.navLink} ${isSettings ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="settings" /></span><span>Settings</span></Link>}
           <Link href="/credits" onClick={closeSidebar} className={`${styles.navLink} ${isCredits ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="plus" /></span><span>Credits</span></Link>
-          {(user.canManageUsers === true || user.canEditSettings === true) && <Link href="/user-accounts" onClick={closeSidebar} className={`${styles.navLink} ${isUserAccounts ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="users" /></span><span>User Accounts</span></Link>}
+          {canAdministerAccess(user) && <Link href="/user-accounts" onClick={closeSidebar} className={`${styles.navLink} ${isUserAccounts ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="users" /></span><span>User Accounts</span></Link>}
         </nav>
 
         <div className={styles.sidebarSpacer} />

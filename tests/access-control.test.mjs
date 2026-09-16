@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   canDecideApplicant,
+  canAdministerAccess,
   canDeleteApplicant,
   canDeleteRoleRequest,
   canEditApplicant,
@@ -55,14 +56,15 @@ test("isDepartmentReviewer only classifies the HOD tier, not HR/Management", () 
   assert.equal(isDepartmentReviewer(management), false);
 });
 
-test("Management is view-only: no recruitment setup, pipeline management, applicant decisions, or edit/delete rights", () => {
+test("Decision-only users cannot edit recruitment or applicant records", () => {
   assert.equal(canEditRecruitmentSetup(management), false);
   assert.equal(canManagePipeline(management), false);
   assert.equal(canEditApplicant(management), false);
   assert.equal(canDeleteApplicant(management), false);
   assert.equal(canEditRoleRequest(management, roleInDept), false);
-  // Management holds no applicant hiring-decision rights — that is the HR tier.
-  assert.equal(canDecideApplicant(management), false);
+  // An explicit decision capability permits applicant decisions without
+  // granting operational editing rights.
+  assert.equal(canDecideApplicant(management), true);
   // They retain company-wide read visibility.
   assert.equal(canViewRole(management, roleOutsideDept), true);
   assert.equal(canViewApplicant(management, { department: "Finance" }), true);
@@ -75,6 +77,12 @@ test("HR retains full company-wide pipeline management", () => {
   assert.equal(canEditRoleRequest(hr, roleOutsideDept), true);
   assert.equal(canViewRole(hr, roleOutsideDept), true);
   assert.equal(canDecideApplicant(hr), true);
+});
+
+test("only an HR reviewer can administer access", () => {
+  assert.equal(canAdministerAccess({ accessRole: "HR", canReviewRole: true }), true);
+  assert.equal(canAdministerAccess({ accessRole: "Admin", canReviewRole: true }), false);
+  assert.equal(canAdministerAccess({ accessRole: "HR", canReviewRole: false }), false);
 });
 
 test("a plain requester cannot view roles outside their own", () => {

@@ -287,7 +287,7 @@ test("user account edits update the original directory row", () => {
   assert.match(api, /updateDirectoryUser\(normalizedOriginalEmail, normalizedUser\)/);
   assert.doesNotMatch(api, /upsertDirectoryUser\(normalizedUser\);\s*\/\/ Leave the old row inactive/);
   assert.match(sheets, /export async function updateDirectoryUser\(originalEmail: string, user: DirectoryUser\)/);
-  assert.match(sheets, /range: `User_Directory!A\$\{rowIndex \+ 2\}:K\$\{rowIndex \+ 2\}`/);
+  assert.match(sheets, /range: `User_Directory!A\$\{rowIndex \+ 2\}:L\$\{rowIndex \+ 2\}`/);
 });
 
 test("candidate intake forms and decisions expose the required fields", () => {

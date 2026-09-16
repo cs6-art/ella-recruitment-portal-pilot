@@ -37,6 +37,7 @@ export const users = pgTable(
     canApproveRole: boolean("can_approve_role").notNull().default(false),
     canEditSettings: boolean("can_edit_settings").notNull().default(false),
     canManageUsers: boolean("can_manage_users").notNull().default(false),
+    canManageCredits: boolean("can_manage_credits").notNull().default(false),
     canReviewDepartmentRole: boolean("can_review_department_role").notNull().default(false),
     active: boolean("active").notNull().default(true),
     createdAt: ts("created_at").notNull().defaultNow(),

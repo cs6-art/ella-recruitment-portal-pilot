@@ -181,12 +181,16 @@ downloadable.
 
 `Email`, `Full_Name`, `Access_Role`, `Department`, `Can_Create_Role`,
 `Can_Review_Role`, `Can_Approve_Role`, `Can_Edit_Settings`,
-`Can_Manage_Users`, `Active`.
+`Can_Manage_Users`, `Active`, `Can_Review_Department_Role`,
+`Can_Manage_Credits`.
 
-`Can_Manage_Users` controls access to the User Accounts page and account
-administration API. Existing rows without this column remain compatible: an
-existing settings administrator is treated as a user administrator until the
-row is saved with an explicit value.
+`Can_Manage_Users` is retained for directory compatibility, but HR reviewers
+are the only access administrators. Existing rows without this column remain
+compatible with the legacy parser.
+
+`Can_Manage_Credits` is an
+independent capability for manual Smile Credits administration and does not
+come from the display value in `Access_Role`.
 
 ## Settings
 

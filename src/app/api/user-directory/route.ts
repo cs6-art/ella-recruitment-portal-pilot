@@ -8,6 +8,8 @@ import { organizations } from "@/db/schema";
 import { getDirectoryUsers, updateDirectoryUser, upsertDirectoryUser, type DirectoryUser } from "@/lib/google-sheets";
 import { DEFAULT_ORGANIZATION_ID, syncOrganizationMembership } from "@/lib/organization-accounts";
 import { getPostgresDirectoryUsers, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
+import { canAdministerAccess } from "@/lib/access-control";
+import { applyAccessRolePolicy } from "@/lib/access-roles";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { runWithTenantDatabase } from "@/lib/tenant-database";
@@ -25,6 +27,7 @@ const userSchema = z.object({
   canApproveRole: z.boolean(),
   canEditSettings: z.boolean(),
   canManageUsers: z.boolean(),
+  canManageCredits: z.boolean().default(false),
   canReviewDepartmentRole: z.boolean().default(false),
   active: z.boolean(),
 });
@@ -40,7 +43,7 @@ function responseError(error: string, status: number) {
 async function requireAdmin(request: Request) {
   const user = await currentUser();
   if (!user) return { error: responseError("Authentication required.", 401) } as const;
-  if (user.canManageUsers !== true && user.canEditSettings !== true) return { error: responseError("User account administration permission required.", 403) } as const;
+  if (!canAdministerAccess(user)) return { error: responseError("Only an active HR reviewer can administer user access.", 403) } as const;
   const rate = consumeRateLimit(`user-directory:${user.email}:${requestClientKey(request)}`, 60, 15 * 60 * 1000);
   if (!rate.allowed) {
     return { error: NextResponse.json({ success: false, error: "Too many account updates. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) }) } as const;
@@ -51,7 +54,7 @@ async function requireAdmin(request: Request) {
 async function resolveTargetOrganization(request: Request, user: Awaited<ReturnType<typeof currentUser>>) {
   if (!user) return { error: responseError("Authentication required.", 401) } as const;
   const requestedOrganizationId = new URL(request.url).searchParams.get("organizationId")?.trim() || "";
-  const isPlatformAdmin = user.organizationId === DEFAULT_ORGANIZATION_ID && user.canManageUsers === true;
+  const isPlatformAdmin = user.organizationId === DEFAULT_ORGANIZATION_ID && canAdministerAccess(user);
   const organizationId = requestedOrganizationId || user.organizationId;
   if (!isPlatformAdmin && organizationId !== user.organizationId) {
     return { error: responseError("You can only manage users in your own organization.", 403) } as const;
@@ -103,7 +106,7 @@ async function saveAccount(request: Request, originalEmail?: string) {
   try {
     const user = userSchema.parse(await request.json());
     const normalizedEmail = user.email.toLowerCase();
-    const normalizedUser: DirectoryUser = {
+    const normalizedUser: DirectoryUser = applyAccessRolePolicy({
       email: normalizedEmail,
       fullName: user.fullName,
       accessRole: user.accessRole,
@@ -112,10 +115,13 @@ async function saveAccount(request: Request, originalEmail?: string) {
       canReviewRole: user.canReviewRole,
       canApproveRole: user.canApproveRole,
       canEditSettings: user.canEditSettings,
-      canManageUsers: user.canManageUsers,
+      // User administration is intentionally not delegable to Admin or a
+      // custom account. HR reviewers are the only access administrators.
+      canManageUsers: user.accessRole.trim().toLowerCase() === "hr",
+      canManageCredits: user.canManageCredits,
       canReviewDepartmentRole: user.canReviewDepartmentRole,
       active: user.active,
-    };
+    });
     const isDefaultOrganization = target.organizationId === DEFAULT_ORGANIZATION_ID;
     const users = isDefaultOrganization
       ? await getDirectoryUsers()
