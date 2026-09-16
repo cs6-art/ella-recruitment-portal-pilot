@@ -167,7 +167,7 @@ export default function EllaCreditsPanel() {
       <div className={styles.header}>
         <div>
           <h2>Credits</h2>
-          <p>One shared credit balance meters AI usage — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer.` : "Pricing is loaded from the active credit settings."} AI actions are blocked when the balance runs out.</p>
+          <p>Each signed-in user has a separate Smile Credits balance inside their organization — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer.` : "Pricing is loaded from the active credit settings."} AI actions are blocked when the balance runs out.</p>
         </div>
         {data && (
           <div className={`${styles.headline} ${headlineTone}`}>

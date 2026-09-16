@@ -53,6 +53,7 @@ test("credit activity is recent-first, filterable, and keeps a stable table foot
   assert.match(panel, /No activity matches the current filters/);
   assert.match(panel, /placeholder-\$\{index\}/);
   assert.match(panel, /Voice interview/);
+  assert.match(panel, /Each signed-in user has a separate Smile Credits balance inside their organization/);
   assert.match(styles, /min-height: 540px/);
   assert.match(styles, /table-layout: fixed/);
 });
