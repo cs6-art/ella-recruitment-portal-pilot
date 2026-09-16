@@ -162,8 +162,10 @@ function roleSummary(role: Record<string, unknown>): RoleRequestSummary {
   const status = label(role.status || "submitted");
   const setupStatus = label(role.recruitmentSetupStatus || "draft");
   const posted = Boolean(role.postedAt) || role.postingConfirmed === true;
+  const archive = role.archive as Record<string, unknown> | undefined;
   return {
     roleId: text(role.externalId),
+    archivedAt: text(archive?.archivedAt),
     organizationId: text(role.organizationId),
     createdAt: text(role.createdAt),
     requesterEmail: text(role.requesterEmail),
@@ -220,7 +222,9 @@ export async function targetRoleDetails(externalId: string, organizationId = "")
   const role = roles.find((candidate) => text(candidate.externalId).toLowerCase() === decodeURIComponent(externalId).trim().toLowerCase());
   if (!role) return null;
   const raw = role as unknown as Record<string, unknown>;
-  if (isArchivedRole(raw)) return null;
+  // Archived roles are excluded from summaries/listings (see
+  // targetRoleSummariesForOrganization) but stay reachable by ID here so
+  // their history (applicants, screenings) remains viewable, not deleted.
   const summary = roleSummary(raw);
   const setup = (raw.setup as Record<string, unknown> | undefined) || {};
   return {

@@ -168,3 +168,13 @@ test("voice queue expires late scheduled work before claiming it", () => {
   }
   assert.match(claim, /FOR UPDATE SKIP LOCKED/);
 });
+
+test("stale provider dispatches become audited failures without entering billing", () => {
+  const source = read("src/lib/internal-recruitment-queries.ts");
+  const reconcile = source.slice(source.indexOf("export async function reconcileStaleVoiceAttempts"), source.indexOf("export async function dispatchVoiceAttemptDryRun"));
+  assert.match(reconcile, /calling.*dispatching.*initiated.*in_progress/);
+  assert.match(reconcile, /status: \"failed\", outcome: \"system_failure\"/);
+  assert.match(reconcile, /stale-voice-reconcile/);
+  assert.match(reconcile, /No terminal provider result was received/);
+  assert.doesNotMatch(reconcile, /recordVoiceInterviewDeduction/);
+});

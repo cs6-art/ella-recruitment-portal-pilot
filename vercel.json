@@ -5,6 +5,10 @@
       "schedule": "17 3 * * *"
     },
     {
+      "path": "/api/cron/reconcile-voice-attempts",
+      "schedule": "37 3 * * *"
+    },
+    {
       "path": "/api/cron/resume-cleanup",
       "schedule": "17 2 * * *"
     }

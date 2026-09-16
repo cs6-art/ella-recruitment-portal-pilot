@@ -305,7 +305,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
       const result = await targetArchiveRole(access.role.roleId, { email: access.user.email, name: access.user.name });
       if (!result) return NextResponse.json({ success: false, error: "Role request not found." }, { status: 404 });
     } else {
-      await deleteRoleRequest(access.role.roleId);
+      await deleteRoleRequest(access.role.roleId, { email: access.user.email, name: access.user.name });
     }
     return NextResponse.json({ success: true, roleId: access.role.roleId, message: "Role request deleted successfully." });
   } catch (error) {

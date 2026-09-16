@@ -19,6 +19,7 @@ const publicApplicantRouteSource = fs.readFileSync("src/app/api/public/applicati
 const proxySource = fs.readFileSync("proxy.ts", "utf8");
 const nextConfigSource = fs.readFileSync("next.config.mjs", "utf8");
 const queueCronSource = fs.readFileSync("src/app/api/cron/reconcile-bulk-queue/route.ts", "utf8");
+const voiceAttemptCronSource = fs.readFileSync("src/app/api/cron/reconcile-voice-attempts/route.ts", "utf8");
 const vercelSource = fs.readFileSync("vercel.json", "utf8");
 
 test("authentication and logout use secure HTTP-only cookie settings", () => {
@@ -99,6 +100,14 @@ test("stale bulk queue reconciliation is cron-authenticated and scheduled daily 
   assert.match(queueCronSource, /reconcileBulkResumeQueue/);
   const config = JSON.parse(vercelSource);
   assert.equal(config.crons.some((cron) => cron.path === "/api/cron/reconcile-bulk-queue" && cron.schedule === "17 3 * * *"), true);
+});
+
+test("stale voice dispatch reconciliation is cron-authenticated and scheduled daily", () => {
+  assert.match(voiceAttemptCronSource, /CRON_SECRET/);
+  assert.match(voiceAttemptCronSource, /unauthorized/);
+  assert.match(voiceAttemptCronSource, /reconcileStaleVoiceAttempts/);
+  const config = JSON.parse(vercelSource);
+  assert.equal(config.crons.some((cron) => cron.path === "/api/cron/reconcile-voice-attempts" && cron.schedule === "37 3 * * *"), true);
 });
 
 test("stale queue reconciliation updates the persisted Postgres dedupe key", () => {

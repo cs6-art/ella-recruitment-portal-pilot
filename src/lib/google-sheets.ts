@@ -73,6 +73,7 @@ export type DirectoryUser = {
 export type RoleRequestSummary = {
   roleId: string;
   organizationId?: string;
+  archivedAt?: string;
   createdAt: string;
   requesterEmail: string;
   targetHiringDate: string;
@@ -101,6 +102,8 @@ export type RoleRequestSummary = {
 export type RoleRequestDetails = {
   roleId: string;
   organizationId?: string;
+  archivedAt?: string;
+  archivedBy?: string;
   createdAt: string;
 
   submittedByEmail: string;
@@ -405,6 +408,9 @@ function mapRoleRequest(
       "Submission_ID",
       "Submission ID",
     ]),
+
+    archivedAt: getField(record, ["Archived_At", "Archived At"]),
+    archivedBy: getField(record, ["Archived_By", "Archived By"]),
 
     createdAt: getField(record, [
       "Created_At",
@@ -979,10 +985,14 @@ export async function getRoleRequests(options: { liveOnly?: boolean } = {}): Pro
         mapRoleRequest(record),
       )
       .filter(
-        (role) => role.roleId !== "",
+        // Archived roles are excluded from every list (active roles, public
+        // catalogue) but stay reachable by ID via getRoleRequestById so
+        // their history (applicants, screenings) remains viewable.
+        (role) => role.roleId !== "" && role.archivedAt === "",
       )
       .map((role) => ({
         roleId: role.roleId,
+        archivedAt: role.archivedAt,
         createdAt: role.createdAt,
         requesterEmail: role.requesterEmail,
         targetHiringDate: role.targetHiringDate,
@@ -1361,49 +1371,24 @@ export async function appendRoleRequestDraft(fields: Record<string, string>): Pr
   invalidateSheetsCache("Role_Requests");
 }
 
-export async function deleteRoleRequest(roleId: string): Promise<void> {
+/**
+ * "Deleting" a role is a reversible archive, never a hard delete: its row
+ * (and every dependent applicant/screening record, which reference it by
+ * Role_ID) must stay intact so the role's history remains viewable. This
+ * mirrors the Postgres target's archiveRole.
+ */
+export async function deleteRoleRequest(roleId: string, actor?: { email?: string; name?: string }): Promise<void> {
   if (isPostgresRecruitmentTarget()) {
     const { targetArchiveRole } = await import("@/lib/recruitment-target-portal");
-    const result = await targetArchiveRole(roleId, { email: "portal-target", name: "Portal target" });
+    const result = await targetArchiveRole(roleId, { email: actor?.email || "portal-target", name: actor?.name || "Portal target" });
     if (!result) throw new Error("Role request not found.");
     return;
   }
-  const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Role_Requests!A1:ZZ" });
-  const rows = response.data.values ?? [];
-  if (rows.length < 2) throw new Error("Role_Requests sheet has no data rows.");
-
-  const headers = rows[0] ?? [];
-  const roleIndex = headers.findIndex((header) => ["role_id", "role id", "submission_id", "submission id"].includes(normalizeHeader(header)));
-  if (roleIndex < 0) throw new Error("Role_Requests sheet is missing a role ID column.");
-
-  const normalizedRoleId = roleId.trim().toLowerCase();
-  const dataRowIndex = rows.slice(1).findIndex((row) => toText(row[roleIndex]).toLowerCase() === normalizedRoleId);
-  if (dataRowIndex < 0) throw new Error("Role request row not found.");
-
-  const metadata = await sheets.spreadsheets.get({
-    spreadsheetId,
-    fields: "sheets(properties(sheetId,title))",
+  await updateRoleRequestFields(roleId, {
+    Archived_At: new Date().toISOString(),
+    Archived_By: actor?.email || "",
+    Latest_Comments: "Role archived by portal operator",
   });
-  const sheet = metadata.data.sheets?.find((item) => item.properties?.title === "Role_Requests");
-  const sheetId = sheet?.properties?.sheetId;
-  if (sheetId === undefined) throw new Error("Role_Requests sheet metadata is unavailable.");
-
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId,
-    requestBody: {
-      requests: [{
-        deleteDimension: {
-          range: {
-            sheetId,
-            dimension: "ROWS",
-            startIndex: dataRowIndex + 1,
-            endIndex: dataRowIndex + 2,
-          },
-        },
-      }],
-    },
-  });
-  invalidateSheetsCache("Role_Requests");
 }
 
 export async function deleteRecruitmentTemplate(id: string): Promise<void> {

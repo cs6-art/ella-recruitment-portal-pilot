@@ -45,6 +45,13 @@ const configuredVoiceCallLateGraceMinutes = Number(process.env.VOICE_CALL_MAX_LA
 const VOICE_CALL_MAX_LATE_MINUTES = Number.isFinite(configuredVoiceCallLateGraceMinutes)
   ? Math.max(1, Math.min(60, Math.trunc(configuredVoiceCallLateGraceMinutes)))
   : 15;
+// Provider calls should finish well before this window. A stale dispatch row
+// is terminally failed by the maintenance sweep so an old worker/webhook
+// cannot leave an applicant looking permanently stuck at "Initiated".
+const configuredVoiceAttemptStaleMinutes = Number(process.env.VOICE_ATTEMPT_STALE_MINUTES || "60");
+const VOICE_ATTEMPT_STALE_MINUTES = Number.isFinite(configuredVoiceAttemptStaleMinutes)
+  ? Math.max(15, Math.min(24 * 60, Math.trunc(configuredVoiceAttemptStaleMinutes)))
+  : 60;
 const STAGES = ["resume_review", "resume_approved", "voice_booking_pending", "voice_scheduled", "voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final", "rejected", "withdrawn"] as const;
 const DECISIONS = ["", "approve", "reject", "manual_review", "pending"] as const;
 const STAGE_TRANSITIONS: Record<string, readonly string[]> = {
@@ -925,6 +932,68 @@ export async function pendingVoiceCalls() {
   const db = getDb();
   await db.execute(sql`UPDATE voice_call_attempts SET status = 'failed', outcome = 'system_failure', updated_at = now() WHERE status IN ('scheduled','queued','retry_scheduled') AND scheduled_at < now() - (${VOICE_CALL_MAX_LATE_MINUTES} * interval '1 minute')`);
   return db.select({ id: voiceCallAttempts.id, applicationId: voiceCallAttempts.applicationId, externalId: applications.externalId, candidateName: applications.candidateName, email: applications.email, preferredMobile: voiceCallAttempts.preferredMobile, contactNumber: voiceCallAttempts.contactNumber, applicantCountry: voiceCallAttempts.applicantCountry, attemptNumber: voiceCallAttempts.attemptNumber, maxAttempts: voiceCallAttempts.maxAttempts, scheduledAt: voiceCallAttempts.scheduledAt, status: voiceCallAttempts.status }).from(voiceCallAttempts).innerJoin(applications, eq(applications.id, voiceCallAttempts.applicationId)).where(and(inArray(voiceCallAttempts.status, ["scheduled", "queued", "retry_scheduled"]), or(isNull(voiceCallAttempts.scheduledAt), and(lte(voiceCallAttempts.scheduledAt, sql`now()`), gte(voiceCallAttempts.scheduledAt, sql`now() - (${VOICE_CALL_MAX_LATE_MINUTES} * interval '1 minute')`))))).orderBy(asc(voiceCallAttempts.scheduledAt)).limit(LIMIT);
+}
+
+/**
+ * Reconcile dispatch rows that have outlived a real provider call. This is a
+ * maintenance repair, not a billing path: there is no reliable terminal
+ * interview evidence, so the attempt is failed without charging credits.
+ * Locking the rows makes the sweep safe to run concurrently with webhooks.
+ */
+export async function reconcileStaleVoiceAttempts(limit = LIMIT) {
+  const db = getDb();
+  const safeLimit = Math.max(1, Math.min(LIMIT, Math.trunc(limit)));
+  return db.transaction(async (tx) => {
+    const stale = await tx.select({
+      id: voiceCallAttempts.id,
+      applicationId: voiceCallAttempts.applicationId,
+      organizationId: voiceCallAttempts.organizationId,
+      providerCallId: voiceCallAttempts.providerCallId,
+      status: voiceCallAttempts.status,
+      externalId: applications.externalId,
+    })
+      .from(voiceCallAttempts)
+      .innerJoin(applications, eq(applications.id, voiceCallAttempts.applicationId))
+      .where(and(
+        inArray(voiceCallAttempts.status, ["calling", "dispatching", "initiated", "in_progress"]),
+        lte(voiceCallAttempts.updatedAt, sql`now() - (${VOICE_ATTEMPT_STALE_MINUTES} * interval '1 minute')`),
+      ))
+      .orderBy(asc(voiceCallAttempts.updatedAt))
+      .limit(safeLimit)
+      .for("update");
+
+    let reconciled = 0;
+    for (const attempt of stale) {
+      const [updated] = await tx.update(voiceCallAttempts)
+        .set({ status: "failed", outcome: "system_failure", updatedAt: new Date() })
+        .where(and(
+          eq(voiceCallAttempts.id, attempt.id),
+          inArray(voiceCallAttempts.status, ["calling", "dispatching", "initiated", "in_progress"]),
+        ))
+        .returning({ id: voiceCallAttempts.id });
+      if (!updated) continue;
+
+      await tx.insert(voiceCallLogs).values({
+        organizationId: attempt.organizationId,
+        applicationId: attempt.applicationId,
+        voiceCallAttemptId: attempt.id,
+        provider: "vapi",
+        providerCallId: attempt.providerCallId || "",
+        sourceEventKey: `stale-voice-reconcile:${attempt.id}`,
+        callStatus: "failed",
+        errorDetails: `Voice attempt remained ${attempt.status} beyond the ${VOICE_ATTEMPT_STALE_MINUTES}-minute reconciliation window. No terminal provider result was received.`,
+        rawResult: { maintenance: "stale_voice_attempt_reconciliation", previousStatus: attempt.status },
+      }).onConflictDoNothing({ target: voiceCallLogs.sourceEventKey });
+      reconciled += 1;
+    }
+
+    return {
+      inspected: stale.length,
+      reconciled,
+      staleAttemptIds: stale.filter((attempt) => attempt.id).map((attempt) => attempt.id),
+      staleMinutes: VOICE_ATTEMPT_STALE_MINUTES,
+    };
+  });
 }
 
 export async function dispatchVoiceAttemptDryRun(input: { attemptId: string; providerCallId: string }) {
