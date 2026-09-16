@@ -66,10 +66,9 @@ export const creditBalance = pgTable("credit_balance", {
 });
 
 /**
- * One balance per organization (migration 0015). `ownerEmail` is a leftover
- * from the earlier per-user-wallet design and is no longer part of the
- * account's identity -- every user in an organization shares this one row.
- * Per-actor attribution still lives on `creditAccountLedger.actorEmail`.
+ * One balance per user inside an organization (migration 0017). The owner
+ * email is normalized at provisioning time and is always queried together
+ * with organizationId; per-actor attribution still lives on the ledger too.
  */
 export const creditAccounts = pgTable(
   "credit_accounts",
@@ -81,7 +80,7 @@ export const creditAccounts = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [unique("credit_accounts_organization_uidx").on(table.organizationId)],
+  (table) => [unique("credit_accounts_organization_owner_uidx").on(table.organizationId, table.ownerEmail)],
 );
 
 export const creditAccountLedger = pgTable(

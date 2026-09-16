@@ -71,17 +71,31 @@
 
 .activity {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   padding: 16px 22px 10px;
   border-top: 1px solid var(--line, #dfe5ec);
 }
+.activityTitle { display: flex; align-items: baseline; gap: 10px; }
 .activity h3 { margin: 0; color: var(--navy, #17324d); font-size: 14px; }
-.activity span { color: #5b6f83; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.activityTitle > span { color: #5b6f83; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.filters { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.filters input, .filters select { min-height: 34px; padding: 0 10px; border: 1px solid #cbd9e7; border-radius: 7px; background: #fff; color: var(--navy, #17324d); font: inherit; font-size: 12px; }
+.filters input { width: 170px; }
+.filters select { min-width: 132px; }
+.filters button { min-height: 34px; }
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-.tableWrap { overflow-x: auto; padding: 0 22px 20px; }
-.table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 12px; }
+.tableWrap { min-height: 540px; overflow-x: auto; padding: 0 22px 20px; }
+.table { width: 100%; min-width: 760px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
+.table th:nth-child(1) { width: 18%; }
+.table th:nth-child(2) { width: 26%; }
+.table th:nth-child(3) { width: 8%; }
+.table th:nth-child(4) { width: 9%; }
+.table th:nth-child(5) { width: 24%; }
+.table th:nth-child(6) { width: 15%; }
 .table th {
   padding: 8px 10px;
   border-bottom: 1px solid #dfe5ec;
@@ -92,8 +106,12 @@
   text-align: left;
   text-transform: uppercase;
 }
-.table td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; color: var(--navy, #17324d); vertical-align: top; }
+.table td { height: 52px; padding: 9px 10px; border-bottom: 1px solid #eef2f6; color: var(--navy, #17324d); vertical-align: middle; }
 .table td:nth-child(1) { white-space: nowrap; color: #5e6b78; }
+.cellClamp { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eventName { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.eventNote { display: block; overflow: hidden; color: var(--muted, #5e6b78); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.placeholderRow td { color: transparent; user-select: none; }
 .delta { font-variant-numeric: tabular-nums; font-weight: 800; }
 .deltaPlus { color: #1c7d4d; }
 .deltaMinus { color: #a12b22; }
@@ -107,4 +125,8 @@
   .form { grid-template-columns: 1fr; }
   .amountField, .noteField { width: 100%; }
   .form button { margin-top: 0; }
+  .activity { align-items: stretch; }
+  .activityTitle, .filters { width: 100%; }
+  .filters { justify-content: flex-start; }
+  .filters input { flex: 1 1 150px; width: auto; }
 }

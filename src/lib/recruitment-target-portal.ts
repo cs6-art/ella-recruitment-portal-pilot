@@ -688,6 +688,7 @@ export async function targetSendVoiceBookingInvitation(input: { applicationId: s
         callStatus: text(result?.callStatus),
         callFinalStatus: text(result?.callFinalStatus),
         transcript: text(result?.transcript),
+        raw: result?.raw,
       })
     : null;
   const attemptStatus = text(attempt?.status).toLowerCase();
@@ -1047,6 +1048,7 @@ export async function targetApplicantDetails(externalId: string) {
         callStatus: text(voiceResult?.callStatus),
         callFinalStatus: text(voiceResult?.callFinalStatus),
         transcript: text(voiceResult?.transcript || voiceLog?.transcript),
+        raw: voiceResult?.raw,
       })
     : null;
   const voiceAttemptStatus = text(voiceAttempt?.status).toLowerCase();
@@ -1082,7 +1084,9 @@ export async function targetApplicantDetails(externalId: string) {
     resumeEvaluationFields: [],
     voiceDecision: text(application.voiceHrDecision),
     voiceComments: text(application.voiceHrComments),
-    voiceScore: voiceResult?.score == null ? "" : String(voiceResult.score),
+    // A provider may return score 0 for an interview that ended before any
+    // question was answered. That is not an assessed candidate score.
+    voiceScore: voiceOutcome === "incomplete" || voiceResult?.score == null ? "" : String(voiceResult.score),
     voiceRecommendation: text(voiceResult?.recommendation || voiceLog?.recommendation),
     voiceSummary: text(voiceResult?.summary || voiceLog?.summary),
     voiceStrengths: text(voiceResult?.strengths),

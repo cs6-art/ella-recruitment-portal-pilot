@@ -119,6 +119,8 @@ test("voice review reflects the real call outcome when no interview took place",
   const applications = read("src/lib/candidate-applications.ts");
   assert.match(target, /applicationVoiceReview\(externalId\)/);
   assert.match(target, /classifyVoiceInterviewBillingOutcome\(/);
+  assert.match(target, /raw: voiceResult\?\.raw/);
+  assert.match(target, /voiceOutcome === "incomplete" \|\| voiceResult\?\.score == null/);
   assert.match(target, /voiceCallStatus/);
   assert.match(target, /storedResumeText\(resumeFile\)/);
   assert.match(applications, /voiceCallStatus: field\(record, "Status 2 \(Voice Interview\)"/);
@@ -131,6 +133,15 @@ test("voice review reflects the real call outcome when no interview took place",
   assert.match(decisionPanel, /stageKey === "voice_review_pending"/);
   assert.match(decisionPanel, /no\[_ -\]\?answer\|no\[_ -\]\?show/);
   assert.match(detail, /currentStage=\{applicant\.currentStage\}/);
+});
+
+test("incomplete voice calls expose a reschedule action for HR", () => {
+  const detail = read("src/app/applicants/[applicationId]/page.tsx");
+  const panel = read("src/components/ApplicantDecisionPanel.tsx");
+  assert.match(detail, /incomplete/);
+  assert.match(detail, /voiceRetryEligible/);
+  assert.match(panel, /Send reschedule link/);
+  assert.match(panel, /No call will be placed until the candidate books a new time/);
 });
 
 test("a call that never reached the candidate reads as a system failure, not 'awaiting evaluation'", () => {

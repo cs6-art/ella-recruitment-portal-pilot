@@ -137,6 +137,21 @@ test("notification state records attempt, sent time, provider ID, and recipient"
   assert.match(route, /providerMessageId/);
 });
 
+test("voice-result notification identity is stable per call attempt", () => {
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  const voiceIngest = query.slice(query.indexOf("export async function ingestVoiceResult"), query.indexOf("/** Latest voice-call artefacts"));
+  assert.match(voiceIngest, /actionRequestId: `email:voice_result_next_step:\$\{attemptId\}`/);
+  assert.ok(voiceIngest.indexOf("const existing = await tx.select") < voiceIngest.indexOf("const moveToVoiceReview"), "duplicate results must be detected before queueing the notification");
+});
+
+test("notification acknowledgements cannot reopen a sent row", () => {
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  const mark = query.slice(query.indexOf("export async function markNotification"));
+  assert.match(mark, /Delivery state is monotonic/);
+  assert.match(mark, /not\(eq\(applicationStatusHistory\.notificationStatus, "sent"\)\)/);
+  assert.match(mark, /not\(eq\(roleStatusHistory\.notificationStatus, "sent"\)\)/);
+});
+
 test("HR booking cards expose invitation delivery separately from booking state", () => {
   const page = read("src/app/applicants/[applicationId]/page.tsx");
   const target = read("src/lib/recruitment-target-portal.ts");

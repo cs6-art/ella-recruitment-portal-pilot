@@ -14,7 +14,7 @@ export type { CreditEvent } from "@/lib/ella-credit-math";
 export type { CreditBalance, LedgerEntry } from "@/lib/ella-credits-store";
 
 /**
- * Smile Credits — single org-wide balance metering every AI action.
+ * Smile Credits — per-user balances inside the signed-in user's organization.
  *
  * Storage is switchable via `CREDITS_BACKEND` (Phase 2 backend migration):
  *  - `sheets`   (default): the original Google Sheet ledger.
@@ -73,16 +73,18 @@ async function mirrorToPostgres(entry: LedgerAppend): Promise<void> {
 
 // --- Reads --------------------------------------------------------------------
 
-// `ownerEmail` is kept on the scope only for actor attribution on the ledger
-// entry -- since migration 0015 the credit balance itself is keyed on
-// `organizationId` alone, shared by every user in the organization.
+// Both organizationId and ownerEmail are required in the Postgres Pilot path.
+// The owner is part of the wallet identity, so one HR account cannot spend or
+// display another user's organization wallet.
 type CreditScope = { organizationId?: string; ownerEmail?: string };
 
 function accountScope(scope: CreditScope) {
   if (!perUserCreditsEnabled()) return null;
   const organizationId = scope.organizationId?.trim();
   if (!organizationId) throw new Error("An organization is required for org-scoped credits.");
-  return { organizationId };
+  const ownerEmail = scope.ownerEmail?.trim().toLowerCase();
+  if (!ownerEmail) throw new Error("A credit account owner is required for per-user credits.");
+  return { organizationId, ownerEmail };
 }
 
 export async function getCreditBalance(options: { fresh?: boolean } & CreditScope = {}): Promise<CreditBalance> {
@@ -168,7 +170,7 @@ export async function assertCreditsAvailable(units: number, event: CreditEvent, 
 async function append(entry: LedgerAppend, opts: { guard: boolean }, scope: CreditScope = {}): Promise<{ balanceAfter: number }> {
   const account = accountScope(scope);
   if (account) {
-    const { balanceAfter } = await runWithTenantDatabase(account.organizationId, () => appendAccountLedgerEntry({ organizationId: account.organizationId, entry }, opts));
+    const { balanceAfter } = await runWithTenantDatabase(account.organizationId, () => appendAccountLedgerEntry({ organizationId: account.organizationId, ownerEmail: account.ownerEmail, entry }, opts));
     return { balanceAfter };
   }
   const backend = creditsBackend();

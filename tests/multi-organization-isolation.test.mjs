@@ -16,12 +16,13 @@ test("Pilot provisions a tenant and independent seeded credit accounts", () => {
   assert.match(migration, /ON CONFLICT \("organization_id", "owner_email"\) DO NOTHING/);
 });
 
-test("org-scoped credit operations always carry a tenant scope, shared by every user in the org", () => {
+test("credit operations carry both tenant and user-wallet scope", () => {
   const credits = read("src/lib/ella-credits.ts");
   const accounts = read("src/lib/ella-credits-accounts.ts");
-  assert.match(accounts, /WHERE "organization_id" = \$\{orgId\}\s*\n\s*FOR UPDATE/);
+  assert.match(accounts, /WHERE "organization_id" = \$\{orgId\} AND "owner_email" = \$\{owner\}/);
+  assert.match(accounts, /ownerEmail: string/);
   assert.match(accounts, /credit_account_ledger/);
-  assert.match(credits, /An organization is required for org-scoped credits/);
+  assert.match(credits, /A credit account owner is required for per-user credits/);
 });
 
 test("sessions and login resolve an organization before tenant-scoped requests", () => {
@@ -84,9 +85,17 @@ test("a new organization and its first user are self-service, no separate databa
   // Its first (and every later) user is created through the same directory
   // upsert every organization uses -- no separate provisioning script.
   assert.match(directory, /export async function upsertPostgresDirectoryUser/);
-  // Every organization gets its own single shared credit balance automatically.
+  // Every user gets a wallet inside their organization automatically.
   assert.match(orgs, /insert\(creditAccounts\)/);
-  assert.match(orgs, /onConflictDoNothing\(\{ target: creditAccounts\.organizationId \}\)/);
+  assert.match(orgs, /creditOwner = perUserCreditsEnabled\(\) \? email : "org"/);
+  assert.match(orgs, /onConflictDoNothing\(\{ target: \[creditAccounts\.organizationId, creditAccounts\.ownerEmail\] \}\)/);
+});
+
+test("per-user wallet migration removes the organization-only uniqueness constraint", () => {
+  const migration = read("drizzle/0017_per_user_credit_accounts.sql");
+  assert.match(migration, /DROP INDEX IF EXISTS "credit_accounts_organization_uidx"/);
+  assert.match(migration, /credit_accounts_organization_owner_uidx/);
+  assert.match(migration, /organization_id.*owner_email/);
 });
 
 test("applicants are deduplicated inside each organization", () => {

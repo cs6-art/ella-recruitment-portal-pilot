@@ -38,7 +38,18 @@ export async function GET() {
       success: true,
       balance,
       totals,
-      entries: entries.slice(-100).reverse(),
+      // Both storage backends can return a different natural row order. The
+      // activity feed is explicitly newest-first so the UI always shows the
+      // latest credit changes at the top.
+      entries: entries
+        .slice()
+        .sort((left, right) => {
+          const leftTime = Date.parse(left.timestamp);
+          const rightTime = Date.parse(right.timestamp);
+          if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) return rightTime - leftTime;
+          return String(right.timestamp).localeCompare(String(left.timestamp));
+        })
+        .slice(0, 100),
       pricing,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

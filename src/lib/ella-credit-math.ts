@@ -47,7 +47,18 @@ const INCOMPLETE_SIGNALS = new Set([
   "partial",
   "ended-before-completion",
   "ended_before_completion",
+  "ended before completion",
+  "call ended prematurely",
 ]);
+
+function rawStructuredData(raw: unknown): Record<string, unknown> {
+  const root = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+  const body = root.body && typeof root.body === "object" && !Array.isArray(root.body) ? root.body as Record<string, unknown> : root;
+  const message = body.message && typeof body.message === "object" && !Array.isArray(body.message) ? body.message as Record<string, unknown> : body;
+  const analysis = message.analysis && typeof message.analysis === "object" && !Array.isArray(message.analysis) ? message.analysis as Record<string, unknown> : {};
+  const structured = analysis.structuredData ?? analysis.structured_data ?? message.structuredData ?? message.structured_data;
+  return structured && typeof structured === "object" && !Array.isArray(structured) ? structured as Record<string, unknown> : {};
+}
 
 function normalizedSignal(value: unknown): string {
   return String(value ?? "").trim().toLowerCase();
@@ -67,10 +78,17 @@ export function classifyVoiceInterviewBillingOutcome(input: {
   transcript?: string;
   isComplete?: boolean;
   completenessScore?: number | null;
+  raw?: unknown;
 }): VoiceInterviewBillingOutcome | null {
   const signals = [input.outcome, input.callStatus, input.callFinalStatus].map(normalizedSignal).filter(Boolean);
   if (signals.some((signal) => NO_ANSWER_SIGNALS.has(signal))) return "no_answer";
-  if (signals.some((signal) => INCOMPLETE_SIGNALS.has(signal)) || input.isComplete === false) return "incomplete";
+  const structured = rawStructuredData(input.raw);
+  const answeredQuestionCount = Number(structured.answered_question_count);
+  const rawIncomplete = structured.interview_completed === false
+    || normalizedSignal(structured.interview_completed) === "false"
+    || INCOMPLETE_SIGNALS.has(normalizedSignal(structured.status))
+    || (Number.isFinite(answeredQuestionCount) && answeredQuestionCount === 0 && Boolean(String(input.transcript ?? "").trim()));
+  if (signals.some((signal) => INCOMPLETE_SIGNALS.has(signal)) || input.isComplete === false || rawIncomplete) return "incomplete";
 
   const transcript = String(input.transcript ?? "").trim();
   const terminal = signals.some((signal) => signal === "completed" || signal === "complete" || signal === "ended" || signal === "finished") || Boolean(transcript);

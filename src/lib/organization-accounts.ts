@@ -2,6 +2,7 @@ import { eq, and } from "drizzle-orm";
 
 import { getDb, getTenantDb, isDatabaseConfigured } from "@/db/client";
 import { creditAccounts, organizationMemberships, organizations } from "@/db/schema";
+import { perUserCreditsEnabled } from "@/lib/ella-credits-accounts";
 import { runWithTenantDatabase } from "@/lib/tenant-database";
 
 /** Stable tenant for the existing Pilot data set. */
@@ -48,6 +49,7 @@ export async function syncOrganizationMembership(input: {
   const email = normalizedEmail(input.email);
   const previousEmail = input.previousEmail ? normalizedEmail(input.previousEmail) : "";
   if (!organizationId || !email) return;
+  const creditOwner = perUserCreditsEnabled() ? email : "org";
 
   const db = getDb();
   try {
@@ -65,18 +67,19 @@ export async function syncOrganizationMembership(input: {
           target: [organizationMemberships.organizationId, organizationMemberships.email],
           set: { active: input.active, updatedAt: new Date() },
         });
-      // One shared balance per organization (migration 0015) -- ensure the
-      // org's single row exists; it is not keyed by which user logged in.
+      // Provision the account that will be used by this signed-in user. In
+      // per-user mode the owner is part of the tenant wallet identity; legacy
+      // mode retains the organization wallet.
       if (organizationId === DEFAULT_ORGANIZATION_ID) {
         await tx
           .insert(creditAccounts)
-          .values({ organizationId, ownerEmail: "org", balance: 0 })
-          .onConflictDoNothing({ target: creditAccounts.organizationId });
+          .values({ organizationId, ownerEmail: creditOwner, balance: 0 })
+          .onConflictDoNothing({ target: [creditAccounts.organizationId, creditAccounts.ownerEmail] });
       }
     });
     if (organizationId !== DEFAULT_ORGANIZATION_ID) {
       await runWithTenantDatabase(organizationId, async () => {
-        await getTenantDb().insert(creditAccounts).values({ organizationId, ownerEmail: "org", balance: 0 }).onConflictDoNothing({ target: creditAccounts.organizationId });
+        await getTenantDb().insert(creditAccounts).values({ organizationId, ownerEmail: creditOwner, balance: 0 }).onConflictDoNothing({ target: [creditAccounts.organizationId, creditAccounts.ownerEmail] });
       });
     }
   } catch (error) {

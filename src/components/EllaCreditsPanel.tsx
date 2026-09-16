@@ -36,16 +36,19 @@ type LedgerResponse = {
   };
 };
 
+type ActivityTypeFilter = "all" | "added" | "used";
+type ActivityEventFilter = "all" | "manual" | "cv_analysis" | "voice_interview";
+
 const defaultPricing = { cvAnalysis: 1, phoneInterview: 10, phoneInterviewNoAnswer: 5, phoneInterviewIncomplete: 8, discountThreshold: 2000, discountPercent: 10 };
 
 const eventLabels: Record<string, string> = {
   manual_topup: "Manual top-up",
   manual_adjustment: "Manual adjustment",
-  volume_discount: "Volume discount bonus",
-  cv_analysis: "AI CV analysis",
-  phone_interview: "AI phone interview completed",
-  phone_interview_no_answer: "AI phone interview — no answer",
-  phone_interview_incomplete: "AI phone interview — incomplete",
+  volume_discount: "Volume bonus",
+  cv_analysis: "CV analysis",
+  phone_interview: "Voice interview",
+  phone_interview_no_answer: "Voice interview",
+  phone_interview_incomplete: "Voice interview",
 };
 
 const nf = new Intl.NumberFormat("en-US");
@@ -54,6 +57,21 @@ const ACTIVITY_PAGE_SIZE = 10;
 function formatWhen(value: string) {
   const time = Date.parse(value);
   return Number.isFinite(time) ? new Date(time).toLocaleString() : value;
+}
+
+function eventFilterFor(event: string): ActivityEventFilter {
+  if (event === "cv_analysis") return "cv_analysis";
+  if (event.startsWith("phone_interview")) return "voice_interview";
+  return "manual";
+}
+
+function recentFirst(entries: LedgerEntry[]) {
+  return entries.slice().sort((left, right) => {
+    const leftTime = Date.parse(left.timestamp);
+    const rightTime = Date.parse(right.timestamp);
+    if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) return rightTime - leftTime;
+    return String(right.timestamp).localeCompare(String(left.timestamp));
+  });
 }
 
 export default function EllaCreditsPanel() {
@@ -66,6 +84,9 @@ export default function EllaCreditsPanel() {
   const [saveError, setSaveError] = useState("");
   const [message, setMessage] = useState("");
   const [activityPage, setActivityPage] = useState(1);
+  const [activitySearch, setActivitySearch] = useState("");
+  const [activityType, setActivityType] = useState<ActivityTypeFilter>("all");
+  const [activityEvent, setActivityEvent] = useState<ActivityEventFilter>("all");
 
   async function load() {
     try {
@@ -119,10 +140,27 @@ export default function EllaCreditsPanel() {
   const balance = data?.balance ?? 0;
   const pricing = data?.pricing;
   const headlineTone = balance <= 0 ? styles.empty : balance < 50 ? styles.low : "";
-  const activityTotalPages = data ? Math.max(1, Math.ceil(data.entries.length / ACTIVITY_PAGE_SIZE)) : 1;
+  const normalizedSearch = activitySearch.trim().toLowerCase();
+  const filteredEntries = recentFirst(data?.entries ?? []).filter((entry) => {
+    const matchesType = activityType === "all"
+      || (activityType === "added" && entry.creditsDelta > 0)
+      || (activityType === "used" && entry.creditsDelta < 0);
+    const matchesEvent = activityEvent === "all" || eventFilterFor(entry.event) === activityEvent;
+    const searchable = [eventLabels[entry.event] || entry.event, entry.note, entry.reference, entry.roleId, entry.actorName, entry.actorEmail].join(" ").toLowerCase();
+    return matchesType && matchesEvent && (!normalizedSearch || searchable.includes(normalizedSearch));
+  });
+  const activityTotalPages = Math.max(1, Math.ceil(filteredEntries.length / ACTIVITY_PAGE_SIZE));
   const visibleActivityPage = Math.min(activityPage, activityTotalPages);
   const activityStart = (visibleActivityPage - 1) * ACTIVITY_PAGE_SIZE;
-  const visibleEntries = data?.entries.slice(activityStart, activityStart + ACTIVITY_PAGE_SIZE) ?? [];
+  const visibleEntries = filteredEntries.slice(activityStart, activityStart + ACTIVITY_PAGE_SIZE);
+  const hasActivityFilters = Boolean(normalizedSearch) || activityType !== "all" || activityEvent !== "all";
+
+  function clearActivityFilters() {
+    setActivitySearch("");
+    setActivityType("all");
+    setActivityEvent("all");
+    setActivityPage(1);
+  }
 
   return (
     <section className={`card ${styles.panel}`}>
@@ -169,26 +207,48 @@ export default function EllaCreditsPanel() {
         </div>
 
         <div className={styles.activity}>
-          <h3>Recent activity</h3>
-          <span>{data.entries.length} entr{data.entries.length === 1 ? "y" : "ies"}</span>
+          <div className={styles.activityTitle}>
+            <h3>Recent activity</h3>
+            <span>{filteredEntries.length} matching entr{filteredEntries.length === 1 ? "y" : "ies"}</span>
+          </div>
+          <div className={styles.filters}>
+            <label className={styles.searchField}>
+              <span className={styles.srOnly}>Search credit activity</span>
+              <input aria-label="Search credit activity" placeholder="Search activity" value={activitySearch} onChange={(event) => { setActivitySearch(event.target.value); setActivityPage(1); }} />
+            </label>
+            <select aria-label="Filter credit activity type" value={activityType} onChange={(event) => { setActivityType(event.target.value as ActivityTypeFilter); setActivityPage(1); }}>
+              <option value="all">All activity</option>
+              <option value="added">Credits added</option>
+              <option value="used">Credits used</option>
+            </select>
+            <select aria-label="Filter credit activity event" value={activityEvent} onChange={(event) => { setActivityEvent(event.target.value as ActivityEventFilter); setActivityPage(1); }}>
+              <option value="all">All events</option>
+              <option value="manual">Manual changes</option>
+              <option value="cv_analysis">CV analysis</option>
+              <option value="voice_interview">Voice interviews</option>
+            </select>
+            {hasActivityFilters && <button type="button" className="btn btn-secondary btn-small" onClick={clearActivityFilters}>Clear</button>}
+          </div>
         </div>
         {data.entries.length === 0
           ? <p className={styles.empty}>No credit activity yet. Add a starting balance above to begin.</p>
-          : <div className={styles.tableWrap}><table className={styles.table}>
+          : filteredEntries.length === 0
+            ? <p className={styles.empty}>No activity matches the current filters.</p>
+            : <div className={styles.tableWrap}><table className={styles.table}>
             <thead><tr><th>When</th><th>Event</th><th>Change</th><th>Balance</th><th>Reference</th><th>By</th></tr></thead>
             <tbody>{visibleEntries.map((entry) => (
               <tr key={entry.entryId}>
-                <td>{formatWhen(entry.timestamp)}</td>
-                <td>{eventLabels[entry.event] || entry.event}{entry.note ? ` — ${entry.note}` : ""}</td>
+                <td><span className={styles.cellClamp} title={formatWhen(entry.timestamp)}>{formatWhen(entry.timestamp)}</span></td>
+                <td><span className={styles.eventName}>{eventLabels[entry.event] || entry.event}</span>{entry.note && <small className={styles.eventNote} title={entry.note}>{entry.note}</small>}</td>
                 <td className={`${styles.delta} ${entry.creditsDelta >= 0 ? styles.deltaPlus : styles.deltaMinus}`}>{entry.creditsDelta > 0 ? `+${nf.format(entry.creditsDelta)}` : nf.format(entry.creditsDelta)}</td>
                 <td>{nf.format(entry.balanceAfter)}</td>
-                <td>{entry.reference || entry.roleId || "—"}</td>
-                <td>{entry.actorName || entry.actorEmail || "—"}</td>
+                <td><span className={styles.cellClamp} title={entry.reference || entry.roleId || "—"}>{entry.reference || entry.roleId || "—"}</span></td>
+                <td><span className={styles.cellClamp} title={entry.actorName || entry.actorEmail || "—"}>{entry.actorName || entry.actorEmail || "—"}</span></td>
               </tr>
-            ))}</tbody>
+            ))}{Array.from({ length: Math.max(0, ACTIVITY_PAGE_SIZE - visibleEntries.length) }, (_, index) => <tr className={styles.placeholderRow} aria-hidden="true" key={`placeholder-${index}`}><td colSpan={6}>&nbsp;</td></tr>)}</tbody>
           </table></div>}
-        {data.entries.length > ACTIVITY_PAGE_SIZE && <div className={styles.pagination} aria-label="Credit activity pagination">
-          <span>Showing {activityStart + 1}–{Math.min(activityStart + ACTIVITY_PAGE_SIZE, data.entries.length)} of {data.entries.length}</span>
+        {filteredEntries.length > ACTIVITY_PAGE_SIZE && <div className={styles.pagination} aria-label="Credit activity pagination">
+          <span>Showing {activityStart + 1}–{Math.min(activityStart + ACTIVITY_PAGE_SIZE, filteredEntries.length)} of {filteredEntries.length}</span>
           <button type="button" className="btn btn-secondary btn-small" disabled={visibleActivityPage === 1} onClick={() => setActivityPage((current) => Math.max(1, current - 1))}>Previous</button>
           <span>Page {visibleActivityPage} of {activityTotalPages}</span>
           <button type="button" className="btn btn-secondary btn-small" disabled={visibleActivityPage === activityTotalPages} onClick={() => setActivityPage((current) => Math.min(activityTotalPages, current + 1))}>Next</button>

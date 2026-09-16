@@ -536,6 +536,7 @@ export async function copyScreeningResult(input: { sourceApplicationId: string; 
       if (perUserCreditsEnabled()) {
         await appendAccountLedgerEntryOnExecutor(tx, {
           organizationId: target.organizationId,
+          ownerEmail: target.creditOwnerEmail,
           entry: input.ledger,
         }, { guard: true });
       } else {
@@ -849,7 +850,7 @@ export async function upsertScreeningResult(input: { applicationExternalId: stri
           sourceEntryId: `LDG-${crypto.createHash("sha256").update(`cv:${input.applicationExternalId}`).digest("hex")}`,
         };
         credit = perUserCreditsEnabled()
-          ? await appendAccountLedgerEntryOnExecutor(tx, { organizationId: application.organizationId, entry: ledger }, { guard: true })
+          ? await appendAccountLedgerEntryOnExecutor(tx, { organizationId: application.organizationId, ownerEmail: application.creditOwnerEmail, entry: ledger }, { guard: true })
           : await appendPostgresLedgerEntryOnExecutor(tx, ledger, { guard: true });
       }
     await tx.insert(applicationStatusHistory).values({
@@ -1200,15 +1201,18 @@ export async function ingestVoiceResult(rawInput: VoiceResultInput) {
     // attempt-status callback was skipped. This is idempotent and keeps a
     // completed Vapi call from remaining visually stuck at "Initiated".
     await settleVoiceAttemptFromResult(tx, attemptId, input);
-    const moveToVoiceReview = async () => {
-      if (application.currentStage !== "voice_scheduled") return;
-      await tx.update(applications).set({ currentStage: "voice_review_pending", updatedAt: new Date() }).where(eq(applications.id, application.id));
-      await tx.insert(applicationStatusHistory).values({ organizationId: application.organizationId, applicationId: application.id, stage: "voice_review_pending", previousStage: "voice_scheduled", newStage: "voice_review_pending", decision: input.recommendation || "", source: "internal_api:voice_result", comments: input.summary || "", actionRequestId: input.sourceEventKey || null, notificationStatus: "pending", notificationEventType: "voice_result_next_step", notificationRecipient: pilotEmailRecipient(application.email).to, notificationIntendedRecipient: application.email }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
-    };
-    await moveToVoiceReview();
     const existing = await tx.select({ id: voiceInterviewResults.id }).from(voiceInterviewResults).where(and(eq(voiceInterviewResults.applicationId, application.id), eq(voiceInterviewResults.providerEventType, input.providerEventType || ""), completedAt ? eq(voiceInterviewResults.callCompletedAt, completedAt) : isNull(voiceInterviewResults.callCompletedAt))).limit(1);
     if (existing.length > 0) return { inserted: false, applicationId: application.id, attemptId, candidateEmail: application.email, creditOwnerEmail: application.creditOwnerEmail, organizationId: application.organizationId, chargedCredits: 0, billingOutcome: null, error: null };
     const [inserted] = await tx.insert(voiceInterviewResults).values({ organizationId: application.organizationId, applicationId: application.id, attemptId, score: input.score ?? null, recommendation: input.recommendation || "", strengths: input.strengths || "", concerns: input.concerns || "", summary: input.summary || "", transcript: input.transcript || "", callStatus: input.callStatus || "", callFinalStatus: input.callFinalStatus || "", providerEventType: input.providerEventType || "", callCompletedAt: completedAt, resultReceivedAt: new Date(), raw: (input.raw ?? null) as object | null }).returning();
+    const moveToVoiceReview = async () => {
+      if (application.currentStage !== "voice_scheduled") return;
+      await tx.update(applications).set({ currentStage: "voice_review_pending", updatedAt: new Date() }).where(eq(applications.id, application.id));
+      // One completed call attempt can produce several provider callbacks.
+      // The attempt ID is the durable event identity; provider event keys are
+      // optional and may change between retries.
+      await tx.insert(applicationStatusHistory).values({ organizationId: application.organizationId, applicationId: application.id, stage: "voice_review_pending", previousStage: "voice_scheduled", newStage: "voice_review_pending", decision: input.recommendation || "", source: "internal_api:voice_result", comments: input.summary || "", actionRequestId: `email:voice_result_next_step:${attemptId}`, notificationStatus: "pending", notificationEventType: "voice_result_next_step", notificationRecipient: pilotEmailRecipient(application.email).to, notificationIntendedRecipient: application.email }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
+    };
+    await moveToVoiceReview();
     return { inserted: Boolean(inserted), applicationId: application.id, attemptId, candidateEmail: application.email, creditOwnerEmail: application.creditOwnerEmail, organizationId: application.organizationId, chargedCredits: 0, billingOutcome: null, error: null };
   });
   if (!result.applicationId || !result.attemptId) return { ...result, chargedCredits: 0, billingOutcome: null };
@@ -1546,7 +1550,7 @@ export async function finalizeBulkScreening(input: {
     if (!result) return { processed: false, duplicate: true, error: null };
 
     const credit = perUserCreditsEnabled()
-      ? await appendAccountLedgerEntryOnExecutor(tx, { organizationId: application.organizationId, entry: input.ledger }, { guard: true })
+      ? await appendAccountLedgerEntryOnExecutor(tx, { organizationId: application.organizationId, ownerEmail: application.creditOwnerEmail || input.ledger.actorEmail || "", entry: input.ledger }, { guard: true })
       : await appendPostgresLedgerEntryOnExecutor(tx, input.ledger, { guard: true });
     const actionRequestId = `screening:${input.dedupeKey.trim()}`;
     await tx.insert(applicationStatusHistory).values({
@@ -1961,8 +1965,17 @@ export async function notificationQueue(stage?: string) {
 
 export async function markNotification(input: { historyId: string; status: "sent" | "pending" | "failed" | "not_configured"; error?: string; providerMessageId?: string; recipient?: string }) {
   const db = getDb();
-  const [row] = await db.update(applicationStatusHistory).set({ notificationStatus: input.status, notificationError: input.error || "", notificationAttemptedAt: new Date(), notificationSentAt: input.status === "sent" ? new Date() : undefined, notificationProviderId: input.providerMessageId || "", notificationRecipient: input.recipient || undefined }).where(eq(applicationStatusHistory.id, input.historyId)).returning({ id: applicationStatusHistory.id });
+  // Delivery state is monotonic: once a provider has acknowledged a message
+  // as sent, a late failure/pending callback must not reopen the queue row and
+  // cause the same email to be delivered again.
+  const applicationWhere = input.status === "sent"
+    ? eq(applicationStatusHistory.id, input.historyId)
+    : and(eq(applicationStatusHistory.id, input.historyId), not(eq(applicationStatusHistory.notificationStatus, "sent")));
+  const [row] = await db.update(applicationStatusHistory).set({ notificationStatus: input.status, notificationError: input.error || "", notificationAttemptedAt: new Date(), notificationSentAt: input.status === "sent" ? new Date() : undefined, notificationProviderId: input.providerMessageId || "", notificationRecipient: input.recipient || undefined }).where(applicationWhere).returning({ id: applicationStatusHistory.id });
   if (row) return { updated: true };
-  const [roleRow] = await db.update(roleStatusHistory).set({ notificationStatus: input.status, notificationError: input.error || "", notificationAttemptedAt: new Date() }).where(eq(roleStatusHistory.id, input.historyId)).returning({ id: roleStatusHistory.id });
+  const roleWhere = input.status === "sent"
+    ? eq(roleStatusHistory.id, input.historyId)
+    : and(eq(roleStatusHistory.id, input.historyId), not(eq(roleStatusHistory.notificationStatus, "sent")));
+  const [roleRow] = await db.update(roleStatusHistory).set({ notificationStatus: input.status, notificationError: input.error || "", notificationAttemptedAt: new Date() }).where(roleWhere).returning({ id: roleStatusHistory.id });
   return { updated: Boolean(roleRow) };
 }

@@ -36,7 +36,23 @@ test("the purchase UI is separate from manual credit management", () => {
 test("credit activity is paginated in the UI", () => {
   const panel = read("src/components/EllaCreditsPanel.tsx");
   assert.match(panel, /ACTIVITY_PAGE_SIZE = 10/);
-  assert.match(panel, /visibleEntries = data\?\.entries\.slice\(activityStart/);
+  assert.match(panel, /visibleEntries = filteredEntries\.slice\(activityStart/);
   assert.match(panel, /Credit activity pagination/);
   assert.match(panel, /Showing \{activityStart \+ 1\}/);
+});
+
+test("credit activity is recent-first, filterable, and keeps a stable table footprint", () => {
+  const panel = read("src/components/EllaCreditsPanel.tsx");
+  const route = read("src/app/api/ella-credits/route.ts");
+  const styles = read("src/components/EllaCreditsPanel.module.css");
+  assert.match(route, /newest-first/);
+  assert.match(route, /sort\(\(left, right\)/);
+  assert.match(panel, /Search credit activity/);
+  assert.match(panel, /Filter credit activity type/);
+  assert.match(panel, /Filter credit activity event/);
+  assert.match(panel, /No activity matches the current filters/);
+  assert.match(panel, /placeholder-\$\{index\}/);
+  assert.match(panel, /Voice interview/);
+  assert.match(styles, /min-height: 540px/);
+  assert.match(styles, /table-layout: fixed/);
 });
