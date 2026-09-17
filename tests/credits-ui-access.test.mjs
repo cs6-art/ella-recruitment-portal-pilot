@@ -21,6 +21,9 @@ test("the Credits page does not widen Settings access", () => {
   const settings = read("src/app/settings/page.tsx");
   const page = read("src/app/credits/page.tsx");
   assert.match(settings, /user\.canEditSettings !== true/);
+  assert.match(settings, /<GoogleCalendarConnect canManage \/>/);
+  assert.doesNotMatch(settings, /EllaCreditsPanel/);
+  assert.doesNotMatch(settings, /recruitment credits/);
   assert.match(page, /canManageCredits\(user\)/);
 });
 
