@@ -34,7 +34,7 @@ export async function POST(request: Request, context: Context) {
 
   const { roleId: encodedRoleId } = await context.params;
   const roleId = decodeURIComponent(encodedRoleId);
-  const role = isPostgresRecruitmentTarget() ? await targetRoleDetails(roleId) : await getRoleRequestById(roleId);
+  const role = isPostgresRecruitmentTarget() ? await targetRoleDetails(roleId, user.organizationId) : await getRoleRequestById(roleId);
   if (!role || !canViewRole(user, role)) return NextResponse.json({ success: false, error: "Role request not found." }, { status: 404 });
 
   try {
@@ -283,6 +283,7 @@ export async function POST(request: Request, context: Context) {
     // n8n writes them again immediately after, so the two stay consistent.
     // Role status transitions remain owned by the workflow.
     const persistedFields: Record<string, string> = {
+      Job_Description: role.jobDescription || setup.jobDescription,
       Target_Hiring_Date: role.targetHiringDate || "",
       Voice_Interview_Availability_Mode: setup.voiceInterviewAvailabilityMode,
       Voice_Interview_Slots: serializeVoiceInterviewSlots(setup.voiceInterviewSlots),
