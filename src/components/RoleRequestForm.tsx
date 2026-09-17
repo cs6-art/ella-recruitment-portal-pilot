@@ -484,7 +484,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
 
             <div className="field">
               <label htmlFor="targetHiringDate">Target Hiring Date <strong className="required-mark">*</strong></label>
-              <input id="targetHiringDate" {...fieldErrorProps("targetHiringDate")} required type="date" value={form.targetHiringDate} onChange={(event) => update("targetHiringDate", event.target.value)} />
+              <input id="targetHiringDate" {...fieldErrorProps("targetHiringDate")} required type="date" value={form.targetHiringDate} onChange={(event) => update("targetHiringDate", event.currentTarget.value)} onInput={(event) => update("targetHiringDate", event.currentTarget.value)} />
             </div>
 
             {form.requestType === "Staff Replacement" && (

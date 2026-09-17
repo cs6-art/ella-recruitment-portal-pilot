@@ -131,6 +131,7 @@ test("role creation can generate AI guidance from typed job descriptions", () =>
 
 test("role drafts normalize the stored target date for the browser date input", () => {
   assert.match(formSource, /targetHiringDate: toDateInputValue\(initialValues\?\.targetHiringDate\)/);
+  assert.match(formSource, /onInput=\{\(event\) => update\("targetHiringDate", event\.currentTarget\.value\)\}/);
   assert.match(dateOnlySource, /monthFirst/);
   assert.match(dateOnlySource, /input type="date"/);
 });

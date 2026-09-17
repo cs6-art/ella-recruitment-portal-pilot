@@ -288,7 +288,7 @@ export async function POST(request: Request) {
         if (isPostgresRecruitmentTarget()) await targetUpdateRoleFields(roleId, fields);
         else await updateRoleRequestFields(roleId, fields);
       } else {
-        await appendRoleRequestDraft(fields);
+        await appendRoleRequestDraft(fields, user.organizationId);
       }
       return NextResponse.json({ success: true, draft: true, roleId, status: "Draft", message: "Draft saved." }, { status: 201 });
     }

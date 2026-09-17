@@ -1313,7 +1313,7 @@ export async function updateRoleRequestFields(roleId: string, fields: Record<str
  * workflow. Drafts are intentionally stored in Role_Requests so HR,
  * management, and the original requester can reopen the same record later.
  */
-export async function appendRoleRequestDraft(fields: Record<string, string>): Promise<void> {
+export async function appendRoleRequestDraft(fields: Record<string, string>, organizationId = ""): Promise<void> {
   if (isPostgresRecruitmentTarget()) {
     const roleId = fields.Role_ID || fields.Submission_ID || `ROLE-${randomUUID()}`;
     const result = await targetUpdateRoleFields(roleId, { ...fields, Role_ID: roleId });
@@ -1333,6 +1333,7 @@ export async function appendRoleRequestDraft(fields: Record<string, string>): Pr
       requesterName: fields.Requester_Name,
       actionRequestId: `draft:${roleId}`,
       actorEmail: fields.Requester_Email,
+      organizationId,
     });
     return;
   }
