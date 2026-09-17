@@ -305,13 +305,17 @@ export async function targetRoleDetails(externalId: string, organizationId = "")
  * absent HR session. The role external ID is globally unique, and the role's
  * own tenant is then used for all downstream application writes. */
 export async function targetPublicRoleDetails(externalId: string): Promise<RoleRequestDetails | null> {
-  const organizationIds = await activeTenantOrganizationIds();
-  for (const organizationId of organizationIds) {
-    const role = await runWithTenantDatabase(organizationId, () => getRole(externalId));
-    if (!role) continue;
-    return runWithTenantDatabase(organizationId, () => targetRoleDetails(externalId, organizationId));
-  }
-  return null;
+  const normalizedExternalId = decodeURIComponent(externalId).trim();
+  if (!normalizedExternalId) return null;
+  // Resolve the role first, then carry its own tenant through the detailed
+  // read. Public catalogue pages span active organizations, so deriving the
+  // tenant from the current HR session (or relying on an iteration order)
+  // can make a valid cross-organization application link return 404.
+  const role = await getRole(normalizedExternalId);
+  if (!role) return null;
+  const activeOrganizations = await activeTenantOrganizationIds();
+  if (!activeOrganizations.includes(role.organizationId)) return null;
+  return runWithTenantDatabase(role.organizationId, () => targetRoleDetails(normalizedExternalId, role.organizationId));
 }
 
 function isArchivedRole(role: Record<string, unknown>) {
