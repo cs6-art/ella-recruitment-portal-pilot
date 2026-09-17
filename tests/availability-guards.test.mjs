@@ -10,6 +10,7 @@ const roleDetails = fs.readFileSync("src/components/RoleDetails.tsx", "utf8");
 const roleForm = fs.readFileSync("src/components/RoleRequestForm.tsx", "utf8");
 const workflow = fs.readFileSync("src/lib/applicant-workflow.ts", "utf8");
 const instrumentation = fs.readFileSync("src/instrumentation.ts", "utf8");
+const styles = fs.readFileSync("src/app/globals.css", "utf8");
 
 test("availability rules reject overlapping weekday windows and deduplicate legacy reads", () => {
   assert.match(rules, /"Completed", "No Show", "Cancelled"/);
@@ -59,6 +60,13 @@ test("HR scheduling preserves the default week and allows calendar-checked excep
   assert.match(bookings, /calendarLookupState/);
   assert.match(bookings, /Checking the shared HR Google Calendar connection/);
   assert.match(bookings, /already covered by your standard weekly hours/);
+});
+
+test("HR exception drawer keeps error states inside the viewport", () => {
+  assert.match(styles, /\.booking-drawer \{[^}]*max-width: 100vw/);
+  assert.match(styles, /\.booking-drawer-body \{[^}]*overflow-x: hidden/);
+  assert.match(styles, /\.booking-drawer \.schedule-time-row \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /@media \(max-width: 520px\)[\s\S]*\.booking-drawer-footer \.btn \{ width: 100%; \}/);
 });
 
 test("calendar counter uses configured windows and recruitment setup is editable from role details", () => {
