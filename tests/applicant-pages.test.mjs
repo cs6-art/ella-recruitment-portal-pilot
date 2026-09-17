@@ -227,7 +227,7 @@ test("applicant routes are protected and render populated sheet data", () => {
   // not excluded in favor of the Drive-folder poller as it was previously.
   assert.match(screening, /BulkResumeScreeningPanel/);
   assert.match(bulkPanel, /Choose from Google Drive|Connect Google Drive/);
-  assert.match(screening, /getPortalConfigValue\("Bulk_Resume_Drive_URL"\)/);
+  assert.doesNotMatch(bulkPanel, /Open the shared Drive folder/);
   assert.match(screening, /sort\(\(left, right\) => left\.label\.localeCompare\(right\.label/);
   assert.match(read("src/components/CandidateApplicationForm.tsx"), /No published roles available/);
   assert.match(detail, /verifySessionToken/);

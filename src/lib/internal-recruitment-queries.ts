@@ -145,6 +145,27 @@ function firstNumber(...values: unknown[]): number | null {
   return null;
 }
 
+function normalizedVoiceFieldName(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/([a-z])([A-Z])/g, "$1_$2")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+}
+
+/** Vapi may put structured outputs in artifact.structuredOutputs as a UUID-keyed map. */
+function structuredVoiceOutputs(value: unknown): Record<string, unknown> {
+  const source = objectValue(value);
+  const output: Record<string, unknown> = {};
+  for (const item of Array.isArray(value) ? value : Object.values(source)) {
+    const record = objectValue(item);
+    const name = normalizedVoiceFieldName(record.name);
+    if (name && Object.prototype.hasOwnProperty.call(record, "result")) output[name] = record.result;
+  }
+  return output;
+}
+
 type VoiceResultInput = {
   applicationExternalId: string;
   attemptId?: string;
@@ -176,20 +197,45 @@ function normalizeVoiceResultInput(input: VoiceResultInput): VoiceResultInput {
   const message = objectValue(body.message || raw.message || body || raw);
   const call = objectValue(message.call);
   const analysis = objectValue(message.analysis);
-  const structured = objectValue(analysis.structuredData || analysis.structured_data || message.structuredData || message.structured_data);
   const artifact = objectValue(message.artifact);
+  const structured = {
+    ...structuredVoiceOutputs(artifact.structuredOutputs || artifact.structured_outputs),
+    ...objectValue(analysis.structuredData || analysis.structured_data || message.structuredData || message.structured_data),
+  };
   const endedReason = firstText(message.endedReason, call.endedReason, call.ended_reason);
   const transcript = firstText(input.transcript, message.transcript, artifact.transcript);
   const callStatus = firstText(input.callStatus, message.status, call.status, transcript || endedReason ? "ended" : "");
   const callFinalStatus = firstText(input.callFinalStatus, endedReason);
-  const isComplete = input.isComplete ?? (typeof structured.interview_completed === "boolean" ? structured.interview_completed : undefined);
+  const score = input.score ?? firstNumber(structured.voice_score, structured.score, structured.match_score, message.score);
+  const answeredQuestionCount = firstNumber(structured.answered_question_count);
+  const isComplete = input.isComplete ?? (
+    typeof structured.interview_completed === "boolean"
+      ? structured.interview_completed
+      : normalizedVoiceFieldName(structured.status) === "interview_completed"
+        ? true
+        : undefined
+  );
+  const recommendation = firstText(
+    input.recommendation,
+    structured.voice_recommendation,
+    structured.recommendation,
+    message.recommendation,
+    score === null ? "" : score >= 80 ? "Strong Match" : score >= 60 ? "Potential Match" : "Needs Review",
+  );
+  const summary = firstText(
+    input.summary,
+    structured.hr_summary,
+    structured.summary,
+    message.summary,
+    score === null ? "" : `The candidate completed the voice interview. Answered questions: ${answeredQuestionCount ?? "not provided"}. Voice match score: ${score}. The transcript was captured and is available for HR review.`,
+  );
   return {
     ...input,
-    score: input.score ?? firstNumber(structured.voice_score, structured.score, message.score),
-    recommendation: firstText(input.recommendation, structured.voice_recommendation, structured.recommendation, message.recommendation),
+    score,
+    recommendation,
     strengths: firstText(input.strengths, structured.voice_strengths, structured.strengths, message.strengths),
     concerns: firstText(input.concerns, structured.voice_concerns, structured.concerns, message.concerns),
-    summary: firstText(input.summary, structured.hr_summary, structured.summary, message.summary),
+    summary,
     transcript,
     callStatus,
     callFinalStatus,
@@ -1226,8 +1272,66 @@ export async function applicationVoiceReview(externalId: string) {
   const db = getDb();
   const [application] = await db.select({ id: applications.id }).from(applications).where(eq(applications.externalId, externalId.trim())).limit(1);
   if (!application) return null;
-  const [result] = await db.select().from(voiceInterviewResults).where(eq(voiceInterviewResults.applicationId, application.id)).orderBy(desc(voiceInterviewResults.createdAt)).limit(1);
-  const [log] = await db.select().from(voiceCallLogs).where(eq(voiceCallLogs.applicationId, application.id)).orderBy(desc(voiceCallLogs.createdAt)).limit(1);
+  let [result] = await db.select().from(voiceInterviewResults).where(eq(voiceInterviewResults.applicationId, application.id)).orderBy(desc(voiceInterviewResults.createdAt)).limit(1);
+  // Older n8n executions stored Vapi's UUID-keyed artifact.structuredOutputs
+  // as raw JSON but left the denormalized review fields blank. Repair only
+  // missing fields, keyed to the existing result, so refreshes are idempotent
+  // and never create a second result or bill another interview.
+  if (result) {
+    const normalized = normalizeVoiceResultInput({
+      applicationExternalId: externalId,
+      score: result.score,
+      recommendation: result.recommendation,
+      strengths: result.strengths,
+      concerns: result.concerns,
+      summary: result.summary,
+      transcript: result.transcript,
+      callStatus: result.callStatus,
+      callFinalStatus: result.callFinalStatus,
+      providerEventType: result.providerEventType,
+      callCompletedAt: result.callCompletedAt?.toISOString(),
+      raw: result.raw,
+    });
+    const patch: Record<string, unknown> = {};
+    if (result.score == null && normalized.score != null) patch.score = normalized.score;
+    if (!result.recommendation.trim() && normalized.recommendation) patch.recommendation = normalized.recommendation;
+    if (!result.strengths.trim() && normalized.strengths) patch.strengths = normalized.strengths;
+    if (!result.concerns.trim() && normalized.concerns) patch.concerns = normalized.concerns;
+    if (!result.summary.trim() && normalized.summary) patch.summary = normalized.summary;
+    if (!result.callStatus.trim() && normalized.callStatus) patch.callStatus = normalized.callStatus;
+    if (!result.callFinalStatus.trim() && normalized.callFinalStatus) patch.callFinalStatus = normalized.callFinalStatus;
+    if (Object.keys(patch).length > 0) {
+      const [updated] = await db.update(voiceInterviewResults).set(patch).where(eq(voiceInterviewResults.id, result.id)).returning();
+      result = updated ?? { ...result, ...patch };
+    }
+  }
+  let [log] = await db.select().from(voiceCallLogs).where(eq(voiceCallLogs.applicationId, application.id)).orderBy(desc(voiceCallLogs.createdAt)).limit(1);
+  if (result && !log && result.transcript.trim()) {
+    const raw = objectValue(result.raw);
+    const body = objectValue(raw.body);
+    const message = objectValue(body.message || raw.message || body || raw);
+    const call = objectValue(message.call);
+    const [createdLog] = await db.insert(voiceCallLogs).values({
+      organizationId: result.organizationId,
+      applicationId: result.applicationId,
+      voiceCallAttemptId: result.attemptId,
+      provider: "vapi",
+      providerCallId: firstText(call.id, call.callId, message.callId),
+      providerEventId: firstText(message.id, call.id),
+      sourceEventKey: `repair:voice-result:${result.id}`,
+      callStatus: result.callStatus,
+      durationSeconds: firstNumber(message.durationSeconds, message.duration_seconds),
+      recordingUrl: firstText(message.recordingUrl, message.recording_url),
+      completenessScore: 100,
+      transcript: result.transcript,
+      summary: result.summary,
+      recommendation: result.recommendation,
+      rawResult: result.raw,
+      startedAt: isoOrNull(firstText(message.startedAt, call.startedAt, call.started_at)),
+      endedAt: isoOrNull(firstText(message.endedAt, call.endedAt, call.ended_at)),
+    }).onConflictDoNothing({ target: voiceCallLogs.sourceEventKey }).returning();
+    log = createdLog ?? null;
+  }
   const [attempt] = await db.select().from(voiceCallAttempts).where(eq(voiceCallAttempts.applicationId, application.id)).orderBy(desc(voiceCallAttempts.attemptNumber), desc(voiceCallAttempts.createdAt)).limit(1);
   let currentAttempt = attempt ?? null;
   if (result && currentAttempt) {

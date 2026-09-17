@@ -69,7 +69,7 @@ async function fileQueueId(roleId: string, file: File) {
   return `BULK-${roleKey}-${sha256}`;
 }
 
-export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveRootFolderId = "" }: { roleOptions: RoleOption[]; driveUrl: string; driveRootFolderId?: string }) {
+export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderId = "" }: { roleOptions: RoleOption[]; driveRootFolderId?: string }) {
   const [roleId, setRoleId] = useState("");
   const [items, setItems] = useState<QueueItem[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -436,7 +436,6 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveUrl, driveR
                 Disconnect {msDriveStatus.accountEmail}
               </button>
             )}
-            {driveUrl && <a className="bulk-screening-link-button" href={driveUrl} target="_blank" rel="noopener noreferrer">Open the shared Drive folder</a>}
           </div>
         </div>
 

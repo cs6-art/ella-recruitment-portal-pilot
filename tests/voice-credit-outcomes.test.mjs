@@ -100,6 +100,15 @@ test("voice result and log routes expose outcome billing fields", () => {
   }
 });
 
+test("voice review repairs Vapi artifact structured outputs without duplicating results", () => {
+  const queries = readFileSync(new URL("../src/lib/internal-recruitment-queries.ts", import.meta.url), "utf8");
+  assert.match(queries, /artifact\.structuredOutputs/);
+  assert.match(queries, /structured\.match_score/);
+  assert.match(queries, /repair:voice-result:\$\{result\.id\}/);
+  assert.match(queries, /if \(result\.score == null && normalized\.score != null\)/);
+  assert.match(queries, /onConflictDoNothing\(\{ target: voiceCallLogs\.sourceEventKey \}\)/);
+});
+
 // Regression for a 2026-09-15 pilot incident: n8n's POST to
 // /voice/attempts/status legitimately sends outcome: "incomplete" (a
 // VoiceInterviewBillingOutcome value, produced by
