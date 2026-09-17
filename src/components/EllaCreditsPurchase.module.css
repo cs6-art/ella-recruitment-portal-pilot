@@ -4,6 +4,7 @@
 .header h2 { margin: 5px 0 0; color: var(--navy, #17324d); font-size: 18px; }
 .header p { margin: 5px 0 0; max-width: 65ch; color: var(--muted, #5e6b78); font-size: 12px; line-height: 1.5; }
 .feedback { padding: 14px 22px 0; }
+.retry { margin-top: 10px; }
 .reference, .unavailable, .loading { margin: 14px 22px 0; color: var(--muted, #5e6b78); font-size: 12px; }
 .reference code { color: var(--navy, #17324d); }
 .packGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 18px 22px 22px; }

@@ -38,6 +38,7 @@ export default function EllaCreditsPurchase() {
   const [returnReference, setReturnReference] = useState("");
   const [payment, setPayment] = useState<Payment | null>(null);
   const [returnMessage, setReturnMessage] = useState("");
+  const [reconciling, setReconciling] = useState(false);
 
   const loadPacks = useCallback(async () => {
     try {
@@ -64,36 +65,86 @@ export default function EllaCreditsPurchase() {
     if (!returnReference) return;
     let cancelled = false;
 
+    async function readPaymentStatus() {
+      const response = await fetch(`/api/ella-credits/payments/${encodeURIComponent(returnReference)}`, { credentials: "same-origin", cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok || body.success !== true) throw new Error(body.error || "Unable to check payment status.");
+      return body.payment as Payment;
+    }
+
+    async function reconcilePaymentStatus() {
+      const response = await fetch(`/api/ella-credits/payments/${encodeURIComponent(returnReference)}`, { method: "POST", credentials: "same-origin", cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Unable to reconcile payment.");
+      if (body.payment) return body.payment as Payment;
+      throw new Error(body.error || "Unable to reconcile payment.");
+    }
+
+    async function updatePayment(nextPayment: Payment) {
+      if (cancelled) return false;
+      setPayment(nextPayment);
+      setError("");
+      if (nextPayment.status === "paid" && nextPayment.creditedAt) {
+        setReturnMessage(`Payment confirmed. ${nf.format(nextPayment.credits)} credits have been added.`);
+        return true;
+      }
+      if (["failed", "expired"].includes(nextPayment.status)) {
+        setReturnMessage(`Payment ${nextPayment.status}. No credits were added.`);
+        return true;
+      }
+      return false;
+    }
+
     async function poll() {
       for (let attempt = 0; attempt < 15 && !cancelled; attempt += 1) {
         try {
-          const response = await fetch(`/api/ella-credits/payments/${encodeURIComponent(returnReference)}`, { credentials: "same-origin", cache: "no-store" });
-          const body = await response.json();
-          if (!response.ok || body.success !== true) throw new Error(body.error || "Unable to check payment status.");
-          const nextPayment = body.payment as Payment;
-          if (cancelled) return;
-          setPayment(nextPayment);
-          setError("");
-          if (nextPayment.status === "paid" && nextPayment.creditedAt) {
-            setReturnMessage(`Payment confirmed. ${nf.format(nextPayment.credits)} credits have been added.`);
-            return;
-          }
-          if (["failed", "expired"].includes(nextPayment.status)) {
-            setReturnMessage(`Payment ${nextPayment.status}. No credits were added.`);
-            return;
+          let nextPayment = await readPaymentStatus();
+          const terminal = await updatePayment(nextPayment);
+          if (terminal) return;
+
+          // The browser return is not proof of payment and the webhook can be
+          // delayed or missed. Reconcile immediately, then at bounded
+          // intervals, so a paid-but-uncredited record can self-heal without
+          // hammering HitPay or creating duplicate credit grants.
+          if (attempt === 0 || attempt % 5 === 0) {
+            nextPayment = await reconcilePaymentStatus();
+            if (await updatePayment(nextPayment)) return;
           }
         } catch (pollError) {
           if (!cancelled) setError(pollError instanceof Error ? pollError.message : "Unable to check payment status.");
-          return;
         }
         await sleep(2000);
       }
-      if (!cancelled) setReturnMessage("Payment is still being confirmed. Your balance will update after the verified webhook is processed.");
+      if (!cancelled) setReturnMessage("Payment confirmation is taking longer than expected. Check again to retry the verified provider status and credit update.");
     }
 
     void poll();
     return () => { cancelled = true; };
   }, [returnReference]);
+
+  async function checkPaymentAgain() {
+    if (!returnReference || reconciling) return;
+    setReconciling(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/ella-credits/payments/${encodeURIComponent(returnReference)}`, { method: "POST", credentials: "same-origin", cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok || !body.payment) throw new Error(body.error || "Unable to reconcile payment.");
+      const nextPayment = body.payment as Payment;
+      setPayment(nextPayment);
+      if (nextPayment.status === "paid" && nextPayment.creditedAt) {
+        setReturnMessage(`Payment confirmed. ${nf.format(nextPayment.credits)} credits have been added.`);
+      } else if (["failed", "expired"].includes(nextPayment.status)) {
+        setReturnMessage(`Payment ${nextPayment.status}. No credits were added.`);
+      } else {
+        setReturnMessage("Payment is still being confirmed. We’ll keep the purchase safe and retry when you check again.");
+      }
+    } catch (checkError) {
+      setError(checkError instanceof Error ? checkError.message : "Unable to reconcile payment.");
+    } finally {
+      setReconciling(false);
+    }
+  }
 
   async function startPayment(packId: string) {
     setBuying(packId);
@@ -130,7 +181,7 @@ export default function EllaCreditsPurchase() {
       </div>
 
       {error && <div className={styles.feedback}><ActionFeedback kind="error">{error}</ActionFeedback></div>}
-      {returnMessage && <div className={styles.feedback}><ActionFeedback kind={payment?.status === "paid" ? "success" : "warning"}>{returnMessage}</ActionFeedback></div>}
+      {returnMessage && <div className={styles.feedback}><ActionFeedback kind={payment?.status === "paid" && payment.creditedAt ? "success" : "warning"}>{returnMessage}</ActionFeedback>{returnReference && !(payment?.status === "paid" && payment.creditedAt) && !["failed", "expired"].includes(payment?.status || "") && <button type="button" className={`btn btn-secondary ${styles.retry}`} onClick={() => void checkPaymentAgain()} disabled={reconciling}>{reconciling ? "Checking payment…" : "Check payment again"}</button>}</div>}
       {payment && <p className={styles.reference}>Reference: <code>{payment.reference}</code> · Status: <strong>{payment.status}</strong></p>}
 
       {!configured && !loading && <p className={styles.unavailable}>Credit purchases are currently unavailable. Please contact an administrator.</p>}

@@ -33,6 +33,15 @@ test("the purchase UI is separate from manual credit management", () => {
   assert.match(read("src/app/credits/page.tsx"), /canManage && <EllaCreditsPanel \/>/);
 });
 
+test("the payment return screen reconciles missed webhooks and offers recovery", () => {
+  const purchase = read("src/components/EllaCreditsPurchase.tsx");
+  assert.match(purchase, /method: "POST"/);
+  assert.match(purchase, /reconcilePaymentStatus/);
+  assert.match(purchase, /Check payment again/);
+  assert.match(purchase, /creditedAt/);
+  assert.match(purchase, /attempt === 0 \|\| attempt % 5 === 0/);
+});
+
 test("credit activity is paginated in the UI", () => {
   const panel = read("src/components/EllaCreditsPanel.tsx");
   assert.match(panel, /ACTIVITY_PAGE_SIZE = 10/);
