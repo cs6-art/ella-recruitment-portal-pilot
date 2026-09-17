@@ -59,7 +59,15 @@ function hashToken(token: string) {
  * `https://careers.example.com/index.html`.
  */
 export function applicationInviteLink(baseUrl: string, token: string, apiBaseUrl = "") {
-  const url = new URL(baseUrl.trim());
+  let url = new URL(baseUrl.trim());
+  // The pilot's legacy custom domain is a separate, stale static deployment
+  // that does not understand the `portalApi` override. Keep old configuration
+  // from generating links that always render as invalid by using the current
+  // portal host when it is available.
+  if (url.hostname === "ella-recruitment.mclinkgroup.com" && apiBaseUrl.trim()) {
+    const currentPortal = new URL(apiBaseUrl.trim());
+    if (currentPortal.protocol === "http:" || currentPortal.protocol === "https:") url = currentPortal;
+  }
   if (!url.pathname || url.pathname === "/") url.pathname = "/index.html";
   url.search = "";
   url.searchParams.set("invite", token);
