@@ -41,6 +41,8 @@ test("the payment return screen reconciles missed webhooks and offers recovery",
   assert.match(purchase, /creditedAt/);
   assert.match(purchase, /attempt === 0 \|\| attempt % 5 === 0/);
   assert.match(purchase, /requestEllaCreditsRefresh/);
+  assert.match(purchase, /clearPaymentReturnUrl/);
+  assert.match(purchase, /dismissAfterMs=\{payment\?\.status === "paid" && payment\.creditedAt \? null : undefined\}/);
 });
 
 test("credit activity is paginated in the UI", () => {

@@ -30,6 +30,12 @@ function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function clearPaymentReturnUrl() {
+  const url = new URL(window.location.href);
+  ["payment", "ref", "status", "reference"].forEach((key) => url.searchParams.delete(key));
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 export default function EllaCreditsPurchase() {
   const [packs, setPacks] = useState<CreditPack[]>([]);
   const [configured, setConfigured] = useState(false);
@@ -91,6 +97,8 @@ export default function EllaCreditsPurchase() {
       setError("");
       if (nextPayment.status === "paid" && nextPayment.creditedAt) {
         requestEllaCreditsRefresh();
+        clearPaymentReturnUrl();
+        setReturnReference("");
         setReturnMessage(`Payment confirmed. ${nf.format(nextPayment.credits)} credits have been added.`);
         return true;
       }
@@ -143,6 +151,8 @@ export default function EllaCreditsPurchase() {
       setPayment(nextPayment);
       if (nextPayment.status === "paid" && nextPayment.creditedAt) {
         requestEllaCreditsRefresh();
+        clearPaymentReturnUrl();
+        setReturnReference("");
         setReturnMessage(`Payment confirmed. ${nf.format(nextPayment.credits)} credits have been added.`);
       } else if (["failed", "expired"].includes(nextPayment.status)) {
         setReturnMessage(`Payment ${nextPayment.status}. No credits were added.`);
@@ -191,8 +201,8 @@ export default function EllaCreditsPurchase() {
       </div>
 
       {error && <div className={styles.feedback}><ActionFeedback kind="error">{error}</ActionFeedback></div>}
-      {returnMessage && <div className={styles.feedback}><ActionFeedback kind={payment?.status === "paid" && payment.creditedAt ? "success" : "warning"}>{returnMessage}</ActionFeedback>{returnReference && !(payment?.status === "paid" && payment.creditedAt) && !["failed", "expired"].includes(payment?.status || "") && <button type="button" className={`btn btn-secondary ${styles.retry}`} onClick={() => void checkPaymentAgain()} disabled={reconciling}>{reconciling ? "Checking payment…" : "Check payment again"}</button>}</div>}
-      {payment && <p className={styles.reference}>Reference: <code>{payment.reference}</code> · Status: <strong>{payment.status}</strong></p>}
+      {returnMessage && <div className={styles.feedback}><ActionFeedback dismissAfterMs={payment?.status === "paid" && payment.creditedAt ? null : undefined} kind={payment?.status === "paid" && payment.creditedAt ? "success" : "warning"}>{returnMessage}</ActionFeedback>{returnReference && !(payment?.status === "paid" && payment.creditedAt) && !["failed", "expired"].includes(payment?.status || "") && <button type="button" className={`btn btn-secondary ${styles.retry}`} onClick={() => void checkPaymentAgain()} disabled={reconciling}>{reconciling ? "Checking payment…" : "Check payment again"}</button>}</div>}
+      {payment && returnReference && <p className={styles.reference}>Reference: <code>{payment.reference}</code> · Status: <strong>{payment.status}</strong></p>}
 
       {!configured && !loading && <p className={styles.unavailable}>Credit purchases are currently unavailable. Please contact an administrator.</p>}
       {loading && <p className={styles.loading}>Loading credit packs…</p>}
