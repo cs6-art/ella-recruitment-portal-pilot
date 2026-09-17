@@ -98,6 +98,7 @@ test("target role and applicant paths resolve Postgres before legacy Sheets", ()
   assert.match(roles, /isPostgresRecruitmentTarget\(\) \? await targetRoleSummaries\(\)/);
   assert.match(roles, /generateRoleId\(input\.jobTitle, \(await listRoles\(\)\)/);
   assert.match(detail, /isPostgresRecruitmentTarget\(\)\s*\? await targetRoleDetails/);
+  assert.match(detail, /targetRoleDetails\(roleId, user\.organizationId\)/);
   assert.match(setup, /isPostgresRecruitmentTarget\(\) \? await targetRoleDetails/);
   assert.match(applicants, /isPostgresRecruitmentTarget\(\) \? await targetRoleDetails/);
 });

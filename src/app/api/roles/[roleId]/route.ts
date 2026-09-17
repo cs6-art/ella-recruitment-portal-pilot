@@ -108,7 +108,7 @@ export async function GET(
     const { roleId } = await context.params;
 
     const role = isPostgresRecruitmentTarget()
-      ? await targetRoleDetails(roleId)
+      ? await targetRoleDetails(roleId, user.organizationId)
       : await getRoleRequestById(roleId, { fresh: true });
 
     if (!role) {
@@ -177,7 +177,7 @@ async function getRoleAndUser(roleId: string) {
   // Mutations must observe a draft or role written by a preceding request,
   // even when the requests are handled by different app instances.
   const role = isPostgresRecruitmentTarget()
-    ? await targetRoleDetails(roleId)
+    ? await targetRoleDetails(roleId, user.organizationId)
     : await getRoleRequestById(roleId, { fresh: true });
   if (!role) return { user, role: null, error: NextResponse.json({ success: false, error: "Role request not found." }, { status: 404 }) };
   if (!canViewRole(user, role)) return { user, role: null, error: NextResponse.json({ success: false, error: "You do not have permission to manage this role request." }, { status: 403 }) };
