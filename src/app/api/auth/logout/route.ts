@@ -6,8 +6,8 @@ function clearSession(response: NextResponse) {
   return response;
 }
 
-export async function GET() {
-  return clearSession(new NextResponse(null, { status: 303, headers: { Location: "/" } }));
+export async function GET(request: Request) {
+  return clearSession(NextResponse.redirect(new URL("/", request.url), 303));
 }
 
 export async function POST() {

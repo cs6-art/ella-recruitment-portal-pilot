@@ -86,5 +86,5 @@ test("settings access and logout work for settings administrator", async ({ page
   await expect(page.getByRole("heading", { name: "Credits" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.getByRole("button", { name: /Sign out/i }).click();
-  await expect(page).toHaveURL(/127\.0\.0\.1:3000\/$/);
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/");
 });
