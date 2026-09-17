@@ -24,7 +24,15 @@ export function parseProviderAmountCents(value: unknown): number | null {
  * database errors must bubble up so the provider can retry the webhook.
  */
 export function isPaymentEventDedupeConflict(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const candidate = error as { code?: unknown; constraint?: unknown };
-  return candidate.code === "23505" && typeof candidate.constraint === "string" && candidate.constraint.toLowerCase().includes("dedupe_key");
+  const seen = new Set<object>();
+  let current = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const candidate = current as { code?: unknown; constraint?: unknown; cause?: unknown };
+    if (candidate.code === "23505" && typeof candidate.constraint === "string" && candidate.constraint.toLowerCase().includes("dedupe_key")) {
+      return true;
+    }
+    current = candidate.cause;
+  }
+  return false;
 }

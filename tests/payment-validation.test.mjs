@@ -15,4 +15,5 @@ test("only a payment_events dedupe unique violation is a duplicate replay", () =
   assert.equal(isPaymentEventDedupeConflict({ code: "23505", constraint: "payments_reference_key" }), false);
   assert.equal(isPaymentEventDedupeConflict({ code: "ECONNRESET", constraint: "payment_events_dedupe_key_key" }), false);
   assert.equal(isPaymentEventDedupeConflict(new Error("database unavailable")), false);
+  assert.equal(isPaymentEventDedupeConflict({ cause: { code: "23505", constraint: "payment_events_dedupe_key_key" } }), true);
 });

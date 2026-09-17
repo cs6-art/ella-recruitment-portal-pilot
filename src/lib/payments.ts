@@ -168,9 +168,14 @@ export async function handleProviderUpdate(update: ProviderUpdate): Promise<Prov
     });
   } catch (error) {
     if (isPaymentEventDedupeConflict(error)) {
-      return { ok: true, outcome: "already_processed", status: payment.status };
+      // The event may have been recorded by a concurrent webhook/reconcile
+      // request that failed before the ledger grant completed. Keep running
+      // the paid transition: the deterministic ledger key makes the grant
+      // idempotent, while `creditedAt` still gives completed replays a cheap
+      // no-op path below.
+    } else {
+      throw error;
     }
-    throw error;
   }
 
   await db
