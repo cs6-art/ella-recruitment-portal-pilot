@@ -58,7 +58,11 @@ export default function EllaCreditsPurchase() {
   useEffect(() => {
     void loadPacks();
     const params = new URLSearchParams(window.location.search);
-    if (params.get("payment") === "return") setReturnReference(params.get("ref") || "");
+    if (params.get("payment") === "return") {
+      const reference = params.get("ref") || "";
+      setReturnReference(reference);
+      if (reference) setReturnMessage("Verifying your payment and credit balance…");
+    }
   }, [loadPacks]);
 
   useEffect(() => {
@@ -92,6 +96,9 @@ export default function EllaCreditsPurchase() {
         setReturnMessage(`Payment ${nextPayment.status}. No credits were added.`);
         return true;
       }
+      setReturnMessage(nextPayment.status === "paid"
+        ? "Payment received. We’re finalizing your credit balance."
+        : "Verifying your payment and credit balance…");
       return false;
     }
 
