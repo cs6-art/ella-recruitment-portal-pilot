@@ -1733,6 +1733,16 @@ export async function createInterviewSlot(input: {
     roleId = role.id;
     organizationId = role.organizationId;
   }
+  const duplicateConditions = [
+    eq(interviewSlots.organizationId, organizationId),
+    eq(interviewSlots.interviewType, input.interviewType),
+    eq(interviewSlots.startsAt, startsAt),
+    eq(interviewSlots.endsAt, endsAt),
+    eq(interviewSlots.status, "available"),
+    roleId ? eq(interviewSlots.roleId, roleId) : isNull(interviewSlots.roleId),
+  ];
+  const [duplicate] = await db.select().from(interviewSlots).where(and(...duplicateConditions)).limit(1);
+  if (duplicate) return { slot: duplicate, created: false, error: null };
   const [slot] = await db.insert(interviewSlots).values({ organizationId, slotCode: input.slotCode?.trim() || null, interviewType: input.interviewType, roleId, startsAt, endsAt, timezone: input.timezone.trim(), status: "available" }).onConflictDoNothing({ target: interviewSlots.slotCode }).returning();
   if (slot) return { slot, created: true, error: null };
   const [existing] = input.slotCode ? await db.select().from(interviewSlots).where(eq(interviewSlots.slotCode, input.slotCode.trim())).limit(1) : [];

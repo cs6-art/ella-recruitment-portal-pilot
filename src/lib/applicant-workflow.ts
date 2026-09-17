@@ -16,7 +16,7 @@ import type { ResumeFileRecord } from "@/lib/resume-files";
 import { generateAutomaticVoiceInterviewSlots, type VoiceInterviewSlot } from "@/lib/voice-interview-availability";
 import { normalizeDateOnly, normalizeTimeOnly } from "@/lib/date-only";
 import { countActiveVoiceInterviews, isActiveVoiceInterviewStatus, MAX_CONCURRENT_VOICE_INTERVIEWS, voiceCapacitySlotId, voiceInterviewConcurrencyKey } from "@/lib/voice-interview-capacity";
-import { hasValidFutureTime, isBeforeTargetHiringDate, isCurrentCalendarMonth, isStandardFinalInterviewSlot, isStandardVoiceInterviewSlot, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
+import { hasValidFutureTime, isBeforeTargetHiringDate, isCurrentCalendarMonth, isFinalInterviewSlotDuration, isStandardVoiceInterviewSlot, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetBookingContext, targetCreateInterviewSlot, targetDeleteApplicant, targetMarkInterviewNoShow, targetRecordApplicantDecision, targetReserveBooking, targetSendVoiceBookingInvitation, targetUpdateApplicantProfile, } from "@/lib/recruitment-target-portal";
 import { listApplicationHistory } from "@/lib/internal-recruitment-queries";
@@ -586,7 +586,6 @@ export async function getBookingContext(kind: BookingKind, token: string): Promi
     .filter((slot) => (slot.status || "").toLowerCase() === "available")
     .filter((slot) => isBeforeTargetHiringDate(slot.date, role?.targetHiringDate))
     .filter((slot) => kind !== "voice" || isStandardVoiceInterviewSlot(slot))
-    .filter((slot) => kind !== "final" || isStandardFinalInterviewSlot(slot))
     .filter((slot) => isCurrentCalendarMonth(slot.date, slot.timezone || role?.voiceInterviewTimezone || "Asia/Singapore"))
     .filter((slot) => {
       try {
@@ -1793,7 +1792,7 @@ export async function createInterviewSlot(input: CreateInterviewSlotInput) {
       const messages: Record<string, string> = {
         unknown_role: "Role request not found.",
         role_not_ready: "HR interview availability can only be added for an approved or published role.",
-        invalid_final_slot: "HR interview slots must be one hour between 10:00 and 16:00, excluding 12:00–13:00.",
+        invalid_final_slot: "HR interview slots must be exactly one hour. Standard weekday hours are already available automatically; exception slots can be outside those hours.",
         after_target_hiring_date: "The HR interview date must be on or before the role's target hiring date.",
         past_slot: "Interview slots must start in the future. Choose a later date or time.",
         calendar_not_connected: "Connect the assigned HR Google Calendar before adding an HR interview slot.",
@@ -1808,7 +1807,7 @@ export async function createInterviewSlot(input: CreateInterviewSlotInput) {
   const role = input.interviewType === "Final Interview" ? await getRoleRequestById(roleId) : null;
   if (input.interviewType === "Final Interview" && !role) throw new Error("Role request not found.");
   if (input.interviewType === "Final Interview" && role) {
-    if (!isStandardFinalInterviewSlot({ interviewType: input.interviewType, startTime, endTime })) throw new Error("HR interview slots must be one hour between 10:00 and 16:00, excluding 12:00–13:00.");
+    if (!isFinalInterviewSlotDuration({ interviewType: input.interviewType, startTime, endTime })) throw new Error("HR interview slots must be exactly one hour. Standard weekday hours are already available automatically; exception slots can be outside those hours.");
     if (!isBeforeTargetHiringDate(date, role.targetHiringDate)) throw new Error("The HR interview date must be on or before the role's target hiring date.");
     const hodEmail = (await getFinalInterviewCalendarConfig()).email;
     if (!hodEmail) throw new Error("No HR interviewer email is configured for this role.");

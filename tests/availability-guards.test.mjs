@@ -39,20 +39,26 @@ test("availability write API blocks stacked voice schedules while final slots us
   assert.doesNotMatch(availabilityRoute, /slotMatchesHodAvailability/);
 });
 
-test("final interview setup allows HR to save a manually selected calendar-checked slot", () => {
+test("HR scheduling preserves the default week and allows calendar-checked exception slots", () => {
   assert.doesNotMatch(roleDetails, /HodAvailabilityEditor/);
   assert.doesNotMatch(roleDetails, /Availability Windows/);
   assert.match(roleDetails, /Managed through the shared HR Google Calendar configured in Settings/);
   assert.doesNotMatch(roleForm, /addAvailability|removeAvailability|updateAvailability/);
   assert.doesNotMatch(bookings, /<option>Final Interview<\/option>/);
-  assert.match(bookings, /Set HR \/ face-to-face interview/);
+  assert.match(bookings, /Add an HR exception slot/);
   assert.match(bookings, /fetch\("\/api\/bookings\/slots"/);
-  assert.match(bookings, /Save HR interview slot/);
+  assert.match(bookings, /Save exception slot/);
   assert.doesNotMatch(bookings, /<strong>AI Voice Interview<\/strong>/);
-  assert.match(workflow, /let slots = kind === "final" \? \[\]/);
+  assert.match(rules, /export function isDefaultFinalInterviewSlot/);
+  assert.match(workflow, /isFinalInterviewSlotDuration/);
+  assert.doesNotMatch(workflow, /isStandardFinalInterviewSlot/);
+  assert.doesNotMatch(fs.readFileSync("src/lib/recruitment-target-portal.ts", "utf8"), /isStandardFinalInterviewSlot/);
+  assert.doesNotMatch(workflow, /kind !== "final" \|\| isStandardFinalInterviewSlot/);
   assert.match(workflow, /Connect the HR Google Calendar before booking an HR interview/);
   assert.match(calendarBusyRoute, /calendarConnected/);
-  assert.match(bookings, /finalCalendarConnected !== true/);
+  assert.match(bookings, /calendarLookupState/);
+  assert.match(bookings, /Checking the shared HR Google Calendar connection/);
+  assert.match(bookings, /already covered by your standard weekly hours/);
 });
 
 test("calendar counter uses configured windows and recruitment setup is editable from role details", () => {

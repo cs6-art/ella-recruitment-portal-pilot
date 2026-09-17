@@ -272,4 +272,15 @@ export function isStandardFinalInterviewSlot(slot: { interviewType: string; star
   const end = minutes(slot.endTime);
   return start >= 10 * 60 && end <= 16 * 60 && end - start === 60 && !(start < 13 * 60 && end > 12 * 60);
 }
+export function isFinalInterviewSlotDuration(slot: { interviewType: string; startTime: string; endTime: string }) {
+  if (!slot.interviewType.toLowerCase().includes("final")) return true;
+  const start = minutes(slot.startTime);
+  const end = minutes(slot.endTime);
+  return Number.isFinite(start) && Number.isFinite(end) && end - start === 60;
+}
+export function isDefaultFinalInterviewSlot(slot: { interviewType: string; date: string; startTime: string; endTime: string }) {
+  return slot.interviewType.toLowerCase().includes("final")
+    && [1, 2, 3, 4, 5].includes(weekday(slot.date))
+    && isStandardFinalInterviewSlot(slot);
+}
 export function hasValidFutureTime(slot: { date: string; startTime: string; timezone: string }) { try { return scheduledInstant(slot.date, slot.startTime, slot.timezone || "Asia/Singapore").getTime() > Date.now(); } catch { return false; } }

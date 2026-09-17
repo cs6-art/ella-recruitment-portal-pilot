@@ -50,7 +50,7 @@ import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { generateRoleId } from "@/lib/role-id";
 import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows } from "@/lib/google-calendar";
-import { hasValidFutureTime, isBeforeTargetHiringDate, isStandardFinalInterviewSlot, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
+import { hasValidFutureTime, isBeforeTargetHiringDate, isFinalInterviewSlotDuration, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { getPortalConfigNumber } from "@/lib/portal-config";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
@@ -625,7 +625,7 @@ export async function targetCreateInterviewSlot(input: { slotCode?: string; role
     const role = await getRole(input.roleId);
     if (!role) return { slot: null, created: false, error: "unknown_role" as const };
     if (!["approved", "recruitment_setup", "job_posted"].includes(text(role.status).toLowerCase())) return { slot: null, created: false, error: "role_not_ready" as const };
-    if (!isStandardFinalInterviewSlot({ interviewType: input.interviewType, startTime: input.startTime, endTime: input.endTime })) return { slot: null, created: false, error: "invalid_final_slot" as const };
+    if (!isFinalInterviewSlotDuration({ interviewType: input.interviewType, startTime: input.startTime, endTime: input.endTime })) return { slot: null, created: false, error: "invalid_final_slot" as const };
     if (!isBeforeTargetHiringDate(input.date, role.targetHiringDate || undefined)) return { slot: null, created: false, error: "after_target_hiring_date" as const };
     const start = new Date(startsAt);
     if (Number.isNaN(start.getTime()) || start.getTime() <= Date.now()) return { slot: null, created: false, error: "past_slot" as const };

@@ -915,6 +915,8 @@ a { color: inherit; text-decoration: none; }
 .weekday-picker button.is-selected { border-color: #1674c5; background: #e8f3ff; color: #176ba6; }
 .drawer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .availability-preview { display: grid; gap: 7px; padding: 14px; border: 1px solid #cfe4f6; border-radius: 10px; background: #f1f8ff; color: #41627c; font-size: 12px; }
+.availability-preview.is-standard-covered { border-color: #e7c28e; background: #fff8eb; color: #7e4a17; }
+.availability-preview.is-standard-covered small { color: #8c6c45; }
 .availability-preview > div { display: flex; justify-content: space-between; gap: 12px; color: var(--navy); }
 .availability-preview > div span { color: #176ba6; font-weight: 800; }
 .availability-preview small { color: var(--muted); }
