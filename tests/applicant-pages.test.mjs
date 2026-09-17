@@ -220,6 +220,8 @@ test("applicant routes are protected and render populated sheet data", () => {
   assert.match(screening, /successRedirectTo="\/applicants"/);
   assert.match(read("src/components/CandidateApplicationForm.tsx"), /if \(successRedirectTo\) router\.push\(successRedirectTo\)/);
   assert.match(screening, /isPublishedRoleForIntake/);
+  assert.match(screening, /targetRoleSummaries/);
+  assert.doesNotMatch(screening, /targetPublicRoleSummaries/);
   assert.match(screening, /Resume Screening/);
   // Bulk upload is a first-class portal feature (drag-and-drop, live status),
   // not excluded in favor of the Drive-folder poller as it was previously.
@@ -227,6 +229,7 @@ test("applicant routes are protected and render populated sheet data", () => {
   assert.match(bulkPanel, /Choose from Google Drive|Connect Google Drive/);
   assert.match(screening, /getPortalConfigValue\("Bulk_Resume_Drive_URL"\)/);
   assert.match(screening, /sort\(\(left, right\) => left\.label\.localeCompare\(right\.label/);
+  assert.match(read("src/components/CandidateApplicationForm.tsx"), /No published roles available/);
   assert.match(detail, /verifySessionToken/);
   assert.match(detail, /getApplicantById/);
   assert.match(detail, /getCandidateStatusHistory/);

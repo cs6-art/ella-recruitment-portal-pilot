@@ -10,7 +10,7 @@ import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { isBulkResumeUatMode } from "@/lib/bulk-resume-config";
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { targetPublicRoleSummaries } from "@/lib/recruitment-target-portal";
+import { targetRoleSummaries } from "@/lib/recruitment-target-portal";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -21,10 +21,11 @@ export default async function ResumeScreeningPage() {
   if (!canManagePipeline(user)) redirect("/dashboard");
 
   const targetRecruitment = isPostgresRecruitmentTarget();
-  // Intake and invitation generation must read from the same recruitment
-  // backend; otherwise a target role can be displayed from Sheets and then
-  // fail when the invitation is stored in Postgres.
-  const roles = targetRecruitment ? await targetPublicRoleSummaries({ liveOnly: true }) : await getRoleRequests({ liveOnly: true });
+  // This is an authenticated HR surface, so target mode must use the signed-in
+  // organization's roles. The public catalogue intentionally aggregates active
+  // organizations, but using it here would show roles that the submit API must
+  // correctly reject as belonging to another organization.
+  const roles = targetRecruitment ? await targetRoleSummaries({ liveOnly: true }) : await getRoleRequests({ liveOnly: true });
   const roleOptions = roles
     .filter(isPublishedRoleForIntake)
     .map((role) => ({ roleId: role.roleId, label: `${role.jobTitle || role.roleId} (${role.roleId})` }))

@@ -250,10 +250,11 @@ export default function CandidateApplicationForm({
           {showRoleSelect ? (
             <label className="field">
               <span>Role Applied For *</span>
-              <select id="candidate-role" required value={form.resumeRoleId} disabled={saving} onChange={(event) => update("resumeRoleId", event.target.value)}>
-                <option value="">Select a role</option>
+              <select id="candidate-role" required value={form.resumeRoleId} disabled={saving || roleOptions.length === 0} onChange={(event) => update("resumeRoleId", event.target.value)}>
+                <option value="">{roleOptions.length === 0 ? "No published roles available" : "Select a role"}</option>
                 {roleOptions.map((option) => <option key={option.roleId} value={option.roleId}>{option.label}</option>)}
               </select>
+              {roleOptions.length === 0 && <small>No published roles are available for your organization.</small>}
               {readFieldError(fieldErrors, "resumeRoleId") && <small>{readFieldError(fieldErrors, "resumeRoleId")}</small>}
             </label>
           ) : <input type="hidden" name="roleId" value={form.resumeRoleId || roleId} />}
@@ -275,7 +276,7 @@ export default function CandidateApplicationForm({
             </label>
             <small>PDF, DOC, or DOCX · up to 10 MB</small>
             {readFieldError(fieldErrors, "resumeFile") && <small>{readFieldError(fieldErrors, "resumeFile")}</small>}
-            {submitInUploadCard && <div className="resume-inline-submit"><div><strong>Ready to screen this resume?</strong><small>Start the billable CV screening and save the screening record.</small></div><button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Starting..." : submitLabel}</button></div>}
+            {submitInUploadCard && <div className="resume-inline-submit"><div><strong>Ready to screen this resume?</strong><small>{roleOptions.length === 0 && showRoleSelect ? "Publish a role for your organization before starting a CV analysis." : "Start the billable CV screening and save the screening record."}</small></div><button type="submit" className="btn btn-primary" disabled={saving || (showRoleSelect && roleOptions.length === 0)}>{saving ? "Starting..." : submitLabel}</button></div>}
           </div>
         </div>
 
