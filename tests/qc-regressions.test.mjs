@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { evaluateVoiceInterview } from "../src/lib/voice-interview-evaluation.ts";
 import { extractResumeContactDetails } from "../src/lib/resume-contact-extraction.ts";
+import { applyScreeningEvidenceGuard, parseScreeningResult } from "../src/lib/recruitment-screening.ts";
 
 test("completed voice repair records strengths and concerns from interview evidence", () => {
   const result = evaluateVoiceInterview({
@@ -34,4 +35,25 @@ test("resume contact extraction preserves line-based candidate names", () => {
   ].join("\n"));
   assert.equal(result.candidateName, "Ahmad Firdaus");
   assert.equal(result.candidateEmail, "ahmad@example.com");
+});
+
+test("resume screening guard differentiates a non-QA resume from a QA role", () => {
+  const result = applyScreeningEvidenceGuard({
+    result: parseScreeningResult({
+      match_score: 68,
+      recommendation: "For HR Review",
+      ai_summary: "The candidate has strong visual design experience.",
+      strengths: ["Strong visual design experience."],
+      gaps: [],
+      interview_questions: ["Question one", "Question two", "Question three"],
+    }),
+    roleTitle: "QA Automation Engineer",
+    roleDescription: "Build automated regression tests and maintain CI/CD quality gates.",
+    requiredSkills: "Playwright, API testing, test automation",
+    screeningCriteria: "Hands-on QA automation experience required.",
+    resumeText: "Product designer with ten years of branding and visual design experience.",
+  });
+  assert.equal(result.match_score, 49);
+  assert.match(result.gaps[0], /QA|test automation/i);
+  assert.match(result.ai_summary, /Direct-evidence check/i);
 });

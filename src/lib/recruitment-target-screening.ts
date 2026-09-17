@@ -7,7 +7,7 @@ import {
   getBulkScreeningContext,
   updateBulkQueueStatus,
 } from "@/lib/internal-recruitment-queries";
-import { parseScreeningResult, screeningDbValues } from "@/lib/recruitment-screening";
+import { applyScreeningEvidenceGuard, parseScreeningResult, screeningDbValues } from "@/lib/recruitment-screening";
 
 function text(value: unknown) {
   return String(value ?? "").trim();
@@ -45,7 +45,17 @@ export async function processTargetBulkScreening(input: {
   if (!context.application) return { status: "failed" as const, error: "missing_application" };
 
   try {
-    const aiResult = parseScreeningResult(input.screening);
+    const roleSetup = (context.role.setup && typeof context.role.setup === "object")
+      ? context.role.setup as Record<string, unknown>
+      : {};
+    const aiResult = applyScreeningEvidenceGuard({
+      result: parseScreeningResult(input.screening),
+      roleTitle: text(context.role.title),
+      roleDescription: text(roleSetup.jobDescription),
+      requiredSkills: text(roleSetup.requiredSkills),
+      screeningCriteria: text(roleSetup.screeningCriteria),
+      resumeText: text(context.resumeFile?.extractedText),
+    });
     const cost = await creditCostFor("cv_analysis");
     const result = await finalizeBulkScreening({
       dedupeKey,

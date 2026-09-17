@@ -91,3 +91,46 @@ export function screeningDbValues(result: ValidatedScreeningResult) {
     evaluationScores: { match_score: result.match_score },
   };
 }
+
+const qaRolePattern = /\b(?:qa|quality assurance|test engineer|software test(?:ing)?|sdet|automation engineer)\b/i;
+const qaEvidencePatterns: Array<[RegExp, string]> = [
+  [/\b(?:qa engineer|quality assurance|software testing)\b/i, "quality assurance/testing"],
+  [/\b(?:test automation|automation testing|automated testing)\b/i, "test automation"],
+  [/\b(?:selenium|playwright|cypress|appium|webdriver)\b/i, "test automation tooling"],
+  [/\b(?:test case|test plan|regression testing|api testing|performance testing)\b/i, "structured testing"],
+  [/\b(?:ci\/cd|continuous integration|continuous delivery)\b/i, "CI/CD testing"],
+  [/\b(?:postman|jmeter|k6)\b/i, "testing tools"],
+];
+
+/**
+ * Keep an upstream screening worker from treating generic confidence or
+ * unrelated experience as evidence for a QA/test role. The worker remains
+ * responsible for the detailed explanation; this deterministic guard protects
+ * the persisted score when the worker omits the role's core evidence.
+ */
+export function applyScreeningEvidenceGuard(input: {
+  result: ValidatedScreeningResult;
+  roleTitle: string;
+  roleDescription?: string;
+  requiredSkills?: string;
+  screeningCriteria?: string;
+  resumeText: string;
+}): ValidatedScreeningResult {
+  const roleText = [input.roleTitle, input.roleDescription, input.requiredSkills, input.screeningCriteria].map(text).join(" ");
+  if (!qaRolePattern.test(roleText)) return input.result;
+
+  const evidence = qaEvidencePatterns.filter(([pattern]) => pattern.test(input.resumeText)).map(([, label]) => label);
+  if (evidence.length > 0) return input.result;
+
+  const guardGap = "Resume does not provide direct evidence of hands-on QA or test automation experience for this role.";
+  const gaps = input.result.gaps.some((gap) => gap.toLowerCase() === guardGap.toLowerCase())
+    ? input.result.gaps
+    : [guardGap, ...input.result.gaps].slice(0, 20);
+  const summary = `${input.result.ai_summary} Direct-evidence check: no hands-on QA or test-automation evidence was found in the resume, so HR verification is required.`.slice(0, 10000);
+  return {
+    ...input.result,
+    match_score: Math.min(input.result.match_score, 49),
+    ai_summary: summary,
+    gaps,
+  };
+}
