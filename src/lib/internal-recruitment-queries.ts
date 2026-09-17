@@ -1320,7 +1320,10 @@ export async function applicationVoiceReview(externalId: string) {
       providerEventId: firstText(message.id, call.id),
       sourceEventKey: `repair:voice-result:${result.id}`,
       callStatus: result.callStatus,
-      durationSeconds: firstNumber(message.durationSeconds, message.duration_seconds),
+      durationSeconds: (() => {
+        const seconds = firstNumber(message.durationSeconds, message.duration_seconds);
+        return seconds == null ? null : Math.trunc(seconds);
+      })(),
       recordingUrl: firstText(message.recordingUrl, message.recording_url),
       completenessScore: 100,
       transcript: result.transcript,

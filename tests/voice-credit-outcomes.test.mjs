@@ -106,6 +106,7 @@ test("voice review repairs Vapi artifact structured outputs without duplicating 
   assert.match(queries, /structured\.match_score/);
   assert.match(queries, /repair:voice-result:\$\{result\.id\}/);
   assert.match(queries, /if \(result\.score == null && normalized\.score != null\)/);
+  assert.match(queries, /return seconds == null \? null : Math\.trunc\(seconds\)/);
   assert.match(queries, /onConflictDoNothing\(\{ target: voiceCallLogs\.sourceEventKey \}\)/);
 });
 
