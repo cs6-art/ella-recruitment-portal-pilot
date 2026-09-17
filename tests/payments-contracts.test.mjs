@@ -7,6 +7,7 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 test("payments schema keeps money in Postgres and separate from the credit ledger", () => {
   const schema = read("src/db/schema.ts");
   assert.match(schema, /pgTable\(\s*"payments"/);
+  assert.match(schema, /organizationId: uuid\("organization_id"\)/);
   assert.match(schema, /pgTable\(\s*"payment_events"/);
   assert.match(schema, /reference.*\.notNull\(\)\.unique\(\)/s);
   assert.match(schema, /credit_ledger_source_id/);
@@ -92,4 +93,5 @@ test("reconcile re-runs the same idempotent transition (missed-webhook recovery)
   assert.match(payments, /export async function reconcilePayment/);
   assert.match(payments, /source: "reconcile"/);
   assert.match(payments, /getPaymentRequest\(payment\.providerPaymentId\)/);
+  assert.match(payments, /organizationId: payment\.organizationId/);
 });

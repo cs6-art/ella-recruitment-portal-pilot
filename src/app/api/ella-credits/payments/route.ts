@@ -73,6 +73,7 @@ export async function POST(request: Request) {
       packId: parsed.data.packId,
       actorEmail: user.email,
       actorName: user.name,
+      organizationId: user.organizationId,
       origin: appOrigin(request),
       idempotencyKey: request.headers.get("Idempotency-Key")?.trim() || undefined,
     });

@@ -123,6 +123,7 @@ export const payments = pgTable(
     // to HitPay as `reference_number`. Unique — the anchor for idempotency.
     reference: text("reference").notNull().unique(),
     provider: text("provider").notNull().default("hitpay"),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     // HitPay payment-request id (from the create call).
     providerPaymentId: text("provider_payment_id"),
     // HitPay's own payment id from the webhook / status pull.

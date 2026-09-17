@@ -39,6 +39,7 @@ export type CreatePurchaseInput = {
   packId: string;
   actorEmail: string;
   actorName: string;
+  organizationId: string;
   origin: string;
   /** Optional caller idempotency key (e.g. an Idempotency-Key header). */
   idempotencyKey?: string;
@@ -80,6 +81,7 @@ export async function createCreditPurchase(input: CreatePurchaseInput): Promise<
     .values({
       reference,
       provider: "hitpay",
+      organizationId: input.organizationId,
       status: "pending",
       amountCents: pack.amountCents,
       currency: pack.currency,
@@ -225,6 +227,7 @@ export async function handleProviderUpdate(update: ProviderUpdate): Promise<Prov
       idempotencyKey: grantKeyFor(payment.reference),
       actorName: payment.actorName,
       actorEmail: payment.actorEmail,
+      organizationId: payment.organizationId,
       note: `HitPay purchase ${payment.reference} (${payment.packId || "custom"})`,
     });
   } catch (error) {
