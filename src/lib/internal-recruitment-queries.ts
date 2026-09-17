@@ -14,6 +14,7 @@ import { notificationEmail, notificationEventLabel, notificationStatusLabel, not
 import { pilotOutboundEmailEnabled } from "@/lib/pilot-email-policy";
 import { avatarInterviewLink } from "@/lib/public-url";
 import type { LiveAvatarEvaluation, LiveAvatarTranscriptTurn } from "@/lib/live-avatar-screening";
+import { evaluateVoiceInterview } from "@/lib/voice-interview-evaluation";
 import {
   applicants,
   applicantAliases,
@@ -130,6 +131,13 @@ function rowsOf<T>(value: unknown): T[] {
 
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function rawVoiceArtifact(input: unknown) {
+  const raw = objectValue(input);
+  const body = objectValue(raw.body);
+  const message = objectValue(body.message || raw.message || body || raw);
+  return { message, artifact: objectValue(message.artifact), analysis: objectValue(message.analysis) };
 }
 
 function firstText(...values: unknown[]) {
@@ -517,6 +525,11 @@ export async function createApplication(input: { externalId: string; applicantEm
     const [application] = await tx.insert(applications).values({ organizationId: role.organizationId, externalId: input.externalId.trim(), applicantId: applicant.id, roleId: role.id, source: input.source || "direct", sourceDetail: input.sourceDetail || "", consentAt: isoOrNull(input.consentAt), departmentSnapshot: role.departmentSnapshot, candidateName: input.applicantName || applicant.fullName, email, phone: input.phone || "", preferredMobile: input.preferredMobile || "", applicantCountry: input.applicantCountry || "", resumeFileId: input.resumeFileId || null, creditOwnerEmail: (input.creditOwnerEmail || role.requesterEmail || "").trim().toLowerCase() }).onConflictDoNothing({ target: applications.externalId }).returning();
     if (!application) {
       const [existing] = await tx.select().from(applications).where(eq(applications.externalId, input.externalId.trim())).limit(1);
+      if (existing && input.applicantName?.trim() && !existing.candidateName.trim()) {
+        const [updated] = await tx.update(applications).set({ candidateName: input.applicantName.trim(), updatedAt: new Date() }).where(eq(applications.id, existing.id)).returning();
+        if (updated) await tx.update(applicants).set({ fullName: input.applicantName.trim(), updatedAt: new Date() }).where(eq(applicants.id, existing.applicantId));
+        return { application: updated ?? existing, created: false, error: null };
+      }
       return { application: existing ?? null, created: false, error: null };
     }
     await tx.insert(applicationStatusHistory).values({
@@ -1234,7 +1247,7 @@ export async function ingestVoiceResult(rawInput: VoiceResultInput) {
   const input = normalizeVoiceResultInput(rawInput);
   const db = getDb();
   const result = await db.transaction(async (tx) => {
-    const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, creditOwnerEmail: applications.creditOwnerEmail, email: applications.email, currentStage: applications.currentStage }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
+    const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, creditOwnerEmail: applications.creditOwnerEmail, email: applications.email, currentStage: applications.currentStage, roleTitle: roles.title, roleSetup: roles.setup }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
     if (!application) return { inserted: false, applicationId: null, attemptId: null, candidateEmail: "", creditOwnerEmail: "", organizationId: DEFAULT_ORGANIZATION_ID, chargedCredits: 0, billingOutcome: null, error: "unknown_application" as const };
     const attempts = await tx.select({ id: voiceCallAttempts.id, status: voiceCallAttempts.status }).from(voiceCallAttempts).where(eq(voiceCallAttempts.applicationId, application.id)).orderBy(desc(voiceCallAttempts.attemptNumber), desc(voiceCallAttempts.createdAt));
     const attempt = input.attemptId ? attempts.find((item) => item.id === input.attemptId) : attempts[0];
@@ -1247,9 +1260,24 @@ export async function ingestVoiceResult(rawInput: VoiceResultInput) {
     // attempt-status callback was skipped. This is idempotent and keeps a
     // completed Vapi call from remaining visually stuck at "Initiated".
     await settleVoiceAttemptFromResult(tx, attemptId, input);
+    const setup = objectValue(application.roleSetup);
+    const rawArtifact = rawVoiceArtifact(input.raw);
+    const variableValues = objectValue(rawArtifact.artifact.variableValues || rawArtifact.message.variableValues);
+    const derived = input.transcript
+      ? evaluateVoiceInterview({
+          roleTitle: application.roleTitle,
+          roleDescription: firstText(setup.jobDescription, setup.screeningCriteria),
+          transcript: input.transcript,
+          resumeSummary: firstText(variableValues.ai_summary, variableValues.resume_summary),
+          baseScore: input.score,
+        })
+      : null;
+    const completedInput = derived && (derived.strengths || derived.concerns)
+      ? { ...input, score: derived.score ?? input.score, recommendation: derived.riskFlags.length && /strong match/i.test(input.recommendation || "") ? derived.recommendation : input.recommendation || derived.recommendation, strengths: input.strengths || derived.strengths, concerns: input.concerns || derived.concerns, summary: input.summary || derived.summary }
+      : input;
     const existing = await tx.select({ id: voiceInterviewResults.id }).from(voiceInterviewResults).where(and(eq(voiceInterviewResults.applicationId, application.id), eq(voiceInterviewResults.providerEventType, input.providerEventType || ""), completedAt ? eq(voiceInterviewResults.callCompletedAt, completedAt) : isNull(voiceInterviewResults.callCompletedAt))).limit(1);
     if (existing.length > 0) return { inserted: false, applicationId: application.id, attemptId, candidateEmail: application.email, creditOwnerEmail: application.creditOwnerEmail, organizationId: application.organizationId, chargedCredits: 0, billingOutcome: null, error: null };
-    const [inserted] = await tx.insert(voiceInterviewResults).values({ organizationId: application.organizationId, applicationId: application.id, attemptId, score: input.score ?? null, recommendation: input.recommendation || "", strengths: input.strengths || "", concerns: input.concerns || "", summary: input.summary || "", transcript: input.transcript || "", callStatus: input.callStatus || "", callFinalStatus: input.callFinalStatus || "", providerEventType: input.providerEventType || "", callCompletedAt: completedAt, resultReceivedAt: new Date(), raw: (input.raw ?? null) as object | null }).returning();
+    const [inserted] = await tx.insert(voiceInterviewResults).values({ organizationId: application.organizationId, applicationId: application.id, attemptId, score: completedInput.score ?? null, recommendation: completedInput.recommendation || "", strengths: completedInput.strengths || "", concerns: completedInput.concerns || "", summary: completedInput.summary || "", transcript: completedInput.transcript || "", callStatus: completedInput.callStatus || "", callFinalStatus: completedInput.callFinalStatus || "", providerEventType: completedInput.providerEventType || "", callCompletedAt: completedAt, resultReceivedAt: new Date(), raw: (completedInput.raw ?? null) as object | null }).returning();
     const moveToVoiceReview = async () => {
       if (application.currentStage !== "voice_scheduled") return;
       await tx.update(applications).set({ currentStage: "voice_review_pending", updatedAt: new Date() }).where(eq(applications.id, application.id));
@@ -1270,7 +1298,7 @@ export async function ingestVoiceResult(rawInput: VoiceResultInput) {
 /** Latest voice-call artefacts for one application, for the HR review view. */
 export async function applicationVoiceReview(externalId: string) {
   const db = getDb();
-  const [application] = await db.select({ id: applications.id }).from(applications).where(eq(applications.externalId, externalId.trim())).limit(1);
+  const [application] = await db.select({ id: applications.id, roleTitle: roles.title, roleSetup: roles.setup }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).where(eq(applications.externalId, externalId.trim())).limit(1);
   if (!application) return null;
   let [result] = await db.select().from(voiceInterviewResults).where(eq(voiceInterviewResults.applicationId, application.id)).orderBy(desc(voiceInterviewResults.createdAt)).limit(1);
   // Older n8n executions stored Vapi's UUID-keyed artifact.structuredOutputs
@@ -1278,6 +1306,18 @@ export async function applicationVoiceReview(externalId: string) {
   // missing fields, keyed to the existing result, so refreshes are idempotent
   // and never create a second result or bill another interview.
   if (result) {
+    const { message, artifact } = rawVoiceArtifact(result.raw);
+    const variableValues = objectValue(artifact.variableValues || message.variableValues);
+    const setup = objectValue(application.roleSetup);
+    const derived = result.transcript
+      ? evaluateVoiceInterview({
+          roleTitle: application.roleTitle,
+          roleDescription: firstText(setup.jobDescription, setup.screeningCriteria),
+          transcript: result.transcript,
+          resumeSummary: firstText(variableValues.ai_summary, variableValues.resume_summary),
+          baseScore: result.score,
+        })
+      : null;
     const normalized = normalizeVoiceResultInput({
       applicationExternalId: externalId,
       score: result.score,
@@ -1294,10 +1334,14 @@ export async function applicationVoiceReview(externalId: string) {
     });
     const patch: Record<string, unknown> = {};
     if (result.score == null && normalized.score != null) patch.score = normalized.score;
+    if (derived?.riskFlags.length && result.score != null && derived.score != null && derived.score < result.score) patch.score = derived.score;
     if (!result.recommendation.trim() && normalized.recommendation) patch.recommendation = normalized.recommendation;
     if (!result.strengths.trim() && normalized.strengths) patch.strengths = normalized.strengths;
     if (!result.concerns.trim() && normalized.concerns) patch.concerns = normalized.concerns;
     if (!result.summary.trim() && normalized.summary) patch.summary = normalized.summary;
+    if (!result.strengths.trim() && derived?.strengths) patch.strengths = derived.strengths;
+    if (!result.concerns.trim() && derived?.concerns) patch.concerns = derived.concerns;
+    if (derived?.riskFlags.length && /strong match/i.test(result.recommendation)) patch.recommendation = derived.recommendation;
     if (!result.callStatus.trim() && normalized.callStatus) patch.callStatus = normalized.callStatus;
     if (!result.callFinalStatus.trim() && normalized.callFinalStatus) patch.callFinalStatus = normalized.callFinalStatus;
     if (Object.keys(patch).length > 0) {

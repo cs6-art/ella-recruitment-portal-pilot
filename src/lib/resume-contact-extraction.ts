@@ -13,6 +13,14 @@ function clean(value: unknown) {
   return String(value ?? "").replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function cleanResumeText(value: unknown) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\r?\n\s*/g, "\n")
+    .trim();
+}
+
 function normalizePhone(value: string, country = "") {
   const raw = clean(value);
   const digits = raw.replace(/\D/g, "");
@@ -57,7 +65,10 @@ function nameFromText(text: string, email: string, phone: string) {
  * whose layout causes the AI extractor to return an incomplete response.
  */
 export function extractResumeContactDetails(resumeText: string) {
-  const text = clean(resumeText);
+  // Keep line boundaries for name detection. Flattening the entire resume to
+  // one line makes the first email/phone match swallow the candidate heading,
+  // which is why older bulk rows fell back to the raw filename.
+  const text = cleanResumeText(resumeText);
   const email = (text.match(EMAIL_PATTERN)?.[0] || "").toLowerCase();
   const country = countryFromText(text);
   const phone = (text.match(PHONE_PATTERN) || [])

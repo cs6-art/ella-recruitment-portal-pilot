@@ -15,6 +15,12 @@ function driveFileUrl(fileId: string) {
   return fileId ? `https://drive.google.com/file/d/${fileId}/view` : "";
 }
 
+function fallbackCandidateName(fileName: string) {
+  const words = fileName.replace(/\.[^.]+$/, "").replace(/[._-]+/g, " ").replace(/\b(resume|cv|curriculum vitae)\b/gi, " ").split(/\s+/).filter(Boolean);
+  const name = words.map((word) => word ? `${word[0].toUpperCase()}${word.slice(1).toLowerCase()}` : "").join(" ").trim();
+  return name.split(" ").length >= 2 ? name : "Candidate";
+}
+
 /**
  * Postgres target intake. Importing a resume creates a durable queued item and
  * application only. Screening owns the credit boundary: failed or unprocessed
@@ -59,6 +65,7 @@ export async function intakeTargetResumeBatch(input: {
       const queueId = queueIdForHash(input.roleId, stored.record.sha256);
       queueKey = queueId;
       const contact = extractResumeContactDetails(stored.extractedText);
+      const candidateName = contact.candidateName || fallbackCandidateName(source.name);
       if (!contact.candidateEmail) throw new Error("The resume must contain a readable candidate email address.");
       stage = "application_persistence";
 
@@ -81,7 +88,7 @@ export async function intakeTargetResumeBatch(input: {
       const application = await createApplication({
         externalId: applicationId,
         applicantEmail: contact.candidateEmail,
-        applicantName: contact.candidateName || source.name.replace(/\.[^.]+$/, ""),
+        applicantName: candidateName,
         phone: contact.preferredMobile,
         preferredMobile: contact.preferredMobile,
         applicantCountry: contact.applicantCountry,
@@ -110,7 +117,7 @@ export async function intakeTargetResumeBatch(input: {
         filename: stored.record.fileName,
         fileUrl: driveFileUrl(stored.record.fileId),
         mimeType: stored.record.mimeType,
-        candidateName: contact.candidateName,
+        candidateName,
         candidateEmail: contact.candidateEmail,
         preferredMobile: contact.preferredMobile,
         applicantCountry: contact.applicantCountry,

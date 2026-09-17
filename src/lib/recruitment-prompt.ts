@@ -168,6 +168,13 @@ Adjustment bands (apply per answer, then combine into one overall adjustment):
 
 Never reduce more than 10 points total. Do not default to the 0-to-+4 "Good" band out of caution - use the Excellent or Weak/Severe bands whenever the interview content clearly supports them.
 
+Plausibility and contradiction check:
+- Compare experience years and tool claims in the interview with the AI Summary and resume context.
+- If the candidate's claimed years materially conflict with the resume, record the exact conflicting claims in Concerns and use Manual Review; do not label the candidate a Strong Match until HR verifies the timeline.
+- Do not treat a long list of tools, projects, or confident wording as proof of hands-on experience. Require concrete role-relevant evidence in the answers.
+- If an answer is vague, off-topic, internally inconsistent, or lacks a concrete action and outcome, record that as a concern and lower the score accordingly.
+- Never leave Strengths or Concerns blank after a completed interview. If there is no positive evidence, write "No role-specific strength evidenced in the completed answers." If there is no risk, write "No material concern identified from the completed answers." Each value must cite the answer or claim that supports it.
+
 Never mention the score, grading, rubric, recommendation, or internal evaluation to the candidate.
 
 [Fair and Consistent Assessment]
