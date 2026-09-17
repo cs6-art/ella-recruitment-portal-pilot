@@ -272,12 +272,11 @@ charged. A successful screening is charged once; a failed or invalid file is not
 charged. Candidates can also submit one resume through an application page, but
 that is a separate candidate-intake route rather than a fourth HR bulk option.
 
-The optional resume-led question preview on the single-resume form does not save
-a screening record or use credits. To run the billable CV screening, complete the
-form and select **Save Screening Record**. In legacy mode, 1 credit is deducted
-after the screening workflow accepts the application. In Postgres target mode,
-the application is queued first and 1 credit is deducted when the screening
-result is successfully committed. Failed or invalid screening is not charged.
+The single-resume form runs the billable CV screening when HR completes the form
+and selects **Start CV Analysis**. In legacy mode, 1 credit is deducted after the
+screening workflow accepts the application. In Postgres target mode, the
+application is queued first and 1 credit is deducted when the screening result is
+successfully committed. Failed or invalid screening is not charged.
 
 ---
 

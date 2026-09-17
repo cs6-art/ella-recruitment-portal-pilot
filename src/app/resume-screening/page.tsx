@@ -10,7 +10,6 @@ import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { isBulkResumeUatMode } from "@/lib/bulk-resume-config";
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { isLiveAvatarConfigured } from "@/lib/live-avatar";
 import { targetPublicRoleSummaries } from "@/lib/recruitment-target-portal";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -57,11 +56,11 @@ export default async function ResumeScreeningPage() {
           submitUrl="/api/applicants"
           title="CV Analysis"
           description="Upload a single candidate resume to begin the automated screening process."
-          submitLabel="Save Screening Record"
+          submitLabel="Start CV Analysis"
           requireConsent={false}
           showRoleSelect
           roleOptions={roleOptions}
-          enableLiveAvatar={isLiveAvatarConfigured()}
+          submitInUploadCard
           successRedirectTo="/applicants"
         />
       </main>

@@ -4,11 +4,9 @@ import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
-import LiveAvatarInterview from "@/components/LiveAvatarInterview";
 import { countryOptions, CountrySelect } from "@/components/CountryOptions";
 import ValidationSummary from "@/components/ValidationSummary";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
-import type { LiveAvatarPreparation } from "@/lib/live-avatar-screening";
 
 type RoleOption = {
   roleId: string;
@@ -25,8 +23,7 @@ type Props = {
   submitLabel?: string;
   requireConsent?: boolean;
   showRoleSelect?: boolean;
-  liveAvatarRoleTitle?: string;
-  enableLiveAvatar?: boolean;
+  submitInUploadCard?: boolean;
   successRedirectTo?: string;
 };
 
@@ -90,8 +87,7 @@ export default function CandidateApplicationForm({
   submitLabel = "Submit My Application",
   requireConsent = true,
   showRoleSelect = false,
-  liveAvatarRoleTitle = "",
-  enableLiveAvatar = false,
+  submitInUploadCard = false,
   successRedirectTo,
 }: Props) {
   const router = useRouter();
@@ -108,7 +104,6 @@ export default function CandidateApplicationForm({
   const [saving, setSaving] = useState(false);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
-  const [liveAvatarPreparation, setLiveAvatarPreparation] = useState<LiveAvatarPreparation | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const selectedRoleLabel = useMemo(
@@ -119,7 +114,6 @@ export default function CandidateApplicationForm({
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
-    setLiveAvatarPreparation(null);
     setError("");
     setMessage("");
     setFieldErrors((current) => ({ ...current, [key]: "" }));
@@ -141,7 +135,6 @@ export default function CandidateApplicationForm({
 
   function selectResumeFile(file: File | null) {
     setResumeFile(null);
-    setLiveAvatarPreparation(null);
     setFieldErrors((current) => ({ ...current, resumeFile: "" }));
     if (!file) return;
     const extension = file.name.toLowerCase().split(".").pop();
@@ -158,30 +151,6 @@ export default function CandidateApplicationForm({
     setResumeFile(file);
     setError("");
     setMessage("");
-  }
-
-  async function prepareElla() {
-    if (!form.candidateName.trim() || !resumeFile) {
-      setError("Enter the candidate name and choose a resume before meeting Smile.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    setMessage("");
-    try {
-      const body = new FormData();
-      body.append("roleId", form.resumeRoleId || roleId);
-      body.append("candidateName", form.candidateName.trim());
-      body.append("resumeFile", resumeFile, resumeFile.name);
-      const response = await fetch("/api/live-avatar/prepare", { method: "POST", body });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || result.success !== true || !result.preparation) throw new Error(result.error || "Smile could not prepare the resume yet.");
-      setLiveAvatarPreparation(result.preparation as LiveAvatarPreparation);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Smile could not prepare the resume yet.");
-    } finally {
-      setSaving(false);
-    }
   }
 
   async function submit(event: FormEvent) {
@@ -223,7 +192,6 @@ export default function CandidateApplicationForm({
       setMessage(result.message || `Application submitted. Application ID: ${result.applicationId}`);
       setForm({ candidateName: "", email: "", countryCode: "+63", localContactNumber: "", resumeRoleId: roleId || "" });
       setResumeFile(null);
-      setLiveAvatarPreparation(null);
       setFileInputKey((value) => value + 1);
       if (fileInput.current) fileInput.current.value = "";
       setFieldErrors({});
@@ -307,15 +275,11 @@ export default function CandidateApplicationForm({
             </label>
             <small>PDF, DOC, or DOCX · up to 10 MB</small>
             {readFieldError(fieldErrors, "resumeFile") && <small>{readFieldError(fieldErrors, "resumeFile")}</small>}
-            {enableLiveAvatar && <div className="resume-avatar-action"><div><strong>Preview Smile&apos;s resume-led question</strong><small>This preview does not save a screening record or use credits. Select &quot;Save Screening Record&quot; to start the billable CV screening.</small></div><button type="button" className="btn btn-secondary" disabled={saving || !form.candidateName.trim() || !resumeFile} onClick={() => void prepareElla()}>{saving ? "Preparing..." : liveAvatarPreparation ? "Preview ready" : "Preview Smile&apos;s question"}</button></div>}
+            {submitInUploadCard && <div className="resume-inline-submit"><div><strong>Ready to screen this resume?</strong><small>Start the billable CV screening and save the screening record.</small></div><button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Starting..." : submitLabel}</button></div>}
           </div>
         </div>
 
-        {enableLiveAvatar && liveAvatarPreparation && <LiveAvatarInterview roleId={form.resumeRoleId || roleId} roleTitle={liveAvatarRoleTitle || selectedRoleLabel || "this role"} candidateName={form.candidateName.trim()} preparation={liveAvatarPreparation} />}
-
-        <div className="candidate-form-actions">
-          <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? "Submitting..." : submitLabel}</button>
-        </div>
+        {!submitInUploadCard && <div className="candidate-form-actions"><button className="btn btn-primary" type="submit" disabled={saving}>{saving ? "Submitting..." : submitLabel}</button></div>}
       </div>
     </form>
   );
