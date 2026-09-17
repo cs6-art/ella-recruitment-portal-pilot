@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 import styles from "./EllaCreditsPurchase.module.css";
 
 type CreditPack = {
@@ -89,6 +90,7 @@ export default function EllaCreditsPurchase() {
       setPayment(nextPayment);
       setError("");
       if (nextPayment.status === "paid" && nextPayment.creditedAt) {
+        requestEllaCreditsRefresh();
         setReturnMessage(`Payment confirmed. ${nf.format(nextPayment.credits)} credits have been added.`);
         return true;
       }
@@ -140,6 +142,7 @@ export default function EllaCreditsPurchase() {
       const nextPayment = body.payment as Payment;
       setPayment(nextPayment);
       if (nextPayment.status === "paid" && nextPayment.creditedAt) {
+        requestEllaCreditsRefresh();
         setReturnMessage(`Payment confirmed. ${nf.format(nextPayment.credits)} credits have been added.`);
       } else if (["failed", "expired"].includes(nextPayment.status)) {
         setReturnMessage(`Payment ${nextPayment.status}. No credits were added.`);

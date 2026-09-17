@@ -40,6 +40,7 @@ test("the payment return screen reconciles missed webhooks and offers recovery",
   assert.match(purchase, /Check payment again/);
   assert.match(purchase, /creditedAt/);
   assert.match(purchase, /attempt === 0 \|\| attempt % 5 === 0/);
+  assert.match(purchase, /requestEllaCreditsRefresh/);
 });
 
 test("credit activity is paginated in the UI", () => {
