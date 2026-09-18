@@ -76,6 +76,19 @@ test("re-uploading a historical hash reuses the existing Drive object", () => {
   assert.match(upload, /if \(!stored\.reused\) await deleteResumeFile/);
 });
 
+test("resume storage dedupe is scoped to the owning organization", () => {
+  const files = read("src/lib/resume-files.ts");
+  assert.match(files, /organizationId\?: string/);
+  assert.match(files, /key='organizationId' and value='/);
+  assert.match(files, /organizationId \? \{ organizationId \} : \{\}/);
+  for (const source of [
+    read("src/app/api/applicants/route.ts"),
+    read("src/app/api/public/applications/route.ts"),
+    read("src/lib/bulk-resume-intake.ts"),
+    read("src/lib/recruitment-target-bulk.ts"),
+  ]) assert.match(source, /storeResumeFile\([^\n]+organizationId/);
+});
+
 test("bulk completion emails default to disabled but remain configurable", () => {
   const route = read("src/lib/bulk-resume-intake.ts");
   assert.match(route, /BULK_RESUME_NOTIFY_ON_SUCCESS/);

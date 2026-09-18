@@ -60,7 +60,7 @@ export async function intakeTargetResumeBatch(input: {
       }
       const file = new File([new Uint8Array(bytes)], source.name || "resume", { type: source.mimeType || "application/octet-stream" });
       stage = "destination_storage";
-      stored = await storeResumeFile(file, { environment });
+      stored = await storeResumeFile(file, { environment, organizationId: input.organizationId });
       stage = "contact_extraction";
       const queueId = queueIdForHash(input.roleId, stored.record.sha256);
       queueKey = queueId;

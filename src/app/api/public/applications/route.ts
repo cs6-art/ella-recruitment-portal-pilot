@@ -104,7 +104,7 @@ export async function POST(request: Request) {
         throw creditError;
       }
       const applicationId = `APP-${crypto.randomUUID()}`;
-      if (intake.resumeFile) storedResume = await storeResumeFile(intake.resumeFile);
+      if (intake.resumeFile) storedResume = await storeResumeFile(intake.resumeFile, { organizationId: role.organizationId });
       const created = await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: invitation ? "hr_invitation" : "direct", sourceDetail: invitation?.invitationId || "public", consentAt: new Date().toISOString(), creditOwnerEmail: role.requesterEmail, organizationId: role.organizationId, resume: storedResume ? { ...storedResume.record, extractedText: storedResume.extractedText } : undefined });
       if (inviteToken) await markResumeScreeningInvitationUsed(inviteToken, applicationId);
       const reused = created.screeningReused === true;

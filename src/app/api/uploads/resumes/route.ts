@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     if (!(value instanceof File)) return failure("Attach one PDF, DOC, or DOCX resume file.", 422);
     if (value.size > MAX_RESUME_FILE_BYTES) return failure("Resume files must be 10 MB or smaller.", 413);
 
-    const stored = await storeResumeFile(value);
+    const stored = await storeResumeFile(value, { organizationId: user.organizationId });
     return NextResponse.json({
       success: true,
       file: {

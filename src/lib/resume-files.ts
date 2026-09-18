@@ -251,7 +251,7 @@ export async function cleanupExpiredResumeFiles(now = Date.now()) {
 /** The isolated cron route owns cleanup; uploads must never scan Drive. */
 export const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
-export async function storeResumeFile(file: File, options: { environment?: BulkResumeEnvironment } = {}): Promise<StoredResume> {
+export async function storeResumeFile(file: File, options: { environment?: BulkResumeEnvironment; organizationId?: string } = {}): Promise<StoredResume> {
   const fileName = safeFileName(file.name || "resume");
   const kind = detectKind(fileName, file.type);
   if (!kind) throw new Error("Only PDF, DOC, and DOCX resume files are supported.");
@@ -271,6 +271,7 @@ export async function storeResumeFile(file: File, options: { environment?: BulkR
   // non-expired Drive object when it is already present, so re-submitting a
   // resume after a lost historical queue write does not create another file.
   const folderId = await resumeFolderId(options.environment);
+  const organizationId = options.organizationId?.trim() || "";
   console.info("[Resume Storage] destination", { folderId, fileName, authentication: "service_account" });
   // Source retrieval uses the user's OAuth connection; destination storage
   // uses the service account. Report these failures separately.
@@ -285,8 +286,13 @@ export async function storeResumeFile(file: File, options: { environment?: BulkR
   }).catch(() => {
     throw new Error(`Resume storage destination unavailable to the service account (${folderId}). Verify RESUME_STORAGE_DRIVE_FOLDER_ID and Shared Drive access.`);
   });
+  const escapedOrganizationId = organizationId.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  const organizationFilter = organizationId ? ` and properties has { key='organizationId' and value='${escapedOrganizationId}' }` : "";
   const existing = await drive().files.list({
-    q: `'${folderId}' in parents and trashed = false and properties has { key='sha256' and value='${sha256}' }`,
+    // Resume hashes are only reusable inside the owning organization. Older
+    // files without organizationId intentionally miss this query and receive
+    // a tenant-specific copy instead of failing at Postgres registration.
+    q: `'${folderId}' in parents and trashed = false and properties has { key='sha256' and value='${sha256}' }${organizationFilter}`,
     fields: "files(id, name, mimeType, size, createdTime, properties)",
     pageSize: 10,
     includeItemsFromAllDrives: true,
@@ -304,7 +310,7 @@ export async function storeResumeFile(file: File, options: { environment?: BulkR
     requestBody: {
       name: fileName,
       parents: [folderId],
-      properties: { kind, sha256, expiresAt },
+      properties: { kind, sha256, expiresAt, ...(organizationId ? { organizationId } : {}) },
     },
     media: { mimeType, body: Readable.from(buffer) },
     fields: "id, name, mimeType, size, createdTime, properties",

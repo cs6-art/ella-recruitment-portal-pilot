@@ -156,7 +156,7 @@ export async function intakeResumeBatch(input: {
     try {
       if (bytes.length > MAX_RESUME_FILE_BYTES) throw new Error("Resume files must be 10 MB or smaller.");
       const file = new File([new Uint8Array(bytes)], source.name || "resume", { type: source.mimeType || "application/octet-stream" });
-      stored = await storeResumeFile(file, { environment });
+      stored = await storeResumeFile(file, { environment, organizationId: input.organizationId });
       resolvedQueueId = queueIdForHash(roleId, stored.record.sha256);
       const previous = latestByFile.get(resolvedQueueId) || latestByFile.get(legacyQueueIdForHash(stored.record.sha256));
       const previousStatus = previous?.status.toLowerCase() || "";
