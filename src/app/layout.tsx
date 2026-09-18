@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "mcprint Recruitment Portal",
+  title: "McPrint Recruitment Portal",
   description: "Role-first recruitment request and approval portal",
 };
 

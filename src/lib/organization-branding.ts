@@ -4,7 +4,7 @@ import { getTenantDb } from "@/db/client";
 import { portalSettings } from "@/db/schema-recruitment";
 
 export const DEFAULT_ORGANIZATION_BRANDING = {
-  name: "mcprint",
+  name: "McPrint",
   subtitle: "Recruitment Portal",
 } as const;
 

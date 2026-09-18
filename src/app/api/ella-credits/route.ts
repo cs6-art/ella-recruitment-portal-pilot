@@ -4,6 +4,9 @@ import { z } from "zod";
 
 import { canManageCredits } from "@/lib/access-control";
 import { getCreditBalance, getCreditPricing, recordTopUp } from "@/lib/ella-credits";
+import { getDirectoryUsers } from "@/lib/google-sheets";
+import { getPostgresDirectoryUsers } from "@/lib/postgres-directory";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -28,6 +31,29 @@ async function currentUser() {
   return verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
 }
 
+async function displayCreditActors<T extends { actorName: string; actorEmail: string }>(entries: T[], organizationId: string) {
+  try {
+    const directory = organizationId === DEFAULT_ORGANIZATION_ID
+      ? await getDirectoryUsers()
+      : await getPostgresDirectoryUsers(organizationId);
+    const names = new Map<string, string>(directory.map((directoryUser) => [directoryUser.email.trim().toLowerCase(), directoryUser.fullName.trim()] as const).filter(([email, name]) => email && name));
+    return entries.map((entry) => {
+      const email = entry.actorEmail.trim().toLowerCase();
+      const actorName = entry.actorName.trim();
+      const directoryName = names.get(email);
+      return {
+        ...entry,
+        actorName: directoryName && (!actorName || actorName.toLowerCase() === email) ? directoryName : actorName,
+      };
+    });
+  } catch (error) {
+    // Ledger reads must remain available if an optional directory source is
+    // temporarily unavailable; actorEmail remains the audit fallback.
+    console.error("[API Smile Credits] actor-name lookup failed:", error);
+    return entries;
+  }
+}
+
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
@@ -42,7 +68,7 @@ export async function GET() {
       // Both storage backends can return a different natural row order. The
       // activity feed is explicitly newest-first so the UI always shows the
       // latest credit changes at the top.
-      entries: entries
+      entries: (await displayCreditActors(entries, user.organizationId))
         .slice()
         .sort((left, right) => {
           const leftTime = Date.parse(left.timestamp);

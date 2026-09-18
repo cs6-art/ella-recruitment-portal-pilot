@@ -65,6 +65,22 @@ export function organizationCreditsEnabled() {
   return (process.env.RECRUITMENT_BACKEND || "").trim().toLowerCase() === "postgres";
 }
 
+function displayEntries(rows: Array<Record<string, unknown>>, names: Map<string, string>) {
+  return rows.map((row) => {
+    const value = entry(row);
+    const email = value.actorEmail.trim().toLowerCase();
+    const actorName = value.actorName.trim();
+    const directoryName = names.get(email);
+    // Older rows sometimes stored the actor email in actor_name. Resolve that
+    // display value from the tenant directory while retaining actorEmail for
+    // audit and search purposes.
+    return {
+      ...value,
+      actorName: directoryName && (!actorName || actorName.toLowerCase() === email) ? directoryName : actorName,
+    };
+  });
+}
+
 /** @deprecated Use organizationCreditsEnabled. Kept for external callers during rollout. */
 export function perUserCreditsEnabled() {
   return false;
@@ -92,10 +108,15 @@ export async function getAccountCreditBalance(input: { organizationId: string; o
     ORDER BY "entry_time" DESC
     LIMIT 100
   `));
+  const directory = rowsOf(await db.execute(sql`
+    SELECT "email", "full_name" FROM "users"
+    WHERE "organization_id" = ${orgId} AND "active" = true
+  `));
+  const names = new Map<string, string>(directory.map((row) => [String(row.email ?? "").trim().toLowerCase(), String(row.full_name ?? "").trim()] as const).filter(([email, name]) => email && name));
   return {
     balance: int(account?.balance),
     totals: { toppedUp: int(totals.topped_up), consumed: int(totals.consumed) },
-    entries: ledger.map(entry),
+    entries: displayEntries(ledger, names),
   };
 }
 
