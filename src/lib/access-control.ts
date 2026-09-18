@@ -119,10 +119,10 @@ export function filterVisibleApplicants<T extends { department: string }>(applic
   return [];
 }
 
-// Smile Credits — viewing the ledger, manual/demo top-ups, and initiating a
-// paid (HitPay) purchase. This is an explicit capability so HR can delegate
-// credits to a narrowly scoped Admin account without granting recruitment,
-// settings, or user-management access.
+// Smile Credits — manual/demo top-ups are an explicit capability so HR can
+// delegate credit management to a narrowly scoped Admin account without
+// granting recruitment, settings, or user-management access. Ledger viewing
+// is organization-wide and is handled by authenticated tenant scope.
 export function canManageCredits(user: Pick<SessionUser, "canManageCredits">): boolean {
   return user.canManageCredits === true;
 }

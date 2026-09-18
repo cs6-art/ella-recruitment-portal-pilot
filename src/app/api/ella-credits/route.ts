@@ -31,8 +31,9 @@ async function currentUser() {
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageCredits(user)) return NextResponse.json({ success: false, error: "Smile Credits permission required." }, { status: 403 });
   try {
+    // Every authenticated member can inspect the immutable, organization-
+    // scoped ledger. Mutation remains restricted to canManageCredits below.
     const [{ balance, totals, entries }, pricing] = await Promise.all([getCreditBalance({ organizationId: user.organizationId, ownerEmail: user.email }), getCreditPricing()]);
     return NextResponse.json({
       success: true,

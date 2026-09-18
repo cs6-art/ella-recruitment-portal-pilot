@@ -9,7 +9,7 @@ test("the dedicated Credits page is available to authenticated users", () => {
   assert.match(page, /canManageCredits\(user\)/);
   assert.match(page, /EllaCreditsPanel/);
   assert.match(page, /EllaCreditsPurchase/);
-  assert.match(page, /canManage &&/);
+  assert.match(page, /<EllaCreditsPanel canManage=\{canManage\} \/>/);
 });
 
 test("the sidebar exposes Credits to authenticated users for purchases", () => {
@@ -33,7 +33,19 @@ test("the purchase UI is separate from manual credit management", () => {
   assert.match(purchase, /\/api\/ella-credits\/payments/);
   assert.match(purchase, /Pay with HitPay/);
   assert.match(panel, /\/api\/ella-credits/);
-  assert.match(read("src/app/credits/page.tsx"), /canManage && <EllaCreditsPanel \/>/);
+  assert.match(read("src/app/credits/page.tsx"), /<EllaCreditsPanel canManage=\{canManage\} \/>/);
+});
+
+test("every authenticated user can read organization credit history while mutations stay gated", () => {
+  const route = read("src/app/api/ella-credits/route.ts");
+  const panel = read("src/components/EllaCreditsPanel.tsx");
+  const getRoute = route.split("export async function POST")[0];
+  assert.doesNotMatch(getRoute, /canManageCredits\(user\)/);
+  assert.match(route, /organizationId: user\.organizationId/);
+  assert.match(route, /export async function POST[\s\S]*?canManageCredits\(user\)/);
+  assert.match(panel, /canManage = false/);
+  assert.match(panel, /\{canManage && <div className=\{styles\.form\}>/);
+  assert.match(panel, /Organization credit history/);
 });
 
 test("the payment return screen reconciles missed webhooks and offers recovery", () => {
@@ -68,7 +80,7 @@ test("credit activity is recent-first, filterable, and keeps a stable table foot
   assert.match(panel, /No activity matches the current filters/);
   assert.match(panel, /placeholder-\$\{index\}/);
   assert.match(panel, /Voice interview/);
-  assert.match(panel, /Each signed-in user has a separate Smile Credits balance inside their organization/);
+  assert.match(panel, /All signed-in users in this organization share one Smile Credits balance/);
   assert.match(styles, /min-height: 540px/);
   assert.match(styles, /table-layout: fixed/);
 });

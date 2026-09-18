@@ -21,11 +21,11 @@ export default async function CreditsPage() {
           <div>
             <span className="eyebrow-dark">SMILE CREDITS</span>
             <h1>Credits</h1>
-            <p>Purchase credits securely, or manage authorized manual top-ups.</p>
+            <p>Purchase credits securely, review your organization’s credit history, or manage authorized manual top-ups.</p>
           </div>
         </header>
         <EllaCreditsPurchase />
-        {canManage && <EllaCreditsPanel />}
+        <EllaCreditsPanel canManage={canManage} />
       </main>
     </AppShell>
   );

@@ -74,7 +74,7 @@ function recentFirst(entries: LedgerEntry[]) {
   });
 }
 
-export default function EllaCreditsPanel() {
+export default function EllaCreditsPanel({ canManage = false }: { canManage?: boolean }) {
   const [data, setData] = useState<LedgerResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -166,8 +166,8 @@ export default function EllaCreditsPanel() {
     <section className={`card ${styles.panel}`}>
       <div className={styles.header}>
         <div>
-          <h2>Credits</h2>
-          <p>Each signed-in user has a separate Smile Credits balance inside their organization — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer.` : "Pricing is loaded from the active credit settings."} AI actions are blocked when the balance runs out.</p>
+          <h2>Credit balance</h2>
+          <p>All signed-in users in this organization share one Smile Credits balance — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer.` : "pricing is loaded from the active credit settings"}. AI actions are blocked when the balance runs out.</p>
         </div>
         {data && (
           <div className={`${styles.headline} ${headlineTone}`}>
@@ -192,7 +192,7 @@ export default function EllaCreditsPanel() {
           {message && <ActionFeedback kind="success">{message}</ActionFeedback>}
         </div>}
 
-        <div className={styles.form}>
+        {canManage && <div className={styles.form}>
           <div className={`${styles.field} ${styles.amountField}`}>
             <label htmlFor="smile-credit-amount">Adjust balance</label>
             <input id="smile-credit-amount" type="number" min="1" step="1" inputMode="numeric" placeholder="e.g. 2000" value={amount} onChange={(event) => setAmount(event.target.value)} />
@@ -204,11 +204,11 @@ export default function EllaCreditsPanel() {
             <small>Recorded in the ledger for audit. Takes effect immediately for new AI actions.</small>
           </div>
           <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void submit()}>{saving ? "Saving…" : "Update Balance"}</button>
-        </div>
+        </div>}
 
         <div className={styles.activity}>
           <div className={styles.activityTitle}>
-            <h3>Recent activity</h3>
+            <h3>Organization credit history</h3>
             <span>{filteredEntries.length} matching entr{filteredEntries.length === 1 ? "y" : "ies"}</span>
           </div>
           <div className={styles.filters}>
@@ -231,7 +231,7 @@ export default function EllaCreditsPanel() {
           </div>
         </div>
         {data.entries.length === 0
-          ? <p className={styles.empty}>No credit activity yet. Add a starting balance above to begin.</p>
+          ? <p className={styles.empty}>{canManage ? "No credit activity yet. Add a starting balance above to begin." : "No credit activity has been recorded for this organization yet."}</p>
           : filteredEntries.length === 0
             ? <p className={styles.empty}>No activity matches the current filters.</p>
             : <div className={styles.tableWrap}><table className={styles.table}>
