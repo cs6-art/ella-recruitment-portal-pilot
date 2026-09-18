@@ -36,7 +36,7 @@ export function directHelpAnswer(question: string, user?: HelpUserContext): stri
     return "I'm Smile, your in-portal guide for the McLink Recruitment Portal. I can explain portal steps, applicant stages, screening, interviews, access, and Smile Credits. I can't see your records or make changes.";
   }
   if (/^(what can you do|how can you help|what can i ask you)$/.test(normalized)) {
-    return "I can guide you through using the portal—for example, creating a role request, uploading resumes, understanding screening results, scheduling interviews, and checking what each applicant stage means. I can't access live records or perform actions for you.";
+    return "I can guide you through using the portal—for example, creating a role request, uploading resumes, understanding screening results, scheduling interviews, checking approved aggregate metrics, and understanding applicant stages. I can't access candidate records or perform actions for you.";
   }
   if (/^(what are the three ways to screen resumes?|how many ways (are there to screen|can i screen) (a )?resumes?|how do i screen resumes?)$/.test(normalized)) {
     return "For HR screening, the portal has three intake options: (1) upload resumes from your computer, (2) import resumes from Google Drive, or (3) import resumes from OneDrive when Microsoft setup is enabled. All three use the same queue, duplicate checks, status tracking, and credit rules. A candidate can also submit one resume through an application page; that is separate from the three HR intake options.";
@@ -120,9 +120,15 @@ export const HELP_BOT_SYSTEM_PROMPT = [
   "  decline and offer portal help instead.",
   "",
   "Style: concise and practical. Prefer short paragraphs or numbered steps. Use the",
-  "portal's own wording for menu items and statuses. Keep answers under ~200 words",
-  "unless the user asks for more detail.",
+  "portal's own wording for menu items and statuses. Use plain text only: do not use",
+  "Markdown emphasis markers such as **. Keep answers under ~200 words unless the",
+  "user asks for more detail.",
 ].join("\n");
+
+/** Keep the chat UI readable even if a provider returns Markdown formatting. */
+export function cleanHelpBotAnswer(answer: string): string {
+  return answer.replaceAll("**", "").trim();
+}
 
 export function buildUserPrompt(context: RetrievedContext, question: string, user?: HelpUserContext): string {
   const userContext = user

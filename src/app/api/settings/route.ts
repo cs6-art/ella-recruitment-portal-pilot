@@ -100,6 +100,9 @@ export async function PUT(request: Request) {
   try {
     const input = settingsSchema.parse(await request.json());
     for (const setting of input.settings) {
+      if (!editableSettingKeys.has(setting.key) || secretKey(setting.key)) {
+        return NextResponse.json({ success: false, error: `${setting.key} is not editable from the portal.` }, { status: 400 });
+      }
       if (setting.key === "Final_Interview_Calendar_Email" && !z.string().email().safeParse(setting.value.trim()).success) {
         return NextResponse.json({ success: false, error: "HR interview calendar email must be a valid email address." }, { status: 400 });
       }

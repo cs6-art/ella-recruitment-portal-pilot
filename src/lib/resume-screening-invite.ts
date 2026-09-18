@@ -25,6 +25,8 @@ const auth = new google.auth.JWT({
 const sheets = google.sheets({ version: "v4", auth });
 
 const TAB = "Resume_Screening_Invitations";
+const LEGACY_PILOT_ORIGIN = "https://ella-recruitment.mclinkgroup.com";
+const CANONICAL_PILOT_ORIGIN = "https://ella-recruitment-portal-pilot.vercel.app";
 const HEADERS = [
   "Invitation_ID",
   "Role_ID",
@@ -60,21 +62,25 @@ function hashToken(token: string) {
  */
 export function applicationInviteLink(baseUrl: string, token: string, apiBaseUrl = "") {
   let url = new URL(baseUrl.trim());
-  // The pilot's legacy custom domain is a separate, stale static deployment
-  // that does not understand the `portalApi` override. Keep old configuration
-  // from generating links that always render as invalid by using the current
-  // portal host when it is available.
-  if (url.hostname === "ella-recruitment.mclinkgroup.com" && apiBaseUrl.trim()) {
+  let apiOrigin = "";
+  if (apiBaseUrl.trim()) {
     const currentPortal = new URL(apiBaseUrl.trim());
-    if (currentPortal.protocol === "http:" || currentPortal.protocol === "https:") url = currentPortal;
+    if (currentPortal.protocol === "http:" || currentPortal.protocol === "https:") apiOrigin = currentPortal.origin;
+  }
+
+  // The pilot's legacy custom domain is a separate, stale static deployment.
+  // It can still be present in the Settings sheet, and the HR portal itself
+  // may also be opened through that hostname. In both cases, keep new invite
+  // links on the canonical deployment so the candidate receives the current
+  // page and the token is checked against the same live API/database.
+  if (url.origin === LEGACY_PILOT_ORIGIN) {
+    url = new URL(apiOrigin && apiOrigin !== LEGACY_PILOT_ORIGIN ? apiOrigin : CANONICAL_PILOT_ORIGIN);
+    apiOrigin = url.origin;
   }
   if (!url.pathname || url.pathname === "/") url.pathname = "/index.html";
   url.search = "";
   url.searchParams.set("invite", token);
-  if (apiBaseUrl.trim()) {
-    const apiUrl = new URL(apiBaseUrl.trim());
-    if (apiUrl.protocol === "http:" || apiUrl.protocol === "https:") url.searchParams.set("portalApi", apiUrl.origin);
-  }
+  if (apiOrigin) url.searchParams.set("portalApi", apiOrigin);
   return url.toString();
 }
 

@@ -96,7 +96,7 @@ test("target role and applicant paths resolve Postgres before legacy Sheets", ()
   const setup = read("src/app/api/roles/[roleId]/recruitment-setup/route.ts");
   const applicants = read("src/app/api/applicants/route.ts");
   assert.match(roles, /isPostgresRecruitmentTarget\(\) \? await targetRoleSummaries\(\)/);
-  assert.match(roles, /generateRoleId\(input\.jobTitle, \(await listRoles\(\)\)/);
+  assert.match(roles, /generateRoleId\(input\.jobTitle, \(await listRoles\(undefined, user\.organizationId\)\)/);
   assert.match(detail, /isPostgresRecruitmentTarget\(\)\s*\? await targetRoleDetails/);
   assert.match(detail, /targetRoleDetails\(roleId, user\.organizationId\)/);
   assert.match(setup, /isPostgresRecruitmentTarget\(\) \? await targetRoleDetails/);

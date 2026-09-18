@@ -7,9 +7,10 @@ import { HELP_BOT_STARTER_QUESTIONS } from "@/lib/help-bot/prompt";
 import styles from "./HelpBot.module.css";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
+const STARTER_RETURN_DELAY_MS = 4_000;
 
 const GREETING =
-  "Hi, I'm Smile. Ask me how to use the recruitment portal — creating role requests, screening, interviews, statuses, access, and more. I answer from the portal guide and can't see your records.";
+  "Hi, I'm Smile. Ask me how to use the recruitment portal — creating role requests, screening, interviews, statuses, access, and more. I answer from the portal guide and can't see candidate records or make changes.";
 
 const NOT_CONFIGURED_MESSAGE =
   "Smile is currently being configured and will be available soon.";
@@ -22,9 +23,15 @@ export default function HelpBot() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showStarters, setShowStarters] = useState(true);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const starterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (starterTimerRef.current) clearTimeout(starterTimerRef.current);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -53,6 +60,8 @@ export default function HelpBot() {
       if (!question || loading || !configured) return;
 
       const history = messages.slice(-6);
+      setShowStarters(false);
+      if (starterTimerRef.current) clearTimeout(starterTimerRef.current);
       setMessages((current) => [...current, { role: "user", content: question }]);
       setInput("");
       setError("");
@@ -74,6 +83,10 @@ export default function HelpBot() {
         setError(sendError instanceof Error ? sendError.message : "Something went wrong. Please try again.");
       } finally {
         setLoading(false);
+        starterTimerRef.current = setTimeout(() => {
+          setShowStarters(true);
+          starterTimerRef.current = null;
+        }, STARTER_RETURN_DELAY_MS);
       }
     },
     [loading, messages, configured],
@@ -113,7 +126,7 @@ export default function HelpBot() {
               <div className={styles.notice} role="status">{NOT_CONFIGURED_MESSAGE}</div>
             )}
 
-            {configured && messages.length === 0 && (
+            {configured && showStarters && (
               <div className={styles.starters}>
                 <p>Try asking:</p>
                 {HELP_BOT_STARTER_QUESTIONS.map((question) => (

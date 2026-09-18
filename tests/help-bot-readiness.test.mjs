@@ -89,3 +89,13 @@ test("auth is required to use the assistant", () => {
   assert.match(route, /verifySessionToken/);
   assert.match(route, /Authentication required/);
 });
+
+test("Smile starter questions hide after a question and return after the response settles", () => {
+  const panel = read("src/components/HelpBot.tsx");
+  assert.match(panel, /STARTER_RETURN_DELAY_MS = 4_000/);
+  assert.match(panel, /setShowStarters\(false\)/);
+  assert.match(panel, /starterTimerRef\.current = setTimeout/);
+  assert.match(panel, /setShowStarters\(true\)/);
+  assert.match(panel, /clearTimeout\(starterTimerRef\.current\)/);
+  assert.match(panel, /configured && showStarters/);
+});

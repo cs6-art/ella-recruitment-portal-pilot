@@ -278,8 +278,9 @@ test("invite links can use a separate candidate page origin without breaking por
   assert.match(candidatePage, /ella-recruitment-portal-pilot\.vercel\.app/);
   assert.match(candidatePage, /inviteQuery\.get\("portalApi"\)/);
   assert.match(inviteStore, /applicationInviteLink\(input\.baseUrl, target\.token, input\.apiBaseUrl\)/);
-  assert.match(inviteStore, /url\.hostname === "ella-recruitment\.mclinkgroup\.com"/);
-  assert.match(inviteStore, /url = currentPortal/);
+  assert.match(inviteStore, /url\.origin === LEGACY_PILOT_ORIGIN/);
+  assert.match(inviteStore, /CANONICAL_PILOT_ORIGIN/);
+  assert.match(inviteStore, /apiOrigin = url\.origin/);
   assert.match(inviteRoute, /apiBaseUrl/);
   assert.match(emailSender, /fallbackUrl = \(await getPortalConfigValue\("N8N_Application_Invite_Email_Webhook_URL"\)\)/);
   assert.match(emailSender, /response\.status !== 404/);

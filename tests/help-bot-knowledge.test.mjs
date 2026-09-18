@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { retrieveContext, knowledgeHeadings } from "../src/lib/help-bot/knowledge.ts";
-import { buildUserPrompt, directHelpAnswer, HELP_BOT_STARTER_QUESTIONS } from "../src/lib/help-bot/prompt.ts";
+import { buildUserPrompt, cleanHelpBotAnswer, directHelpAnswer, HELP_BOT_STARTER_QUESTIONS } from "../src/lib/help-bot/prompt.ts";
 import { MAX_FILES_PER_SUBMISSION } from "../src/lib/bulk-resume-limits.ts";
 
 // Regression coverage for the exact failure this once had: the bulk-upload
@@ -70,6 +70,11 @@ test("Ella answers common orientation questions clearly", () => {
   assert.match(directHelpAnswer("who are you?") || "", /I'm Smile/);
   assert.match(directHelpAnswer("what can you do?") || "", /guide you through using the portal/);
   assert.equal(directHelpAnswer("what is my applicant score?"), null);
+});
+
+test("Smile answers never expose raw Markdown emphasis markers", () => {
+  assert.equal(cleanHelpBotAnswer("1. **Review role requests**\n2. **View applicants**"), "1. Review role requests\n2. View applicants");
+  assert.equal(cleanHelpBotAnswer("Already plain text."), "Already plain text.");
 });
 
 test("Ella directly lists the three HR resume screening options", () => {

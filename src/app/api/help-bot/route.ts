@@ -4,7 +4,7 @@ import OpenAI from "openai";
 
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { retrieveContext } from "@/lib/help-bot/knowledge";
-import { directHelpAnswer, HELP_BOT_SYSTEM_PROMPT, buildUserPrompt, type HelpUserContext } from "@/lib/help-bot/prompt";
+import { cleanHelpBotAnswer, directHelpAnswer, HELP_BOT_SYSTEM_PROMPT, buildUserPrompt, type HelpUserContext } from "@/lib/help-bot/prompt";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { runHelpBotConversation } from "@/lib/help-bot/conversation";
 import type { LiveToolDependencies } from "@/lib/help-bot/live-tools";
@@ -128,7 +128,7 @@ export async function POST(request: Request) {
   const directAnswer = directHelpAnswer(question, userContext);
   if (directAnswer) {
     return NextResponse.json(
-      { success: true, answer: directAnswer, sources: ["About Smile"] },
+      { success: true, answer: cleanHelpBotAnswer(directAnswer), sources: ["About Smile"] },
       { headers: { "Cache-Control": "no-store" } },
     );
   }
@@ -161,7 +161,8 @@ export async function POST(request: Request) {
       liveToolDeps,
     );
 
-    if (!answer) {
+    const cleanedAnswer = cleanHelpBotAnswer(answer);
+    if (!cleanedAnswer) {
       return NextResponse.json(
         { success: false, error: "The assistant could not produce an answer. Please rephrase your question." },
         { status: 502 },
@@ -172,7 +173,7 @@ export async function POST(request: Request) {
     if (toolCallsUsed > 0) sources.push("Live portal data");
 
     return NextResponse.json(
-      { success: true, answer, sources },
+      { success: true, answer: cleanedAnswer, sources },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

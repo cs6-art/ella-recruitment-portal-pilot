@@ -276,9 +276,13 @@ export function isValidStage(value: string): value is (typeof STAGES)[number] { 
 export function isValidDecision(value: string): value is (typeof DECISIONS)[number] { return (DECISIONS as readonly string[]).includes(value); }
 export function isValidTransition(from: string, to: string): boolean { return STAGE_TRANSITIONS[from]?.includes(to) ?? false; }
 
-export async function listRoles(status?: string) {
+export async function listRoles(status?: string, organizationId?: string) {
   const db = getDb();
-  return db.select().from(roles).where(status ? eq(roles.status, status) : undefined).orderBy(desc(roles.updatedAt)).limit(LIMIT);
+  const filters = [
+    status ? eq(roles.status, status) : undefined,
+    organizationId?.trim() ? eq(roles.organizationId, organizationId.trim()) : undefined,
+  ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter));
+  return db.select().from(roles).where(filters.length ? and(...filters) : undefined).orderBy(desc(roles.updatedAt)).limit(LIMIT);
 }
 
 export async function getRole(externalId: string) {

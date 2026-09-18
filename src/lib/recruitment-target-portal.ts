@@ -199,7 +199,7 @@ export async function targetRoleSummaries(options: { liveOnly?: boolean } = {}) 
 }
 
 async function targetRoleSummariesForOrganization(organizationId: string, options: { liveOnly?: boolean } = {}) {
-  const roles = (await repairPublishedRoleIds((await listRoles()).filter((role) => rowOrganizationId(role) === organizationId))).filter((role) => !isArchivedRole(role as unknown as Record<string, unknown>));
+  const roles = (await repairPublishedRoleIds(await listRoles(undefined, organizationId))).filter((role) => !isArchivedRole(role as unknown as Record<string, unknown>));
   const visible = options.liveOnly
     ? roles.filter((role) => ["approved", "recruitment_setup", "job_posted"].includes(text(role.status).toLowerCase()))
     : roles;
@@ -218,7 +218,7 @@ export async function targetPublicRoleSummaries(options: { liveOnly?: boolean } 
 
 export async function targetRoleDetails(externalId: string, organizationId = ""): Promise<RoleRequestDetails | null> {
   const targetOrg = organizationId || await targetOrganizationId();
-  const roles = await repairPublishedRoleIds((await listRoles()).filter((role) => rowOrganizationId(role) === targetOrg));
+  const roles = await repairPublishedRoleIds(await listRoles(undefined, targetOrg));
   const role = roles.find((candidate) => text(candidate.externalId).toLowerCase() === decodeURIComponent(externalId).trim().toLowerCase());
   if (!role) return null;
   const raw = role as unknown as Record<string, unknown>;
@@ -744,42 +744,51 @@ async function targetCreateApplicationInTenant(input: { externalId: string; role
   const result = await createApplication({ externalId: input.externalId, roleExternalId: input.roleId, applicantEmail: input.email, applicantName: input.candidateName, phone: input.phone, preferredMobile: input.preferredMobile, applicantCountry: input.applicantCountry, source: input.source, sourceDetail: input.sourceDetail, consentAt: input.consentAt, creditOwnerEmail: input.creditOwnerEmail, resumeFileId: resumeFileId || undefined });
   if (!result.application) throw new Error(result.error || "Unable to create the application.");
   if (input.resume) {
-    const queued = await enqueueBulkScreening({
-      applicationExternalId: result.application.externalId,
-      roleExternalId: input.roleId,
-      dedupeKey: result.application.externalId,
-      resumeSha256: input.resume.sha256,
-      driveFileId: input.resume.fileId,
-      filename: input.resume.fileName,
-      mimeType: input.resume.mimeType,
-      candidateName: input.candidateName,
-      candidateEmail: input.email,
-      preferredMobile: input.preferredMobile,
-      applicantCountry: input.applicantCountry,
-      source: "upload",
-      environment: "pilot",
-      isUat: true,
-    });
-    if (queued.error) throw new Error(queued.error);
-    const screeningReused = !queued.created && queued.item?.status === "screened" && Boolean(queued.item.applicationId)
-      ? await copyScreeningResult({
-        sourceApplicationId: queued.item.applicationId as string,
-        targetApplicationId: result.application.id,
-        ledger: {
-          type: "Deduction",
-          event: "cv_analysis",
-          units: 1,
-          creditsDelta: -(await creditCostFor("cv_analysis")),
-          reference: result.application.externalId,
-          roleId: input.roleId,
-          actorName: "",
-          actorEmail: input.creditOwnerEmail || "",
-          note: "Postgres target reused resume screening",
-          sourceEntryId: `LDG-${crypto.createHash("sha256").update(`cv:${result.application.externalId}`).digest("hex")}`,
-        },
-      })
-      : false;
-    return { ...result, screeningQueued: queued.created, screeningQueueCreated: queued.created, screeningReused };
+    try {
+      const queued = await enqueueBulkScreening({
+        applicationExternalId: result.application.externalId,
+        roleExternalId: input.roleId,
+        dedupeKey: result.application.externalId,
+        resumeSha256: input.resume.sha256,
+        driveFileId: input.resume.fileId,
+        filename: input.resume.fileName,
+        mimeType: input.resume.mimeType,
+        candidateName: input.candidateName,
+        candidateEmail: input.email,
+        preferredMobile: input.preferredMobile,
+        applicantCountry: input.applicantCountry,
+        source: "upload",
+        environment: "pilot",
+        isUat: true,
+      });
+      if (queued.error) throw new Error(queued.error);
+      const screeningReused = !queued.created && queued.item?.status === "screened" && Boolean(queued.item.applicationId)
+        ? await copyScreeningResult({
+          sourceApplicationId: queued.item.applicationId as string,
+          targetApplicationId: result.application.id,
+          ledger: {
+            type: "Deduction",
+            event: "cv_analysis",
+            units: 1,
+            creditsDelta: -(await creditCostFor("cv_analysis")),
+            reference: result.application.externalId,
+            roleId: input.roleId,
+            actorName: "",
+            actorEmail: input.creditOwnerEmail || "",
+            note: "Postgres target reused resume screening",
+            sourceEntryId: `LDG-${crypto.createHash("sha256").update(`cv:${result.application.externalId}`).digest("hex")}`,
+          },
+        })
+        : false;
+      return { ...result, screeningQueued: queued.created, screeningQueueCreated: queued.created, screeningReused };
+    } catch (error) {
+      // The Drive object is cleaned up by the API boundary. Remove the newly
+      // created database record as well, so a transient queue failure cannot
+      // leave an application that has no screening path. Never delete an
+      // existing application returned by an idempotent replay.
+      if (result.created) await deleteApplication(result.application.externalId).catch(() => undefined);
+      throw error;
+    }
   }
   return { ...result, screeningQueued: false, screeningQueueCreated: false, screeningReused: false };
 }

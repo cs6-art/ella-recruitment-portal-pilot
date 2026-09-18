@@ -1,6 +1,7 @@
 import { internalJson, readInternalJson, withInternalAuth } from "@/lib/internal-api-http";
 import { normalizeRequestType, record, requiredString } from "@/lib/internal-recruitment-http";
 import { createRole, getRole, listRoles, updateRoleDetails } from "@/lib/internal-recruitment-queries";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,7 +14,8 @@ export const GET = withInternalAuth("roles", async (request) => {
     if (!role) return internalJson({ ok: false, error: "unknown_role" }, 404);
     return internalJson({ ok: true, migrated: true, role });
   }
-  return internalJson({ ok: true, migrated: true, items: await listRoles(params.get("status") || undefined) });
+  const organizationId = request.headers.get("x-organization-id")?.trim() || DEFAULT_ORGANIZATION_ID;
+  return internalJson({ ok: true, migrated: true, items: await listRoles(params.get("status") || undefined, organizationId) });
 });
 
 export const POST = withInternalAuth("roles", async (request) => {

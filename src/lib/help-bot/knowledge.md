@@ -10,8 +10,11 @@ Rules for the assistant:
 - Only answer using the information in this file.
 - If the answer is not covered here, say you don't know and suggest contacting HR
   or the portal administrator.
-- This assistant is informational only. It cannot see candidate records, resumes,
-  scores, calendars, or any live portal data, and it cannot perform actions.
+- This assistant is informational only. It can report the signed-in user's
+  organisation-wide Smile Credits balance and, for pipeline users, aggregate
+  queue and interview counts through approved live checks. It cannot see
+  candidate records, resumes, scores, calendars, or other live business data,
+  and it cannot perform actions.
 
 ---
 
@@ -52,8 +55,10 @@ by the organization's access boundary. A user only sees the organization tied to
 their signed-in account.
 
 **What does Smile know about me?** Smile can explain the signed-in account's access
-role, department, and permissions. She cannot look up candidate records, resume
-files, applicant scores, calendars, balances, or other live business records.
+role, department, and permissions. When asked, she can report the organisation's
+current Smile Credits balance and, for pipeline users, aggregate bulk-queue or
+interview counts. She cannot look up candidate records, resume files, applicant
+scores, calendars, or other live business records.
 
 **What is the current bulk screening limit?** The current Pilot limit is
 {{BULK_FILE_LIMIT}} files per batch, with PDF, DOC, and DOCX accepted up to
@@ -306,9 +311,9 @@ final decision.
 
 ## How Google Drive import works
 
-Current launch limit: select no more than 6 files per bulk submission across
-local upload, Google Drive, and OneDrive. Older 8-file measurements are
-historical validation evidence, not the current limit.
+Current launch limit: select no more than {{BULK_FILE_LIMIT}} files per bulk submission across
+local upload, Google Drive, and OneDrive. This is the same limit enforced by
+the portal's upload, Drive, and OneDrive controls.
 
 If your team uses the shared Google Drive resume folder, first connect Google
 Drive (HR uses "Connect Google Drive"; this uses a read-only permission). Then in
@@ -326,7 +331,7 @@ OneDrive is the third cloud option for HR resume screening. It uses a separate
 Microsoft 365 connection and read-only file access; it does not use Google Drive
 credentials. In **Resume Screening**, select **Connect OneDrive**, complete the
 Microsoft sign-in, then choose **Choose from OneDrive** and import the files for a
-published role. The same 8-file limit, 10 MB limit, accepted file types, queue,
+published role. The same {{BULK_FILE_LIMIT}}-file limit, 10 MB limit, accepted file types, queue,
 duplicate handling, statuses, and one-credit-per-successful-file rule apply.
 
 If the OneDrive buttons are hidden, Microsoft Entra configuration has not been
@@ -466,9 +471,9 @@ Credits panel or contact the portal administrator.
 ## Who can access what: HR, Management, HOD, and Creator
 
 The portal shows only the actions a person is allowed to use. Access is built from
-five permissions: submit and track role requests; review HR setup and applicants
-and manage interview operations; approve or reject management-stage decisions;
-edit portal settings; and manage user accounts.
+explicit permissions: submit and track role requests; review HR setup and
+applicants and manage interview operations; approve or reject management-stage
+decisions; edit portal settings; manage user accounts; and manage Smile Credits.
 
 - **Creator / Requester** — creates staffing requests and follows the requests
   they submitted. Usually sees Dashboard, Role Requests, and Profile. Does not
@@ -486,8 +491,10 @@ edit portal settings; and manage user accounts.
   scoped to their own department. May also be given the ability to create
   requests. Does not manage the company-wide pipeline unless HR grants more
   access.
-- **Administrator** — manages user accounts and permissions and, where
-  authorized, shared settings and the interview calendar connection.
+- **Administrator / HR access administrator** — manages user accounts and
+  permissions and, where authorized, shared settings and the interview calendar
+  connection. The Admin starting preset is for Smile Credits only; HR grants any
+  additional capabilities explicitly.
 
 Settings and the connected interview Google account are visible read-only to
 every signed-in user, but only an administrator (or a specifically trusted HR

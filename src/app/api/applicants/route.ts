@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     }
 
     const roleId = parsed.data.roleId.trim();
-    const role = isPostgresRecruitmentTarget() ? await targetRoleDetails(roleId) : await getRoleRequestById(roleId);
+    const role = isPostgresRecruitmentTarget() ? await targetRoleDetails(roleId, user.organizationId) : await getRoleRequestById(roleId);
     if (!role || !isPublishedRoleForIntake(role)) {
       return responseError("The selected role is not available for manual candidate intake.", 409);
     }

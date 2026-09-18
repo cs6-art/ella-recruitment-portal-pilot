@@ -304,7 +304,7 @@ export async function POST(request: Request) {
 
     if (isPostgresRecruitmentTarget()) {
       const submissionId = crypto.randomUUID();
-      const roleId = generateRoleId(input.jobTitle, (await listRoles()).map((role) => String(role.externalId)));
+      const roleId = generateRoleId(input.jobTitle, (await listRoles(undefined, user.organizationId)).map((role) => String(role.externalId)));
       const setupDraft = input.recruitmentSetupDraft || {};
       const setup = {
         jobDescription: input.jobDescription,

@@ -29,6 +29,7 @@ type AppShellUser = {
 
 type AppShellProps = { user: AppShellUser; children: React.ReactNode };
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "mclink.sidebar.collapsed";
+const DEFAULT_BRANDING = { name: "mcprint", subtitle: "Recruitment Portal" };
 
 function getInitials(name?: string, email?: string) {
   const source = name?.trim() || email?.trim() || "User";
@@ -43,7 +44,8 @@ export default function AppShell({ user, children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarPreferenceLoaded, setSidebarPreferenceLoaded] = useState(false);
-  const userName = user.name?.trim() || "McLink User";
+  const [branding, setBranding] = useState(DEFAULT_BRANDING);
+  const userName = user.name?.trim() || "mcprint User";
   const userEmail = user.email?.trim() || "";
   const initials = getInitials(userName, userEmail);
   const showRoleRequests = user.canReviewRole === true || user.canApproveRole === true || user.canCreateRole === true || user.canReviewDepartmentRole === true;
@@ -71,6 +73,31 @@ export default function AppShell({ user, children }: AppShellProps) {
   const closeSidebar = () => setSidebarOpen(false);
 
   useEffect(() => {
+    let cancelled = false;
+    const loadBranding = () => {
+      void fetch("/api/organization/branding", { credentials: "same-origin", cache: "no-store" })
+        .then(async (response) => {
+          const data = await response.json();
+          if (!response.ok || data.success !== true || !data.branding || cancelled) return;
+          setBranding({
+            name: String(data.branding.name || DEFAULT_BRANDING.name).trim() || DEFAULT_BRANDING.name,
+            subtitle: String(data.branding.subtitle || DEFAULT_BRANDING.subtitle).trim() || DEFAULT_BRANDING.subtitle,
+          });
+        })
+        .catch(() => {
+          // The shell remains usable with the safe local fallback when the
+          // branding endpoint is unavailable during a first deployment.
+        });
+    };
+    loadBranding();
+    window.addEventListener("portal-branding-updated", loadBranding);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("portal-branding-updated", loadBranding);
+    };
+  }, []);
+
+  useEffect(() => {
     const savedPreference = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
     if (savedPreference === "true") setSidebarCollapsed(true);
     if (savedPreference === "true") document.documentElement.dataset.sidebarCollapsed = "true";
@@ -91,7 +118,7 @@ export default function AppShell({ user, children }: AppShellProps) {
       <aside id="portal-navigation" className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ""} ${sidebarCollapsed ? styles.sidebarCollapsed : ""}`} aria-label="Portal navigation">
         <div className={styles.sidebarTop}>
           <Link href="/dashboard" className={styles.brand} onClick={closeSidebar}>
-            <span className={styles.brandIcon}>M</span><span><strong>McLink</strong><small>Recruitment Portal</small></span>
+            <span className={styles.brandIcon}>{branding.name.slice(0, 1).toUpperCase()}</span><span><strong>{branding.name}</strong><small>{branding.subtitle}</small></span>
           </Link>
           <button type="button" className={styles.closeButton} onClick={closeSidebar} aria-label="Close navigation"><UiIcon name="close" /></button>
         </div>
@@ -130,7 +157,7 @@ export default function AppShell({ user, children }: AppShellProps) {
       </aside>
 
       <div className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ""}`}>
-        <header className={styles.mobileHeader}><Link href="/dashboard" className={styles.mobileBrand} onClick={closeSidebar}><span className={styles.brandIcon}>M</span><strong>McLink Recruitment Portal</strong></Link><div className={styles.mobileHeaderActions}><EllaCreditsMeter variant="mobile" /><button type="button" className={styles.menuButton} onClick={() => setSidebarOpen(true)} aria-expanded={sidebarOpen} aria-controls="portal-navigation"><UiIcon name="menu" /><span>Menu</span></button></div></header>
+        <header className={styles.mobileHeader}><Link href="/dashboard" className={styles.mobileBrand} onClick={closeSidebar}><span className={styles.brandIcon}>{branding.name.slice(0, 1).toUpperCase()}</span><strong>{branding.name} {branding.subtitle}</strong></Link><div className={styles.mobileHeaderActions}><EllaCreditsMeter variant="mobile" /><button type="button" className={styles.menuButton} onClick={() => setSidebarOpen(true)} aria-expanded={sidebarOpen} aria-controls="portal-navigation"><UiIcon name="menu" /><span>Menu</span></button></div></header>
         {/* Single instance: absolutely positioned on desktop, a slim right-aligned
             row on mobile. Rendering it twice would double the poll traffic. */}
         {showApplicants && <div className={styles.topBar}><NewApplicantsBell userEmail={userEmail} /></div>}

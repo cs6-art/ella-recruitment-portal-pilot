@@ -36,3 +36,10 @@ test("target manual intake charges fresh screening results in the worker and reu
   assert.match(applicants, /queued for CV analysis/);
   assert.match(applicants, /creditsCharged: reused \? await creditCostFor\("cv_analysis"\) : 0/);
 });
+
+test("target manual intake does not leave an unqueueable application after handoff failure", () => {
+  const portal = read("src/lib/recruitment-target-portal.ts");
+  const applicants = read("src/app/api/applicants/route.ts");
+  assert.match(portal, /if \(result\.created\) await deleteApplication\(result\.application\.externalId\)/);
+  assert.match(applicants, /targetRoleDetails\(roleId, user\.organizationId\)/);
+});

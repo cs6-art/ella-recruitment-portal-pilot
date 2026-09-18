@@ -208,7 +208,7 @@ export async function POST(
     if (action === "submit_draft_for_hr" && role.roleId.startsWith("DRAFT-")) {
       try {
         const existingRoles = isPostgresRecruitmentTarget()
-          ? (await listRoles()).map((existingRole) => ({ roleId: String(existingRole.externalId) }))
+          ? (await listRoles(undefined, user.organizationId)).map((existingRole) => ({ roleId: String(existingRole.externalId) }))
           : await getRoleRequests();
         const renamedRoleId = generateRoleId(role.jobTitle, existingRoles.map((existingRole) => existingRole.roleId));
         if (isPostgresRecruitmentTarget()) {
