@@ -1,21 +1,17 @@
 /**
  * Pilot outbound-email safety switch.
  *
- * The Postgres-backed portal currently uses pilot n8n workflows. Keep email
- * delivery disabled for that target so a stale or newly-created queue row
- * cannot send another `[PILOT]` message. This is intentionally hard-disabled
- * for the Postgres target until those workflows are retired; an environment
- * override must not be able to re-enable the messages.
+ * The Postgres-backed portal uses the target n8n notification workflow. Keep
+ * that path fail-closed when the explicit pilot flag is absent, while still
+ * allowing the reviewed deployment setting to enable delivery.
  */
 export function pilotOutboundEmailEnabled() {
   const backend = process.env.RECRUITMENT_BACKEND?.trim().toLowerCase();
-  if (backend === "postgres") return false;
-
   const configured = process.env.PILOT_OUTBOUND_EMAIL_ENABLED?.trim().toLowerCase();
   if (configured === "true") return true;
   if (configured === "false") return false;
 
-  return true;
+  return backend !== "postgres";
 }
 
 export const PILOT_OUTBOUND_EMAIL_DISABLED_MESSAGE =

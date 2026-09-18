@@ -58,7 +58,7 @@ function bookingInvitationStatus(input: { tokenLink: string; notificationStatus:
   if (input.isScheduled) return "Booking link used";
   switch (input.notificationStatus.trim().toLowerCase()) {
     case "sent": return "Booking link sent";
-    case "pending": return "Booking link pending";
+    case "pending": return "Booking email queued";
     case "failed": return "Booking email failed — retry pending";
     case "not_configured": return "Booking email not configured";
     default: return input.tokenLink ? "Booking link not sent" : "Booking link not created";

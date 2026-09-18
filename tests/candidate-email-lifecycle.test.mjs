@@ -159,7 +159,7 @@ test("HR booking cards expose invitation delivery separately from booking state"
   const query = read("src/lib/internal-recruitment-queries.ts");
   assert.match(page, /Booking Link Email/);
   assert.match(page, /Booking link sent/);
-  assert.match(page, /Booking link pending/);
+  assert.match(page, /Booking email queued/);
   assert.match(page, /Booking email failed/);
   assert.match(target, /getApplicationBookingNotification\(externalId, "final"\)/);
   assert.match(query, /final_booking_invitation/);
@@ -179,13 +179,13 @@ test("notification queue claims rows atomically to prevent overlapping duplicate
   assert.match(route, /recruitment_target_not_enabled/);
 });
 
-test("pilot outbound email is fail-closed for the Postgres target", () => {
+test("pilot outbound email is explicitly gated for the Postgres target", () => {
   const policy = read("src/lib/pilot-email-policy.ts");
   const invite = read("src/lib/application-invite-email.ts");
   const labels = read("src/lib/notification-labels.ts");
   const query = read("src/lib/internal-recruitment-queries.ts");
   assert.match(policy, /PILOT_OUTBOUND_EMAIL_ENABLED/);
-  assert.match(policy, /if \(backend === "postgres"\) return false/);
+  assert.match(policy, /return backend !== "postgres"/);
   assert.match(invite, /PILOT_OUTBOUND_EMAIL_DISABLED_MESSAGE/);
   assert.match(labels, /if \(!pilotOutboundEmailEnabled\(\)\) return null/);
   assert.match(query, /if \(!pilotOutboundEmailEnabled\(\)\) return \[\]/);

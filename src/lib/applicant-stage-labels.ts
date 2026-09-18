@@ -77,7 +77,7 @@ export function historyStageLabel(value: string | null | undefined) {
 const HISTORY_SOURCE_LABELS: Record<string, string> = {
   "internal_api": "System update",
   "internal_api:booking": "Interview booked",
-  "internal_api:voice_booking_invitation": "Booking invitation sent to candidate",
+  "internal_api:voice_booking_invitation": "Booking invitation queued",
   "internal_api:voice_result": "Voice interview result recorded",
   "internal_api:hr_decision": "Decision recorded by HR",
   "portal_postgres_target": "System update",
