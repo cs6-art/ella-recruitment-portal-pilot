@@ -11,6 +11,7 @@ import NewApplicantsBell, { useNewApplicantFeed } from "./NewApplicantsBell";
 import { ConfirmationProvider } from "./ConfirmationModal";
 import styles from "./AppShell.module.css";
 import { canAdministerAccess } from "@/lib/access-control";
+import { usePortalBranding } from "./PortalBrandingContext";
 
 type AppShellUser = {
   name?: string;
@@ -29,7 +30,6 @@ type AppShellUser = {
 
 type AppShellProps = { user: AppShellUser; children: React.ReactNode };
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "mclink.sidebar.collapsed";
-const DEFAULT_BRANDING = { name: "McLink", subtitle: "Recruitment Portal" };
 
 function getInitials(name?: string, email?: string) {
   const source = name?.trim() || email?.trim() || "User";
@@ -44,7 +44,7 @@ export default function AppShell({ user, children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarPreferenceLoaded, setSidebarPreferenceLoaded] = useState(false);
-  const [branding, setBranding] = useState(DEFAULT_BRANDING);
+  const branding = usePortalBranding();
   const userName = user.name?.trim() || "McLink User";
   const userEmail = user.email?.trim() || "";
   const initials = getInitials(userName, userEmail);
@@ -71,31 +71,6 @@ export default function AppShell({ user, children }: AppShellProps) {
   const isUserAccounts = pathname === "/user-accounts";
   const isRoleRequestArea = pathname === "/roles" || (pathname.startsWith("/roles/") && pathname !== "/roles/new");
   const closeSidebar = () => setSidebarOpen(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadBranding = () => {
-      void fetch("/api/organization/branding", { credentials: "same-origin", cache: "no-store" })
-        .then(async (response) => {
-          const data = await response.json();
-          if (!response.ok || data.success !== true || !data.branding || cancelled) return;
-          setBranding({
-            name: String(data.branding.name || DEFAULT_BRANDING.name).trim() || DEFAULT_BRANDING.name,
-            subtitle: String(data.branding.subtitle || DEFAULT_BRANDING.subtitle).trim() || DEFAULT_BRANDING.subtitle,
-          });
-        })
-        .catch(() => {
-          // The shell remains usable with the safe local fallback when the
-          // branding endpoint is unavailable during a first deployment.
-        });
-    };
-    loadBranding();
-    window.addEventListener("portal-branding-updated", loadBranding);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("portal-branding-updated", loadBranding);
-    };
-  }, []);
 
   useEffect(() => {
     const savedPreference = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
