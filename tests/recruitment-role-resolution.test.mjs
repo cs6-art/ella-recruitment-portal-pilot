@@ -51,7 +51,7 @@ test("legacy Sheets mode remains the resolver fallback", () => {
 
 test("public Postgres role details use the role's own active tenant", () => {
   const target = read("src/lib/recruitment-target-portal.ts");
-  assert.match(target, /const role = await getRole\(normalizedExternalId\)/);
-  assert.match(target, /activeOrganizations\.includes\(role\.organizationId\)/);
-  assert.match(target, /targetRoleDetails\(normalizedExternalId, role\.organizationId\)/);
+  assert.match(target, /for \(const organizationId of activeOrganizations\)/);
+  assert.match(target, /getRole\(normalizedExternalId, organizationId\)/);
+  assert.match(target, /targetRoleDetails\(normalizedExternalId, organizationId\)/);
 });

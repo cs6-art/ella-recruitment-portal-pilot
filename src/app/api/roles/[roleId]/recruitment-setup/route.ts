@@ -114,7 +114,7 @@ export async function POST(request: Request, context: Context) {
       if (isPostgresRecruitmentTarget() && publishedRoleId.startsWith("DRAFT-")) {
         const existingRoles = await listRoles(undefined, user.organizationId);
         const nextRoleId = generateRoleId(role.jobTitle, existingRoles.map((existingRole) => String(existingRole.externalId)));
-        const renamed = await renameRoleExternalId({ currentExternalId: publishedRoleId, nextExternalId: nextRoleId, actorEmail: user.email });
+        const renamed = await renameRoleExternalId({ currentExternalId: publishedRoleId, nextExternalId: nextRoleId, organizationId: user.organizationId, actorEmail: user.email });
         if (!renamed.renamed) return NextResponse.json({ success: false, error: renamed.error === "role_id_conflict" ? "The generated role ID is already in use. Refresh and try again." : "The published role ID could not be repaired.", code: renamed.error }, { status: renamed.error === "unknown_role" ? 404 : 409 });
         publishedRoleId = nextRoleId;
       }

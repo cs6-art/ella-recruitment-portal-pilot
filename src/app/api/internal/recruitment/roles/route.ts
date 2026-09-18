@@ -8,13 +8,13 @@ export const dynamic = "force-dynamic";
 
 export const GET = withInternalAuth("roles", async (request) => {
   const params = new URL(request.url).searchParams;
+  const organizationId = request.headers.get("x-organization-id")?.trim() || DEFAULT_ORGANIZATION_ID;
   const externalId = params.get("externalId")?.trim();
   if (externalId) {
-    const role = await getRole(externalId);
+    const role = await getRole(externalId, organizationId);
     if (!role) return internalJson({ ok: false, error: "unknown_role" }, 404);
     return internalJson({ ok: true, migrated: true, role });
   }
-  const organizationId = request.headers.get("x-organization-id")?.trim() || DEFAULT_ORGANIZATION_ID;
   return internalJson({ ok: true, migrated: true, items: await listRoles(params.get("status") || undefined, organizationId) });
 });
 
@@ -24,6 +24,7 @@ export const POST = withInternalAuth("roles", async (request) => {
     return Boolean(item && requiredString(item.externalId) && requiredString(item.title));
   });
   if (!body) return internalJson({ ok: false, error: "externalId_and_title_required" }, 422);
+  const organizationId = request.headers.get("x-organization-id")?.trim() || DEFAULT_ORGANIZATION_ID;
   const requestType = normalizeRequestType(body.requestType);
   if (requestType === null) return internalJson({ ok: false, error: "invalid_request_type" }, 422);
   const result = await createRole({
@@ -34,6 +35,7 @@ export const POST = withInternalAuth("roles", async (request) => {
     source: typeof body.source === "string" ? body.source : undefined, requesterEmail: typeof body.requesterEmail === "string" ? body.requesterEmail : undefined,
     requesterName: typeof body.requesterName === "string" ? body.requesterName : undefined, actionRequestId: typeof body.actionRequestId === "string" ? body.actionRequestId : undefined,
     actorEmail: typeof body.actorEmail === "string" ? body.actorEmail : undefined, actorName: typeof body.actorName === "string" ? body.actorName : undefined,
+    organizationId,
   });
   if (!result.role) return internalJson({ ok: false, error: "role_create_failed" }, 409);
   return internalJson({ ok: true, migrated: true, created: result.created, role: result.role }, result.created ? 201 : 200);
@@ -45,8 +47,9 @@ export const PATCH = withInternalAuth("roles", async (request) => {
     return Boolean(item && requiredString(item.externalId) && requiredString(item.actorEmail));
   });
   if (!body) return internalJson({ ok: false, error: "externalId_and_actorEmail_required" }, 422);
+  const organizationId = request.headers.get("x-organization-id")?.trim() || DEFAULT_ORGANIZATION_ID;
   const result = await updateRoleDetails({
-    externalId: String(body.externalId), actorEmail: String(body.actorEmail),
+    externalId: String(body.externalId), organizationId, actorEmail: String(body.actorEmail),
     title: typeof body.title === "string" ? body.title : undefined, code: body.code === null || typeof body.code === "string" ? body.code : undefined,
     departmentSnapshot: typeof body.departmentSnapshot === "string" ? body.departmentSnapshot : undefined, requestType: typeof body.requestType === "string" ? body.requestType : undefined,
     vacancies: typeof body.vacancies === "number" ? body.vacancies : undefined, reason: typeof body.reason === "string" ? body.reason : undefined,

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import ApplicantLiveRefresh from "@/components/ApplicantLiveRefresh";
 import { useConfirmation } from "@/components/ConfirmationModal";
 import type { ApplicantMetrics, ApplicantSummary } from "@/lib/candidate-applications";
 import Pagination from "@/components/Pagination";
@@ -113,6 +114,7 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
   // Opening Applicants records the current visit as the viewed watermark.
   // Applicants arriving after that timestamp remain highlighted during this visit.
   const [seenWatermark, setSeenWatermark] = useState<number | null>(null);
+  const hasPendingScreening = applicants.some((applicant) => !applicant.isHistoricalDemo && applicant.resumeStatus.trim().toLowerCase() !== "processed");
 
   useEffect(() => {
     const seenAt = Date.now();
@@ -291,7 +293,9 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
   }
 
   return (
-    <main className="container page applicants-page">
+    <>
+      <ApplicantLiveRefresh enabled={hasPendingScreening} intervalMs={5_000} throttleMs={5_000} />
+      <main className="container page applicants-page">
       <div className="hero-row applicants-header">
         <div>
           <h1>{title}</h1>
@@ -356,6 +360,7 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
         )}
         {visibleApplicants.length > 0 && <Pagination page={page} totalPages={totalPages} totalItems={visibleApplicants.length} displayTotalItems={matchingApplicantCount} pageSize={pageSize} onPageChange={setPage} />}
       </section>
-    </main>
+      </main>
+    </>
   );
 }

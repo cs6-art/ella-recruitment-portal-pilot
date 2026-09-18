@@ -53,7 +53,7 @@ export async function intakeTargetResumeBatch(input: {
       const bytes = await source.getBytes();
       if (bytes.length > MAX_RESUME_FILE_BYTES) throw new Error("Resume files must be 10 MB or smaller.");
       const sourceSha256 = crypto.createHash("sha256").update(bytes).digest("hex");
-      const existingQueue = await findBulkQueueByRoleAndSha(input.roleId, sourceSha256);
+      const existingQueue = await findBulkQueueByRoleAndSha(input.roleId, sourceSha256, input.organizationId);
       if (existingQueue) {
         results.push({ fileName: source.name, status: "Skipped", skipped: true, message: "This resume is already queued or processed for this role." });
         continue;
@@ -93,6 +93,7 @@ export async function intakeTargetResumeBatch(input: {
         preferredMobile: contact.preferredMobile,
         applicantCountry: contact.applicantCountry,
         roleExternalId: input.roleId,
+        organizationId: input.organizationId,
         source: input.sourceLabel.toLowerCase().includes("drive") ? "drive_import" : "bulk_upload",
         sourceDetail: `${source.driveFileId || stored.record.fileId}|${stored.record.sha256}`,
         resumeFileId: resumeFileId || undefined,
@@ -109,6 +110,7 @@ export async function intakeTargetResumeBatch(input: {
       stage = "queue_persistence";
       const queued = await enqueueBulkScreening({
         roleExternalId: input.roleId,
+        organizationId: input.organizationId,
         applicationExternalId: applicationId,
         batchId,
         dedupeKey: queueId,

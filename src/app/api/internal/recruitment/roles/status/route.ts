@@ -11,7 +11,7 @@ export const POST = withInternalAuth("roles", async (request) => {
     return Boolean(item && requiredString(item.externalId) && requiredString(item.newStatus) && requiredString(item.actionRequestId));
   });
   if (!body) return internalJson({ ok: false, error: "externalId_newStatus_actionRequestId_required" }, 422);
-  const result = await updateRoleStatus({ externalId: String(body.externalId), newStatus: String(body.newStatus), actionRequestId: String(body.actionRequestId), actorEmail: typeof body.actorEmail === "string" ? body.actorEmail : undefined, actorName: typeof body.actorName === "string" ? body.actorName : undefined, comments: typeof body.comments === "string" ? body.comments : undefined });
+  const result = await updateRoleStatus({ externalId: String(body.externalId), organizationId: request.headers.get("x-organization-id")?.trim() || undefined, newStatus: String(body.newStatus), actionRequestId: String(body.actionRequestId), actorEmail: typeof body.actorEmail === "string" ? body.actorEmail : undefined, actorName: typeof body.actorName === "string" ? body.actorName : undefined, comments: typeof body.comments === "string" ? body.comments : undefined });
   if (result.error === "unknown_role") return internalJson({ ok: false, error: result.error }, 404);
   if (result.error) return internalJson({ ok: false, error: result.error }, 422);
   return internalJson({ ok: true, migrated: true, updated: result.updated, duplicate: result.duplicate || false });

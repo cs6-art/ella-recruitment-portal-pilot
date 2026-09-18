@@ -185,7 +185,7 @@ test("pilot outbound email is fail-closed for the Postgres target", () => {
   const labels = read("src/lib/notification-labels.ts");
   const query = read("src/lib/internal-recruitment-queries.ts");
   assert.match(policy, /PILOT_OUTBOUND_EMAIL_ENABLED/);
-  assert.match(policy, /!== "postgres"/);
+  assert.match(policy, /if \(backend === "postgres"\) return false/);
   assert.match(invite, /PILOT_OUTBOUND_EMAIL_DISABLED_MESSAGE/);
   assert.match(labels, /if \(!pilotOutboundEmailEnabled\(\)\) return null/);
   assert.match(query, /if \(!pilotOutboundEmailEnabled\(\)\) return \[\]/);

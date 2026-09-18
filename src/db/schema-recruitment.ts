@@ -74,8 +74,8 @@ export const roles = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     organizationId: uuid("organization_id").notNull().references(() => organizations.id),
-    externalId: text("external_id").notNull().unique(),
-    code: text("code").unique(),
+    externalId: text("external_id").notNull(),
+    code: text("code"),
     title: text("title").notNull().default(""),
     departmentId: uuid("department_id").references(() => departments.id),
     departmentSnapshot: text("department_snapshot").notNull().default(""),
@@ -111,6 +111,8 @@ export const roles = pgTable(
     index("roles_department_id_idx").on(t.departmentId),
     index("roles_requester_email_idx").on(t.requesterEmail),
     index("roles_created_at_idx").on(t.createdAt),
+    uniqueIndex("roles_organization_external_id_uidx").on(t.organizationId, t.externalId),
+    uniqueIndex("roles_organization_code_uidx").on(t.organizationId, t.code),
   ],
 );
 

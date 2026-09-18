@@ -212,7 +212,7 @@ export async function POST(
           : await getRoleRequests();
         const renamedRoleId = generateRoleId(role.jobTitle, existingRoles.map((existingRole) => existingRole.roleId));
         if (isPostgresRecruitmentTarget()) {
-          const renamed = await renameRoleExternalId({ currentExternalId: role.roleId, nextExternalId: renamedRoleId, actorEmail: user.email });
+          const renamed = await renameRoleExternalId({ currentExternalId: role.roleId, nextExternalId: renamedRoleId, organizationId: user.organizationId, actorEmail: user.email });
           if (!renamed.renamed) return jsonError(renamed.error === "role_id_conflict" ? "The generated role ID is already in use. Refresh and try again." : "The role ID could not be promoted from its draft ID.", renamed.error === "unknown_role" ? 404 : 409, { code: renamed.error });
         } else {
           await updateRoleRequestFields(role.roleId, { Role_ID: renamedRoleId });
@@ -264,7 +264,7 @@ export async function POST(
       const normalizedSource = transition.source.map((source) => source.toLowerCase().replace(/\s+/g, "_"));
       if (!normalizedSource.includes(normalizedCurrent)) return jsonError("The role status has changed since the page was loaded.", 409, { code: "STATUS_CONFLICT", currentStatus: role.status });
       const targetStatus = transition.target.toLowerCase().replace(/\s+/g, "_");
-      const result = await updateRoleStatus({ externalId: role.roleId, newStatus: targetStatus, actorEmail: user.email, actorName: user.name, comments, actionRequestId });
+      const result = await updateRoleStatus({ externalId: role.roleId, organizationId: user.organizationId, newStatus: targetStatus, actorEmail: user.email, actorName: user.name, comments, actionRequestId });
       if (!result.updated && !("duplicate" in result && result.duplicate)) return jsonError(result.error === "invalid_transition" ? "The role status has changed since the page was loaded." : "The role status could not be updated.", result.error === "unknown_role" ? 404 : 409, { code: result.error });
       return NextResponse.json({ success: true, roleId: role.roleId, previousStatus: role.status, status: transition.target, action, notificationStatus: "pending", actionRequestId, idempotentReplay: "duplicate" in result && result.duplicate === true });
     }

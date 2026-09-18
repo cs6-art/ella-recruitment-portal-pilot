@@ -302,20 +302,18 @@ export async function targetRoleDetails(externalId: string, organizationId = "")
 }
 
 /** Resolve a public job link without inheriting the default tenant from an
- * absent HR session. The role external ID is globally unique, and the role's
- * own tenant is then used for all downstream application writes. */
+ * absent HR session. Public links may use the same readable role ID in
+ * different organizations, so search each active tenant and keep the matched
+ * organization's context for all downstream application writes. */
 export async function targetPublicRoleDetails(externalId: string): Promise<RoleRequestDetails | null> {
   const normalizedExternalId = decodeURIComponent(externalId).trim();
   if (!normalizedExternalId) return null;
-  // Resolve the role first, then carry its own tenant through the detailed
-  // read. Public catalogue pages span active organizations, so deriving the
-  // tenant from the current HR session (or relying on an iteration order)
-  // can make a valid cross-organization application link return 404.
-  const role = await getRole(normalizedExternalId);
-  if (!role) return null;
   const activeOrganizations = await activeTenantOrganizationIds();
-  if (!activeOrganizations.includes(role.organizationId)) return null;
-  return runWithTenantDatabase(role.organizationId, () => targetRoleDetails(normalizedExternalId, role.organizationId));
+  for (const organizationId of activeOrganizations) {
+    const role = await runWithTenantDatabase(organizationId, () => getRole(normalizedExternalId, organizationId));
+    if (role) return runWithTenantDatabase(organizationId, () => targetRoleDetails(normalizedExternalId, organizationId));
+  }
+  return null;
 }
 
 function isArchivedRole(role: Record<string, unknown>) {
@@ -334,7 +332,7 @@ async function repairPublishedRoleIds(sourceRoles: Awaited<ReturnType<typeof lis
       continue;
     }
     const nextExternalId = generateRoleId(text(role.title), usedIds);
-    const result = await renameRoleExternalId({ currentExternalId: externalId, nextExternalId, actorEmail: "system:published-role-id-repair" });
+    const result = await renameRoleExternalId({ currentExternalId: externalId, nextExternalId, organizationId: text(role.organizationId), actorEmail: "system:published-role-id-repair" });
     if (result.renamed) {
       usedIds.push(nextExternalId);
       repaired.push({ ...role, externalId: nextExternalId });
@@ -346,7 +344,7 @@ async function repairPublishedRoleIds(sourceRoles: Awaited<ReturnType<typeof lis
 }
 
 export async function targetRoleStatusHistory(externalId: string) {
-  const rows = await listRoleStatusHistory(externalId);
+  const rows = await listRoleStatusHistory(externalId, await targetOrganizationId());
   return rows.map(({ history, roleExternalId }) => ({
     historyId: history.id,
     roleId: roleExternalId,
@@ -424,7 +422,7 @@ async function targetBookingContextInTenant(kind: "voice" | "final", tokenHash: 
   const role = await targetRoleDetails(roleId, rowOrganizationId(token.token));
   const matching = slots.map(({ slot }) => bookingSlot(slot as unknown as Record<string, unknown>, roleId)).filter((slot) => text(slot.interviewType).toLowerCase().includes(targetType));
   const currentSlot = matching.find((slot) => ["booked", "completed", "no show"].includes(text(slot.status).toLowerCase()));
-  const availableRows = (await listBookingSlots(targetType, roleId)).filter((value) => rowOrganizationId(((value as { slot?: unknown }).slot || value)) === rowOrganizationId(token.token));
+  const availableRows = await listBookingSlots(targetType, roleId, rowOrganizationId(token.token));
   const persistedAvailable = availableRows
     .map((value) => bookingSlot(((value as { slot?: unknown }).slot || value) as Record<string, unknown>, roleId))
     .filter((slot) => isBeforeTargetHiringDate(slot.date, row.roleTargetHiringDate || undefined))
@@ -622,7 +620,7 @@ export async function targetCreateInterviewSlot(input: { slotCode?: string; role
     return { slot: null, created: false, error: "invalid_slot" as const };
   }
   if (input.interviewType === "Final Interview") {
-    const role = await getRole(input.roleId);
+    const role = await getRole(input.roleId, await targetOrganizationId());
     if (!role) return { slot: null, created: false, error: "unknown_role" as const };
     if (!["approved", "recruitment_setup", "job_posted"].includes(text(role.status).toLowerCase())) return { slot: null, created: false, error: "role_not_ready" as const };
     if (!isFinalInterviewSlotDuration({ interviewType: input.interviewType, startTime: input.startTime, endTime: input.endTime })) return { slot: null, created: false, error: "invalid_final_slot" as const };
@@ -633,7 +631,7 @@ export async function targetCreateInterviewSlot(input: { slotCode?: string; role
     if (!calendar.checked) return { slot: null, created: false, error: calendar.reason === "not_connected" ? "calendar_not_connected" as const : "calendar_unavailable" as const };
     if (!calendar.available) return { slot: null, created: false, error: "calendar_conflict" as const };
   }
-  return createInterviewSlot({ slotCode: input.slotCode, roleExternalId: input.roleId, interviewType: input.interviewType.toLowerCase().includes("voice") ? "voice" : "final", startsAt, endsAt, timezone: input.timezone });
+  return createInterviewSlot({ slotCode: input.slotCode, roleExternalId: input.roleId, organizationId: await targetOrganizationId(), interviewType: input.interviewType.toLowerCase().includes("voice") ? "voice" : "final", startsAt, endsAt, timezone: input.timezone });
 }
 
 export async function targetUpdateApplicantProfile(input: { applicationId: string; candidateName: string; email: string; preferredMobile: string; applicantCountry: string }) {
@@ -721,7 +719,7 @@ export async function targetSendVoiceBookingInvitation(input: { applicationId: s
 
 export async function targetCreateScreeningInvitation(input: { roleId: string; candidateEmail: string; createdBy: string; expiresAt?: string; organizationId?: string }) {
   const token = crypto.randomBytes(32).toString("hex");
-  const create = () => createScreeningInvitation({ roleExternalId: input.roleId, tokenHash: crypto.createHash("sha256").update(token).digest("hex"), email: input.candidateEmail, createdBy: input.createdBy, expiresAt: input.expiresAt });
+  const create = () => createScreeningInvitation({ roleExternalId: input.roleId, tokenHash: crypto.createHash("sha256").update(token).digest("hex"), email: input.candidateEmail, createdBy: input.createdBy, expiresAt: input.expiresAt, organizationId: input.organizationId });
   const result = input.organizationId?.trim() ? await runWithTenantDatabase(input.organizationId, create) : await create();
   if (!result.invitation) throw new Error(result.error || "Unable to create screening invitation.");
   return { invitationId: result.invitation.id, token, expiresAt: result.invitation.expiresAt?.toISOString() || "" };
@@ -735,19 +733,20 @@ export async function targetCreateApplication(input: { externalId: string; roleI
 }
 
 async function targetCreateApplicationInTenant(input: { externalId: string; roleId: string; candidateName: string; email: string; phone: string; preferredMobile: string; applicantCountry: string; source: string; sourceDetail?: string; consentAt?: string; creditOwnerEmail?: string; organizationId?: string; resume?: { fileId: string; fileName: string; mimeType: string; size: number; sha256: string; kind: string; expiresAt: string; extractedText?: string } }) {
-  const role = await getRole(input.roleId);
+  const role = await getRole(input.roleId, input.organizationId || await targetOrganizationId());
   const roleOrganizationId = rowOrganizationId(role);
   if (!role || !roleOrganizationId) throw new Error("Unable to resolve the application role organization.");
   if (input.organizationId?.trim() && input.organizationId.trim() !== roleOrganizationId) throw new Error("application_role_belongs_to_another_organization");
   const organizationId = roleOrganizationId;
   const resumeFileId = input.resume ? await registerResumeFile({ storageRef: input.resume.fileId, sha256: input.resume.sha256, filename: input.resume.fileName, mimeType: input.resume.mimeType, size: input.resume.size, kind: input.resume.kind, expiresAt: input.resume.expiresAt, extractedText: input.resume.extractedText, organizationId }) : null;
-  const result = await createApplication({ externalId: input.externalId, roleExternalId: input.roleId, applicantEmail: input.email, applicantName: input.candidateName, phone: input.phone, preferredMobile: input.preferredMobile, applicantCountry: input.applicantCountry, source: input.source, sourceDetail: input.sourceDetail, consentAt: input.consentAt, creditOwnerEmail: input.creditOwnerEmail, resumeFileId: resumeFileId || undefined });
+  const result = await createApplication({ externalId: input.externalId, roleExternalId: input.roleId, applicantEmail: input.email, applicantName: input.candidateName, phone: input.phone, preferredMobile: input.preferredMobile, applicantCountry: input.applicantCountry, source: input.source, sourceDetail: input.sourceDetail, consentAt: input.consentAt, creditOwnerEmail: input.creditOwnerEmail, resumeFileId: resumeFileId || undefined, organizationId });
   if (!result.application) throw new Error(result.error || "Unable to create the application.");
   if (input.resume) {
     try {
       const queued = await enqueueBulkScreening({
         applicationExternalId: result.application.externalId,
         roleExternalId: input.roleId,
+        organizationId,
         dedupeKey: result.application.externalId,
         resumeSha256: input.resume.sha256,
         driveFileId: input.resume.fileId,
@@ -875,6 +874,7 @@ export async function targetUpdateRoleFields(roleId: string, fields: Record<stri
   try { if (fields.Evaluation_Fields) evaluationFields = JSON.parse(fields.Evaluation_Fields); } catch { evaluationFields = []; }
   return updateRoleDetails({
     externalId: roleId,
+    organizationId: await targetOrganizationId(),
     status: normalizeTargetRoleStatus(fields.Status) || (["true", "1", "yes"].includes(text(fields.Posting_Confirmed).toLowerCase()) ? "job_posted" : undefined),
     title: fields.Job_Title,
     departmentSnapshot: fields.Department,
@@ -918,7 +918,7 @@ function normalizeTargetRoleStatus(value?: string) {
 }
 
 export async function targetArchiveRole(roleId: string, actor: { email: string; name?: string }) {
-  return archiveRole({ externalId: roleId, actorEmail: actor.email, actorName: actor.name, actionRequestId: `archive:${roleId}` });
+  return archiveRole({ externalId: roleId, organizationId: await targetOrganizationId(), actorEmail: actor.email, actorName: actor.name, actionRequestId: `archive:${roleId}` });
 }
 
 type TargetApplicationRow = Awaited<ReturnType<typeof listApplications>>[number];
@@ -955,13 +955,13 @@ export async function targetApplicantSummaries() {
   // Repair legacy/partial intake rows before reading the portal pipeline so a
   // stored resume cannot remain permanently outside the screening worker.
   await reconcileMissingTargetScreeningQueue(organizationId);
-  const rows = (await listApplications()).filter((row) => rowOrganizationId(row.application) === organizationId);
+  const rows = await listApplications(undefined, undefined, organizationId);
   return rows.map(targetApplicantSummary);
 }
 
 export async function targetRecentApplicantSummaries(department = "") {
   const organizationId = await targetOrganizationId();
-  const rows = (await listRecentApplications(department || undefined, 50)).filter((row) => rowOrganizationId(row.application) === organizationId);
+  const rows = await listRecentApplications(department || undefined, 50, organizationId);
   return rows.map(targetApplicantSummary);
 }
 
@@ -1153,7 +1153,7 @@ export async function targetApplicantDetails(externalId: string) {
 
 export async function targetActiveBookingLinkRoleIds() {
   const organizationId = await targetOrganizationId();
-  const rows = (await listActiveBookingRoleIds()).filter((row) => rowOrganizationId(row) === organizationId);
+  const rows = await listActiveBookingRoleIds(organizationId);
   return {
     voice: rows.filter((row) => row.kind === "voice").map((row) => text(row.roleExternalId)),
     final: rows.filter((row) => row.kind === "final").map((row) => text(row.roleExternalId)),
@@ -1162,7 +1162,7 @@ export async function targetActiveBookingLinkRoleIds() {
 
 export async function targetBulkResumeQueue(roleExternalId = "") {
   const organizationId = await targetOrganizationId();
-  const rows = (await listBulkQueueForPortal(undefined, roleExternalId || undefined)).filter((row) => rowOrganizationId(row.item) === organizationId);
+  const rows = await listBulkQueueForPortal(undefined, roleExternalId || undefined, organizationId);
   return rows.map(({ item, roleExternalId: roleId, applicationExternalId }) => ({
     dedupeKey: text(item.dedupeKey) || text(item.driveFileId),
     driveFileId: text(item.driveFileId), driveFileName: text(item.filename), driveFileUrl: text(item.fileUrl), roleId: text(roleId),
@@ -1174,14 +1174,14 @@ export async function targetBulkResumeQueue(roleExternalId = "") {
 
 export async function targetAppendBulkResumeQueue(event: { driveFileId: string; roleId: string; status: string; driveFileName?: string; driveFileUrl?: string; driveFileMimeType?: string; candidateName?: string; candidateEmail?: string; applicationId?: string; errorMessage?: string; discoveredAt?: string; processingStartedAt?: string; processedAt?: string; attemptCount?: string; lastUpdated?: string; environment?: string; isUat?: boolean; batchId?: string; jobId?: string; resumeSha256?: string }) {
   const resumeSha256 = text(event.resumeSha256) || crypto.createHash("sha256").update(event.driveFileId).digest("hex");
-  const result = await enqueueBulkScreening({ roleExternalId: event.roleId, dedupeKey: event.driveFileId, resumeSha256, driveFileId: event.driveFileId, filename: event.driveFileName || event.driveFileId, fileUrl: event.driveFileUrl, mimeType: event.driveFileMimeType, candidateName: event.candidateName, candidateEmail: event.candidateEmail, environment: event.environment, isUat: event.isUat, batchId: event.batchId, jobId: event.jobId, source: "upload" });
+  const result = await enqueueBulkScreening({ roleExternalId: event.roleId, organizationId: await targetOrganizationId(), dedupeKey: event.driveFileId, resumeSha256, driveFileId: event.driveFileId, filename: event.driveFileName || event.driveFileId, fileUrl: event.driveFileUrl, mimeType: event.driveFileMimeType, candidateName: event.candidateName, candidateEmail: event.candidateEmail, environment: event.environment, isUat: event.isUat, batchId: event.batchId, jobId: event.jobId, source: "upload" });
   if (!result.item) throw new Error(result.error || "Unable to save target bulk queue item.");
   return { created: result.created, item: result.item };
 }
 
 export async function targetBookings() {
   const organizationId = await targetOrganizationId();
-  const rows = (await listBookingSlots()).filter((row) => rowOrganizationId(((row as { slot?: unknown }).slot || row)) === organizationId);
+  const rows = await listBookingSlots(undefined, undefined, organizationId);
   return rows.map((row) => {
     const slot = (row as { slot?: Record<string, unknown> }).slot || row as unknown as Record<string, unknown>;
     const timezone = text(slot.timezone) || "Asia/Singapore";
