@@ -39,7 +39,7 @@ export default async function Home({ searchParams }: HomePageProps) {
     <main className="login-page">
       <section className="login-card">
         <div className="login-hero">
-          <span className="eyebrow">Internal recruitment system</span>
+          <span className="eyebrow">Recruitment Portal</span>
           <h1>Start every hire with the right role.</h1>
           <p>Create a staff addition or replacement request, align the job requirements with HR, and get HR approval before recruitment begins.</p>
           <div className="steps-preview">

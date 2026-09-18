@@ -7,7 +7,7 @@ import ActionFeedback from "@/components/ActionFeedback";
 type Branding = { name: string; subtitle: string };
 
 export default function OrganizationBrandingEditor() {
-  const [branding, setBranding] = useState<Branding>({ name: "McPrint", subtitle: "Recruitment Portal" });
+  const [branding, setBranding] = useState<Branding>({ name: "McLink", subtitle: "Recruitment Portal" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");

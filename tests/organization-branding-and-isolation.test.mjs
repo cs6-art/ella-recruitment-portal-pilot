@@ -16,8 +16,10 @@ test("organization branding is tenant-scoped and editable only through Settings 
   assert.match(shell, /fetch\("\/api\/organization\/branding"/);
   assert.match(shell, /portal-branding-updated/);
   assert.match(settingsPage, /OrganizationBrandingEditor/);
-  assert.match(branding, /name: "McPrint"/);
-  assert.match(shell, /name: "McPrint"/);
+  assert.match(branding, /name: "McLink"/);
+  assert.match(branding, /DEFAULT_ORGANIZATION_ID/);
+  assert.match(branding, /organizations\.name/);
+  assert.match(shell, /name: "McLink"/);
 });
 
 test("role IDs are allocated from the signed-in organization's roles", () => {

@@ -29,7 +29,7 @@ type AppShellUser = {
 
 type AppShellProps = { user: AppShellUser; children: React.ReactNode };
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "mclink.sidebar.collapsed";
-const DEFAULT_BRANDING = { name: "McPrint", subtitle: "Recruitment Portal" };
+const DEFAULT_BRANDING = { name: "McLink", subtitle: "Recruitment Portal" };
 
 function getInitials(name?: string, email?: string) {
   const source = name?.trim() || email?.trim() || "User";
@@ -45,7 +45,7 @@ export default function AppShell({ user, children }: AppShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarPreferenceLoaded, setSidebarPreferenceLoaded] = useState(false);
   const [branding, setBranding] = useState(DEFAULT_BRANDING);
-  const userName = user.name?.trim() || "McPrint User";
+  const userName = user.name?.trim() || "McLink User";
   const userEmail = user.email?.trim() || "";
   const initials = getInitials(userName, userEmail);
   const showRoleRequests = user.canReviewRole === true || user.canApproveRole === true || user.canCreateRole === true || user.canReviewDepartmentRole === true;

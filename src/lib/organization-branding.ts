@@ -1,10 +1,12 @@
 import { and, eq } from "drizzle-orm";
 
+import { organizations } from "@/db/schema";
 import { getTenantDb } from "@/db/client";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { portalSettings } from "@/db/schema-recruitment";
 
 export const DEFAULT_ORGANIZATION_BRANDING = {
-  name: "McPrint",
+  name: "McLink",
   subtitle: "Recruitment Portal",
 } as const;
 
@@ -16,6 +18,16 @@ function clean(value: unknown, fallback: string, maxLength: number) {
   return normalized || fallback;
 }
 
+async function defaultOrganizationName(organizationId: string) {
+  if (organizationId === DEFAULT_ORGANIZATION_ID) return DEFAULT_ORGANIZATION_BRANDING.name;
+  const rows = await getTenantDb()
+    .select({ name: organizations.name })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
+    .limit(1);
+  return clean(rows[0]?.name, DEFAULT_ORGANIZATION_BRANDING.name, 80);
+}
+
 export async function getOrganizationBranding(organizationId: string) {
   const rows = await getTenantDb()
     .select({ key: portalSettings.key, value: portalSettings.value })
@@ -25,14 +37,15 @@ export async function getOrganizationBranding(organizationId: string) {
     .select({ value: portalSettings.value })
     .from(portalSettings)
     .where(and(eq(portalSettings.organizationId, organizationId), eq(portalSettings.key, SUBTITLE_KEY)));
+  const fallbackName = await defaultOrganizationName(organizationId);
   return {
-    name: clean(rows[0]?.value, DEFAULT_ORGANIZATION_BRANDING.name, 80),
+    name: clean(rows[0]?.value, fallbackName, 80),
     subtitle: clean(subtitleRows[0]?.value, DEFAULT_ORGANIZATION_BRANDING.subtitle, 80),
   };
 }
 
 export async function saveOrganizationBranding(input: { organizationId: string; name: string; subtitle: string; updatedBy: string }) {
-  const name = clean(input.name, DEFAULT_ORGANIZATION_BRANDING.name, 80);
+  const name = clean(input.name, await defaultOrganizationName(input.organizationId), 80);
   const subtitle = clean(input.subtitle, DEFAULT_ORGANIZATION_BRANDING.subtitle, 80);
   const db = getTenantDb();
   await db
