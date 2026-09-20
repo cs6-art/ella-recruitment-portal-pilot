@@ -57,6 +57,9 @@ test("application invitations can send email and lock the invited identity", () 
   assert.match(emailSender, /N8N_APPLICATION_INVITE_EMAIL_TARGET_WEBHOOK_URL/);
   assert.match(emailSender, /N8N_Application_Invite_Email_Target_Webhook_URL/);
   assert.match(emailSender, /application_invite_email_requested/);
+  assert.match(emailSender, /AI Interview Notice: This interview will be conducted with the assistance of an AI interviewing system/);
+  const inviteWorkflow = read("integrations/n8n/application-invite-email.json");
+  assert.match(inviteWorkflow, /AI Interview Notice:<\/strong> This interview will be conducted with the assistance of an AI interviewing system/);
   assert.match(candidatePage, /candidateNameField\.readOnly = true/);
   assert.match(candidatePage, /candidateEmailField\.readOnly = true/);
 });

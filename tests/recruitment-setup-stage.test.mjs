@@ -73,20 +73,23 @@ test("voice interview availability is not part of Recruitment Setup", async () =
   // The availability library remains available to the Bookings workflow for
   // legacy roles; it is no longer exposed in the setup editor.
   assert.match(route, /Voice_Interview_Availability_Mode/);
-  assert.match(voiceAvailability, /9 \* 60/);
+  assert.match(voiceAvailability, /for \(let start = 0/);
 
   const { generateAutomaticVoiceInterviewSlots } = await import("../src/lib/voice-interview-availability.ts");
   const slots = generateAutomaticVoiceInterviewSlots({ startDate: "2026-08-17", endDate: "2026-08-17", timezone: "Asia/Singapore", durationMinutes: 30 });
-  assert.equal(slots.length, 16);
-  assert.deepEqual(slots[0], { date: "2026-08-17", startTime: "09:00", endTime: "09:30", timezone: "Asia/Singapore" });
-  assert.deepEqual(slots.at(-1), { date: "2026-08-17", startTime: "16:30", endTime: "17:00", timezone: "Asia/Singapore" });
+  assert.equal(slots.length, 47);
+  assert.deepEqual(slots[0], { date: "2026-08-17", startTime: "00:00", endTime: "00:30", timezone: "Asia/Singapore" });
+  assert.deepEqual(slots.at(-1), { date: "2026-08-17", startTime: "23:00", endTime: "23:30", timezone: "Asia/Singapore" });
 });
 
-test("voice booking defaults to weekday ten-minute availability and creates only future slots", async () => {
+test("voice booking defaults to all-day, every-day ten-minute availability and creates only future slots", async () => {
   const { generateAutomaticVoiceInterviewSlots } = await import("../src/lib/voice-interview-availability.ts");
   const slots = generateAutomaticVoiceInterviewSlots({ startDate: "2026-08-17", endDate: "2026-08-17", timezone: "Asia/Singapore" });
-  assert.equal(slots.length, 48);
-  assert.deepEqual(slots.at(-1), { date: "2026-08-17", startTime: "16:50", endTime: "17:00", timezone: "Asia/Singapore" });
+  assert.equal(slots.length, 143);
+  assert.deepEqual(slots[0], { date: "2026-08-17", startTime: "00:00", endTime: "00:10", timezone: "Asia/Singapore" });
+  assert.deepEqual(slots.at(-1), { date: "2026-08-17", startTime: "23:40", endTime: "23:50", timezone: "Asia/Singapore" });
+  const weekendSlots = generateAutomaticVoiceInterviewSlots({ startDate: "2026-08-16", endDate: "2026-08-16", timezone: "Asia/Singapore" });
+  assert.equal(weekendSlots.length, 143);
   const availabilityRules = fs.readFileSync("src/lib/interview-availability-rules.ts", "utf8");
   assert.match(availabilityRules, /DEFAULT-VOICE-/);
   assert.match(availabilityRules, /slotDurationMinutes: 10/);
@@ -108,12 +111,6 @@ test("voice booking defaults to weekday ten-minute availability and creates only
   assert.deepEqual(finalSlots[1], { date: "2026-08-20", startTime: "11:00", endTime: "12:00", timezone: "Asia/Singapore" });
   assert.deepEqual(finalSlots[2], { date: "2026-08-20", startTime: "13:00", endTime: "14:00", timezone: "Asia/Singapore" });
   assert.deepEqual(finalSlots.at(-1), { date: "2026-08-20", startTime: "15:00", endTime: "16:00", timezone: "Asia/Singapore" });
-});
-
-test("August 20 demo voice slots may extend through midnight only", () => {
-  const availabilityRules = fs.readFileSync("src/lib/interview-availability-rules.ts", "utf8");
-  assert.match(availabilityRules, /slot\.date === "2026-08-20" \? 24 \* 60 : 17 \* 60/);
-  assert.match(availabilityRules, /end <= latestEnd && end - start === 10/);
 });
 
 test("setup action status is synchronized for legacy and canonical n8n payload readers", () => {

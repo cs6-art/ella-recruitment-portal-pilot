@@ -48,6 +48,9 @@ function weekday(value: string) {
   return new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
 }
 
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+const DAY_END_MINUTES = 24 * 60;
+
 function minutesToTime(value: number) {
   return `${Math.floor(value / 60).toString().padStart(2, "0")}:${(value % 60).toString().padStart(2, "0")}`;
 }
@@ -60,8 +63,11 @@ export function generateAutomaticVoiceInterviewSlots({ startDate, endDate, timez
   if (!Number.isInteger(durationMinutes) || durationMinutes < 5 || durationMinutes > 240) throw new Error("Voice interview duration must be between 5 and 240 minutes.");
   const slots: VoiceInterviewSlot[] = [];
   for (let date = startDate; date <= endDate; date = addDays(date, 1)) {
-    if (![1, 2, 3, 4, 5].includes(weekday(date))) continue;
-    for (let start = 9 * 60; start + durationMinutes <= 17 * 60; start += durationMinutes) {
+    if (!ALL_DAYS.includes(weekday(date))) continue;
+    // Keep every generated end time within the same calendar date. A slot
+    // ending at 24:00 becomes the next date when persisted as a timestamp,
+    // which makes the slot ambiguous when it is read back from storage.
+    for (let start = 0; start + durationMinutes < DAY_END_MINUTES; start += durationMinutes) {
       slots.push({ date, startTime: minutesToTime(start), endTime: minutesToTime(start + durationMinutes), timezone });
     }
   }

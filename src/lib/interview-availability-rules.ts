@@ -171,20 +171,20 @@ export function ruleToSlots(rule: InterviewAvailabilityRule, maxDays = 180): Voi
   if (rule.mode === "specific") {
     return rule.specificSlots.filter((slot) => isCurrentCalendarMonth(slot.date, slot.timezone));
   }
-  // AI voice interviews use one consistent weekday window so every role has
-  // predictable ten-minute times and the candidate calendar stays simple.
+  // AI voice interviews are available throughout the day, every day, in
+  // predictable ten-minute times. HR interviews retain their office rules.
   const isVoiceInterview = rule.interviewType === "AI Voice Interview";
   const isFinalInterview = rule.interviewType === "Final Interview";
   const duration = isVoiceInterview ? 10 : isFinalInterview ? 60 : Number.isInteger(rule.slotDurationMinutes) && rule.slotDurationMinutes >= 5 ? rule.slotDurationMinutes : 30;
-  // Voice screening is available 09:00–17:00 in ten-minute slots. HR
-  // interviews use 10:00–16:00 one-hour slots, with 12:00–13:00 reserved for
-  // lunch. Keep these windows centralized so every role follows the same
-  // booking policy, including legacy rules.
-  const startTime = isVoiceInterview ? 9 * 60 : isFinalInterview ? 10 * 60 : minutes(rule.startTime);
-  const endTime = isVoiceInterview ? 17 * 60 : isFinalInterview ? 16 * 60 : minutes(rule.endTime);
+  // Voice screening uses the whole local day. The strict inequality below
+  // keeps the final slot's end time at 23:50 rather than serializing a
+  // cross-date 24:00. HR interviews use 10:00–16:00 one-hour slots, with
+  // 12:00–13:00 reserved for lunch.
+  const startTime = isVoiceInterview ? 0 : isFinalInterview ? 10 * 60 : minutes(rule.startTime);
+  const endTime = isVoiceInterview ? 24 * 60 : isFinalInterview ? 16 * 60 : minutes(rule.endTime);
   // HR interviews are weekday-only even when an older saved rule contains
-  // weekend values; the shared calendar must never offer Saturday/Sunday slots.
-  const weekdays = isVoiceInterview || isFinalInterview ? [1, 2, 3, 4, 5] : rule.weekdays;
+  // weekend values; voice interviews intentionally run on all seven days.
+  const weekdays = isVoiceInterview ? [0, 1, 2, 3, 4, 5, 6] : isFinalInterview ? [1, 2, 3, 4, 5] : rule.weekdays;
   const result: VoiceInterviewSlot[] = [];
   const end = addDays(rule.startDate, Math.min(maxDays, 180));
   const monthLimited = isVoiceInterview || isFinalInterview;
@@ -194,7 +194,7 @@ export function ruleToSlots(rule: InterviewAvailabilityRule, maxDays = 180): Voi
   const lastDate = [rule.endDate, end, monthLimit].sort()[0];
   for (let date = firstDate; date <= lastDate; date = addDays(date, 1)) {
     if (!weekdays.includes(weekday(date))) continue;
-    for (let start = startTime; start + duration <= endTime; start += duration) {
+    for (let start = startTime; start + duration <= endTime - (isVoiceInterview ? 1 : 0); start += duration) {
       if (isFinalInterview && start === 12 * 60) continue;
       result.push({ date, startTime: time(start), endTime: time(start + duration), timezone: rule.timezone });
     }
@@ -227,7 +227,7 @@ export function roleAvailabilityRules(
     const startDate = configuredStart > today ? configuredStart : today;
     const configuredEnd = DATE.test(role.voiceInterviewAutoEndDate || "") ? role.voiceInterviewAutoEndDate || "" : "";
     const endDate = configuredEnd >= startDate ? configuredEnd : monthEnd(today);
-    rules.push({ ruleId: `DEFAULT-VOICE-${role.roleId}`, roleId: role.roleId, interviewType: "AI Voice Interview", mode: "recurring", startDate, endDate, weekdays: [1, 2, 3, 4, 5], startTime: "09:00", endTime: "17:00", slotDurationMinutes: 10, timezone, specificSlots: [], status: "Active" });
+    rules.push({ ruleId: `DEFAULT-VOICE-${role.roleId}`, roleId: role.roleId, interviewType: "AI Voice Interview", mode: "recurring", startDate, endDate, weekdays: [0, 1, 2, 3, 4, 5, 6], startTime: "00:00", endTime: "23:59", slotDurationMinutes: 10, timezone, specificSlots: [], status: "Active" });
   }
   const finalTimezone = "Asia/Singapore";
   const today = todayInTimezone(finalTimezone);
@@ -260,11 +260,9 @@ export function isStandardVoiceInterviewSlot(slot: { interviewType: string; date
   if (!slot.interviewType.toLowerCase().includes("voice")) return true;
   const start = minutes(slot.startTime);
   const end = minutes(slot.endTime);
-  // The August 20 client-demo schedule was explicitly extended through
-  // midnight. Keep this exception date-scoped so every later day continues
-  // to use the standard 09:00-17:00 voice-interview window.
-  const latestEnd = slot.date === "2026-08-20" ? 24 * 60 : 17 * 60;
-  return start >= 9 * 60 && end <= latestEnd && end - start === 10;
+  // Voice screening can be booked on any day and at any ten-minute time
+  // within the local calendar day.
+  return start >= 0 && end <= 24 * 60 - 1 && end - start === 10;
 }
 export function isStandardFinalInterviewSlot(slot: { interviewType: string; startTime: string; endTime: string }) {
   if (!slot.interviewType.toLowerCase().includes("final")) return true;

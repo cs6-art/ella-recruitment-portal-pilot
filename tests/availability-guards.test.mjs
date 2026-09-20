@@ -12,7 +12,7 @@ const workflow = fs.readFileSync("src/lib/applicant-workflow.ts", "utf8");
 const instrumentation = fs.readFileSync("src/instrumentation.ts", "utf8");
 const styles = fs.readFileSync("src/app/globals.css", "utf8");
 
-test("availability rules reject overlapping weekday windows and deduplicate legacy reads", () => {
+test("availability rules reject overlapping windows and deduplicate legacy reads", () => {
   assert.match(rules, /"Completed", "No Show", "Cancelled"/);
   assert.match(rules, /export function availabilityRulesOverlap/);
   assert.match(rules, /left\.weekdays\.some/);
@@ -23,7 +23,7 @@ test("availability rules reject overlapping weekday windows and deduplicate lega
   assert.match(rules, /startTime: "10:00"/);
   assert.match(rules, /endTime: "16:00"/);
   assert.match(rules, /start === 12 \* 60/);
-  assert.match(rules, /isVoiceInterview \|\| isFinalInterview \? \[1, 2, 3, 4, 5\]/);
+  assert.match(rules, /const weekdays = isVoiceInterview \? \[0, 1, 2, 3, 4, 5, 6\]/);
   assert.match(rules, /export function isTargetHiringDateOverdue/);
   assert.match(bookings, /Target hiring date overdue/);
   assert.match(bookings, /is-target-overdue/);
@@ -67,6 +67,14 @@ test("HR exception drawer keeps error states inside the viewport", () => {
   assert.match(styles, /\.booking-drawer-body \{[^}]*overflow-x: hidden/);
   assert.match(styles, /\.booking-drawer \.schedule-time-row \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(styles, /@media \(max-width: 520px\)[\s\S]*\.booking-drawer-footer \.btn \{ width: 100%; \}/);
+});
+
+test("HR exception saves update the client calendar immediately", () => {
+  assert.match(bookings, /function bookingFromSavedException/);
+  assert.match(bookings, /data\.slot/);
+  assert.match(bookings, /setBookings\(\(current\) =>/);
+  assert.match(bookings, /HR exception slot saved and added to the calendar/);
+  assert.match(bookings, /router\.refresh\(\)/);
 });
 
 test("calendar counter uses configured windows and recruitment setup is editable from role details", () => {
