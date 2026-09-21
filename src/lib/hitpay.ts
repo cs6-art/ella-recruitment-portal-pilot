@@ -107,10 +107,6 @@ export async function createPaymentRequest(input: {
     redirect_url: input.redirectUrl,
     purpose: input.purpose || "Smile Credits top-up",
     send_email: "false",
-    metadata: JSON.stringify({
-      internal_order_id: input.referenceNumber,
-      webhook_url: input.webhookUrl,
-    }),
   });
   if (input.email) body.set("email", input.email);
   if (input.name) body.set("name", input.name);
