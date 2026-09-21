@@ -57,3 +57,38 @@ export function bookingLink(baseUrl: string, kind: "voice" | "final", token: str
 export function avatarInterviewLink(baseUrl: string, token: string) {
   return `${baseUrl.replace(/\/$/, "")}/avatar/${encodeURIComponent(token)}`;
 }
+
+/**
+ * Build the public application URL for a role. Postgres role IDs are scoped
+ * to an organization, so the organization context is part of the public
+ * link whenever it is available.
+ */
+export function publicApplicationLink(baseUrl: string, roleId: string, organizationId = "") {
+  const path = `/apply/${encodeURIComponent(roleId)}`;
+  const organization = organizationId.trim();
+  const suffix = organization ? `?organizationId=${encodeURIComponent(organization)}` : "";
+  return `${baseUrl.replace(/\/$/, "")}${path}${suffix}`;
+}
+
+/**
+ * Preserve an existing stored application URL while adding or correcting its
+ * tenant query parameter. This also upgrades links saved before tenant-local
+ * role IDs were introduced.
+ */
+export function applicationLinkWithOrganization(link: string, roleId: string, organizationId = "") {
+  const fallback = publicApplicationLink("", roleId, organizationId);
+  const cleanLink = link.trim() || fallback;
+  const organization = organizationId.trim();
+  if (!organization) return cleanLink;
+
+  try {
+    const absolute = /^[a-z][a-z\d+.-]*:\/\//i.test(cleanLink);
+    const parsed = new URL(cleanLink, "https://mclink.invalid");
+    parsed.searchParams.set("organizationId", organization);
+    const value = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    return absolute ? `${parsed.origin}${value}` : value;
+  } catch {
+    const separator = cleanLink.includes("?") ? "&" : "?";
+    return `${cleanLink}${separator}organizationId=${encodeURIComponent(organization)}`;
+  }
+}

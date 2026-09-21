@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const candidateName = String(form.get("candidateName") || "").trim();
     const file = form.get("resumeFile");
     if (!roleId || !candidateName || !(file instanceof File)) return NextResponse.json({ success: false, error: "Choose a resume and enter your full name first." }, { status: 422 });
-    const role = await resolvePublishedRecruitmentRole(roleId);
+    const role = await resolvePublishedRecruitmentRole(roleId, user.organizationId);
     if (!role) return NextResponse.json({ success: false, error: "This role is not currently accepting applications." }, { status: 404 });
     const resumeText = await extractResumeText(file);
     const preparation = prepareLiveAvatarScreening({ roleTitle: role.jobTitle, roleDescription: role.jobDescription || "", resumeText });

@@ -52,6 +52,7 @@ import { generateRoleId } from "@/lib/role-id";
 import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows } from "@/lib/google-calendar";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isFinalInterviewSlotDuration, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { getPortalConfigNumber } from "@/lib/portal-config";
+import { applicationLinkWithOrganization } from "@/lib/public-url";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { runWithTenantDatabase } from "@/lib/tenant-database";
@@ -211,7 +212,12 @@ export async function targetPublicRoleSummaries(options: { liveOnly?: boolean } 
   const summaries = [];
   for (const organizationId of await activeTenantOrganizationIds()) {
     const rows = await runWithTenantDatabase(organizationId, () => targetRoleSummariesForOrganization(organizationId, options));
-    summaries.push(...rows);
+    summaries.push(...rows.map((role) => ({
+      ...role,
+      // Older published rows may contain a link without tenant context. Add
+      // it at read time so those links are safe before HR republishes them.
+      applicationLink: applicationLinkWithOrganization(role.applicationLink || "", role.roleId, role.organizationId || organizationId),
+    })));
   }
   return summaries;
 }
@@ -301,19 +307,39 @@ export async function targetRoleDetails(externalId: string, organizationId = "")
   };
 }
 
-/** Resolve a public job link without inheriting the default tenant from an
- * absent HR session. Public links may use the same readable role ID in
- * different organizations, so search each active tenant and keep the matched
- * organization's context for all downstream application writes. */
-export async function targetPublicRoleDetails(externalId: string): Promise<RoleRequestDetails | null> {
-  const normalizedExternalId = decodeURIComponent(externalId).trim();
+/**
+ * Resolve a public job link without inheriting the default tenant from an
+ * absent HR session. Role IDs are tenant-local, so an explicit organization
+ * context is preferred. Legacy links without that context are only accepted
+ * when exactly one active organization owns the ID; ambiguous links fail
+ * closed instead of routing an application to the wrong tenant.
+ */
+export async function targetPublicRoleDetails(externalId: string, organizationId = ""): Promise<RoleRequestDetails | null> {
+  let normalizedExternalId = "";
+  let normalizedOrganizationId = "";
+  try {
+    normalizedExternalId = decodeURIComponent(externalId).trim();
+    normalizedOrganizationId = decodeURIComponent(organizationId).trim();
+  } catch {
+    return null;
+  }
   if (!normalizedExternalId) return null;
   const activeOrganizations = await activeTenantOrganizationIds();
-  for (const organizationId of activeOrganizations) {
-    const role = await runWithTenantDatabase(organizationId, () => getRole(normalizedExternalId, organizationId));
-    if (role) return runWithTenantDatabase(organizationId, () => targetRoleDetails(normalizedExternalId, organizationId));
+  if (normalizedOrganizationId) {
+    const matchedOrganization = activeOrganizations.find((candidate) => candidate.toLowerCase() === normalizedOrganizationId.toLowerCase());
+    if (!matchedOrganization) return null;
+    const role = await runWithTenantDatabase(matchedOrganization, () => getRole(normalizedExternalId, matchedOrganization));
+    return role ? runWithTenantDatabase(matchedOrganization, () => targetRoleDetails(normalizedExternalId, matchedOrganization)) : null;
   }
-  return null;
+
+  const matches: Array<{ organizationId: string; role: Awaited<ReturnType<typeof getRole>> }> = [];
+  for (const candidateOrganizationId of activeOrganizations) {
+    const role = await runWithTenantDatabase(candidateOrganizationId, () => getRole(normalizedExternalId, candidateOrganizationId));
+    if (role) matches.push({ organizationId: candidateOrganizationId, role });
+  }
+  if (matches.length !== 1) return null;
+  const match = matches[0];
+  return runWithTenantDatabase(match.organizationId, () => targetRoleDetails(normalizedExternalId, match.organizationId));
 }
 
 function isArchivedRole(role: Record<string, unknown>) {
@@ -803,7 +829,7 @@ export async function targetGetScreeningInvitation(token: string) {
   const expiresAt = row.invitation.expiresAt;
   const expired = Boolean(expiresAt && expiresAt.getTime() < Date.now());
   const valid = row.invitation.status === "active" && !expired;
-  return { invitationId: row.invitation.id, roleId: row.roleExternalId, roleTitle: row.roleTitle, candidateName: "", candidateEmail: row.invitation.email, status: row.invitation.status, applicationId: "", expiresAt: expiresAt?.toISOString() || "", valid, reason: valid ? undefined : expired ? "expired" as const : row.invitation.status === "used" ? "used" as const : "invalid" as const };
+  return { invitationId: row.invitation.id, roleId: row.roleExternalId, organizationId: row.invitation.organizationId, roleTitle: row.roleTitle, candidateName: "", candidateEmail: row.invitation.email, status: row.invitation.status, applicationId: "", expiresAt: expiresAt?.toISOString() || "", valid, reason: valid ? undefined : expired ? "expired" as const : row.invitation.status === "used" ? "used" as const : "invalid" as const };
 }
 
 export async function targetUseScreeningInvitation(token: string, applicationId: string) {

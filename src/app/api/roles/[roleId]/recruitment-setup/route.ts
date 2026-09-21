@@ -11,7 +11,7 @@ import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count"
 import { getSetupReadiness, setupStatusForAction } from "@/lib/recruitment-setup-readiness";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { getPortalConfig } from "@/lib/portal-config";
-import { resolvePublicAppBaseUrl } from "@/lib/public-url";
+import { publicApplicationLink, resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { createConfiguredVoiceInterviewSlots } from "@/lib/applicant-workflow";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleDetails, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
@@ -157,7 +157,7 @@ export async function POST(request: Request, context: Context) {
     const actionRequestId = setup.actionRequestId || crypto.randomUUID();
     const performerEmail = user.email.trim().toLowerCase();
     const appBaseUrl = await resolvePublicAppBaseUrl(request);
-    const applicationLink = appBaseUrl ? `${appBaseUrl}/apply/${encodeURIComponent(role.roleId)}` : `/apply/${encodeURIComponent(role.roleId)}`;
+    const applicationLink = publicApplicationLink(appBaseUrl, role.roleId, isPostgresRecruitmentTarget() ? user.organizationId : "");
     const nextRecruitmentSetupStatus = isAutosaveDraft ? role.recruitmentSetupStatus || "Draft" : setupStatusForAction(setupAction, role.recruitmentSetupStatus || "Draft");
     // Canonical numbered list (Q1..Qn, blanks dropped) — the exact string used
     // in the resolved Vapi prompt and shown to HR, so answers stay tied to the

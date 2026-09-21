@@ -133,6 +133,7 @@ async function readRows() {
 export type ResumeScreeningInvitation = {
   invitationId: string;
   roleId: string;
+  organizationId?: string;
   roleTitle: string;
   candidateName: string;
   candidateEmail: string;

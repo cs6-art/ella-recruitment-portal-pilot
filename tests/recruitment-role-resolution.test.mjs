@@ -10,7 +10,7 @@ const read = (file) => readFileSync(path.join(root, file), "utf8");
 test("intake role resolution selects Postgres before applying published-role validation", () => {
   const resolver = read("src/lib/recruitment-role-resolution.ts");
   assert.match(resolver, /isPostgresRecruitmentTarget\(\)/);
-  assert.match(resolver, /targetPublicRoleDetails\(normalizedRoleId\)/);
+  assert.match(resolver, /targetPublicRoleDetails\(normalizedRoleId, organizationId\)/);
   assert.match(resolver, /import\("@\/lib\/google-sheets"\)/);
   assert.match(resolver, /isPublishedRoleForIntake\(role\)/);
   assert.match(resolver, /return role && isPublishedRoleForIntake\(role\) \? role : null/);
@@ -30,7 +30,7 @@ test("Postgres intake routes do not perform a direct Sheets role lookup", () => 
     "src/app/api/resume-screening/onedrive/import/route.ts",
   ]) {
     const route = read(file);
-    assert.match(route, /resolvePublishedRecruitmentRole\(roleId\)/, `${file} must use the shared resolver`);
+    assert.match(route, /resolvePublishedRecruitmentRole\(roleId(?:,[^)]+)?\)/, `${file} must use the shared resolver`);
     assert.doesNotMatch(route, /getRoleRequestById\(roleId\)/, `${file} must not gate target intake through Sheets`);
     assert.doesNotMatch(route, /isPublishedRoleForIntake\(role\)/, `${file} must not duplicate the source-specific gate`);
   }
@@ -51,7 +51,21 @@ test("legacy Sheets mode remains the resolver fallback", () => {
 
 test("public Postgres role details use the role's own active tenant", () => {
   const target = read("src/lib/recruitment-target-portal.ts");
-  assert.match(target, /for \(const organizationId of activeOrganizations\)/);
-  assert.match(target, /getRole\(normalizedExternalId, organizationId\)/);
-  assert.match(target, /targetRoleDetails\(normalizedExternalId, organizationId\)/);
+  assert.match(target, /for \(const candidateOrganizationId of activeOrganizations\)/);
+  assert.match(target, /getRole\(normalizedExternalId, matchedOrganization\)/);
+  assert.match(target, /targetRoleDetails\(normalizedExternalId, matchedOrganization\)/);
+  assert.match(target, /matches\.length !== 1/);
+});
+
+test("published application links carry tenant context through page and submission", () => {
+  const publicUrl = read("src/lib/public-url.ts");
+  const setup = read("src/app/api/roles/[roleId]/recruitment-setup/route.ts");
+  const page = read("src/app/apply/[roleId]/page.tsx");
+  const form = read("src/components/CandidateApplicationForm.tsx");
+  assert.match(publicUrl, /publicApplicationLink/);
+  assert.match(publicUrl, /organizationId=/);
+  assert.match(setup, /publicApplicationLink\(appBaseUrl, role\.roleId/);
+  assert.match(page, /searchParams/);
+  assert.match(page, /organizationId=\{role\.organizationId\}/);
+  assert.match(form, /body\.append\("organizationId", organizationId\.trim\(\)\)/);
 });

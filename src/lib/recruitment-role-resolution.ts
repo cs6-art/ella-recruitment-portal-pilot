@@ -10,7 +10,7 @@ import { targetPublicRoleDetails } from "@/lib/recruitment-target-portal";
  * this function never calls the operational recruitment Sheets repository;
  * Sheets remains the source only when the legacy backend is selected.
  */
-export async function resolvePublishedRecruitmentRole(roleId: string): Promise<RoleRequestDetails | null> {
+export async function resolvePublishedRecruitmentRole(roleId: string, organizationId = ""): Promise<RoleRequestDetails | null> {
   let normalizedRoleId = "";
   try {
     normalizedRoleId = decodeURIComponent(String(roleId)).trim();
@@ -20,7 +20,7 @@ export async function resolvePublishedRecruitmentRole(roleId: string): Promise<R
   if (!normalizedRoleId) return null;
 
   const role = isPostgresRecruitmentTarget()
-    ? await targetPublicRoleDetails(normalizedRoleId)
+    ? await targetPublicRoleDetails(normalizedRoleId, organizationId)
     : await (async () => {
       // Keep Sheets out of the target-mode module graph at request time. This
       // preserves legacy behavior without requiring Sheets credentials just to

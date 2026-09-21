@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   const { roleId } = parsed.data;
   const fileIds = [...new Set(parsed.data.fileIds)];
 
-  const role = await resolvePublishedRecruitmentRole(roleId);
+  const role = await resolvePublishedRecruitmentRole(roleId, user.organizationId);
   if (!role) return responseError("The selected role is not available for bulk screening.", 409);
 
   const token = await getAuthorizedGraphToken(user.email);

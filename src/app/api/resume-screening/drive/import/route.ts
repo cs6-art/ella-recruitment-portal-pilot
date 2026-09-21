@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   console.info("[Drive Import] request", { roleId, fileIds, fileCount: fileIds.length });
   const expectedFiles = new Map((parsed.data.files || []).map((file) => [file.id, file]));
 
-  const role = await resolvePublishedRecruitmentRole(roleId);
+  const role = await resolvePublishedRecruitmentRole(roleId, user.organizationId);
   if (!role) return responseError("The selected role is not available for bulk screening.", 409);
 
   const drive = await getAuthorizedDriveClient(user.email);

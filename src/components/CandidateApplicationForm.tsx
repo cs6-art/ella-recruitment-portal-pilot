@@ -16,6 +16,7 @@ type RoleOption = {
 
 type Props = {
   roleId?: string;
+  organizationId?: string;
   roleOptions?: RoleOption[];
   submitUrl?: string;
   title?: string;
@@ -80,6 +81,7 @@ const fieldAnchors: Record<string, string> = {
 
 export default function CandidateApplicationForm({
   roleId = "",
+  organizationId = "",
   roleOptions = [],
   submitUrl = "/api/public/applications",
   title = "Start a resume screening",
@@ -172,6 +174,7 @@ export default function CandidateApplicationForm({
       body.append("candidateName", form.candidateName.trim());
       body.append("email", form.email.trim().toLowerCase());
       body.append("roleId", form.resumeRoleId || roleId);
+      if (organizationId.trim()) body.append("organizationId", organizationId.trim());
       // Keep the two existing backend/sheet aliases identical while the UI
       // exposes one contact number only.
       body.append("contactNumber", contactNumber);

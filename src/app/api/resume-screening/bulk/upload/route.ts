@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     if (!files.length) return responseError("Choose at least one PDF, DOC, or DOCX resume.", 422);
     if (files.length > MAX_FILES_PER_SUBMISSION) return responseError(`Upload up to ${MAX_FILES_PER_SUBMISSION} resumes per batch.`, 422);
 
-    const role = await resolvePublishedRecruitmentRole(roleId);
+    const role = await resolvePublishedRecruitmentRole(roleId, user.organizationId);
     if (!role) return responseError("The selected role is not available for bulk screening.", 409);
 
     const intake = await intakeResumeBatch({

@@ -91,7 +91,14 @@ export async function POST(request: Request) {
     }
 
     const roleId = parsed.data.roleId.trim();
-    const role = roleId ? await resolvePublishedRecruitmentRole(roleId) : null;
+    // Public role IDs are tenant-local in the Postgres target. The hidden
+    // organizationId comes from the role link and is validated again by the
+    // resolver; an HR invitation's tenant always takes precedence over a
+    // client-supplied value.
+    const requestedOrganizationId = typeof intake.body.organizationId === "string" ? intake.body.organizationId.trim() : "";
+    const role = roleId
+      ? await resolvePublishedRecruitmentRole(roleId, invitation?.organizationId || requestedOrganizationId)
+      : null;
     if (!role) {
       return responseError(request, "This role is not accepting applications.", 404);
     }
