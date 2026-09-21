@@ -20,7 +20,7 @@
     "db:check:recruitment:integrity": "node --env-file-if-exists=.env.local src/db/check-recruitment-integrity.mjs"
   },
   "dependencies": {
-    "@heygen/liveavatar-web-sdk": "^0.0.18",
+    "@heygen/liveavatar-web-sdk": "^0.0.19",
     "@napi-rs/canvas": "^0.1.80",
     "@neondatabase/serverless": "^1.1.0",
     "@vercel/functions": "^3.9.7",
