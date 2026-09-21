@@ -15,6 +15,9 @@ test-results
 
 data/private-resumes/
 
+# Generated document-render scratch output; not project source.
+/tmp/
+
 # One-off scratch scripts used for manual/E2E testing in an assistant
 # session. Never intended to be permanent project code.
 /e2e-*.mjs
