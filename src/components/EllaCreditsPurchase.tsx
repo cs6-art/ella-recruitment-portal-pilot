@@ -21,6 +21,7 @@ type Payment = {
   amountCents: number;
   currency: string;
   creditedAt?: string | null;
+  newBalance?: number;
 };
 
 const nf = new Intl.NumberFormat("en-US");
@@ -99,10 +100,10 @@ export default function EllaCreditsPurchase() {
         requestEllaCreditsRefresh();
         clearPaymentReturnUrl();
         setReturnReference("");
-        setReturnMessage(`Payment confirmed. ${nf.format(nextPayment.credits)} credits have been added.`);
+        setReturnMessage(`Payment Successful — ${nf.format(nextPayment.credits)} Ella Credits have been added. Amount paid: ${money.format(nextPayment.amountCents / 100)}. New balance: ${nf.format(nextPayment.newBalance ?? 0)}.`);
         return true;
       }
-      if (["failed", "expired"].includes(nextPayment.status)) {
+      if (["failed", "expired", "cancelled", "refunded"].includes(nextPayment.status)) {
         setReturnMessage(`Payment ${nextPayment.status}. No credits were added.`);
         return true;
       }
@@ -154,7 +155,7 @@ export default function EllaCreditsPurchase() {
         clearPaymentReturnUrl();
         setReturnReference("");
         setReturnMessage(`Payment confirmed. ${nf.format(nextPayment.credits)} credits have been added.`);
-      } else if (["failed", "expired"].includes(nextPayment.status)) {
+      } else if (["failed", "expired", "cancelled", "refunded"].includes(nextPayment.status)) {
         setReturnMessage(`Payment ${nextPayment.status}. No credits were added.`);
       } else {
         setReturnMessage("Payment is still being confirmed. We’ll keep the purchase safe and retry when you check again.");
@@ -195,14 +196,14 @@ export default function EllaCreditsPurchase() {
       <div className={styles.header}>
         <div>
           <span className={styles.eyebrow}>CREDIT PURCHASE</span>
-          <h2>Buy Smile Credits</h2>
+          <h2>Buy Ella Credits</h2>
           <p>Choose a pack and continue to the secure HitPay checkout. Credits are added only after the verified payment webhook succeeds.</p>
         </div>
       </div>
 
       {error && <div className={styles.feedback}><ActionFeedback kind="error">{error}</ActionFeedback></div>}
       {returnMessage && <div className={styles.feedback}><ActionFeedback dismissAfterMs={payment?.status === "paid" && payment.creditedAt ? null : undefined} kind={payment?.status === "paid" && payment.creditedAt ? "success" : "warning"}>{returnMessage}</ActionFeedback>{returnReference && !(payment?.status === "paid" && payment.creditedAt) && !["failed", "expired"].includes(payment?.status || "") && <button type="button" className={`btn btn-secondary ${styles.retry}`} onClick={() => void checkPaymentAgain()} disabled={reconciling}>{reconciling ? "Checking payment…" : "Check payment again"}</button>}</div>}
-      {payment && returnReference && <p className={styles.reference}>Reference: <code>{payment.reference}</code> · Status: <strong>{payment.status}</strong></p>}
+      {payment && (returnReference || payment.status === "paid") && <p className={styles.reference}>Reference: <code>{payment.reference}</code> · Status: <strong>{payment.status}</strong>{payment.status === "paid" && payment.creditedAt ? <> · Balance: <strong>{nf.format(payment.newBalance ?? 0)}</strong></> : null}</p>}
 
       {!configured && !loading && <p className={styles.unavailable}>Credit purchases are currently unavailable. Please contact an administrator.</p>}
       {loading && <p className={styles.loading}>Loading credit packs…</p>}

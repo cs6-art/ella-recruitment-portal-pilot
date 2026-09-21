@@ -1,4 +1,5 @@
-import { boolean, integer, index, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, integer, index, jsonb, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey(),
@@ -148,6 +149,8 @@ export const payments = pgTable(
   (table) => [
     index("payments_status_idx").on(table.status),
     index("payments_provider_payment_id_idx").on(table.providerPaymentId),
+    uniqueIndex("payments_provider_payment_id_uidx").on(table.providerPaymentId).where(sql`${table.providerPaymentId} is not null`),
+    uniqueIndex("payments_provider_reference_uidx").on(table.providerReference).where(sql`${table.providerReference} <> ''`),
     index("payments_actor_email_idx").on(table.actorEmail),
     index("payments_created_at_idx").on(table.createdAt),
   ],

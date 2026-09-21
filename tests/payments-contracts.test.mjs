@@ -11,6 +11,7 @@ test("payments schema keeps money in Postgres and separate from the credit ledge
   assert.match(schema, /pgTable\(\s*"payment_events"/);
   assert.match(schema, /reference.*\.notNull\(\)\.unique\(\)/s);
   assert.match(schema, /credit_ledger_source_id/);
+  assert.match(schema, /providerReference/);
   const sql = read("drizzle/0002_payments.sql");
   assert.match(sql, /create table if not exists "payments"/i);
   assert.match(sql, /"dedupe_key"\s+text unique/i);
@@ -48,6 +49,7 @@ test("amount is server-calculated and a provider mismatch is never credited", ()
   assert.match(payments, /providerCents !== payment\.amountCents/);
   assert.match(payments, /providerCents === null/);
   assert.match(payments, /outcome: "amount_mismatch"/);
+  assert.match(payments, /outcome: "provider_mismatch"/);
   const createRoute = read("src/app/api/ella-credits/payments/route.ts");
   // request body only carries a packId — no amount / credits from the client
   assert.match(createRoute, /z\.object\(\{ packId:/);
@@ -67,7 +69,18 @@ test("only the payment-event dedupe conflict is treated as an already-processed 
 test("the HitPay API base contract includes /v1", () => {
   const hitpay = read("src/lib/hitpay.ts");
   assert.match(hitpay, /SANDBOX_BASE = "https:\/\/api\.sandbox\.hit-pay\.com\/v1"/);
+  assert.match(hitpay, /HITPAY_BASE_URL/);
   assert.match(read(".env.example"), /HITPAY_API_URL=https:\/\/api\.sandbox\.hit-pay\.com\/v1/);
+});
+
+test("payment settlement supports the current dashboard webhook identity and atomic Pilot grant", () => {
+  const payments = read("src/lib/payments.ts");
+  const webhook = read("src/app/api/webhooks/hitpay/route.ts");
+  assert.match(webhook, /payload\.payments/);
+  assert.match(webhook, /HitPay's current dashboard webhook contract/);
+  assert.match(payments, /\.for\("update"\)/);
+  assert.match(payments, /appendAccountLedgerEntryOnExecutor/);
+  assert.match(read("drizzle/0024_hitpay_sandbox_hardening.sql"), /payments_provider_reference_uidx/);
 });
 
 test("authenticated users may purchase while manual credit management remains RBAC-gated", () => {

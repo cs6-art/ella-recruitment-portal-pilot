@@ -6,6 +6,7 @@ import { getDb, isDatabaseConfigured } from "@/db/client";
 import { paymentEvents, payments, type PaymentRow } from "@/db/schema";
 import { findCreditPack } from "@/lib/credit-packs";
 import { recordTopUp } from "@/lib/ella-credits";
+import { appendAccountLedgerEntryOnExecutor, organizationCreditsEnabled } from "@/lib/ella-credits-accounts";
 import { isPaymentEventDedupeConflict, parseProviderAmountCents } from "@/lib/payment-validation";
 import {
   createPaymentRequest,
@@ -134,7 +135,10 @@ export async function createCreditPurchase(input: CreatePurchaseInput): Promise<
 
 export type ProviderUpdate = {
   reference: string;
+  /** HitPay payment-request id (top-level `id` in the JSON webhook). */
   providerPaymentId: string;
+  /** HitPay charge/payment id (nested `payments[0].id` in the JSON webhook). */
+  providerReference?: string;
   rawStatus: string;
   amountMajor: string; // decimal string from the provider
   currency: string;
@@ -145,7 +149,7 @@ export type ProviderUpdate = {
 
 export type ProviderUpdateResult = {
   ok: boolean;
-  outcome: "credited" | "already_processed" | "not_paid" | "amount_mismatch" | "unknown_payment" | "grant_deferred";
+  outcome: "credited" | "already_processed" | "not_paid" | "amount_mismatch" | "provider_mismatch" | "unknown_payment" | "grant_deferred";
   status: string;
 };
 
@@ -157,8 +161,21 @@ export async function handleProviderUpdate(update: ProviderUpdate): Promise<Prov
   const mapped = mapHitpayStatus(update.rawStatus);
   const dedupeKey = `${payment.reference}:${update.providerPaymentId || "?"}:${mapped}:${update.source}`;
 
-  // Event-layer idempotency: a replayed webhook is a no-op insert.
-  try {
+  // The reference resolves our order. The payment-request id and the charge
+  // id are independently checked when HitPay supplies them, so a valid
+  // signature cannot be used to credit a different internal order.
+  if (
+    (payment.providerPaymentId && update.providerPaymentId && payment.providerPaymentId !== update.providerPaymentId) ||
+    (payment.providerReference && update.providerReference && payment.providerReference !== update.providerReference)
+  ) {
+    await db.update(payments).set({ lastEvent: { ...update.raw, providerMismatch: true }, updatedAt: new Date() }).where(eq(payments.id, payment.id));
+    return { ok: false, outcome: "provider_mismatch", status: payment.status };
+  }
+
+  if (mapped !== "paid") {
+    // A refund is a real provider state transition. This records it for
+    // reconciliation/audit, but intentionally does not remove credits
+    // automatically because the portal has no approved refund policy yet.
     await db.insert(paymentEvents).values({
       paymentId: payment.id,
       source: update.source,
@@ -167,29 +184,22 @@ export async function handleProviderUpdate(update: ProviderUpdate): Promise<Prov
       signatureValid: update.signatureValid,
       dedupeKey,
       detail: update.raw,
-    });
-  } catch (error) {
-    if (isPaymentEventDedupeConflict(error)) {
-      // The event may have been recorded by a concurrent webhook/reconcile
-      // request that failed before the ledger grant completed. Keep running
-      // the paid transition: the deterministic ledger key makes the grant
-      // idempotent, while `creditedAt` still gives completed replays a cheap
-      // no-op path below.
-    } else {
+    }).catch((error) => {
+      if (isPaymentEventDedupeConflict(error)) {
+        return;
+      }
       throw error;
-    }
-  }
+    });
 
-  await db
-    .update(payments)
-    .set({ providerReference: update.providerPaymentId || payment.providerReference, lastEvent: update.raw, updatedAt: new Date() })
-    .where(eq(payments.id, payment.id));
-
-  if (mapped !== "paid") {
-    if (payment.status === "paid" || payment.status === "refunded") {
+    if (payment.status === "paid" && mapped !== "refunded") {
       return { ok: true, outcome: "already_processed", status: payment.status };
     }
-    await db.update(payments).set({ status: mapped, updatedAt: new Date() }).where(eq(payments.id, payment.id));
+    await db.update(payments).set({
+      providerReference: update.providerReference || payment.providerReference,
+      lastEvent: update.raw,
+      status: mapped,
+      updatedAt: new Date(),
+    }).where(eq(payments.id, payment.id));
     return { ok: true, outcome: "not_paid", status: mapped };
   }
 
@@ -197,6 +207,7 @@ export async function handleProviderUpdate(update: ProviderUpdate): Promise<Prov
   // never credited (guards against a tampered payment link).
   const providerCents = parseProviderAmountCents(update.amountMajor);
   if (
+    !update.providerPaymentId ||
     providerCents === null ||
     providerCents !== payment.amountCents ||
     update.currency.trim().toUpperCase() !== payment.currency.toUpperCase()
@@ -205,20 +216,75 @@ export async function handleProviderUpdate(update: ProviderUpdate): Promise<Prov
       .update(payments)
       .set({ status: "failed", updatedAt: new Date(), lastEvent: { ...update.raw, amountMismatch: true } })
       .where(eq(payments.id, payment.id));
-    console.error(`[Payments] Amount validation failed on ${payment.reference}: expected ${payment.amountCents} ${payment.currency}, provider ${providerCents ?? "invalid"} ${update.currency}`);
+    console.error(`[Payments] Amount validation failed for order ${payment.reference}.`);
     return { ok: false, outcome: "amount_mismatch", status: "failed" };
   }
 
-  // Already credited (idempotent re-entry) — nothing to do.
-  if (payment.creditedAt && payment.status === "paid") {
-    return { ok: true, outcome: "already_processed", status: "paid" };
+  if (organizationCreditsEnabled()) {
+    // The Pilot's organization wallet and payment row share the same Neon
+    // database. Locking the payment row and writing the ledger through the
+    // same transaction makes webhook/reconcile races atomic.
+    try {
+      await db.transaction(async (tx) => {
+        const [locked] = await tx.select().from(payments).where(eq(payments.id, payment.id)).for("update").limit(1);
+        if (!locked) throw new Error("Payment disappeared during settlement.");
+        if (locked.creditedAt && locked.status === "paid") return;
+
+        try {
+          await tx.insert(paymentEvents).values({
+            paymentId: locked.id,
+            source: update.source,
+            event: "provider_paid",
+            status: "paid",
+            signatureValid: update.signatureValid,
+            dedupeKey,
+            detail: update.raw,
+          });
+        } catch (error) {
+          if (isPaymentEventDedupeConflict(error)) {
+            // Another source may have recorded the same provider event; the
+            // deterministic ledger key still makes this grant idempotent.
+          } else {
+            throw error;
+          }
+        }
+
+        const creditLedgerSourceId = `LDG-${crypto.createHash("sha256").update(grantKeyFor(locked.reference)).digest("hex")}`;
+        await appendAccountLedgerEntryOnExecutor(tx, {
+          organizationId: locked.organizationId,
+          ownerEmail: "org",
+          entry: {
+            type: "TopUp",
+            event: "purchase",
+            units: locked.credits,
+            creditsDelta: locked.credits,
+            reference: locked.reference,
+            actorName: locked.actorName,
+            actorEmail: locked.actorEmail,
+            note: `HitPay purchase ${locked.reference} (${locked.packId || "custom"})`,
+            sourceEntryId: creditLedgerSourceId,
+          },
+        });
+        await tx.update(payments).set({
+          providerReference: update.providerReference || locked.providerReference,
+          status: "paid",
+          paidAt: locked.paidAt ?? new Date(),
+          creditedAt: new Date(),
+          creditLedgerSourceId,
+          lastEvent: update.raw,
+          updatedAt: new Date(),
+        }).where(eq(payments.id, locked.id));
+      });
+      return { ok: true, outcome: payment.creditedAt ? "already_processed" : "credited", status: "paid" };
+    } catch (error) {
+      console.error(`[Payments] Atomic ledger grant deferred for order ${payment.reference}:`, error instanceof Error ? error.message : "database error");
+      return { ok: true, outcome: "grant_deferred", status: "paid" };
+    }
   }
 
-  await db.update(payments).set({ status: "paid", paidAt: payment.paidAt ?? new Date(), updatedAt: new Date() }).where(eq(payments.id, payment.id));
-
-  // Grant the credits through the idempotent ledger. Deterministic key ⇒ a
-  // duplicate webhook / a reconcile / a retry after a transient error all land
-  // on exactly one grant.
+  // Legacy Sheets/dual deployments retain the existing idempotent ledger
+  // adapter. The deterministic source key still prevents duplicate credits;
+  // atomic settlement is available once the Pilot uses organization wallets.
   try {
     await recordTopUp({
       amount: payment.credits,
@@ -231,17 +297,21 @@ export async function handleProviderUpdate(update: ProviderUpdate): Promise<Prov
       note: `HitPay purchase ${payment.reference} (${payment.packId || "custom"})`,
     });
   } catch (error) {
-    // Payment stays 'paid' but un-credited; a later reconcile retries safely.
-    console.error(`[Payments] Ledger grant deferred for ${payment.reference}:`, error);
+    console.error(`[Payments] Ledger grant deferred for order ${payment.reference}:`, error instanceof Error ? error.message : "ledger error");
     return { ok: true, outcome: "grant_deferred", status: "paid" };
   }
 
-  await db
-    .update(payments)
-    .set({ creditedAt: new Date(), creditLedgerSourceId: `LDG-${crypto.createHash("sha256").update(grantKeyFor(payment.reference)).digest("hex")}`, updatedAt: new Date() })
-    .where(eq(payments.id, payment.id));
+  await db.update(payments).set({
+    providerReference: update.providerReference || payment.providerReference,
+    status: "paid",
+    paidAt: payment.paidAt ?? new Date(),
+    creditedAt: new Date(),
+    creditLedgerSourceId: `LDG-${crypto.createHash("sha256").update(grantKeyFor(payment.reference)).digest("hex")}`,
+    lastEvent: update.raw,
+    updatedAt: new Date(),
+  }).where(eq(payments.id, payment.id));
 
-  return { ok: true, outcome: "credited", status: "paid" };
+  return { ok: true, outcome: payment.creditedAt ? "already_processed" : "credited", status: "paid" };
 }
 
 /** Pull the current status from HitPay and re-run the transition (admin / cron). */
@@ -255,7 +325,8 @@ export async function reconcilePayment(reference: string): Promise<ProviderUpdat
   const firstPayment = request.payments[0] as { id?: string; status?: string; amount?: string; currency?: string } | undefined;
   return handleProviderUpdate({
     reference,
-    providerPaymentId: firstPayment?.id || payment.providerPaymentId,
+    providerPaymentId: request.id || payment.providerPaymentId,
+    providerReference: firstPayment?.id,
     rawStatus: firstPayment?.status || request.status,
     amountMajor: firstPayment?.amount || request.amount,
     currency: firstPayment?.currency || request.currency || payment.currency,

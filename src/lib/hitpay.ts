@@ -5,9 +5,11 @@ import crypto from "node:crypto";
  *
  * Env:
  *   HITPAY_API_KEY   — X-BUSINESS-API-KEY for the create/status calls (secret)
- *   HITPAY_SALT      — webhook HMAC salt (secret)
+ *   HITPAY_WEBHOOK_SECRET — per-webhook HMAC secret (preferred, secret)
+ *   HITPAY_SALT      — legacy/API-key webhook HMAC salt (secret fallback)
  *   HITPAY_MODE      — "sandbox" (default) | "live"
- *   HITPAY_API_URL   — optional explicit override of the API base URL
+ *   HITPAY_BASE_URL  — optional explicit API base URL
+ *   HITPAY_API_URL   — legacy alias for HITPAY_BASE_URL
  *
  * The feature fails safe: when the key/salt are missing, `isHitpayConfigured()`
  * is false and the payment routes return 503 rather than half-working.
@@ -25,9 +27,14 @@ export function hitpayMode(): "sandbox" | "live" {
 }
 
 export function hitpayApiBase(): string {
-  const explicit = process.env.HITPAY_API_URL?.trim();
-  if (explicit) return explicit.replace(/\/+$/, "");
-  return hitpayMode() === "live" ? LIVE_BASE : SANDBOX_BASE;
+  const explicit = process.env.HITPAY_BASE_URL?.trim() || process.env.HITPAY_API_URL?.trim();
+  const base = (explicit || (hitpayMode() === "live" ? LIVE_BASE : SANDBOX_BASE)).replace(/\/+$/, "");
+  const normalized = base.toLowerCase();
+  const sandbox = normalized.includes("api.sandbox.hit-pay.com");
+  const live = normalized.includes("api.hit-pay.com") && !sandbox;
+  if (hitpayMode() === "sandbox" && !sandbox) throw new Error("Sandbox mode requires the HitPay sandbox API host.");
+  if (hitpayMode() === "live" && !live) throw new Error("Live mode requires the HitPay production API host.");
+  return /\/v1$/i.test(base) ? base : `${base}/v1`;
 }
 
 function apiKey(): string {
@@ -37,19 +44,19 @@ function apiKey(): string {
 }
 
 function salt(): string {
-  const value = process.env.HITPAY_SALT?.trim();
-  if (!value) throw new Error("HITPAY_SALT is not configured.");
+  const value = process.env.HITPAY_WEBHOOK_SECRET?.trim() || process.env.HITPAY_SALT?.trim();
+  if (!value) throw new Error("HITPAY_WEBHOOK_SECRET or HITPAY_SALT is not configured.");
   return value;
 }
 
 export function isHitpayConfigured(): boolean {
-  return Boolean(process.env.HITPAY_API_KEY?.trim() && process.env.HITPAY_SALT?.trim());
+  return Boolean(process.env.HITPAY_API_KEY?.trim() && webhookSecretConfigured());
 }
 
 export type HitpayPaymentRequest = {
   id: string;
   url: string;
-  status: string; // pending | completed | failed | expired
+  status: string; // pending | completed | failed | expired | canceled | refunded
   amount: string;
   currency: string;
   referenceNumber: string;
@@ -98,9 +105,12 @@ export async function createPaymentRequest(input: {
     currency: input.currency.toUpperCase(),
     reference_number: input.referenceNumber,
     redirect_url: input.redirectUrl,
-    webhook: input.webhookUrl,
     purpose: input.purpose || "Smile Credits top-up",
     send_email: "false",
+    metadata: JSON.stringify({
+      internal_order_id: input.referenceNumber,
+      webhook_url: input.webhookUrl,
+    }),
   });
   if (input.email) body.set("email", input.email);
   if (input.name) body.set("name", input.name);
@@ -166,6 +176,10 @@ export function verifyJsonWebhook(rawBody: string, signatureHeader: string | nul
   return timingSafeEqualHex(computed, signatureHeader.trim());
 }
 
+export function webhookSecretConfigured(): boolean {
+  return Boolean(process.env.HITPAY_WEBHOOK_SECRET?.trim() || process.env.HITPAY_SALT?.trim());
+}
+
 function timingSafeEqualHex(a: string, b: string): boolean {
   const bufA = Buffer.from(a, "utf8");
   const bufB = Buffer.from(b, "utf8");
@@ -174,10 +188,12 @@ function timingSafeEqualHex(a: string, b: string): boolean {
 }
 
 /** Map HitPay's status vocabulary to ours. */
-export function mapHitpayStatus(raw: string): "paid" | "pending" | "failed" | "expired" {
+export function mapHitpayStatus(raw: string): "paid" | "pending" | "failed" | "expired" | "cancelled" | "refunded" {
   const value = String(raw || "").toLowerCase();
   if (value === "completed" || value === "paid" || value === "succeeded") return "paid";
   if (value === "failed") return "failed";
   if (value === "expired") return "expired";
+  if (value === "canceled" || value === "cancelled") return "cancelled";
+  if (value === "refunded" || value === "partially_refunded") return "refunded";
   return "pending";
 }

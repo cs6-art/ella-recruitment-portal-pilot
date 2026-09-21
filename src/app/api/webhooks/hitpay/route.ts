@@ -29,6 +29,11 @@ export async function POST(request: Request) {
 
   let fields: Record<string, string>;
   let signatureValid = false;
+  let providerPaymentId = "";
+  let providerReference = "";
+  let rawStatus = "";
+  let amountMajor = "";
+  let currency = "";
 
   if (contentType.includes("application/json")) {
     const header =
@@ -37,13 +42,28 @@ export async function POST(request: Request) {
       request.headers.get("x-signature");
     signatureValid = verifyJsonWebhook(raw, header);
     try {
-      fields = flatten(JSON.parse(raw) as Record<string, unknown>);
+      const payload = JSON.parse(raw) as Record<string, unknown>;
+      fields = flatten(payload);
+      const nestedPayment = firstPayment(payload.payments);
+      // HitPay's current dashboard webhook contract places the payment
+      // request id at payload.id and the actual payment/charge id at
+      // payload.payments[0].id. Amount, currency, and status are taken from
+      // that nested payment when available.
+      providerPaymentId = stringValue(payload.id);
+      providerReference = stringValue(nestedPayment?.id);
+      rawStatus = stringValue(nestedPayment?.status) || stringValue(payload.status) || request.headers.get("hitpay-event-type") || "";
+      amountMajor = stringValue(nestedPayment?.amount) || stringValue(payload.amount);
+      currency = stringValue(nestedPayment?.currency) || stringValue(payload.currency);
     } catch {
       return NextResponse.json({ error: "invalid_body" }, { status: 400 });
     }
   } else {
     fields = Object.fromEntries(new URLSearchParams(raw));
     signatureValid = verifyFormWebhook(fields);
+    providerPaymentId = fields.id || fields.payment_id || "";
+    rawStatus = fields.status || "";
+    amountMajor = fields.amount || "";
+    currency = fields.currency || "";
   }
 
   if (!signatureValid) {
@@ -57,10 +77,11 @@ export async function POST(request: Request) {
   try {
     const result = await handleProviderUpdate({
       reference,
-      providerPaymentId: fields.payment_id || fields.id || "",
-      rawStatus: fields.status || "",
-      amountMajor: fields.amount || "",
-      currency: fields.currency || "",
+      providerPaymentId,
+      providerReference,
+      rawStatus,
+      amountMajor,
+      currency,
       signatureValid: true,
       source: "webhook",
       raw: fields,
@@ -72,6 +93,16 @@ export async function POST(request: Request) {
     console.error("[HitPay Webhook] processing failed:", error);
     return NextResponse.json({ error: "processing_error" }, { status: 500 });
   }
+}
+
+function stringValue(value: unknown): string {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function firstPayment(value: unknown): Record<string, unknown> | null {
+  if (!Array.isArray(value)) return null;
+  const first = value[0];
+  return first && typeof first === "object" ? first as Record<string, unknown> : null;
 }
 
 function flatten(input: Record<string, unknown>): Record<string, string> {

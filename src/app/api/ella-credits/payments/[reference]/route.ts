@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { canManageCredits } from "@/lib/access-control";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { getPaymentByReference, getPaymentForActor, isPaymentsConfigured, reconcilePayment } from "@/lib/payments";
+import { getCreditBalance } from "@/lib/ella-credits";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -19,7 +20,8 @@ async function paymentVisibleToUser(reference: string, user: NonNullable<Awaited
     : getPaymentForActor(reference, user.email);
 }
 
-function view(row: NonNullable<Awaited<ReturnType<typeof getPaymentByReference>>>) {
+async function view(row: NonNullable<Awaited<ReturnType<typeof getPaymentByReference>>>, organizationId: string) {
+  const balance = await getCreditBalance({ fresh: true, organizationId });
   return {
     reference: row.reference,
     status: row.status,
@@ -30,6 +32,7 @@ function view(row: NonNullable<Awaited<ReturnType<typeof getPaymentByReference>>
     createdAt: row.createdAt,
     paidAt: row.paidAt,
     creditedAt: row.creditedAt,
+    newBalance: balance.balance,
   };
 }
 
@@ -42,7 +45,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ref
   const { reference } = await params;
   const row = await paymentVisibleToUser(reference, user);
   if (!row) return NextResponse.json({ success: false, error: "Payment not found." }, { status: 404 });
-  return NextResponse.json({ success: true, payment: view(row) }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ success: true, payment: await view(row, user.organizationId) }, { headers: { "Cache-Control": "no-store" } });
 }
 
 // Force a server-side status pull from HitPay and re-run the transition. Safe
@@ -61,7 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ref
     if (!visiblePayment) return NextResponse.json({ success: false, error: "Payment not found." }, { status: 404 });
     const result = await reconcilePayment(reference);
     const row = await paymentVisibleToUser(reference, user);
-    return NextResponse.json({ success: result.ok, outcome: result.outcome, payment: row ? view(row) : null });
+    return NextResponse.json({ success: result.ok, outcome: result.outcome, payment: row ? await view(row, user.organizationId) : null });
   } catch (error) {
     console.error("[API Payments] reconcile failed:", error);
     return NextResponse.json({ success: false, error: "Unable to reconcile the payment." }, { status: 502 });

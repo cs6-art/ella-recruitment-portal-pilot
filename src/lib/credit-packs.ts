@@ -1,5 +1,5 @@
 /**
- * Purchasable Smile Credit packs.
+ * Purchasable Ella Credit packs.
  *
  * Pricing is ALWAYS server-side. The client sends only a `packId`; the server
  * looks up the credits and the payable amount here. There is no code path that
@@ -20,20 +20,30 @@ export type CreditPack = {
   currency: string;
 };
 
+/** Ella Credits are priced at S$0.40 per credit. Keep this calculation in one
+ * server-only module so a client payload or an env override cannot change the
+ * amount charged for a given quantity. */
+export const ELLA_CREDIT_PRICE_CENTS = 40;
+
+export function amountCentsForCredits(credits: number): number {
+  const quantity = Math.trunc(credits);
+  if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new Error("Credit quantity must be a positive whole number.");
+  return quantity * ELLA_CREDIT_PRICE_CENTS;
+}
+
 const DEFAULT_PACKS: CreditPack[] = [
-  { id: "starter", label: "Starter — 100 credits", credits: 100, amountCents: 5000, currency: "SGD" },
-  { id: "standard", label: "Standard — 500 credits", credits: 500, amountCents: 22500, currency: "SGD" },
-  { id: "bulk", label: "Bulk — 2000 credits", credits: 2000, amountCents: 80000, currency: "SGD" },
+  { id: "starter", label: "Starter — 10 credits", credits: 10, amountCents: 400, currency: "SGD" },
+  { id: "standard", label: "Standard — 50 credits", credits: 50, amountCents: 2000, currency: "SGD" },
+  { id: "bulk", label: "Bulk — 100 credits", credits: 100, amountCents: 4000, currency: "SGD" },
 ];
 
-function isValidPack(value: unknown): value is CreditPack {
+function isValidPack(value: unknown): value is Pick<CreditPack, "id" | "label" | "credits"> {
   if (!value || typeof value !== "object") return false;
   const pack = value as Record<string, unknown>;
   return (
     typeof pack.id === "string" && pack.id.trim().length > 0 &&
     typeof pack.credits === "number" && Number.isInteger(pack.credits) && pack.credits > 0 &&
-    typeof pack.amountCents === "number" && Number.isInteger(pack.amountCents) && pack.amountCents > 0 &&
-    typeof pack.currency === "string" && /^[A-Z]{3}$/.test(pack.currency)
+    (pack.label === undefined || typeof pack.label === "string")
   );
 }
 
@@ -46,7 +56,13 @@ export function creditPacks(): CreditPack[] {
     try {
       const parsed = JSON.parse(override);
       if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(isValidPack)) {
-        cached = parsed.map((pack: CreditPack) => ({ ...pack, label: pack.label || `${pack.credits} credits` }));
+        cached = parsed.map((pack) => ({
+          id: pack.id.trim().toLowerCase(),
+          label: pack.label?.trim() || `${pack.credits} credits`,
+          credits: pack.credits,
+          amountCents: amountCentsForCredits(pack.credits),
+          currency: "SGD",
+        }));
         return cached;
       }
       console.error("[Credit Packs] ELLA_CREDIT_PACKS is not a valid pack array — using the built-in catalog.");

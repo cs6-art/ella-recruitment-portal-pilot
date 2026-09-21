@@ -81,11 +81,25 @@ test("JSON webhook verifies a raw-body HMAC header", () => {
   });
 });
 
+test("JSON webhook prefers the per-endpoint webhook secret", () => {
+  const previousSalt = process.env.HITPAY_SALT;
+  const previousSecret = process.env.HITPAY_WEBHOOK_SECRET;
+  process.env.HITPAY_SALT = "wrong-salt";
+  process.env.HITPAY_WEBHOOK_SECRET = SALT;
+  const raw = JSON.stringify({ status: "completed", reference_number: "PAY-3" });
+  const sig = crypto.createHmac("sha256", SALT).update(raw).digest("hex");
+  assert.equal(verifyJsonWebhook(raw, sig), true);
+  if (previousSalt === undefined) delete process.env.HITPAY_SALT; else process.env.HITPAY_SALT = previousSalt;
+  if (previousSecret === undefined) delete process.env.HITPAY_WEBHOOK_SECRET; else process.env.HITPAY_WEBHOOK_SECRET = previousSecret;
+});
+
 test("status vocabulary maps to our states", () => {
   assert.equal(mapHitpayStatus("completed"), "paid");
   assert.equal(mapHitpayStatus("paid"), "paid");
   assert.equal(mapHitpayStatus("failed"), "failed");
   assert.equal(mapHitpayStatus("expired"), "expired");
+  assert.equal(mapHitpayStatus("canceled"), "cancelled");
+  assert.equal(mapHitpayStatus("refunded"), "refunded");
   assert.equal(mapHitpayStatus("pending"), "pending");
   assert.equal(mapHitpayStatus("weird"), "pending");
 });
