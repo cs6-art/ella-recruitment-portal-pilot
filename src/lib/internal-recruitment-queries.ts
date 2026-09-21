@@ -682,28 +682,60 @@ async function avatarInterviewContextByHash(tokenHash: string, allowedStatuses: 
 
 export async function getAvatarInterviewContext(rawToken: string, options: { allowActive?: boolean } = {}) {
   const tokenHash = crypto.createHash("sha256").update(rawToken.trim()).digest("hex");
-  return avatarInterviewContextByHash(tokenHash, options.allowActive ? ["active"] : ["pending"]);
+  return avatarInterviewContextByHash(tokenHash, options.allowActive ? ["booked"] : ["pending"]);
 }
 
 /** Atomically claims the candidate's one-time avatar link before starting a session. */
 export async function startAvatarInterview(rawToken: string) {
   const db = getDb();
   const tokenHash = crypto.createHash("sha256").update(rawToken.trim()).digest("hex");
-  const [claimed] = await db.update(bookingTokens).set({ status: "active" }).where(and(
+  const [claimed] = await db.update(bookingTokens).set({ status: "booked" }).where(and(
     eq(bookingTokens.tokenHash, tokenHash),
     eq(bookingTokens.kind, "avatar"),
     eq(bookingTokens.status, "pending"),
     or(isNull(bookingTokens.expiresAt), gte(bookingTokens.expiresAt, new Date())),
   )).returning({ applicationId: bookingTokens.applicationId });
   if (!claimed) return null;
+
+  const context = await avatarInterviewContextByHash(tokenHash, ["booked"]);
+  if (!context) {
+    await releaseAvatarInterviewStart(rawToken);
+    return null;
+  }
+  return context;
+}
+
+/** Finalize the claim only after the external avatar provider accepts the session. */
+export async function finalizeAvatarInterviewStart(rawToken: string) {
+  const db = getDb();
+  const tokenHash = crypto.createHash("sha256").update(rawToken.trim()).digest("hex");
+  const [active] = await db.select({ applicationId: bookingTokens.applicationId }).from(bookingTokens).where(and(
+    eq(bookingTokens.tokenHash, tokenHash),
+    eq(bookingTokens.kind, "avatar"),
+    eq(bookingTokens.status, "booked"),
+  )).limit(1);
+  if (!active) return false;
+
   // Choosing Smile is the candidate's alternative to scheduling the call.
-  // Disable the unused phone-call link once the avatar interview starts.
+  // Disable the unused phone-call link only after the avatar session exists.
   await db.update(bookingTokens).set({ status: "revoked" }).where(and(
-    eq(bookingTokens.applicationId, claimed.applicationId),
+    eq(bookingTokens.applicationId, active.applicationId),
     eq(bookingTokens.kind, "voice"),
     inArray(bookingTokens.status, ["pending", "active"]),
   ));
-  return avatarInterviewContextByHash(tokenHash, ["active"]);
+  return true;
+}
+
+/** Return a failed provider start to pending so the secure link remains usable. */
+export async function releaseAvatarInterviewStart(rawToken: string) {
+  const db = getDb();
+  const tokenHash = crypto.createHash("sha256").update(rawToken.trim()).digest("hex");
+  const [released] = await db.update(bookingTokens).set({ status: "pending" }).where(and(
+    eq(bookingTokens.tokenHash, tokenHash),
+    eq(bookingTokens.kind, "avatar"),
+    eq(bookingTokens.status, "booked"),
+  )).returning({ id: bookingTokens.id });
+  return Boolean(released);
 }
 
 export async function completeAvatarInterview(input: { rawToken: string; sessionId: string; evaluation: LiveAvatarEvaluation; transcript: LiveAvatarTranscriptTurn[] }) {
@@ -711,7 +743,7 @@ export async function completeAvatarInterview(input: { rawToken: string; session
   const tokenHash = crypto.createHash("sha256").update(input.rawToken.trim()).digest("hex");
   const transcript = input.transcript.map((turn) => `${String(turn.role || "unknown")}: ${String(turn.transcript || "").trim()}`).filter((line) => !line.endsWith(": ")).join("\n");
   return db.transaction(async (tx) => {
-    const [token] = await tx.select({ id: bookingTokens.id, applicationId: bookingTokens.applicationId, organizationId: bookingTokens.organizationId }).from(bookingTokens).where(and(eq(bookingTokens.tokenHash, tokenHash), eq(bookingTokens.kind, "avatar"), eq(bookingTokens.status, "active"))).for("update").limit(1);
+    const [token] = await tx.select({ id: bookingTokens.id, applicationId: bookingTokens.applicationId, organizationId: bookingTokens.organizationId }).from(bookingTokens).where(and(eq(bookingTokens.tokenHash, tokenHash), eq(bookingTokens.kind, "avatar"), eq(bookingTokens.status, "booked"))).for("update").limit(1);
     if (!token) return { completed: false, error: "avatar_link_already_used" as const };
     const now = new Date();
     await tx.insert(voiceInterviewResults).values({
@@ -2078,7 +2110,7 @@ export async function notificationQueue(stage?: string) {
     candidateName: applications.candidateName,
     candidateEmail: applications.email,
     notificationLink: sql<string>`COALESCE((SELECT bt.link FROM booking_tokens bt WHERE bt.application_id = ${applications.id} AND bt.kind = CASE WHEN ${applicationStatusHistory.notificationEventType} = 'voice_booking_invitation' THEN 'voice' WHEN ${applicationStatusHistory.notificationEventType} = 'final_booking_invitation' THEN 'final' ELSE '' END ORDER BY bt.created_at DESC LIMIT 1), '')`,
-    avatarLink: sql<string>`COALESCE((SELECT bt.link FROM booking_tokens bt WHERE bt.application_id = ${applications.id} AND bt.kind = 'avatar' AND bt.status IN ('pending', 'active') ORDER BY bt.created_at DESC LIMIT 1), '')`,
+    avatarLink: sql<string>`COALESCE((SELECT bt.link FROM booking_tokens bt WHERE bt.application_id = ${applications.id} AND bt.kind = 'avatar' AND bt.status IN ('pending', 'booked') ORDER BY bt.created_at DESC LIMIT 1), '')`,
     bookedSlotStartsAt: sql<string>`COALESCE((SELECT to_char(s.starts_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM interview_slots s WHERE s.application_id = ${applications.id} AND s.interview_type = CASE WHEN ${applicationStatusHistory.notificationEventType} = 'voice_booking_confirmation' THEN 'voice' WHEN ${applicationStatusHistory.notificationEventType} = 'final_booking_confirmation' THEN 'final' ELSE '' END AND s.status IN ('booked', 'completed') ORDER BY s.booked_at DESC NULLS LAST LIMIT 1), '')`,
     bookedSlotTimezone: sql<string>`COALESCE((SELECT s.timezone FROM interview_slots s WHERE s.application_id = ${applications.id} AND s.interview_type = CASE WHEN ${applicationStatusHistory.notificationEventType} = 'voice_booking_confirmation' THEN 'voice' WHEN ${applicationStatusHistory.notificationEventType} = 'final_booking_confirmation' THEN 'final' ELSE '' END AND s.status IN ('booked', 'completed') ORDER BY s.booked_at DESC NULLS LAST LIMIT 1), '')`,
     roleExternalId: roles.externalId,

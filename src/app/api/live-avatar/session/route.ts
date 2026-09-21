@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { createLiveAvatarSession, isLiveAvatarConfigured } from "@/lib/live-avatar";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { startAvatarInterview } from "@/lib/internal-recruitment-queries";
+import { finalizeAvatarInterviewStart, releaseAvatarInterviewStart, startAvatarInterview } from "@/lib/internal-recruitment-queries";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,12 +36,26 @@ export async function POST(request: NextRequest) {
 
   if (typeof avatarToken === "string" && avatarToken.trim()) {
     if (!isPostgresRecruitmentTarget()) return NextResponse.json({ success: false, error: "This avatar interview link is not available." }, { status: 404 });
+    let sessionCreated = false;
     try {
       const context = await startAvatarInterview(avatarToken);
       if (!context) return NextResponse.json({ success: false, error: "This avatar interview link has already been used, expired, or is no longer available." }, { status: 410 });
       const session = await createLiveAvatarSession({ roleTitle: context.roleTitle, jobDescription: context.roleDescription, candidateName: context.candidateName, resumeSummary: context.resumeSummary, screeningQuestion: context.screeningQuestion });
+      sessionCreated = true;
+      try {
+        await finalizeAvatarInterviewStart(avatarToken);
+      } catch (finalizeError) {
+        console.error("[API Live Avatar Candidate Session] Failed to finalize invitation state:", finalizeError);
+      }
       return NextResponse.json({ success: true, ...session }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
+      if (!sessionCreated) {
+        try {
+          await releaseAvatarInterviewStart(avatarToken);
+        } catch (releaseError) {
+          console.error("[API Live Avatar Candidate Session] Failed to release invitation after startup failure:", releaseError);
+        }
+      }
       console.error("[API Live Avatar Candidate Session] POST failed:", error);
       return NextResponse.json({ success: false, error: "Unable to start the avatar interview." }, { status: 502 });
     }

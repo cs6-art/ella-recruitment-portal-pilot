@@ -51,7 +51,7 @@ test("resume approval creates a separate one-time avatar invitation with the sam
   assert.match(target, /kind: "avatar"/);
   assert.match(target, /avatarInterviewInvitationQueued: true/);
   assert.match(query, /input\.kind === "avatar"/);
-  assert.match(query, /status: "active"/);
+  assert.match(query, /status: "booked"/);
   assert.match(query, /status: "used", usedAt/);
   assert.match(labels, /secondaryCta: avatarLink/);
   assert.match(migration, /'voice', 'final', 'avatar'/);
