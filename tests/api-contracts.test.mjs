@@ -148,10 +148,11 @@ test("saved recruitment templates stay isolated from role request rows", () => {
   const editor = fs.readFileSync("src/components/RecruitmentSetupEditor.tsx", "utf8");
   assert.match(templateRoute, /Recruitment_Templates/);
   assert.doesNotMatch(templateRoute, /Role_Requests/);
-  assert.doesNotMatch(editor, /CALL SCRIPT TEMPLATES/);
-  assert.doesNotMatch(editor, /SAVED TEMPLATES/);
+  assert.match(editor, /Load standard script/);
+  assert.match(editor, /Saved interview setups/);
+  assert.match(editor, /window\.confirm\(`Load/);
+  assert.match(editor, /Unsaved changes/);
   assert.match(editor, /Reset changes/);
-  assert.doesNotMatch(editor, /Load standard script/);
 });
 
 test("candidate intake allows repeated email and role applications with new identities", () => {

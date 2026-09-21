@@ -7,6 +7,7 @@ import ActionFeedback from "@/components/ActionFeedback";
 import ValidationSummary, { type ValidationIssue } from "@/components/ValidationSummary";
 import { notificationPresentation } from "@/lib/notification-status";
 import {
+  hasLegacyInterviewQuestionBlock,
   rebrandAssistantName,
   renderRecruitmentSystemPrompt,
   renderRecruitmentSystemPromptSample,
@@ -84,6 +85,16 @@ type Props = {
 type SetupField = keyof Setup;
 type SetupValue = string | string[] | VoiceInterviewSlot[];
 
+type RecruitmentTemplate = {
+  id: string;
+  name: string;
+  sourceRoleId: string;
+  setup: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  createdByName: string;
+};
+
 const questionKeys = [
   "requiredInterviewQuestion1",
   "requiredInterviewQuestion2",
@@ -106,6 +117,32 @@ function formatDate(value?: string) {
 
 function valueText(value: unknown) {
   return String(value ?? "").trim();
+}
+
+const templateReplacedFields: SetupField[] = [
+  "jobDescription",
+  "screeningCriteria",
+  "requiredInterviewQuestion1",
+  "requiredInterviewQuestion2",
+  "requiredInterviewQuestion3",
+  "requiredInterviewQuestion4",
+  "requiredInterviewQuestion5",
+  "aiSystemPrompt",
+  "evaluationFieldToggles",
+  "customEvaluationFields",
+  "licenseOrCertificateRequired",
+  "keywordsToLookFor",
+  "minimumYearsOfExperience",
+  "transferableSkillsAccepted",
+  "salaryOrBudgetRange",
+  "earliestAvailabilityRule",
+];
+
+function hasNonEmptyTemplateFields(values: Setup) {
+  return templateReplacedFields.some((key) => {
+    const value = values[key];
+    return Array.isArray(value) ? value.length > 0 : valueText(value) !== "";
+  });
 }
 
 const setupFieldLabels: Record<string, string> = {
@@ -315,6 +352,12 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
+  const [templates, setTemplates] = useState<RecruitmentTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [templateError, setTemplateError] = useState("");
+  const [templateActionId, setTemplateActionId] = useState("");
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
   const actionRequestId = useRef(globalThis.crypto.randomUUID());
   const saveInFlight = useRef(false);
@@ -328,7 +371,29 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
     setValues(initialValues);
     setSavedSetupKey(initialSetupKey);
     setAdvancedPrompt(false);
+    setSelectedTemplateId("");
   }, [initialSetupKey, initialValues]);
+
+  useEffect(() => {
+    if (!editable) return;
+    let cancelled = false;
+    async function loadTemplates() {
+      setTemplateLoading(true);
+      setTemplateError("");
+      try {
+        const response = await fetch("/api/recruitment-templates", { credentials: "same-origin", cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to load recruitment templates.");
+        if (!cancelled) setTemplates(Array.isArray(result.templates) ? result.templates : []);
+      } catch (caught) {
+        if (!cancelled) setTemplateError(caught instanceof Error ? caught.message : "Unable to load recruitment templates.");
+      } finally {
+        if (!cancelled) setTemplateLoading(false);
+      }
+    }
+    void loadTemplates();
+    return () => { cancelled = true; };
+  }, [editable]);
 
   const currentPrompt = rebrandAssistantName(valueText(values.aiSystemPrompt) || STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE);
   const generated = useMemo(() => generatedPrompt(values, currentPrompt), [currentPrompt, values]);
@@ -346,6 +411,8 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
   const setupStatus = values.recruitmentSetupStatus || setup.recruitmentSetupStatus || "Draft";
 
   const setupHasChanges = JSON.stringify(values) !== savedSetupKey;
+  const savedTemplates = templates.filter((template) => template.id);
+  const legacyPromptNeedsSync = hasLegacyInterviewQuestionBlock(currentPrompt);
 
   useEffect(() => {
     dirtyRef.current = setupHasChanges;
@@ -369,6 +436,91 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
     setError("");
     setValidationIssues([]);
   };
+
+  const confirmTemplateReplacement = (templateLabel: string) => {
+    if (!hasNonEmptyTemplateFields(values)) return true;
+    const detail = setupHasChanges
+      ? "Your current unsaved changes will be replaced."
+      : "The current non-empty setup fields will be replaced.";
+    return window.confirm(`Load ${templateLabel}? ${detail} This cannot be undone from the editor unless you reset or re-enter the previous values.`);
+  };
+
+  const applyStandardTemplate = () => {
+    if (!confirmTemplateReplacement("the standard interview script")) return;
+    setValues((current) => ({ ...current, aiSystemPrompt: STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE }));
+    setSelectedTemplateId("");
+    setAdvancedPrompt(true);
+    setMessage("Standard interview script loaded. Review the role-specific sections before saving.");
+    setWarning("");
+    setError("");
+  };
+
+  const applyTemplate = (template: RecruitmentTemplate) => {
+    if (!confirmTemplateReplacement(`template \"${template.name}\"`)) return;
+    setValues(buildInitialValues({
+      ...template.setup,
+      roleTitle: values.roleTitle,
+      postingChannels: normalizeChannels(template.setup.postingChannels as string[] | string | undefined),
+    } as Setup));
+    setSelectedTemplateId(template.id);
+    setAdvancedPrompt(true);
+    setMessage(`Loaded template \"${template.name}\" into the editor. Review the changes, then save when ready.`);
+    setWarning("");
+    setError("");
+  };
+
+  async function saveTemplate() {
+    const name = templateName.trim();
+    if (!name) {
+      setTemplateError("Enter a template name before saving.");
+      return;
+    }
+
+    setTemplateActionId("saving");
+    setTemplateError("");
+    try {
+      const response = await fetch("/api/recruitment-templates", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: "",
+          name,
+          sourceRoleId: roleId,
+          setup: { ...values, aiSystemPrompt: currentPrompt, postingChannels: normalizeChannels(values.postingChannels) },
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to save recruitment template.");
+      const nextTemplate = result.template as RecruitmentTemplate;
+      setTemplates((current) => [...current.filter((template) => template.id !== nextTemplate.id), nextTemplate]);
+      setSelectedTemplateId(nextTemplate.id);
+      setTemplateName("");
+      setMessage(`Template \"${name}\" saved.`);
+    } catch (caught) {
+      setTemplateError(caught instanceof Error ? caught.message : "Unable to save recruitment template.");
+    } finally {
+      setTemplateActionId("");
+    }
+  }
+
+  async function deleteTemplate(template: RecruitmentTemplate) {
+    if (!window.confirm(`Delete template \"${template.name}\"?`)) return;
+    setTemplateActionId(template.id);
+    setTemplateError("");
+    try {
+      const response = await fetch(`/api/recruitment-templates?id=${encodeURIComponent(template.id)}`, { method: "DELETE", credentials: "same-origin" });
+      const result = await response.json();
+      if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to delete recruitment template.");
+      setTemplates((current) => current.filter((item) => item.id !== template.id));
+      if (selectedTemplateId === template.id) setSelectedTemplateId("");
+      setMessage(`Template \"${template.name}\" deleted.`);
+    } catch (caught) {
+      setTemplateError(caught instanceof Error ? caught.message : "Unable to delete recruitment template.");
+    } finally {
+      setTemplateActionId("");
+    }
+  }
 
   const openAdvancedPrompt = () => {
     setValues((current) => ({ ...current, aiSystemPrompt: valueText(current.aiSystemPrompt) || generated }));
@@ -518,6 +670,60 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
       {error && <ValidationSummary error={error} title="Setup save failed" issues={validationIssues} summaryRef={errorSummaryRef} />}
       {message && <ActionFeedback kind="success" className="vapi-message">{message}</ActionFeedback>}
       {warning && <ActionFeedback kind="warning" className="vapi-message">{warning}</ActionFeedback>}
+      {editable && <>
+        <div className="vapi-template-bar">
+          <div>
+            <strong>Reusable interview setup</strong>
+            <small>Load a saved setup or start from Smile's standard interview script. Nothing is saved to this role until you click Save.</small>
+          </div>
+          <div className="vapi-template-actions">
+            <button type="button" className="btn btn-secondary" disabled={saving || templateLoading} onClick={applyStandardTemplate}>Load standard script</button>
+            <label className="field vapi-template-name">
+              <span>Template name</span>
+              <input value={templateName} disabled={saving || templateActionId === "saving"} placeholder="Save current setup as a template" onChange={(event) => setTemplateName(event.target.value)} />
+            </label>
+            <button type="button" className="btn btn-secondary" disabled={saving || templateActionId === "saving"} onClick={() => void saveTemplate()}>Save as template</button>
+          </div>
+        </div>
+        <div className="vapi-template-library">
+          <div className="vapi-section-heading">
+            <div><span className="vapi-kicker">TEMPLATE LIBRARY</span><h3>Saved interview setups</h3><p>Loading a template replaces the current fields locally. Review the changes and save the role when ready.</p></div>
+            <span className="vapi-readonly-badge">{templateLoading ? "Loading..." : `${savedTemplates.length} saved`}</span>
+          </div>
+          {templateError && <ActionFeedback kind="error" className="vapi-message">{templateError}</ActionFeedback>}
+          {savedTemplates.length === 0 && !templateLoading ? (
+            <div className="vapi-template-empty">No saved interview templates are available yet.</div>
+          ) : (
+            <>
+              <div className="vapi-template-picker">
+                <label className="field">
+                  <span>Saved template</span>
+                  <select aria-label="Saved recruitment templates" value={selectedTemplateId} disabled={saving || templateLoading} onChange={(event) => {
+                    const selected = savedTemplates.find((template) => template.id === event.target.value);
+                    if (selected) applyTemplate(selected);
+                  }}>
+                    <option value="">Choose a saved template</option>
+                    {savedTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="vapi-template-list">
+                {savedTemplates.map((template) => (
+                  <div className={`vapi-template-item${selectedTemplateId === template.id ? " is-selected" : ""}`} key={template.id}>
+                    <div><strong>{template.name}</strong><small>{template.sourceRoleId ? `Source role ${template.sourceRoleId}` : "No source role recorded"}</small></div>
+                    <div className="vapi-template-item-actions">
+                      {selectedTemplateId === template.id && <span className="vapi-template-selected">Loaded</span>}
+                      <button type="button" className="btn btn-secondary" disabled={saving || templateActionId === template.id} onClick={() => applyTemplate(template)}>Load</button>
+                      <button type="button" className="btn btn-secondary" disabled={saving || templateActionId === template.id} onClick={() => void deleteTemplate(template)}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </>}
+      {setupHasChanges && <div className="vapi-unsaved-notice" role="status"><strong>Unsaved changes</strong><span>These setup changes are local to this editor and will not affect the role until you save.</span></div>}
 
       <div className="vapi-builder">
         <div className="vapi-section-heading">
@@ -626,6 +832,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
             {!advancedPrompt && <button type="button" className="btn btn-secondary" disabled={!editable || saving} onClick={openAdvancedPrompt}>Advanced: edit full script</button>}
           </div>
         </div>
+        {legacyPromptNeedsSync && <div className="vapi-prompt-warning" role="status"><strong>Legacy prompt detected</strong><span>This saved script contains fixed interview questions. The preview and future calls now use the question fields above; save the setup to keep the corrected prompt.</span></div>}
         {advancedPrompt ? (
            <textarea className="vapi-full-prompt" aria-label="Full interview script" value={currentPrompt} disabled={!editable || saving} onChange={(event) => update("aiSystemPrompt", event.target.value)} />
         ) : (

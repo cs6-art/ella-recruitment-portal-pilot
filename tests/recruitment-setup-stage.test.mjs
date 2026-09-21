@@ -291,6 +291,23 @@ test("evaluation fields flow into the rendered voice interview prompt", async ()
   assert.doesNotMatch(withoutEvaluationFields, /ADDITIONAL EVALUATION FIELDS/);
 });
 
+test("legacy saved prompts replace literal interview questions with current setup values", async () => {
+  const { renderRecruitmentSystemPrompt, hasLegacyInterviewQuestionBlock } = await import("../src/lib/recruitment-prompt.ts");
+  const legacy = `[Identity]\n\nInterview Questions:\n\nQ1: what is your name\nQ2: what is your age\nQ3: what is your education level\n\n[HR Screening Criteria]\n\n{{system_prompt}}`;
+  assert.equal(hasLegacyInterviewQuestionBlock(legacy), true);
+
+  const rendered = renderRecruitmentSystemPrompt(legacy, {
+    jobDescription: "Job",
+    screeningCriteria: "Criteria",
+    interviewQuestions: "Q1: Tell us about your experience.\nQ2: How would you approach this role?\nQ3: What result are you most proud of?",
+  });
+
+  assert.match(rendered, /Q1: Tell us about your experience\./);
+  assert.match(rendered, /Q2: How would you approach this role\?/);
+  assert.match(rendered, /Q3: What result are you most proud of\?/);
+  assert.doesNotMatch(rendered, /what is your education level/);
+});
+
 // Regression guard for the 2026-09-14 pilot incident: a live voice call ran
 // under an unrelated Vapi assistant's own saved prompt ("ELAI (Copy) (Copy)",
 // a generic scheduling-bot greeting) because n8n never received a resolved

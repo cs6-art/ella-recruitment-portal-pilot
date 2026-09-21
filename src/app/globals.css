@@ -1223,6 +1223,10 @@ a { color: inherit; text-decoration: none; }
 .vapi-template-loaded { display: flex; align-items: flex-start; gap: 10px; margin: 0 28px; padding: 11px 13px; border-left: 3px solid var(--blue); border-radius: 8px; color: #35516d; background: #f1f8fe; font-size: 12px; line-height: 1.45; }
 .vapi-template-loaded strong { color: var(--navy); white-space: nowrap; }
 .vapi-template-empty { margin: 0 28px; padding: 16px; border: 1px dashed #cbd9e7; border-radius: 10px; color: var(--muted); background: #fbfdff; font-size: 13px; }
+.vapi-unsaved-notice { display: flex; align-items: flex-start; gap: 10px; margin: 16px 28px 0; padding: 11px 13px; border-left: 3px solid #d8961e; border-radius: 8px; color: #704d11; background: #fff8e9; font-size: 12px; line-height: 1.45; }
+.vapi-unsaved-notice strong { color: #5f3e06; white-space: nowrap; }
+.vapi-prompt-warning { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 14px; padding: 11px 13px; border-left: 3px solid #d8961e; border-radius: 8px; color: #704d11; background: #fff8e9; font-size: 12px; line-height: 1.45; }
+.vapi-prompt-warning strong { color: #5f3e06; white-space: nowrap; }
 .vapi-role-context, .vapi-builder, .vapi-preview { margin: 16px 28px 0; padding: 20px; border: 1px solid #dce6f0; border-radius: 12px; background: #ffffff; }
 .vapi-role-context { background: #f8fbfe; }
 .vapi-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }

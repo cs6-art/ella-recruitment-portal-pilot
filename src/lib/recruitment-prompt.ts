@@ -395,6 +395,55 @@ export function rebrandAssistantName(text: string): string {
   return text.replace(/\bElla\b/gi, "Smile");
 }
 
+function interviewQuestionsHeading(line: string) {
+  return /^\s*(?:approved\s+)?interview\s+questions\s*:?\s*$/i.test(line);
+}
+
+function interviewQuestionLine(line: string) {
+  return /^\s*(?:Q\d+|Question\s+\d+)\s*[:.)-]\s*\S.+$/i.test(line);
+}
+
+/**
+ * Older saved prompts included literal Q1/Q2 lines instead of the
+ * `{{interview_questions}}` marker. Keep those prompts usable when HR edits
+ * the structured question fields by replacing only that legacy section.
+ */
+export function hasLegacyInterviewQuestionBlock(template: string): boolean {
+  const lines = template.split(/\r?\n/);
+  return lines.some((line, index) => {
+    if (!interviewQuestionsHeading(line)) return false;
+    let next = index + 1;
+    while (next < lines.length && lines[next].trim() === "") next += 1;
+    return next < lines.length && interviewQuestionLine(lines[next]);
+  });
+}
+
+function replaceLegacyInterviewQuestionBlock(text: string, questions: string): string {
+  const lines = text.split(/\r?\n/);
+  const headingIndex = lines.findIndex((line) => interviewQuestionsHeading(line));
+  if (headingIndex < 0) return text;
+
+  let next = headingIndex + 1;
+  while (next < lines.length && lines[next].trim() === "") next += 1;
+  const questionStart = next;
+  while (next < lines.length && interviewQuestionLine(lines[next])) next += 1;
+  if (next === questionStart) return text;
+
+  const replacement = [lines[headingIndex], "", questions];
+  return [...lines.slice(0, headingIndex), ...replacement, ...lines.slice(next)].join("\n");
+}
+
+function ensureInterviewQuestionsSection(text: string, questions: string): string {
+  const replaced = replaceLegacyInterviewQuestionBlock(text, questions);
+  if (replaced !== text) return replaced;
+
+  const section = `Interview Questions:\n\n${questions}`;
+  const screeningAnchor = /\n\s*\[HR Screening Criteria\]/i;
+  return screeningAnchor.test(text)
+    ? text.replace(screeningAnchor, `\n\n${section}$&`)
+    : `${text.trimEnd()}\n\n${section}`;
+}
+
 export function renderRecruitmentSystemPrompt(template: string, setup: RecruitmentPromptInput): string {
   const questions = valueOr(setup.interviewQuestions, "No approved interview questions have been provided.");
   const selectedRole = valueOr(setup.roleTitle, "{{selected_role}}");
@@ -408,6 +457,13 @@ export function renderRecruitmentSystemPrompt(template: string, setup: Recruitme
     .replace("{{job_description}}", valueOr(setup.jobDescription, "the approved role requirements"))
     .replaceAll("{{system_prompt}}", screeningCriteria(setup))
     .replace("{{interview_questions}}", questions);
+
+  // Preserve the current structured questions for prompts saved before the
+  // interview-question marker was introduced. This keeps the HR preview and
+  // the dispatched voice prompt in sync with the editable question fields.
+  if (!sourceTemplate.includes("{{interview_questions}}")) {
+    rendered = ensureInterviewQuestionsSection(rendered, questions);
+  }
 
   if (rendered.includes("{{evaluation_fields}}")) {
     rendered = rendered.replace("{{evaluation_fields}}", fieldLines);
