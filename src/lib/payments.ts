@@ -108,6 +108,7 @@ export async function createCreditPurchase(input: CreatePurchaseInput): Promise<
       webhookUrl: `${origin}/api/webhooks/hitpay`,
     });
   } catch (error) {
+    console.error("[Payments] HitPay create failed:", error instanceof Error ? error.message : String(error));
     await db
       .update(payments)
       .set({ status: "failed", updatedAt: new Date(), lastEvent: { error: String(error instanceof Error ? error.message : error) } })
