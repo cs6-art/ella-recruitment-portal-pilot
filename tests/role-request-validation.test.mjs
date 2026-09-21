@@ -60,7 +60,19 @@ test("required-field and vacancy rules remain in the shared schema", () => {
   assert.match(schemaSource, /jobTitle: z\.string\(\)\.trim\(\)\.min/);
   assert.match(schemaSource, /numberOfVacancies: z\.coerce\.number\(\)\.int\(\)\.min\(1\)/);
   assert.match(schemaSource, /reasonForRequest: z\.string\(\)\.trim\(\)\.min/);
-  assert.match(schemaSource, /targetHiringDate: z\.string\(\)\.trim\(\)\.min/);
+  assert.match(schemaSource, /targetHiringDate: z\.string\(\)\.trim\(\)\s*\.min/);
+  assert.match(schemaSource, /Target hiring date must be today or later/);
+  assert.match(schemaSource, /isDateOnOrAfterToday/);
+});
+
+test("target hiring dates cannot be selected or submitted before today", () => {
+  assert.match(formSource, /min=\{todayDateInputValue\(\)\}/);
+  assert.match(formSource, /Select today or a future date/);
+  assert.match(apiSource, /TARGET_HIRING_DATE_IN_PAST/);
+  assert.match(fs.readFileSync("src/app/api/roles/[roleId]/route.ts", "utf8"), /TARGET_HIRING_DATE_IN_PAST/);
+  assert.match(fs.readFileSync("src/app/api/roles/[roleId]/status/route.ts", "utf8"), /TARGET_HIRING_DATE_IN_PAST/);
+  assert.match(dateOnlySource, /todayDateInputValue/);
+  assert.match(dateOnlySource, /isDateOnOrAfterToday/);
 });
 
 test("role creation only renders the requisition and HR screening fields", () => {

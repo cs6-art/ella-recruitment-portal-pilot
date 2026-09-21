@@ -13,6 +13,7 @@ import { canDeleteRoleRequest, canEditRoleRequest, canViewRole } from "@/lib/acc
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetArchiveRole, targetRoleDetails, targetRoleStatusHistory, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 import { roleRequestSchema } from "@/lib/role-schema";
+import { isDateOnOrAfterToday } from "@/lib/date-only";
 import {
   COOKIE_NAME,
   verifySessionToken,
@@ -199,6 +200,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     // Draft autosaves deliberately bypass the strict submission schema. They
     // update the existing row only and never advance its workflow status.
     if (body.draft === true) {
+      const draftTargetHiringDate = body.targetHiringDate === undefined
+        ? ""
+        : String(body.targetHiringDate).trim();
+      if (draftTargetHiringDate && !isDateOnOrAfterToday(draftTargetHiringDate)) {
+        return NextResponse.json({ success: false, error: "Target hiring date must be today or later.", code: "TARGET_HIRING_DATE_IN_PAST" }, { status: 422 });
+      }
       const now = new Date().toISOString();
       const fields = roleDraftFieldsForPatch(body, access.role, access.user, finalInterviewCalendar.email, now);
       if (isPostgresRecruitmentTarget()) {

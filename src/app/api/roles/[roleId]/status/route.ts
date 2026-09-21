@@ -21,6 +21,7 @@ import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleDetails, targetRoleStatusHistory } from "@/lib/recruitment-target-portal";
 import { listRoles, renameRoleExternalId, updateRoleStatus } from "@/lib/internal-recruitment-queries";
+import { isDateOnOrAfterToday } from "@/lib/date-only";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -198,6 +199,9 @@ export async function POST(
       if (!role.reasonForRequest?.trim()) missingFields.push("Reason_For_Request");
       if (!role.targetHiringDate?.trim()) missingFields.push("Target_Hiring_Date");
       if (missingFields.length) return jsonError("Complete the requisition before approving this role.", 409, { code: "REQUISITION_INCOMPLETE", missingFields });
+      if (role.targetHiringDate?.trim() && !isDateOnOrAfterToday(role.targetHiringDate)) {
+        return jsonError("Target hiring date must be today or later. Update it before submitting this role.", 409, { code: "TARGET_HIRING_DATE_IN_PAST" });
+      }
     }
 
     // Autosaved drafts are identified by a client-generated DRAFT-<uuid> id

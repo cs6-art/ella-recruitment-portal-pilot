@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { roleAiRecruitmentSetupDraftSchema } from "@/lib/role-ai-draft-schema";
+import { isDateOnOrAfterToday } from "@/lib/date-only";
 
 const hodAvailabilitySlotSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Select a valid availability date."),
@@ -29,7 +30,10 @@ export const roleRequestSchema = z.object({
   reasonForRequest: z.string().trim().min(10, "Explain why this role is needed.").max(2000),
   jobDescription: z.string().trim().min(20, "Describe the role in at least 20 characters.").max(20000),
   replacementEmployee: z.string().trim().max(150).default(""),
-  targetHiringDate: z.string().trim().min(1, "Select a target hiring date."),
+  targetHiringDate: z.string().trim()
+    .min(1, "Select a target hiring date.")
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Select a valid target hiring date.")
+    .refine((value) => isDateOnOrAfterToday(value), "Target hiring date must be today or later."),
   hodAvailabilityDates: z.string().trim().max(5000).default(""),
   hodAvailabilityTimes: z.string().trim().max(5000).default(""),
   hodAvailabilitySlots: z.array(hodAvailabilitySlotSchema).max(30).default([]),

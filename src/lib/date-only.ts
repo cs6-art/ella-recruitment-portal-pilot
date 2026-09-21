@@ -77,3 +77,37 @@ export function toDateInputValue(value: unknown): string {
   const normalized = normalizeDateOnly(value);
   return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : "";
 }
+
+/** Returns today's calendar date for date-only fields in the portal timezone. */
+export function todayDateInputValue(
+  now = new Date(),
+  timeZone = "Asia/Singapore",
+): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+/** Validates an ISO calendar date and ensures it is today or later. */
+export function isDateOnOrAfterToday(value: unknown, now = new Date()): boolean {
+  const text = String(value ?? "").trim();
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    candidate.getUTCFullYear() !== year
+    || candidate.getUTCMonth() !== month - 1
+    || candidate.getUTCDate() !== day
+  ) return false;
+
+  return text >= todayDateInputValue(now);
+}

@@ -9,6 +9,7 @@ import { createRole, listRoles } from "@/lib/internal-recruitment-queries";
 import { targetRoleDetails, targetRoleSummaries, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 import { filterVisibleRoles } from "@/lib/access-control";
 import { roleRequestSchema } from "@/lib/role-schema";
+import { isDateOnOrAfterToday } from "@/lib/date-only";
 import { generateRoleId } from "@/lib/role-id";
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { resolvePublicAppBaseUrl } from "@/lib/public-url";
@@ -269,6 +270,10 @@ export async function POST(request: Request) {
     // role-request webhook, because incomplete drafts are not ready for HR
     // review and must not trigger notification or approval automation.
     if (clientInput && typeof clientInput === "object" && clientInput.draft === true) {
+      const draftTargetHiringDate = draftText((clientInput as Record<string, unknown>).targetHiringDate, 30);
+      if (draftTargetHiringDate && !isDateOnOrAfterToday(draftTargetHiringDate)) {
+        return NextResponse.json({ success: false, error: "Target hiring date must be today or later.", code: "TARGET_HIRING_DATE_IN_PAST" }, { status: 422 });
+      }
       const requestedDraftId = draftText((clientInput as Record<string, unknown>).draftId, 80).replace(/[^a-zA-Z0-9-]/g, "");
       const roleId = `DRAFT-${requestedDraftId || crypto.randomUUID()}`;
       const now = new Date().toISOString();

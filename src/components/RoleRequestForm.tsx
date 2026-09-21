@@ -8,7 +8,7 @@ import ActionFeedback from "@/components/ActionFeedback";
 import UiIcon from "@/components/UiIcon";
 import ValidationSummary from "@/components/ValidationSummary";
 import { DEPARTMENT_OPTIONS, isKnownDepartment } from "@/lib/department-options";
-import { toDateInputValue } from "@/lib/date-only";
+import { todayDateInputValue, toDateInputValue } from "@/lib/date-only";
 import { roleRequestSchema } from "@/lib/role-schema";
 import type { RoleAiDraft } from "@/lib/role-ai-draft-schema";
 
@@ -484,7 +484,8 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
 
             <div className="field">
               <label htmlFor="targetHiringDate">Target Hiring Date <strong className="required-mark">*</strong></label>
-              <input id="targetHiringDate" {...fieldErrorProps("targetHiringDate")} required type="date" value={form.targetHiringDate} onChange={(event) => update("targetHiringDate", event.currentTarget.value)} onInput={(event) => update("targetHiringDate", event.currentTarget.value)} />
+              <input id="targetHiringDate" {...fieldErrorProps("targetHiringDate")} required min={todayDateInputValue()} type="date" value={form.targetHiringDate} onChange={(event) => update("targetHiringDate", event.currentTarget.value)} onInput={(event) => update("targetHiringDate", event.currentTarget.value)} />
+              <small className="field-help">Select today or a future date. Earlier dates cannot be submitted.</small>
             </div>
 
             {form.requestType === "Staff Replacement" && (
