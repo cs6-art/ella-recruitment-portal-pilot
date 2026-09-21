@@ -21,6 +21,7 @@ type LiveAvatarSessionInstance = {
   voiceChat?: {
     state?: string;
     isMuted?: boolean;
+    start?: () => Promise<void>;
   };
   on: (event: string, handler: (...args: unknown[]) => void) => void;
   off: (event: string, handler: (...args: unknown[]) => void) => void;
@@ -39,6 +40,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
   const [evaluation, setEvaluation] = useState<LiveAvatarEvaluation | null>(null);
   const [lastResponse, setLastResponse] = useState("");
   const [audioBlocked, setAudioBlocked] = useState(false);
+  const [microphoneWarning, setMicrophoneWarning] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const sessionRef = useRef<LiveAvatarSessionInstance | null>(null);
   const sessionIdRef = useRef("");
@@ -65,17 +67,22 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
     }
   }
 
-  async function checkMicrophoneAccess() {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error("This browser does not provide microphone access.");
-    }
-    let stream: MediaStream | null = null;
+  function microphoneErrorMessage(caught: unknown) {
+    const name = caught instanceof DOMException ? caught.name : "";
+    if (name === "NotFoundError") return "No microphone input device was found. Connect or select a microphone, then retry.";
+    if (name === "NotReadableError") return "Your microphone is busy or unavailable to the browser. Close other apps using it, then retry.";
+    if (name === "NotAllowedError" || name === "SecurityError") return "Chrome is still blocking microphone capture for this site. Reset the site permission, reload, and allow the microphone again.";
+    return "The microphone could not be connected. Check the selected input device and browser permission, then retry.";
+  }
+
+  async function retryMicrophone() {
+    const voiceChat = sessionRef.current?.voiceChat;
+    if (!voiceChat?.start) return;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      throw new Error("Please allow microphone access in your browser, then try again.");
-    } finally {
-      stream?.getTracks().forEach((track) => track.stop());
+      await voiceChat.start();
+      if (voiceChat.state === "ACTIVE") setMicrophoneWarning("");
+    } catch (caught) {
+      setMicrophoneWarning(microphoneErrorMessage(caught));
     }
   }
 
@@ -84,12 +91,10 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
     setEvaluation(null);
     setLastResponse("");
     setAudioBlocked(false);
+    setMicrophoneWarning("");
     endingRef.current = false;
     setState("starting");
     try {
-      // Request permission before consuming the one-time invitation. The SDK
-      // otherwise swallows getUserMedia failures and still shows a live video.
-      await checkMicrophoneAccess();
       const tokenResponse = await fetch("/api/live-avatar/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,8 +129,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       setState("connecting");
       await session.start();
       if (session.voiceChat?.state !== "ACTIVE") {
-        await session.stop().catch(() => {});
-        throw new Error("The microphone could not be connected. Please allow microphone access and try again.");
+        setMicrophoneWarning("Smile is connected, but the microphone is not active yet. Check the input device and retry microphone access below.");
       }
     } catch (caught) {
       console.error("[LiveAvatarInterview] Failed to start session:", caught);
@@ -196,6 +200,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
           </div>
         )}
 
+        {microphoneWarning && active && <div className="live-avatar-mic-warning" role="status"><span>{microphoneWarning}</span><button type="button" className="btn btn-secondary" onClick={() => void retryMicrophone()}>Retry microphone</button></div>}
         {lastResponse && active && <div className="live-avatar-transcript"><span>Candidate's latest response</span><p>{lastResponse}</p></div>}
         {active && <button type="button" className="btn btn-secondary" onClick={() => void processResponse()}>Finish and see results</button>}
         {(state === "ending" || state === "evaluating") && <p className="live-avatar-status" aria-live="polite">{state === "ending" ? "Closing the session…" : "Processing your response…"}</p>}
