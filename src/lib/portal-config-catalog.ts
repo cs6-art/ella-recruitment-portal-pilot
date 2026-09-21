@@ -123,7 +123,7 @@ export const PORTAL_CONFIG_CATALOG: PortalConfigEntry[] = [
     key: "Booking_Link_Expiry_Days",
     envKeys: ["BOOKING_LINK_EXPIRY_DAYS"],
     category: "Booking & Interview",
-    description: "Days a pending final-interview booking link stays valid (1-30).",
+    description: "Days a pending AI voice or final HR interview booking link stays valid (1-30).",
     type: "number",
     default: "7",
     min: 1,

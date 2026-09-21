@@ -128,7 +128,7 @@ export function notificationEmail(eventType: string | null | undefined, context:
       return {
         ...base,
         heading: "Schedule your AI voice interview",
-        message: `Dear ${name},\n\nWe are pleased to invite you to the next interview step for ${rolePhrase}. Choose one of the secure options below. Each link expires automatically and can be used once.\n\nYour AI interviewer, Smile, will conduct the voice interview and ask focused questions about your experience. We look forward to speaking with you.`,
+        message: `Dear ${name},\n\nWe are pleased to invite you to the next interview step for ${rolePhrase}. Choose one of the secure options below. Each link expires automatically and can be used once.\n\nYour AI interviewer, Smile, will conduct the voice interview and ask focused questions about your experience. We look forward to speaking with you.\n\n${AI_INTERVIEW_NOTICE}`,
         cta: "Schedule a call",
         ctaLink: link,
         secondaryCta: avatarLink ? "Interview with our Avatar now" : "",

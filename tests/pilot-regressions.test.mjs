@@ -161,11 +161,13 @@ test("voice queue expires late scheduled work before claiming it", () => {
   const source = read("src/lib/internal-recruitment-queries.ts");
   const claim = source.slice(source.indexOf("export async function claimVoiceCalls"), source.indexOf("export async function pendingVoiceCalls"));
   const pending = source.slice(source.indexOf("export async function pendingVoiceCalls"), source.indexOf("export async function dispatchVoiceAttemptDryRun"));
-  for (const section of [claim, pending]) {
-    assert.match(section, /status = 'failed'/);
-    assert.match(section, /outcome = 'system_failure'/);
-    assert.match(section, /VOICE_CALL_MAX_LATE_MINUTES/);
-  }
+  assert.match(claim, /status = 'failed'/);
+  assert.match(claim, /outcome = 'system_failure'/);
+  assert.match(claim, /VOICE_CALL_MAX_LATE_MINUTES/);
+  assert.match(pending, /read-only queue endpoint polled by n8n/);
+  assert.match(pending, /excluded by the predicate below/);
+  assert.match(pending, /VOICE_CALL_MAX_LATE_MINUTES/);
+  assert.doesNotMatch(pending, /UPDATE voice_call_attempts SET status = 'failed'/);
   assert.match(claim, /FOR UPDATE SKIP LOCKED/);
 });
 

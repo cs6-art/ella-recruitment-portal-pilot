@@ -1,4 +1,4 @@
-// One-off, idempotent backfill of the Ella Credit ledger from the Google Sheet
+// One-off, idempotent backfill of the Smile Credit ledger from the Google Sheet
 // into Postgres. Safe to re-run (ON CONFLICT DO NOTHING on source_entry_id).
 // Run: `npm run db:backfill:credits`
 import crypto from "node:crypto";

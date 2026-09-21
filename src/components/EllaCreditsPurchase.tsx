@@ -100,7 +100,7 @@ export default function EllaCreditsPurchase() {
         requestEllaCreditsRefresh();
         clearPaymentReturnUrl();
         setReturnReference("");
-        setReturnMessage(`Payment Successful — ${nf.format(nextPayment.credits)} Ella Credits have been added. Amount paid: ${money.format(nextPayment.amountCents / 100)}. New balance: ${nf.format(nextPayment.newBalance ?? 0)}.`);
+        setReturnMessage(`Payment Successful — ${nf.format(nextPayment.credits)} Smile Credits have been added. Amount paid: ${money.format(nextPayment.amountCents / 100)}. New balance: ${nf.format(nextPayment.newBalance ?? 0)}.`);
         return true;
       }
       if (["failed", "expired", "cancelled", "refunded"].includes(nextPayment.status)) {
@@ -196,7 +196,7 @@ export default function EllaCreditsPurchase() {
       <div className={styles.header}>
         <div>
           <span className={styles.eyebrow}>CREDIT PURCHASE</span>
-          <h2>Buy Ella Credits</h2>
+          <h2>Buy Smile Credits</h2>
           <p>Choose a pack and continue to the secure HitPay checkout. Credits are added only after the verified payment webhook succeeds.</p>
         </div>
       </div>

@@ -89,6 +89,7 @@ test("notification queue carries ready-to-send candidate email copy per booking 
   assert.match(labels, /Smile, will call you at your preferred mobile number/);
   assert.match(labels, /Please ensure you are available and in a quiet location\./);
   assert.match(labels, /AI Interview Notice: This interview will be conducted with the assistance of an AI interviewing system/);
+  assert.match(labels, /We look forward to speaking with you\.\\n\\n\$\{AI_INTERVIEW_NOTICE\}/);
   assert.match(labels, /cta: "Schedule a call"/);
   assert.match(labels, /secondaryCta: avatarLink \? "Interview with our Avatar now"/);
   assert.match(labels, /cta: "Schedule final interview"/);

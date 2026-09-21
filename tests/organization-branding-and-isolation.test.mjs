@@ -43,4 +43,5 @@ test("role IDs are allocated from the signed-in organization's roles", () => {
 test("settings PUT rejects keys outside the explicitly editable catalog", () => {
   const route = read("src/app/api/settings/route.ts");
   assert.match(route, /!editableSettingKeys\.has\(setting\.key\)/);
+  assert.doesNotMatch(route, /\"Voice_Interview_Duration_Minutes\"/);
 });

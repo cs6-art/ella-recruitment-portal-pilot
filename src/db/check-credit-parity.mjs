@@ -236,7 +236,7 @@ const blanksReconcile = pgNullIdCount === 0 && pgSyntheticKeys.length === sheetB
 
 const latestText = pgLatest instanceof Date ? pgLatest.toISOString() : String(pgLatest ?? "n/a");
 
-console.log(`Ella Credits parity check — '${TAB}'  (READ-ONLY; no writes)`);
+console.log(`Smile Credits parity check — '${TAB}'  (READ-ONLY; no writes)`);
 console.log("");
 console.log("Reported values");
 console.log(`   1  Sheets credit balance (Σ Credits_Delta) . ${sheetSum}`);

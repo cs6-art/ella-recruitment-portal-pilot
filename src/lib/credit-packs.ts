@@ -1,5 +1,5 @@
 /**
- * Purchasable Ella Credit packs.
+ * Purchasable Smile Credit packs.
  *
  * Pricing is ALWAYS server-side. The client sends only a `packId`; the server
  * looks up the credits and the payable amount here. There is no code path that
@@ -20,7 +20,7 @@ export type CreditPack = {
   currency: string;
 };
 
-/** Ella Credits are priced at S$0.40 per credit. Keep this calculation in one
+/** Smile Credits are priced at S$0.40 per credit. Keep this calculation in one
  * server-only module so a client payload or an env override cannot change the
  * amount charged for a given quantity. */
 export const ELLA_CREDIT_PRICE_CENTS = 40;

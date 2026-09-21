@@ -1,4 +1,4 @@
-// Seed three synthetic Ella pilot/UAT recruitment scenarios.
+// Seed three synthetic Smile pilot/UAT recruitment scenarios.
 // SAFE BY DEFAULT: requires --confirm-pilot-seed and an empty pilot recruitment
 // database. Credits/payments and Google Sheets are deliberately untouched.
 
@@ -13,7 +13,7 @@ const rawUrl = process.env.DATABASE_URL?.trim();
 if (!rawUrl) { console.error("BLOCKED — DATABASE_URL is not configured."); process.exit(2); }
 const url = new URL(rawUrl);
 if (!url.hostname.toLowerCase().includes("weathered-haze-aukfuaij") || url.pathname !== "/neondb") {
-  console.error("BLOCKED — DATABASE_URL is not the confirmed Ella pilot main database.");
+  console.error("BLOCKED — DATABASE_URL is not the confirmed Smile pilot main database.");
   process.exit(2);
 }
 

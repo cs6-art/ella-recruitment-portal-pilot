@@ -472,7 +472,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
           <div className="bulk-screening-count">
             <span>{files.length} file{files.length === 1 ? "" : "s"} ready to submit</span>
             <EllaCreditsMeter variant="inline" />
-            <span className="bulk-screening-count-hint">Current CV screening cost is shown in Settings → Credits.</span>
+            <span className="bulk-screening-count-hint">Current CV screening cost is shown on the Credits page.</span>
           </div>
           <button type="button" className="btn btn-primary" disabled={!roleId || files.length === 0 || files.length > MAX_FILES_PER_SUBMISSION || uploading} onClick={() => void uploadResumes(files)}>{uploading ? "Uploading and screening..." : `Start screening${files.length ? ` (${files.length})` : ""}`}</button>
         </div>

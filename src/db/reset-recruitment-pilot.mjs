@@ -1,4 +1,4 @@
-// Destructive recruitment-only reset for the Ella pilot database.
+// Destructive recruitment-only reset for the Smile pilot database.
 //
 // SAFE BY DEFAULT: the exact confirmation flag and the pilot database marker
 // are both required. This script never references credit/payment tables or
@@ -43,7 +43,7 @@ if (!rawUrl) {
 const url = new URL(rawUrl);
 const isPilotMain = url.hostname.toLowerCase().includes("weathered-haze-aukfuaij") && url.pathname === "/neondb";
 if (!isPilotMain) {
-  console.error("BLOCKED — DATABASE_URL is not the confirmed Ella pilot main database.");
+  console.error("BLOCKED — DATABASE_URL is not the confirmed Smile pilot main database.");
   process.exit(2);
 }
 if (protectedTables.some((name) => recruitmentTables.includes(name))) {

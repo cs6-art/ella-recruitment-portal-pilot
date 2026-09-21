@@ -7,6 +7,7 @@ import ActionFeedback from "@/components/ActionFeedback";
 import ValidationSummary, { type ValidationIssue } from "@/components/ValidationSummary";
 import { notificationPresentation } from "@/lib/notification-status";
 import {
+  rebrandAssistantName,
   renderRecruitmentSystemPrompt,
   renderRecruitmentSystemPromptSample,
   STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE,
@@ -329,7 +330,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
     setAdvancedPrompt(false);
   }, [initialSetupKey, initialValues]);
 
-  const currentPrompt = valueText(values.aiSystemPrompt) || STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE;
+  const currentPrompt = rebrandAssistantName(valueText(values.aiSystemPrompt) || STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE);
   const generated = useMemo(() => generatedPrompt(values, currentPrompt), [currentPrompt, values]);
   const generatedSample = useMemo(() => generatedSamplePrompt(values, currentPrompt), [currentPrompt, values]);
   const questions = getQuestions(values);

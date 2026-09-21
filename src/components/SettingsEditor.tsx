@@ -85,7 +85,7 @@ export default function SettingsEditor() {
   return (
     <main className="container page settings-page">
       <header className="hero-row settings-header">
-        <div><span className="eyebrow-dark">PORTAL CONFIGURATION</span><h1>Settings</h1><p>Adjust the defaults HR uses for interviews, approvals, and notifications.</p></div>
+        <div><span className="eyebrow-dark">PORTAL CONFIGURATION</span><h1>Settings</h1><p>Adjust the live defaults HR uses for interview scheduling, workflow, notifications, and credits.</p></div>
         <div className="settings-header-note"><strong>HR Defaults</strong><span>Safe to edit. Secrets stay outside this page.</span></div>
       </header>
 

@@ -1001,7 +1001,10 @@ export async function claimVoiceCalls(limit = 10) {
 
 export async function pendingVoiceCalls() {
   const db = getDb();
-  await db.execute(sql`UPDATE voice_call_attempts SET status = 'failed', outcome = 'system_failure', updated_at = now() WHERE status IN ('scheduled','queued','retry_scheduled') AND scheduled_at < now() - (${VOICE_CALL_MAX_LATE_MINUTES} * interval '1 minute')`);
+  // This is a read-only queue endpoint polled by n8n. Expiring rows here used
+  // to turn every empty/read poll into a write transaction. Late work is
+  // excluded by the predicate below, while the atomic claim path and the
+  // maintenance reconciliation job perform the actual expiry update.
   return db.select({ id: voiceCallAttempts.id, applicationId: voiceCallAttempts.applicationId, externalId: applications.externalId, candidateName: applications.candidateName, email: applications.email, preferredMobile: voiceCallAttempts.preferredMobile, contactNumber: voiceCallAttempts.contactNumber, applicantCountry: voiceCallAttempts.applicantCountry, attemptNumber: voiceCallAttempts.attemptNumber, maxAttempts: voiceCallAttempts.maxAttempts, scheduledAt: voiceCallAttempts.scheduledAt, status: voiceCallAttempts.status }).from(voiceCallAttempts).innerJoin(applications, eq(applications.id, voiceCallAttempts.applicationId)).where(and(inArray(voiceCallAttempts.status, ["scheduled", "queued", "retry_scheduled"]), or(isNull(voiceCallAttempts.scheduledAt), and(lte(voiceCallAttempts.scheduledAt, sql`now()`), gte(voiceCallAttempts.scheduledAt, sql`now() - (${VOICE_CALL_MAX_LATE_MINUTES} * interval '1 minute')`))))).orderBy(asc(voiceCallAttempts.scheduledAt)).limit(LIMIT);
 }
 

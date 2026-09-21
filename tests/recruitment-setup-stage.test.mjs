@@ -179,6 +179,17 @@ test("VAPI prompt is interview-only and has no scheduling context", () => {
   assert.match(prompt, /never schedule an HR interview/);
 });
 
+test("VAPI prompt cannot restart a completed interview after an applicant question", () => {
+  const prompt = fs.readFileSync("src/lib/recruitment-prompt.ts", "utf8");
+  assert.match(prompt, /\[Interview State Machine - Highest Priority\]/);
+  assert.match(prompt, /transition permanently to WRAP_UP/);
+  assert.match(prompt, /Never move from WRAP_UP back to SCREENING/);
+  assert.match(prompt, /If all approved questions are complete or WRAP_UP has already started, return to WRAP_UP instead/);
+  assert.match(prompt, /Never restart at Q1/);
+  assert.match(prompt, /only if the call is still in SCREENING and a required question remains unanswered/);
+  assert.match(prompt, /Once WRAP_UP begins, handle the question briefly and continue WRAP_UP/);
+});
+
 test("AI voice interview emails disclose the AI interviewer and human review", () => {
   const contracts = fs.readFileSync("docs/N8N-CONTRACTS.md", "utf8");
   const workflow = fs.readFileSync("docs/WORKING-RECRUITMENT-WORKFLOW.md", "utf8");
