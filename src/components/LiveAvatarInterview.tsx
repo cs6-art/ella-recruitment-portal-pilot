@@ -18,6 +18,10 @@ type LiveAvatarSessionInstance = {
   start: () => Promise<void>;
   stop: () => Promise<void>;
   attach: (element: HTMLMediaElement) => void;
+  voiceChat?: {
+    state?: string;
+    isMuted?: boolean;
+  };
   on: (event: string, handler: (...args: unknown[]) => void) => void;
   off: (event: string, handler: (...args: unknown[]) => void) => void;
 };
@@ -34,6 +38,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
   const [error, setError] = useState("");
   const [evaluation, setEvaluation] = useState<LiveAvatarEvaluation | null>(null);
   const [lastResponse, setLastResponse] = useState("");
+  const [audioBlocked, setAudioBlocked] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const sessionRef = useRef<LiveAvatarSessionInstance | null>(null);
   const sessionIdRef = useRef("");
@@ -46,13 +51,45 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
     };
   }, []);
 
+  async function playAvatarAudio() {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = false;
+    try {
+      await video.play();
+      setAudioBlocked(false);
+    } catch {
+      // Chrome may reject playback after the session API/WebRTC awaits. Keep
+      // the session alive and give the candidate a direct user-gesture retry.
+      setAudioBlocked(true);
+    }
+  }
+
+  async function checkMicrophoneAccess() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("This browser does not provide microphone access.");
+    }
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      throw new Error("Please allow microphone access in your browser, then try again.");
+    } finally {
+      stream?.getTracks().forEach((track) => track.stop());
+    }
+  }
+
   async function startInterview() {
     setError("");
     setEvaluation(null);
     setLastResponse("");
+    setAudioBlocked(false);
     endingRef.current = false;
     setState("starting");
     try {
+      // Request permission before consuming the one-time invitation. The SDK
+      // otherwise swallows getUserMedia failures and still shows a live video.
+      await checkMicrophoneAccess();
       const tokenResponse = await fetch("/api/live-avatar/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -62,7 +99,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       if (!tokenResponse.ok || !tokenBody?.success) throw new Error(tokenBody?.error || "Smile isn't available right now.");
 
       const { LiveAvatarSession, SessionEvent, AgentEventsEnum } = await import("@heygen/liveavatar-web-sdk");
-      const session = new LiveAvatarSession(tokenBody.sessionToken, { voiceChat: true }) as unknown as LiveAvatarSessionInstance;
+      const session = new LiveAvatarSession(tokenBody.sessionToken, { voiceChat: { defaultMuted: false } }) as unknown as LiveAvatarSessionInstance;
       sessionRef.current = session;
       sessionIdRef.current = typeof tokenBody.sessionId === "string" ? tokenBody.sessionId : "";
 
@@ -74,6 +111,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       const streamReady = () => {
         setState("live");
         if (videoRef.current) session.attach(videoRef.current);
+        void playAvatarAudio();
       };
       const userTranscription = (...args: unknown[]) => {
         const text = eventText(args);
@@ -85,6 +123,10 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
 
       setState("connecting");
       await session.start();
+      if (session.voiceChat?.state !== "ACTIVE") {
+        await session.stop().catch(() => {});
+        throw new Error("The microphone could not be connected. Please allow microphone access and try again.");
+      }
     } catch (caught) {
       console.error("[LiveAvatarInterview] Failed to start session:", caught);
       setError(caught instanceof Error ? caught.message : "Smile isn't available right now.");
@@ -150,6 +192,7 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
             <video ref={videoRef} autoPlay playsInline className={`live-avatar-video ${state === "live" ? "is-ready" : ""}`} />
             {state === "starting" && <div className="live-avatar-stage-overlay">Preparing your private interview…</div>}
             {state === "connecting" && <div className="live-avatar-stage-overlay">Waiting for Smile to join…</div>}
+            {audioBlocked && <button type="button" className="live-avatar-audio-retry" onClick={() => void playAvatarAudio()}>Enable sound</button>}
           </div>
         )}
 
