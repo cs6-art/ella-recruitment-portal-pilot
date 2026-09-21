@@ -34,7 +34,7 @@ function eventText(args: unknown[]) {
   return typeof text === "string" ? text.trim() : "";
 }
 
-export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, preparation, accessToken = "" }: Props) {
+export default function LiveAvatarInterview({ roleId, candidateName, preparation, accessToken = "" }: Props) {
   const [state, setState] = useState<WidgetState>("idle");
   const [error, setError] = useState("");
   const [evaluation, setEvaluation] = useState<LiveAvatarEvaluation | null>(null);
@@ -56,7 +56,10 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
   async function playAvatarAudio() {
     const video = videoRef.current;
     if (!video) return;
+    video.autoplay = true;
+    video.playsInline = true;
     video.muted = false;
+    video.volume = 1;
     try {
       await video.play();
       setAudioBlocked(false);
@@ -103,8 +106,10 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       const tokenBody = await tokenResponse.json().catch(() => ({}));
       if (!tokenResponse.ok || !tokenBody?.success) throw new Error(tokenBody?.error || "Smile isn't available right now.");
 
-      const { LiveAvatarSession, SessionEvent, AgentEventsEnum } = await import("@heygen/liveavatar-web-sdk");
-      const session = new LiveAvatarSession(tokenBody.sessionToken, { voiceChat: { defaultMuted: false } }) as unknown as LiveAvatarSessionInstance;
+      const { LiveAvatarSession, SessionEvent, AgentEventsEnum, SessionInteractivityMode } = await import("@heygen/liveavatar-web-sdk");
+      const session = new LiveAvatarSession(tokenBody.sessionToken, {
+        voiceChat: { defaultMuted: false, mode: SessionInteractivityMode.CONVERSATIONAL },
+      }) as unknown as LiveAvatarSessionInstance;
       sessionRef.current = session;
       sessionIdRef.current = typeof tokenBody.sessionId === "string" ? tokenBody.sessionId : "";
 
@@ -115,8 +120,17 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       };
       const streamReady = () => {
         setState("live");
-        if (videoRef.current) session.attach(videoRef.current);
+        if (videoRef.current) {
+          videoRef.current.muted = false;
+          videoRef.current.volume = 1;
+          session.attach(videoRef.current);
+        }
         void playAvatarAudio();
+        // LiveKit may mute a combined audio/video element when its first
+        // autoplay attempt races the remote track attachment. Retry after the
+        // track has settled so the candidate can hear Smile without needing a
+        // second browser permission flow.
+        window.setTimeout(() => void playAvatarAudio(), 300);
       };
       const userTranscription = (...args: unknown[]) => {
         const text = eventText(args);
@@ -184,8 +198,6 @@ export default function LiveAvatarInterview({ roleId, roleTitle, candidateName, 
       <div className="live-avatar-body">
         {state === "idle" && (
           <>
-            <p>Smile has reviewed the candidate's resume for the <strong>{roleTitle}</strong> role and prepared a question about the experience most relevant to it.</p>
-            <div className="live-avatar-question"><span>Smile will ask</span><strong>{preparation.screeningQuestion}</strong></div>
             <p className="live-avatar-disclosure">This is an AI interview aid. The candidate's response will be transcribed and summarized for the recruitment team. You can stop at any time.</p>
             <button type="button" className="btn btn-primary" onClick={() => void startInterview()}>Start with Smile</button>
           </>
