@@ -55,13 +55,13 @@ function externalUrl(value: string) {
 }
 
 function bookingInvitationStatus(input: { tokenLink: string; notificationStatus: string; isScheduled: boolean }) {
-  if (input.isScheduled) return "Booking link used";
+  if (input.isScheduled) return "Invitation completed";
   switch (input.notificationStatus.trim().toLowerCase()) {
-    case "sent": return "Booking link sent";
-    case "pending": return "Booking email queued";
-    case "failed": return "Booking email failed — retry pending";
-    case "not_configured": return "Booking email not configured";
-    default: return input.tokenLink ? "Booking link not sent" : "Booking link not created";
+    case "sent": return "Invitation sent";
+    case "pending": return "Invitation queued";
+    case "failed": return "Invitation failed — retry available";
+    case "not_configured": return "Invitation email not configured";
+    default: return input.tokenLink ? "Invitation not sent" : "Invitation not created";
   }
 }
 
@@ -127,15 +127,15 @@ function FinalInterviewCard({ applicant, role }: { applicant: ApplicantDetails; 
   const calendarError = recordValue(slot, "Google_Calendar_Event_Error");
 
   return <section className="card applicant-detail-card applicant-final-interview-card">
-    <DetailCardHeader icon="briefcase" title="Face-to-Face Interview" description="Schedule and interview outcome details." />
+    <DetailCardHeader icon="briefcase" title="Face-to-Face Interview" description="Interview timing, attendee and outcome details." />
     <div className="applicant-detail-content">
       <div className="applicant-detail-inline-fields">
         <DetailField label="Applicant" value={applicant.candidateName} />
         <DetailField label="Role" value={applicant.selectedRole} />
         <DetailField label="Status" value={displayedStatus} />
         <DetailField label="Booking Status" value={bookingStatus} />
-        <DetailField label="Booking Link Email" value={bookingLinkStatus} />
-        <DetailField label="Scheduled" value={scheduledValue(scheduledDate, scheduledTime)} />
+        <DetailField label="Invitation status" value={bookingLinkStatus} />
+        <DetailField label="Interview time" value={scheduledValue(scheduledDate, scheduledTime)} />
         <DetailField label="Timezone" value={timezone || "Not provided"} />
         <DetailField label="Interviewer" value={interviewer} className="applicant-final-interviewer-field" />
         <DetailField label="Recommendation" value={recommendation} />
@@ -171,7 +171,7 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
       ? "No recommendation — not enough interview content to evaluate"
       : "Awaiting AI evaluation";
   return <section className="card applicant-detail-card applicant-screening-evidence-card">
-    <DetailCardHeader icon="document" title="AI Screening Evidence" description="CV analysis and voice interview evidence for one complete HR review." />
+    <DetailCardHeader icon="document" title="AI Screening Evidence" description="CV analysis and voice interview evidence to support a consistent review." />
     <div className="applicant-detail-content">
       <div className="applicant-evidence-subsection">
         <div className="applicant-evidence-subsection-heading"><UiIcon name="document" size={16} /><h3>AI CV Analysis</h3></div>
@@ -190,8 +190,8 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
         <div className="applicant-detail-inline-fields">
           <DetailField label="Status" value={applicantStageLabel(voiceCallStatus) || applicantStageLabel(applicant.voiceStatus) || "Not Started"} />
           <DetailField label="Booking Status" value={applicant.voiceBookingStatus || "Not Booked"} />
-          <DetailField label="Booking Link Email" value={bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "completed"].includes(voiceCallStatus.toLowerCase()) })} />
-          <DetailField label="Scheduled" value={scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />
+          <DetailField label="Invitation status" value={bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "completed"].includes(voiceCallStatus.toLowerCase()) })} />
+          <DetailField label="Interview time" value={scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />
           <DetailField label="Timezone" value={recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || applicant.voiceTimezone || "Not provided"} />
           <DetailField label="Voice AI Score" value={applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : voiceScorePending} />
           <DetailField label="AI Recommendation" value={applicant.voiceRecommendation || voiceRecommendationPending} />

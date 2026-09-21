@@ -83,10 +83,10 @@ export default function BookingSelector({ token, initialContext }: { token: stri
         body: JSON.stringify({ slotId: selected, preferredMobile }),
       });
       const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || "This slot is no longer available.");
+      if (!response.ok || !data.success) throw new Error(data.error || "That time is no longer available. Please select another time.");
       setContext({ ...data.booking, preferredMobile });
       setSelected("");
-      setConfirmationMessage("Your interview time was confirmed successfully.");
+      setConfirmationMessage("Your interview time has been confirmed.");
     } catch (bookingError) {
       setError(bookingError instanceof Error ? bookingError.message : "Unable to complete booking.");
     } finally {
@@ -94,31 +94,32 @@ export default function BookingSelector({ token, initialContext }: { token: stri
     }
   }
 
+  const interviewLabel = context.kind === "voice" ? "AI voice interview" : "face-to-face interview";
   return <main className="booking-page"><section className="booking-card">
     <div className="booking-brand"><span className="booking-brand-mark">M</span><span><strong>McLink</strong><small>Recruitment Portal</small></span></div>
     <div className="booking-eyebrow">{title}</div>
-    <h1>{noAvailability ? (noShow ? "No replacement times available" : "No interview times available") : noShow ? "Choose a new interview time" : completed ? "Your interview is complete" : booked ? "Your interview is scheduled" : "Choose a time that works for you"}</h1>
-    <p className="booking-intro">Hi {context.candidateName || "there"}. {noAvailability ? <>There are currently no available times for {roleName ? <><strong>{roleName}</strong> role</> : "this role"}.</> : selecting ? <>Select an available slot for {roleName ? <><strong>{roleName}</strong> role</> : "this role"}.</> : <>{roleName ? <>Your <strong>{roleName}</strong> interview is confirmed.</> : "Your interview is confirmed."}</>}</p>
-    {context.kind === "voice" && <p className="booking-ai-disclosure">This interview will be conducted by Smile, McLink Group's AI interview assistant. Your responses will be reviewed by our recruitment team.</p>}
+    <h1>{noAvailability ? (noShow ? "No replacement times are available" : "No interview times are currently available") : noShow ? "Choose a new interview time" : completed ? "Your interview has been completed" : booked ? "Your interview is confirmed" : "Choose a time for your interview"}</h1>
+    <p className="booking-intro">Hello {context.candidateName || "there"}. {noAvailability ? <>We do not have any available times for {roleName ? <><strong>{roleName}</strong> at this time</> : interviewLabel}.</> : selecting ? <>Select a time that suits you for {roleName ? <><strong>{roleName}</strong></> : "your interview"}.</> : <>{roleName ? <>Your <strong>{roleName}</strong> interview has been confirmed.</> : "Your interview has been confirmed."}</>}</p>
+    {context.kind === "voice" && <p className="booking-ai-disclosure"><strong>About this interview</strong><br />Smile, McLink Group&apos;s AI interview assistant, will conduct this interview. Your responses may be recorded, transcribed, and assessed against job-related criteria before review by our recruitment team.</p>}
     {booked && !noShow ? <div className="booking-confirmed">
       {confirmationMessage && <ActionFeedback kind="success" className="booking-confirmed-feedback">{confirmationMessage}</ActionFeedback>}
       <div className="booking-confirmed-icon">✓</div>
-      <h2>{completed ? "Interview completed" : "Your interview is scheduled"}</h2>
-      <p>{context.scheduledDate ? displayDate(context.scheduledDate) : "Your selected date"} · {context.scheduledTime || "Time confirmed"} {context.timezone || ""}</p>
-      {context.kind === "final" && context.finalInterviewVenue?.trim() && <div className="booking-venue"><strong>Venue</strong><p>{context.finalInterviewVenue.trim()}</p></div>}
+      <h2>{completed ? "Interview completed" : "Interview time confirmed"}</h2>
+      <div className="booking-confirmed-details"><div><span>Interview</span><strong>{title}</strong></div><div><span>Confirmed for</span><strong>{context.scheduledDate ? displayDate(context.scheduledDate) : "Your selected date"} · {context.scheduledTime || "Time confirmed"}</strong><small>{context.timezone || "Time zone not provided"}</small></div></div>
+      {context.kind === "final" && context.finalInterviewVenue?.trim() && <div className="booking-venue"><strong>Interview location</strong><p>{context.finalInterviewVenue.trim()}</p></div>}
       <small>{completed ? "The recruitment team has received the interview result." : "You may close this page. The recruitment team has received your booking."}</small>
-    </div> : noAvailability ? <div className="booking-empty booking-no-availability" role="status"><strong>No times are currently available</strong><p>Please reply to your interview invitation email so the recruitment team can send you a new booking link.</p></div> : <>
-      {noShow && <div className="booking-notice">This interview was marked <strong>No Show</strong>. You may choose a replacement time below.</div>}
-      {context.kind === "voice" && <div className="field booking-mobile-field"><span>Preferred mobile number *</span><div className="contact-number-controls"><label><CountrySelect ariaLabel="Country code" value={countryCode} disabled={saving} onChange={setCountryCode} /></label><label><span className="sr-only">Local mobile number</span><input required aria-label="Local mobile number" inputMode="numeric" value={localMobile} disabled={saving} placeholder={(countryOptions.find((country) => country.code === countryCode) || countryOptions[0]).placeholder} onChange={(event) => setLocalMobile(cleanDigits(event.target.value))} /></label></div><small>Enter the local number only, without the country code.</small></div>}
-      <div className="booking-section-heading"><h2>Choose a date</h2><span>{context.slots.length} available times</span></div>
+    </div> : noAvailability ? <div className="booking-empty booking-no-availability" role="status"><strong>No times are currently available</strong><p>Please reply to your invitation email so our recruitment team can provide a new booking link.</p></div> : <>
+      {noShow && <div className="booking-notice">This interview was marked as a <strong>no-show</strong>. You can choose a new time below.</div>}
+      {context.kind === "voice" && <div className="field booking-mobile-field"><span>Mobile number for the interview call *</span><div className="contact-number-controls"><label><CountrySelect ariaLabel="Country code" value={countryCode} disabled={saving} onChange={setCountryCode} /></label><label><span className="sr-only">Local mobile number</span><input required aria-label="Local mobile number" inputMode="numeric" value={localMobile} disabled={saving} placeholder={(countryOptions.find((country) => country.code === countryCode) || countryOptions[0]).placeholder} onChange={(event) => setLocalMobile(cleanDigits(event.target.value))} /></label></div><small>Enter the local number only, without the country code.</small></div>}
+      <div className="booking-section-heading"><h2>Select a date</h2><span>{context.slots.length} available time{context.slots.length === 1 ? "" : "s"}</span></div>
       {context.slots.length === 0 ? <div className="booking-empty">There are no available times right now. Please contact the recruitment team for a new booking link.</div> : <>
       <div className="booking-date-cards" aria-label="Available interview dates">{dates.map((date) => <button type="button" key={date} className={`booking-date-card ${selectedDate === date ? "is-selected" : ""}`} onClick={() => { setSelectedDate(date); setSelected(""); setError(""); }}><strong>{displayDate(date)}</strong><span>{slotsByDate.get(date)?.length || 0} available time{slotsByDate.get(date)?.length === 1 ? "" : "s"}</span></button>)}</div>
-        <div className="booking-section-heading booking-time-heading"><h2>Choose a time</h2><span>{selectedDate ? displayDate(selectedDate) : "Select a date first"}</span></div>
+        <div className="booking-section-heading booking-time-heading"><h2>Select a time</h2><span>{selectedDate ? displayDate(selectedDate) : "Select a date first"}</span></div>
         <div className="booking-time-list">{selectedDateSlots.map((slot) => <button type="button" className={`booking-slot ${selected === slot.slotId ? "booking-slot-selected" : ""}`} key={slot.slotId} onClick={() => setSelected(slot.slotId)}><strong>{slot.startTime} - {slot.endTime}</strong><small>{slot.timezone}</small></button>)}</div>
       </>}
-      {error && <ValidationSummary error={error} title="Booking failed" />}
-      <button type="button" className="booking-submit" disabled={saving || !selected || (context.kind === "voice" && !localMobile.trim()) || context.slots.length === 0} onClick={() => void reserve()}>{saving ? "Confirming..." : noShow ? "Confirm new interview time" : "Confirm interview time"}</button>
+      {error && <ValidationSummary error={error} title="We couldn&apos;t confirm this time" />}
+      <button type="button" className="booking-submit" disabled={saving || !selected || (context.kind === "voice" && !localMobile.trim()) || context.slots.length === 0} onClick={() => void reserve()}>{saving ? "Confirming your time…" : noShow ? "Confirm new interview time" : "Confirm this interview time"}</button>
     </>}
-    <p className="booking-help">Need help? Reply to the interview invitation email.</p>
+    <p className="booking-help">Need help? Reply to your invitation email and our recruitment team will assist you.</p>
   </section></main>;
 }

@@ -76,18 +76,18 @@ test("notification queue exposes email-ready wording, not raw workflow keys", ()
   assert.match(query, /eventLabel: notificationEventLabel\(history\.notificationEventType\)/);
   assert.match(query, /statusLabel: notificationStatusLabel\(history\.newStage\)/);
   assert.match(query, /summary: notificationSummary\(history\.notificationEventType, history\.comments\)/);
-  assert.match(labels, /voice_result_next_step: "AI voice interview completed — HR review needed"/);
+  assert.match(labels, /voice_result_next_step: "Voice interview complete — review required"/);
   assert.match(labels, /A recruitment workflow update requires your attention\./);
 });
 
 test("notification queue carries ready-to-send candidate email copy per booking event", () => {
   const labels = read("src/lib/notification-labels.ts");
   const query = read("src/lib/internal-recruitment-queries.ts");
-  assert.match(labels, /voice_booking_invitation: "Schedule your AI voice interview with McLink Group"/);
-  assert.match(labels, /voice_booking_confirmation: "Your AI voice interview is confirmed"/);
-  assert.match(labels, /Your AI interviewer, Smile, will conduct the voice interview/);
-  assert.match(labels, /Smile, will call you at your preferred mobile number/);
-  assert.match(labels, /Please ensure you are available and in a quiet location\./);
+  assert.match(labels, /voice_booking_invitation: "Schedule your AI voice interview \| McLink Group"/);
+  assert.match(labels, /voice_booking_confirmation: "Your AI voice interview is confirmed \| McLink Group"/);
+  assert.match(labels, /Smile, McLink Group's AI interview assistant, will conduct the voice interview/);
+  assert.match(labels, /Smile, McLink Group's AI interview assistant, will call your preferred mobile number/);
+  assert.match(labels, /Please be available in a quiet location with a stable phone connection\./);
   assert.match(labels, /AI Interview Notice: This interview will be conducted with the assistance of an AI interviewing system/);
   assert.match(labels, /We look forward to speaking with you\.\\n\\n\$\{AI_INTERVIEW_NOTICE\}/);
   assert.match(labels, /cta: "Schedule a call"/);
@@ -158,10 +158,10 @@ test("HR booking cards expose invitation delivery separately from booking state"
   const page = read("src/app/applicants/[applicationId]/page.tsx");
   const target = read("src/lib/recruitment-target-portal.ts");
   const query = read("src/lib/internal-recruitment-queries.ts");
-  assert.match(page, /Booking Link Email/);
-  assert.match(page, /Booking link sent/);
-  assert.match(page, /Booking email queued/);
-  assert.match(page, /Booking email failed/);
+  assert.match(page, /Invitation status/);
+  assert.match(page, /Invitation sent/);
+  assert.match(page, /Invitation queued/);
+  assert.match(page, /Invitation failed/);
   assert.match(target, /getApplicationBookingNotification\(externalId, "final"\)/);
   assert.match(query, /final_booking_invitation/);
   assert.match(query, /notificationSentAt/);
