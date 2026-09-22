@@ -28,6 +28,19 @@ type LiveAvatarSessionInstance = {
   off: (event: string, handler: (...args: unknown[]) => void) => void;
 };
 
+type BrowserSpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
 function eventText(args: unknown[]) {
   const value = args[0];
   if (!value || typeof value !== "object") return "";
@@ -44,7 +57,8 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [microphoneWarning, setMicrophoneWarning] = useState("");
   const [typedResponse, setTypedResponse] = useState("");
-  const [microphoneFallbackAvailable, setMicrophoneFallbackAvailable] = useState(false);
+  const [browserVoiceMode, setBrowserVoiceMode] = useState(false);
+  const [browserVoiceActive, setBrowserVoiceActive] = useState(false);
   const [sessionIssued, setSessionIssued] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -52,10 +66,13 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
   const sessionIdRef = useRef("");
   const endingRef = useRef(false);
   const audioBlockedRef = useRef(false);
+  const browserVoiceModeRef = useRef(false);
+  const speechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
   useEffect(() => {
     return () => {
       sessionRef.current?.stop().catch(() => {});
+      speechRecognitionRef.current?.stop();
       sessionRef.current = null;
     };
   }, []);
@@ -125,7 +142,11 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
     try {
       const deviceId = await requestMicrophoneDevice();
       await voiceChat.start({ defaultMuted: false, deviceId: deviceId || undefined });
-      if (voiceChat.state === "ACTIVE") setMicrophoneWarning("");
+      if (voiceChat.state === "ACTIVE") {
+        browserVoiceModeRef.current = false;
+        setBrowserVoiceMode(false);
+        setMicrophoneWarning("");
+      }
     } catch (caught) {
       setMicrophoneWarning(caught instanceof Error ? caught.message : microphoneErrorMessage(caught));
     }
@@ -139,8 +160,8 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
     window.speechSynthesis.speak(utterance);
   }
 
-  function submitTypedResponse() {
-    const text = typedResponse.trim();
+  function sendResponseText(value: string) {
+    const text = value.trim();
     const session = sessionRef.current;
     if (!text || !session?.message) return;
     try {
@@ -152,7 +173,47 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
     }
   }
 
-  async function startInterview(allowWithoutMicrophone = false) {
+  function submitTypedResponse() {
+    sendResponseText(typedResponse);
+  }
+
+  function startBrowserVoice() {
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    };
+    const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!Recognition) {
+      setMicrophoneWarning("Browser voice input is unavailable here. Type your response below instead.");
+      return;
+    }
+    speechRecognitionRef.current?.stop();
+    const recognition = new Recognition();
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript || "";
+      sendResponseText(transcript);
+    };
+    recognition.onerror = (event) => {
+      setBrowserVoiceActive(false);
+      setMicrophoneWarning(event.error === "not-allowed"
+        ? "Chrome did not allow browser voice input. Type your response below instead."
+        : "Browser voice input was unavailable. Type your response below instead.");
+    };
+    recognition.onend = () => setBrowserVoiceActive(false);
+    speechRecognitionRef.current = recognition;
+    setBrowserVoiceActive(true);
+    try {
+      recognition.start();
+    } catch {
+      setBrowserVoiceActive(false);
+      setMicrophoneWarning("Browser voice input could not start. Type your response below instead.");
+    }
+  }
+
+  async function startInterview() {
     setError("");
     setEvaluation(null);
     setLastResponse("");
@@ -160,7 +221,10 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
     audioBlockedRef.current = false;
     setAudioBlocked(false);
     setMicrophoneWarning("");
-    setMicrophoneFallbackAvailable(false);
+    browserVoiceModeRef.current = false;
+    setBrowserVoiceMode(false);
+    setBrowserVoiceActive(false);
+    speechRecognitionRef.current?.stop();
     setTypedResponse("");
     setSessionIssued(false);
     endingRef.current = false;
@@ -169,15 +233,12 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
       // Resolve the actual input device while this direct click still carries
       // browser permission activation, before consuming the one-time invite.
       let microphoneDeviceId = "";
-      if (!allowWithoutMicrophone) {
-        try {
-          microphoneDeviceId = await requestMicrophoneDevice();
-        } catch (caught) {
-          setError(caught instanceof Error ? caught.message : "The microphone could not be connected.");
-          setMicrophoneFallbackAvailable(true);
-          setState("error");
-          return;
-        }
+      try {
+        microphoneDeviceId = await requestMicrophoneDevice();
+      } catch {
+        browserVoiceModeRef.current = true;
+        setBrowserVoiceMode(true);
+        setMicrophoneWarning("Chrome microphone capture is unavailable. Browser voice input and typed responses are enabled instead.");
       }
       const tokenResponse = await fetch("/api/live-avatar/session", {
         method: "POST",
@@ -191,14 +252,13 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
       const { LiveAvatarSession, SessionEvent, AgentEventsEnum } = await import("@heygen/liveavatar-web-sdk");
       const session = new LiveAvatarSession(tokenBody.sessionToken, {
         autoKeepAlive: true,
-        voiceChat: { defaultMuted: false, deviceId: microphoneDeviceId || undefined },
+        voiceChat: { defaultMuted: !microphoneDeviceId, deviceId: microphoneDeviceId || undefined },
       }) as unknown as LiveAvatarSessionInstance;
-      if (!microphoneDeviceId && session.voiceChat?.start) {
-        // SDK 0.0.19 attempts microphone capture whenever voiceChat is
-        // configured. For the text fallback, keep the WebRTC avatar session
-        // alive without publishing a local track.
-        session.voiceChat.start = async () => {};
-        setMicrophoneWarning("Microphone access is unavailable. Type your response below and Smile will still reply.");
+      if (!microphoneDeviceId) {
+        // Start the avatar in text-only mode when direct capture is unavailable.
+        // This keeps the session alive and leaves voiceChat.start available for
+        // the Retry microphone button if the browser permission is repaired.
+        setMicrophoneWarning("Chrome microphone capture is unavailable. Browser voice input and typed responses are enabled instead.");
       }
       sessionRef.current = session;
       sessionIdRef.current = typeof tokenBody.sessionId === "string" ? tokenBody.sessionId : "";
@@ -228,7 +288,7 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
         const text = eventText(args);
         if (!text) return;
         setAvatarTranscript(text);
-        if (audioBlockedRef.current) speakWithBrowserVoice(text);
+        if (browserVoiceModeRef.current || audioBlockedRef.current) speakWithBrowserVoice(text);
       };
       const avatarSpeakStarted = () => {
         // A fresh speech turn can arrive after Chrome has suspended playback;
@@ -244,6 +304,8 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
       setState("connecting");
       await session.start();
       if (microphoneDeviceId && session.voiceChat?.state !== "ACTIVE") {
+        browserVoiceModeRef.current = true;
+        setBrowserVoiceMode(true);
         setMicrophoneWarning("Smile is connected, but the microphone is not active yet. Check the input device and retry microphone access below.");
       }
     } catch (caught) {
@@ -315,6 +377,11 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
         )}
 
         {microphoneWarning && active && <div className="live-avatar-mic-warning" role="status"><span>{microphoneWarning}</span><button type="button" className="btn btn-secondary" onClick={() => void retryMicrophone()}>Retry microphone</button></div>}
+        {active && browserVoiceMode && <div className="live-avatar-browser-voice" role="status">
+          <p>Browser voice fallback is active. Click the button, speak, and Smile will receive the transcript.</p>
+          <button type="button" className="btn btn-secondary" onClick={startBrowserVoice} disabled={browserVoiceActive}>{browserVoiceActive ? "Listening…" : "Talk to Smile"}</button>
+          {avatarTranscript && <button type="button" className="btn btn-secondary" onClick={() => speakWithBrowserVoice(avatarTranscript)}>Read Smile's reply aloud</button>}
+        </div>}
         {avatarTranscript && active && <div className="live-avatar-transcript" aria-live="polite"><span>Smile</span><p>{avatarTranscript}</p>{audioBlocked && <button type="button" className="btn btn-secondary" onClick={() => speakWithBrowserVoice(avatarTranscript)}>Use browser voice</button>}</div>}
         {lastResponse && active && <div className="live-avatar-transcript"><span>Candidate's latest response</span><p>{lastResponse}</p></div>}
         {active && microphoneWarning && <div className="live-avatar-text-fallback">
@@ -339,7 +406,6 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
         {state === "ended" && <><p>Smile has ended the session. {accessToken ? "This one-time invitation is now closed." : "You can try the question again or return to the screening record."}</p>{!accessToken && <button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button>}</>}
         {state === "error" && <>
           <p className="error-box">{error}</p>
-          {microphoneFallbackAvailable && <button type="button" className="btn btn-primary" onClick={() => void startInterview(true)}>Continue without microphone</button>}
           {accessToken && sessionIssued ? <p>This secure invitation can only be used once. Please contact the recruitment team if you need help.</p> : <button type="button" className="btn btn-secondary" onClick={() => void startInterview()}>Try again</button>}
         </>}
       </div>
