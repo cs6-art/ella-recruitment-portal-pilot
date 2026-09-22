@@ -39,3 +39,12 @@
 // measurement of this path (the same method docs/BATCH-CAPACITY-VALIDATION.md
 // used for the legacy path), or once off Hobby (Pro's 300s ceiling removes it).
 export const MAX_FILES_PER_SUBMISSION = 6;
+
+// Total files a reviewer may queue up in one sitting via the "let it sit and
+// process" flow. The UI auto-splits this into MAX_FILES_PER_SUBMISSION-sized
+// requests fired one at a time (never in parallel -- see
+// BulkResumeScreeningPanel.tsx's runBulkQueue), so this number does NOT need
+// to respect the Hobby 60s-per-request ceiling the way MAX_FILES_PER_SUBMISSION
+// does. It exists only as a sane upper bound on one browser-tab session; a
+// larger backlog should be split across sessions.
+export const MAX_CAMPAIGN_FILES = 150;

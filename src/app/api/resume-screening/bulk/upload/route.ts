@@ -34,7 +34,10 @@ export async function POST(request: Request) {
   if (!user) return responseError("Authentication required.", 401);
   if (!canManagePipeline(user)) return responseError("Only HR reviewers can upload bulk resumes.", 403);
 
-  const rate = consumeRateLimit(`bulk-resume-upload:${user.email}:${requestClientKey(request)}`, 5, 15 * 60 * 1000);
+  // Raised from 5 to allow a ~100-resume backlog (6 files/batch cap) to clear
+  // in one sitting without hitting 429s; see bulk-resume-limits.ts for why
+  // the per-batch file cap can't just be raised instead.
+  const rate = consumeRateLimit(`bulk-resume-upload:${user.email}:${requestClientKey(request)}`, 20, 15 * 60 * 1000);
   if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many bulk uploads. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
 
   const contentLength = Number(request.headers.get("content-length") || 0);

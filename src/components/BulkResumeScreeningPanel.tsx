@@ -9,7 +9,7 @@ import GoogleDriveIcon from "@/components/GoogleDriveIcon";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 import { buildCloudImportRequest, type CloudImportSelection } from "@/lib/cloud-import-request";
 import { formatPortalDateTime } from "@/lib/portal-time";
-import { MAX_FILES_PER_SUBMISSION } from "@/lib/bulk-resume-limits";
+import { MAX_CAMPAIGN_FILES, MAX_FILES_PER_SUBMISSION } from "@/lib/bulk-resume-limits";
 
 type RoleOption = { roleId: string; label: string };
 type QueueItem = {
@@ -87,6 +87,11 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
   // the role's entire screening history.
   const [activeBatch, setActiveBatch] = useState<Map<string, string>>(new Map());
   const [batchResultStatuses, setBatchResultStatuses] = useState<Map<string, string>>(new Map());
+  // "Let it sit" queue state for a selection bigger than one request can take
+  // — see runBulkQueue below.
+  const [queueRunning, setQueueRunning] = useState(false);
+  const [queueProgress, setQueueProgress] = useState<{ done: number; total: number } | null>(null);
+  const queueCancelRef = useRef(false);
   const [driveStatus, setDriveStatus] = useState<{ connected: boolean; accountEmail: string } | null>(null);
   const [msDriveStatus, setMsDriveStatus] = useState<{ configured: boolean; connected: boolean; accountEmail: string } | null>(null);
   const [cloudPicker, setCloudPicker] = useState<"google" | "microsoft" | null>(null);
@@ -132,6 +137,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
   }, [roleId]);
 
   function selectRole(nextRoleId: string) {
+    if (queueRunning) return;
     setCloudPicker(null);
     refreshAbort.current?.abort();
     refreshAbort.current = null;
@@ -142,6 +148,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
     setCounts({});
     setActiveBatch(new Map());
     setBatchResultStatuses(new Map());
+    setQueueProgress(null);
     batchFiles.current.clear();
     setFiles([]);
     setUploadMessage("");
@@ -210,6 +217,16 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
   }, [activeBatch, batchResultStatuses, items]);
   const anyPending = pendingInBatch || items.some((item) => !TERMINAL_STATUSES.has(item.status.toLowerCase()));
 
+  // The queue only advances while this tab is open and running its own JS
+  // loop -- there's no server-side job behind it. Warn before an accidental
+  // close mid-run so the reviewer knows the remaining files won't submit.
+  useEffect(() => {
+    if (!queueRunning) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [queueRunning]);
+
   useEffect(() => {
     if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
     if (!roleId || !anyPending) return;
@@ -236,10 +253,13 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
         const key = `${file.name}:${file.size}`;
         if (!seen.has(key)) { merged.push(file); seen.add(key); }
       }
-      // Temporary operator-facing cap; the server rejects anything above it too.
-      if (merged.length > MAX_FILES_PER_SUBMISSION) {
-        setWarning(`You can screen up to ${MAX_FILES_PER_SUBMISSION} resumes per batch for now. Extra files were not added — run another batch after this one.`);
-        return merged.slice(0, MAX_FILES_PER_SUBMISSION);
+      // The server still caps a single request at MAX_FILES_PER_SUBMISSION;
+      // selecting more than that is fine here -- "Start screening" below
+      // auto-splits a larger selection into that many requests fired one at a
+      // time. MAX_CAMPAIGN_FILES is just a sane ceiling on one sitting.
+      if (merged.length > MAX_CAMPAIGN_FILES) {
+        setWarning(`You can queue up to ${MAX_CAMPAIGN_FILES} resumes in one sitting. Extra files were not added — run another batch after this one finishes.`);
+        return merged.slice(0, MAX_CAMPAIGN_FILES);
       }
       return merged;
     });
@@ -249,40 +269,110 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
     setFiles((current) => current.filter((file) => file !== target));
   }
 
+  // Fires exactly one MAX_FILES_PER_SUBMISSION-sized request and reports a
+  // structured outcome instead of throwing, so runBulkQueue can decide
+  // whether to back off-and-retry (rate limited) or stop the whole run (a
+  // real failure, e.g. insufficient credits). Never call this with more than
+  // MAX_FILES_PER_SUBMISSION files -- the server rejects it.
+  async function submitBatch(fileList: File[]) {
+    // Pre-compute each file's queue ID client-side (same hash the server
+    // uses) so the live section below can track this exact batch from the
+    // moment upload starts, rather than only after the request resolves.
+    // Merged onto (not replacing) the existing maps so a multi-batch queue
+    // run accumulates one combined progress view across all its batches.
+    const batch = new Map<string, string>();
+    const fileMap = new Map<string, File>();
+    await Promise.all(fileList.map(async (file) => {
+      const queueId = await fileQueueId(roleId, file);
+      batch.set(queueId, file.name);
+      fileMap.set(queueId, file);
+    }));
+    batchFiles.current = new Map([...batchFiles.current, ...fileMap]);
+    setActiveBatch((current) => new Map([...current, ...batch]));
+
+    const formData = new FormData();
+    formData.set("roleId", roleId);
+    fileList.forEach((file) => formData.append("resumes", file));
+    const response = await fetch("/api/resume-screening/bulk/upload", { method: "POST", body: formData });
+    if (response.status === 429) {
+      const retryAfterSeconds = Number(response.headers.get("Retry-After")) || 30;
+      return { ok: false as const, retryable: true as const, retryAfterSeconds, error: "Too many bulk uploads. Waiting before retrying this batch." };
+    }
+    const result = await response.json().catch(() => ({}) as Record<string, unknown>);
+    if (!response.ok || result.success !== true) {
+      return { ok: false as const, retryable: false as const, error: String(result.error || "Unable to submit the bulk resumes.") };
+    }
+    const failedFileSet = applyBatchResult(result, fileMap);
+    return { ok: true as const, failedFileSet };
+  }
+
   async function uploadResumes(fileList: File[]) {
-    if (!roleId || fileList.length === 0 || uploading) return;
+    if (!roleId || fileList.length === 0 || uploading || queueRunning) return;
     setUploading(true);
     setError("");
     setWarning("");
     setUploadMessage("");
+    batchFiles.current = new Map();
+    setActiveBatch(new Map());
+    setBatchResultStatuses(new Map());
     try {
-      // Pre-compute each file's queue ID client-side (same hash the server
-      // uses) so the live section below can track this exact batch from the
-      // moment upload starts, rather than only after the request resolves.
-      const batch = new Map<string, string>();
-      const fileMap = new Map<string, File>();
-      await Promise.all(fileList.map(async (file) => {
-        const queueId = await fileQueueId(roleId, file);
-        batch.set(queueId, file.name);
-        fileMap.set(queueId, file);
-      }));
-      batchFiles.current = fileMap;
-      setActiveBatch(batch);
-      setBatchResultStatuses(new Map());
-
-      const formData = new FormData();
-      formData.set("roleId", roleId);
-      fileList.forEach((file) => formData.append("resumes", file));
-      const response = await fetch("/api/resume-screening/bulk/upload", { method: "POST", body: formData });
-      const result = await response.json();
-      if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to submit the bulk resumes.");
-      const failedFileSet = applyBatchResult(result, fileMap);
-      setFiles((current) => current.filter((file) => !fileList.includes(file) || failedFileSet.has(file)));
+      const outcome = await submitBatch(fileList);
+      if (!outcome.ok) throw new Error(outcome.error);
+      setFiles((current) => current.filter((file) => !fileList.includes(file) || outcome.failedFileSet.has(file)));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to submit the bulk resumes.");
     } finally {
       setUploading(false);
     }
+  }
+
+  // "Let it sit" flow for a backlog bigger than one request can take. Splits
+  // the selection into MAX_FILES_PER_SUBMISSION-sized batches and fires them
+  // one at a time -- never in parallel, so concurrent Google Drive API calls
+  // (storeResumeFile does 3 per file: folder check, dedupe search, upload)
+  // and Postgres writes stay at the same level already tested for a single
+  // batch. A short pause between batches adds extra margin against bursting
+  // those Drive calls. The user must keep this tab open: the queue lives in
+  // this component's state, not on the server, so closing the tab stops it
+  // (already-submitted batches keep processing; the rest stay in the file
+  // list to resume from).
+  const BATCH_GAP_MS = 3_000;
+
+  async function runBulkQueue(allFiles: File[]) {
+    if (!roleId || allFiles.length === 0 || uploading || queueRunning) return;
+    setQueueRunning(true);
+    queueCancelRef.current = false;
+    setError("");
+    setWarning("");
+    setUploadMessage("");
+    batchFiles.current = new Map();
+    setActiveBatch(new Map());
+    setBatchResultStatuses(new Map());
+
+    const chunks: File[][] = [];
+    for (let index = 0; index < allFiles.length; index += MAX_FILES_PER_SUBMISSION) chunks.push(allFiles.slice(index, index + MAX_FILES_PER_SUBMISSION));
+    setQueueProgress({ done: 0, total: chunks.length });
+
+    for (let i = 0; i < chunks.length; i++) {
+      if (queueCancelRef.current) { setUploadMessage(`Stopped after batch ${i} of ${chunks.length}. Remaining files stay selected below.`); break; }
+      const chunk = chunks[i];
+      setUploadMessage(`Submitting batch ${i + 1} of ${chunks.length} (${chunk.length} resumes) — keep this tab open until the queue finishes.`);
+      let outcome = await submitBatch(chunk);
+      if (!outcome.ok && outcome.retryable) {
+        const retryAfterSeconds = outcome.retryAfterSeconds;
+        setUploadMessage(`Batch ${i + 1} of ${chunks.length} was rate limited; waiting ${retryAfterSeconds}s before retrying it.`);
+        await new Promise((resolve) => setTimeout(resolve, retryAfterSeconds * 1000));
+        outcome = await submitBatch(chunk);
+      }
+      if (!outcome.ok) {
+        setError(`Bulk queue stopped after batch ${i} of ${chunks.length}: ${outcome.error} Remaining files stay selected below — fix the issue and click Start screening again.`);
+        break;
+      }
+      setFiles((current) => current.filter((file) => !chunk.includes(file) || outcome.failedFileSet.has(file)));
+      setQueueProgress({ done: i + 1, total: chunks.length });
+      if (i < chunks.length - 1 && !queueCancelRef.current) await new Promise((resolve) => setTimeout(resolve, BATCH_GAP_MS));
+    }
+    setQueueRunning(false);
   }
 
   type BatchResult = { fileName?: string; queueId?: string; status?: string; skipped?: boolean; message?: string };
@@ -294,10 +384,20 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
     const results = (Array.isArray(result.results) ? result.results : []) as BatchResult[];
     // The upload path pre-seeds activeBatch from client-side hashes; the Drive
     // path has no local bytes, so seed it from the server's per-file results.
-    if (activeBatch.size === 0 && results.length > 0) {
-      setActiveBatch(new Map(results.filter((item) => item.queueId).map((item) => [item.queueId as string, item.fileName || "Resume"])));
+    // Merged onto (not replacing) the existing map so a multi-batch queue run
+    // accumulates one combined progress view across all its batches.
+    if (results.length > 0) {
+      setActiveBatch((current) => {
+        const next = new Map(current);
+        for (const item of results) if (item.queueId && !next.has(item.queueId)) next.set(item.queueId, item.fileName || "Resume");
+        return next;
+      });
     }
-    setBatchResultStatuses(new Map(results.filter((item) => item.queueId).map((item) => [item.queueId as string, String(item.status || "Queued")])));
+    setBatchResultStatuses((current) => {
+      const next = new Map(current);
+      for (const item of results) if (item.queueId) next.set(item.queueId, String(item.status || "Queued"));
+      return next;
+    });
     const submitted = Number(result.submitted || 0);
     const notificationStatus = String(result.notificationStatus || "not_requested");
     const skippedResults = results.filter((item) => item.skipped);
@@ -368,7 +468,10 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
   }, [activeBatch, batchResultStatuses, items, batchTotal]);
   const batchProcessed = batchTerminal.completed + batchTerminal.failed + batchTerminal.skipped;
   const batchPercent = batchTotal > 0 ? Math.round((batchProcessed / batchTotal) * 100) : 0;
-  const batchFinished = batchTotal > 0 && batchTerminal.queued === 0 && batchTerminal.processing === 0;
+  // While a multi-batch queue run is in flight, batchTotal only reflects the
+  // batches submitted so far, so it can look "finished" between batches
+  // before later ones are even sent. Gate on queueRunning too.
+  const batchFinished = !queueRunning && batchTotal > 0 && batchTerminal.queued === 0 && batchTerminal.processing === 0;
   const failedFiles = useMemo(() => {
     const failedIds = [...activeBatch.keys()].filter((queueId) => {
       const item = items.find((entry) => queueIdentity(entry) === queueId);
@@ -446,14 +549,14 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
           onDrop={(event) => {
             event.preventDefault();
             setDragActive(false);
-            if (roleId && !uploading && event.dataTransfer.files.length) addFiles(event.dataTransfer.files);
+            if (roleId && !uploading && !queueRunning && event.dataTransfer.files.length) addFiles(event.dataTransfer.files);
           }}
         >
           {/* Match the browser picker with the server PDF/DOC/DOCX allowlist. */}
-          <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple disabled={!roleId || uploading} onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = ""; }} />
+          <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple disabled={!roleId || uploading || queueRunning} onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = ""; }} />
           <div className="bulk-screening-dropzone-copy">
             <strong>Drag and drop resumes here, or click to choose files</strong>
-            <span>Up to {MAX_FILES_PER_SUBMISSION} PDF, DOC, or DOCX files per batch, 10 MB each. {files.length > 0 ? `${files.length} file${files.length === 1 ? "" : "s"} selected.` : "No files selected yet."}</span>
+            <span>Up to {MAX_CAMPAIGN_FILES} PDF, DOC, or DOCX files at once, 10 MB each — selections over {MAX_FILES_PER_SUBMISSION} are queued and processed automatically in batches. {files.length > 0 ? `${files.length} file${files.length === 1 ? "" : "s"} selected.` : "No files selected yet."}</span>
           </div>
         </label>
 
@@ -462,7 +565,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
             {files.map((file) => (
               <span key={`${file.name}-${file.size}-${file.lastModified}`} className="bulk-screening-file-chip">
                 {file.name}
-                <button type="button" aria-label={`Remove ${file.name}`} disabled={uploading} onClick={() => removeFile(file)}>×</button>
+                <button type="button" aria-label={`Remove ${file.name}`} disabled={uploading || queueRunning} onClick={() => removeFile(file)}>×</button>
               </span>
             ))}
           </div>
@@ -474,12 +577,28 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
             <EllaCreditsMeter variant="inline" />
             <span className="bulk-screening-count-hint">Current CV screening cost is shown on the Credits page.</span>
           </div>
-          <button type="button" className="btn btn-primary" disabled={!roleId || files.length === 0 || files.length > MAX_FILES_PER_SUBMISSION || uploading} onClick={() => void uploadResumes(files)}>{uploading ? "Uploading and screening..." : `Start screening${files.length ? ` (${files.length})` : ""}`}</button>
+          {queueRunning ? (
+            <button type="button" className="btn btn-secondary" onClick={() => { queueCancelRef.current = true; }}>Stop after current batch</button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!roleId || files.length === 0 || uploading}
+              onClick={() => void (files.length > MAX_FILES_PER_SUBMISSION ? runBulkQueue(files) : uploadResumes(files))}
+            >
+              {uploading ? "Uploading and screening..." : `Start screening${files.length ? ` (${files.length})` : ""}`}
+            </button>
+          )}
         </div>
 
+        {queueProgress && (queueRunning || queueProgress.done < queueProgress.total) && (
+          <ActionFeedback kind="success" className="bulk-screening-action-feedback">
+            Batch {Math.min(queueProgress.done + (queueRunning ? 1 : 0), queueProgress.total)} of {queueProgress.total} — keep this tab open; the rest will queue on their own.
+          </ActionFeedback>
+        )}
         {uploadMessage && <ActionFeedback kind="success" className="bulk-screening-action-feedback">{uploadMessage}</ActionFeedback>}
         {warning && <ActionFeedback kind="warning" className="bulk-screening-action-feedback">{warning}</ActionFeedback>}
-        {failedFiles.length > 0 && !uploading && !batchFinished && (
+        {failedFiles.length > 0 && !uploading && !queueRunning && !batchFinished && (
           <div className="warning-box bulk-screening-retry-box">
             <span>{failedFiles.length} resume{failedFiles.length === 1 ? "" : "s"} failed to process.</span>
             <button type="button" className="btn btn-secondary" onClick={() => void uploadResumes(failedFiles)}>Retry failed ({failedFiles.length})</button>
@@ -491,6 +610,7 @@ export default function BulkResumeScreeningPanel({ roleOptions, driveRootFolderI
           <ol>
             <li>Choose a published role.</li>
             <li>Drag in (or select) multiple PDF, DOC, or DOCX files and start screening.</li>
+            <li>Up to {MAX_FILES_PER_SUBMISSION} files submit immediately; a larger selection queues automatically in batches of {MAX_FILES_PER_SUBMISSION} a few seconds apart — leave the tab open and it runs unattended.</li>
             <li>Smile extracts the candidate details, submits each resume to the screening workflow, and updates the queue below in real time.</li>
             <li>Files marked Completed are identified by role and file hash and are never analyzed again for that role. Failed files can be retried without re-uploading the whole batch.</li>
           </ol>
