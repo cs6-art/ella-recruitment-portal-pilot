@@ -14,11 +14,13 @@ test("Postgres target resume storage is env-backed and isolated from Settings Sh
   assert.doesNotMatch(targetBranch, /getPortalConfigValue\("Resume_Storage_Drive_Folder_ID"\)/);
 });
 
-test("target intake creates the queue only after target storage and application inputs are valid", () => {
+test("target intake creates the queue only after target storage and resume inputs are valid", () => {
   const source = read("src/lib/recruitment-target-bulk.ts");
   assert.match(source, /storeResumeFile/);
   assert.match(source, /enqueueBulkScreening/);
-  assert.match(source, /createApplication/);
+  assert.match(source, /registerResumeFile/);
+  assert.doesNotMatch(source, /createApplication/);
+  assert.match(source, /do not create an applicant\/application yet/);
   assert.match(source, /status: "queued"/);
   assert.doesNotMatch(source, /recordDeduction/);
 });

@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { extractResumeContactDetails } from "@/lib/resume-contact-extraction";
 import { bulkResumeEnvironment, bulkResumeIsUatMarked, productionUatBatchId } from "@/lib/bulk-resume-config";
 import { deleteResumeFile, MAX_RESUME_FILE_BYTES, storeResumeFile } from "@/lib/resume-files";
-import { createApplication, enqueueBulkScreening, findBulkQueueByRoleAndSha, registerResumeFile, updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
+import { enqueueBulkScreening, findBulkQueueByRoleAndSha, registerResumeFile, updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
 import type { IntakeResult, IntakeSource } from "@/lib/bulk-resume-intake";
 
 function queueIdForHash(roleId: string, sha256: string) {
@@ -22,9 +22,9 @@ function fallbackCandidateName(fileName: string) {
 }
 
 /**
- * Postgres target intake. Importing a resume creates a durable queued item and
- * application only. Screening owns the credit boundary: failed or unprocessed
- * resumes never consume credits.
+ * Postgres target intake. Importing a resume creates a durable queued work item
+ * only. Screening owns the credit boundary: the applicant/application and
+ * result are created atomically with the successful credit deduction.
  */
 export async function intakeTargetResumeBatch(input: {
   roleId: string;
@@ -67,10 +67,15 @@ export async function intakeTargetResumeBatch(input: {
       const contact = extractResumeContactDetails(stored.extractedText);
       const candidateName = contact.candidateName || fallbackCandidateName(source.name);
       if (!contact.candidateEmail) throw new Error("The resume must contain a readable candidate email address.");
-      stage = "application_persistence";
+      stage = "resume_persistence";
 
-      const applicationId = `APP-${crypto.createHash("sha256").update(`${input.roleId}:${stored.record.sha256}`).digest("hex").slice(0, 24)}`;
-      const resumeFileId = await registerResumeFile({
+      // Keep the uploaded resume and its extracted candidate details durable,
+      // but do not create an applicant/application yet. The AI worker owns the
+      // credit boundary; finalizeBulkScreening creates the applicant,
+      // application, result, history, and ledger entry in one transaction only
+      // after the credit guard succeeds. This prevents exhausted-credit runs
+      // from leaving visible applicant records with no paid screening.
+      await registerResumeFile({
         storageRef: stored.record.fileId,
         sha256: stored.record.sha256,
         filename: stored.record.fileName,
@@ -85,33 +90,11 @@ export async function intakeTargetResumeBatch(input: {
         applicantCountry: contact.applicantCountry,
         organizationId: input.organizationId,
       });
-      const application = await createApplication({
-        externalId: applicationId,
-        applicantEmail: contact.candidateEmail,
-        applicantName: candidateName,
-        phone: contact.preferredMobile,
-        preferredMobile: contact.preferredMobile,
-        applicantCountry: contact.applicantCountry,
-        roleExternalId: input.roleId,
-        organizationId: input.organizationId,
-        source: input.sourceLabel.toLowerCase().includes("drive") ? "drive_import" : "bulk_upload",
-        sourceDetail: `${source.driveFileId || stored.record.fileId}|${stored.record.sha256}`,
-        resumeFileId: resumeFileId || undefined,
-        creditOwnerEmail: input.actorEmail,
-      });
-      if (!application.application) {
-        throw new Error(application.error || "Unable to create the application.");
-      }
 
-      // Attach the application in the initial INSERT. A queue row with a
-      // null application_id is immediately claimable; a concurrent worker
-      // could otherwise process it between enqueue and this update, fail with
-      // missing_application, and never reach the credit boundary.
       stage = "queue_persistence";
       const queued = await enqueueBulkScreening({
         roleExternalId: input.roleId,
         organizationId: input.organizationId,
-        applicationExternalId: applicationId,
         batchId,
         dedupeKey: queueId,
         resumeSha256: stored.record.sha256,
@@ -135,9 +118,9 @@ export async function intakeTargetResumeBatch(input: {
         continue;
       }
       durableQueue = true;
-      await updateBulkQueueStatus({ dedupeKey: queueId, status: "queued", applicationId: application.application.id });
+      await updateBulkQueueStatus({ dedupeKey: queueId, status: "queued" });
       submitted += 1;
-      results.push({ fileName: stored.record.fileName, queueId, applicationId, status: "Queued", driveFileUrl: driveFileUrl(stored.record.fileId) });
+      results.push({ fileName: stored.record.fileName, queueId, status: "Queued", driveFileUrl: driveFileUrl(stored.record.fileId) });
     } catch (error) {
       if (durableQueue && queueKey) {
         await updateBulkQueueStatus({ dedupeKey: queueKey, status: "failed", errorMessage: error instanceof Error ? error.message : "Unable to process the resume." }).catch(() => undefined);

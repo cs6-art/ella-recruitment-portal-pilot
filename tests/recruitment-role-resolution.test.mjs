@@ -41,6 +41,9 @@ test("target intake preserves no-charge queue-first credit timing", () => {
   assert.match(target, /const creditsCharged = 0/);
   assert.match(target, /status: "queued"/);
   assert.doesNotMatch(target, /recordDeduction/);
+  assert.match(target, /do not create an applicant\/application yet/);
+  assert.match(read("src/lib/internal-recruitment-queries.ts"), /createdApplication/);
+  assert.match(read("src/app/api/resume-screening/bulk/retry/route.ts"), /retryFailedBulkQueueItems/);
 });
 
 test("legacy Sheets mode remains the resolver fallback", () => {

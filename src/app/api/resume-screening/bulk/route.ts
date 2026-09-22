@@ -93,6 +93,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       configured: true,
+      retrySupported: isPostgresRecruitmentTarget(),
       // This is an authenticated, non-secret readiness signal for the
       // controlled Production canary. It lets operators verify the active
       // deployment without uploading a resume just to inspect its config.

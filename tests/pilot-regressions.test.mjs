@@ -29,14 +29,12 @@ test("voice interview timezone resolves from applicant country or phone", () => 
   assert.equal(applicantVoiceTimezone({ country: "XX" }), "Asia/Singapore");
 });
 
-test("bulk intake creates the application before exposing a queue item to workers", () => {
+test("bulk intake exposes only a durable queue item until screening credit is consumed", () => {
   const source = read("src/lib/recruitment-target-bulk.ts");
-  const applicationIndex = source.indexOf("const application = await createApplication");
   const enqueueIndex = source.indexOf("const queued = await enqueueBulkScreening");
-  assert.ok(applicationIndex >= 0, "application creation must exist");
-  assert.ok(enqueueIndex > applicationIndex, "queue insertion must follow application creation");
-  assert.match(source.slice(enqueueIndex, enqueueIndex + 1800), /applicationExternalId: applicationId/);
-  assert.match(source, /applicationId: application\.application\.id/);
+  assert.ok(enqueueIndex >= 0, "queue insertion must exist");
+  assert.doesNotMatch(source.slice(enqueueIndex, enqueueIndex + 1800), /applicationExternalId/);
+  assert.match(source, /do not create an applicant\/application yet/);
 });
 
 test("bulk screening charges only after result persistence and remains idempotent", () => {
@@ -50,6 +48,8 @@ test("bulk screening charges only after result persistence and remains idempoten
   assert.match(finalize, /queue\.status === "screened"/);
   assert.match(finalize, /duplicate: true/);
   assert.match(finalize, /onConflictDoNothing\(\{ target: screeningResults\.applicationId \}\)/);
+  assert.match(finalize, /createdApplication/);
+  assert.match(finalize, /appendAccountLedgerEntryOnExecutor\(tx/);
 });
 
 test("failed or invalid bulk screening has no credit boundary", () => {

@@ -232,7 +232,9 @@ test("the bulk panel supports drag-and-drop, live auto-refresh, and retrying onl
   assert.match(panel, /Bulk Resume Processing/);
   assert.match(panel, /Bulk screening completed/);
   assert.match(panel, /View Processed Applicants/);
-  assert.match(panel, /Retry \{failedFiles\.length\} Failed/);
+  assert.match(panel, /Retry \{retryableFailureCount\} Failed/);
+  assert.match(panel, /retrySavedFailures/);
+  assert.match(panel, /\/api\/resume-screening\/bulk\/retry/);
   assert.match(panel, /refreshInFlight/);
   assert.match(panel, /AbortController/);
   assert.match(panel, /successful completion must come from the queue-backed status API/);

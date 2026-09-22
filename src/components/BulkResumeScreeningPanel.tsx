@@ -73,6 +73,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   const [roleId, setRoleId] = useState("");
   const [items, setItems] = useState<QueueItem[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [retrySupported, setRetrySupported] = useState(false);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
@@ -96,6 +97,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   const [msDriveStatus, setMsDriveStatus] = useState<{ configured: boolean; connected: boolean; accountEmail: string } | null>(null);
   const [cloudPicker, setCloudPicker] = useState<"google" | "microsoft" | null>(null);
   const [driveImporting, setDriveImporting] = useState(false);
+  const [retryingSavedFailures, setRetryingSavedFailures] = useState(false);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const batchFiles = useRef<Map<string, File>>(new Map());
   const refreshInFlight = useRef(false);
@@ -119,6 +121,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       // slow poll from overwriting a newer queue snapshot.
       if (requestId !== statusRequestId.current) return;
       setItems(result.items || []);
+      setRetrySupported(result.retrySupported === true);
       // Use the reconciled latest-state counts. Historical retry-event totals
       // are useful for diagnostics but must not make this summary disagree
       // with the live batch bar above it.
@@ -146,6 +149,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     setRoleId(nextRoleId);
     setItems([]);
     setCounts({});
+    setRetrySupported(false);
     setActiveBatch(new Map());
     setBatchResultStatuses(new Map());
     setQueueProgress(null);
@@ -383,6 +387,35 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     void uploadResumes(failedFileList);
   }
 
+  async function retrySavedFailures(queueItems: QueueItem[]) {
+    if (!roleId || queueItems.length === 0 || retryingSavedFailures || uploading || queueRunning) return;
+    setRetryingSavedFailures(true);
+    setError("");
+    setWarning("");
+    try {
+      const queueIds = queueItems.map((item) => queueIdentity(item)).filter(Boolean);
+      const response = await fetch("/api/resume-screening/bulk/retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roleId, queueIds }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to retry the failed resumes.");
+      const retriedIds = new Set<string>(Array.isArray(result.queueIds) ? result.queueIds : queueIds);
+      const retriedBatch = new Map(queueItems.filter((item) => retriedIds.has(queueIdentity(item))).map((item) => [queueIdentity(item), item.driveFileName || "Resume"]));
+      setActiveBatch(retriedBatch);
+      setBatchResultStatuses(new Map([...retriedBatch.keys()].map((queueId) => [queueId, "Queued"])));
+      batchFiles.current = new Map([...batchFiles.current].filter(([queueId]) => retriedIds.has(queueId)));
+      setQueueProgress(null);
+      setUploadMessage(`${retriedBatch.size} failed resume${retriedBatch.size === 1 ? "" : "s"} queued for retry. Screening will resume when credits are available.`);
+      await refreshStatus();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to retry the failed resumes.");
+    } finally {
+      setRetryingSavedFailures(false);
+    }
+  }
+
   type BatchResult = { fileName?: string; queueId?: string; status?: string; skipped?: boolean; message?: string };
 
   // Shared post-response handling for both the local upload and the Google
@@ -504,6 +537,8 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     });
     return failedIds.map((queueId) => batchFiles.current.get(queueId)).filter((file): file is File => Boolean(file));
   }, [activeBatch, batchResultStatuses, items]);
+  const failedQueueItems = useMemo(() => items.filter((item) => item.status.toLowerCase() === "failed"), [items]);
+  const retryableFailureCount = retrySupported ? failedQueueItems.length : failedFiles.length;
   const visibleCounts = useMemo(() => {
     const normalized: Record<string, number> = {};
     for (const [rawStatus, count] of Object.entries(counts)) {
@@ -608,7 +643,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
             <button
               type="button"
               className="btn btn-primary"
-              disabled={!roleId || files.length === 0 || uploading}
+              disabled={!roleId || files.length === 0 || uploading || retryingSavedFailures}
               onClick={() => void (files.length > MAX_FILES_PER_SUBMISSION ? runBulkQueue(files) : uploadResumes(files))}
             >
               {uploading ? "Uploading and screening..." : `Start screening${files.length ? ` (${files.length})` : ""}`}
@@ -623,10 +658,10 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
         )}
         {uploadMessage && <ActionFeedback kind="success" className="bulk-screening-action-feedback">{uploadMessage}</ActionFeedback>}
         {warning && <ActionFeedback kind="warning" className="bulk-screening-action-feedback">{warning}</ActionFeedback>}
-        {failedFiles.length > 0 && !uploading && !queueRunning && !batchFinished && (
+        {retryableFailureCount > 0 && !uploading && !queueRunning && !retryingSavedFailures && !batchFinished && (
           <div className="warning-box bulk-screening-retry-box">
-            <span>{failedFiles.length} resume{failedFiles.length === 1 ? "" : "s"} failed to process.</span>
-            <button type="button" className="btn btn-secondary" onClick={() => retryFailedFiles(failedFiles)}>Retry failed ({failedFiles.length})</button>
+            <span>{retryableFailureCount} saved resume{retryableFailureCount === 1 ? "" : "s"} failed to process.</span>
+            <button type="button" className="btn btn-secondary" onClick={() => retrySupported ? void retrySavedFailures(failedQueueItems) : retryFailedFiles(failedFiles)}>Retry failed ({retryableFailureCount})</button>
           </div>
         )}
 
@@ -664,7 +699,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
             </div>
             <div className="bulk-screening-finished-actions">
               <a className="btn btn-primary" href="/applicants">View Processed Applicants</a>
-              {failedFiles.length > 0 && <button type="button" className="btn btn-secondary" onClick={() => retryFailedFiles(failedFiles)}>Retry {failedFiles.length} Failed</button>}
+              {retryableFailureCount > 0 && <button type="button" className="btn btn-secondary" onClick={() => retrySupported ? void retrySavedFailures(failedQueueItems) : retryFailedFiles(failedFiles)}>Retry {retryableFailureCount} Failed</button>}
             </div>
           </div>
         )}

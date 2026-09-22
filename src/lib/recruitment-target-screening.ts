@@ -42,7 +42,7 @@ export async function processTargetBulkScreening(input: {
   if (context.item.status !== "processing" && context.item.status !== "queued" && context.item.status !== "failed") {
     return { status: "failed" as const, error: "queue_not_processable" };
   }
-  if (!context.application) return { status: "failed" as const, error: "missing_application" };
+  if (!context.resumeFile) return { status: "failed" as const, error: "missing_resume" };
 
   try {
     const roleSetup = (context.role.setup && typeof context.role.setup === "object")
@@ -77,7 +77,7 @@ export async function processTargetBulkScreening(input: {
     });
     if (result.duplicate) return { status: "duplicate" as const, dedupeKey };
     if (result.error) return { status: "failed" as const, error: result.error };
-    return { status: "screened" as const, dedupeKey, applicationId: context.application.externalId, creditApplied: result.credit?.applied === true };
+    return { status: "screened" as const, dedupeKey, applicationId: result.applicationId || context.application?.externalId || "", creditApplied: result.credit?.applied === true };
   } catch (error) {
     const message = error instanceof EllaCreditsError ? "insufficient_credits" : error instanceof Error ? error.message : "screening_failed";
     await updateBulkQueueStatus({ dedupeKey, status: "failed", errorMessage: message }).catch(() => undefined);

@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import { extractStoredResumeText, type ResumeFileKind, type ResumeFileRecord } from "@/lib/resume-files";
 import { internalJson, readInternalJson, withInternalAuth } from "@/lib/internal-api-http";
 import { record, requiredString } from "@/lib/internal-recruitment-http";
@@ -10,6 +12,10 @@ export const dynamic = "force-dynamic";
 
 function text(value: unknown) {
   return String(value ?? "").trim();
+}
+
+function plannedApplicationId(roleExternalId: string, resumeSha256: string) {
+  return `APP-${crypto.createHash("sha256").update(`${roleExternalId}:${resumeSha256}`).digest("hex").slice(0, 24)}`;
 }
 
 function dateText(value: unknown) {
@@ -36,7 +42,7 @@ export const GET = withInternalAuth("bulk_queue", async (request) => {
   if (!dedupeKey) return internalJson({ ok: false, error: "dedupeKey_required" }, 422);
   const context = await measureServerOperation(timings, "context", () => getBulkScreeningContext(dedupeKey));
   if (!context) return internalJson({ ok: false, error: "unknown_queue" }, 404);
-  if (!context.application || !context.resumeFile) return internalJson({ ok: false, error: "missing_application_or_resume" }, 409);
+  if (!context.resumeFile) return internalJson({ ok: false, error: "missing_resume" }, 409);
   const storedText = String((context.resumeFile as unknown as Record<string, unknown>).extractedText || "").trim();
   reusedExtractedText = Boolean(storedText);
   const resumeText = await measureServerOperation(timings, "resumeText", () => extractStoredResumeText(storedResumeRecord(context.resumeFile as unknown as Record<string, unknown>)));
@@ -60,10 +66,13 @@ export const GET = withInternalAuth("bulk_queue", async (request) => {
         aiSystemPrompt: text(setup.aiSystemPrompt),
       },
       candidate: {
-        applicationId: context.application.externalId,
-        name: context.application.candidateName || context.item.candidateName,
-        email: context.application.email || context.item.candidateEmail,
-        phone: context.application.phone || context.item.preferredMobile,
+        // Keep the worker contract stable even though the actual application
+        // is intentionally created only inside the credit-guarded finalize
+        // transaction.
+        applicationId: context.application?.externalId || plannedApplicationId(context.role.externalId, context.item.resumeSha256),
+        name: context.application?.candidateName || context.item.candidateName,
+        email: context.application?.email || context.item.candidateEmail,
+        phone: context.application?.phone || context.item.preferredMobile,
       },
       resumeText,
     },

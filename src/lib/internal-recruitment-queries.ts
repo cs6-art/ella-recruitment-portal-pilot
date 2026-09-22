@@ -1678,6 +1678,29 @@ export async function claimBulkQueueItem(dedupeKey: string) {
   return rowsOf<Record<string, unknown>>(result)[0] ?? null;
 }
 
+/** Re-queue failed screening work without creating a second application. */
+export async function retryFailedBulkQueueItems(input: { roleExternalId: string; organizationId: string; dedupeKeys: string[] }) {
+  const keys = [...new Set(input.dedupeKeys.map((key) => key.trim()).filter(Boolean))];
+  if (keys.length === 0) return [];
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const [role] = await tx.select({ id: roles.id })
+      .from(roles)
+      .where(and(eq(roles.externalId, input.roleExternalId.trim()), eq(roles.organizationId, input.organizationId.trim())))
+      .limit(1);
+    if (!role) return [];
+    return tx.update(bulkScreeningQueueItems)
+      .set({ status: "queued", errorMessage: "", processingStartedAt: null, processedAt: null, updatedAt: new Date() })
+      .where(and(
+        eq(bulkScreeningQueueItems.roleId, role.id),
+        eq(bulkScreeningQueueItems.organizationId, input.organizationId.trim()),
+        eq(bulkScreeningQueueItems.status, "failed"),
+        inArray(bulkScreeningQueueItems.dedupeKey, keys),
+      ))
+      .returning({ dedupeKey: bulkScreeningQueueItems.dedupeKey });
+  });
+}
+
 export async function getBulkScreeningContext(dedupeKey: string) {
   const db = getDb();
   const [row] = await db.select({
@@ -1689,7 +1712,10 @@ export async function getBulkScreeningContext(dedupeKey: string) {
     .from(bulkScreeningQueueItems)
     .innerJoin(roles, eq(roles.id, bulkScreeningQueueItems.roleId))
     .leftJoin(applications, eq(applications.id, bulkScreeningQueueItems.applicationId))
-    .leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId))
+    .leftJoin(resumeFiles, and(
+      eq(resumeFiles.organizationId, bulkScreeningQueueItems.organizationId),
+      eq(resumeFiles.sha256, bulkScreeningQueueItems.resumeSha256),
+    ))
     .where(eq(bulkScreeningQueueItems.dedupeKey, dedupeKey.trim()))
     .limit(1);
   return row ?? null;
@@ -1724,11 +1750,61 @@ export async function finalizeBulkScreening(input: {
     if (!queue) return { processed: false, duplicate: false, error: "unknown_queue" as const };
     if (queue.status === "screened") return { processed: false, duplicate: true, error: null };
     if (queue.status !== "processing") return { processed: false, duplicate: false, error: "queue_not_claimed" as const };
-    if (!queue.applicationId) return { processed: false, duplicate: false, error: "missing_application" as const };
 
-    const [applicationRow] = await tx.select({ application: applications, requesterName: roles.requesterName }).from(applications)
-      .innerJoin(roles, eq(roles.id, applications.roleId))
-      .where(eq(applications.id, queue.applicationId)).for("update").limit(1);
+    // Legacy queue rows already have an application. New bulk rows deliberately
+    // do not: create the applicant/application inside this same transaction as
+    // the guarded credit deduction, so an exhausted balance rolls back every
+    // visible applicant record as well as the screening result.
+    let applicationRow: { application: typeof applications.$inferSelect; requesterName: string } | null = null;
+    let createdApplication = false;
+    if (queue.applicationId) {
+      const [existingApplication] = await tx.select({ application: applications, requesterName: roles.requesterName }).from(applications)
+        .innerJoin(roles, eq(roles.id, applications.roleId))
+        .where(eq(applications.id, queue.applicationId)).for("update").limit(1);
+      if (existingApplication) applicationRow = existingApplication;
+    } else {
+      const [role] = await tx.select({ id: roles.id, externalId: roles.externalId, organizationId: roles.organizationId, departmentSnapshot: roles.departmentSnapshot, requesterEmail: roles.requesterEmail, requesterName: roles.requesterName })
+        .from(roles)
+        .where(eq(roles.id, queue.roleId))
+        .for("update")
+        .limit(1);
+      if (!role) return { processed: false, duplicate: false, error: "unknown_role" as const };
+      const email = queue.candidateEmail.trim().toLowerCase();
+      if (!email) return { processed: false, duplicate: false, error: "missing_candidate_email" as const };
+      const [resumeFile] = await tx.select({ id: resumeFiles.id })
+        .from(resumeFiles)
+        .where(and(eq(resumeFiles.organizationId, role.organizationId), eq(resumeFiles.sha256, queue.resumeSha256)))
+        .limit(1);
+      const [existingApplicant] = await tx.select({ id: applicants.id, fullName: applicants.fullName })
+        .from(applicants)
+        .where(and(eq(applicants.organizationId, role.organizationId), eq(applicants.primaryEmail, email)))
+        .limit(1);
+      const [applicant] = existingApplicant
+        ? await tx.update(applicants).set({ fullName: queue.candidateName || existingApplicant.fullName, phoneE164: queue.preferredMobile || "", country: queue.applicantCountry || "", updatedAt: new Date() }).where(eq(applicants.id, existingApplicant.id)).returning()
+        : await tx.insert(applicants).values({ organizationId: role.organizationId, primaryEmail: email, fullName: queue.candidateName || "", phoneE164: queue.preferredMobile || "", country: queue.applicantCountry || "" }).returning();
+      if (!applicant) return { processed: false, duplicate: false, error: "applicant_persistence_failed" as const };
+      const externalId = `APP-${crypto.createHash("sha256").update(`${role.externalId}:${queue.resumeSha256}`).digest("hex").slice(0, 24)}`;
+      const [created] = await tx.insert(applications).values({
+        organizationId: role.organizationId,
+        externalId,
+        applicantId: applicant.id,
+        roleId: role.id,
+        source: queue.source === "drive" ? "drive_import" : queue.source === "onedrive" ? "onedrive_import" : "bulk_upload",
+        sourceDetail: `${queue.driveFileId}|${queue.resumeSha256}`,
+        departmentSnapshot: role.departmentSnapshot,
+        candidateName: queue.candidateName || applicant.fullName,
+        email,
+        phone: queue.preferredMobile || "",
+        preferredMobile: queue.preferredMobile || "",
+        applicantCountry: queue.applicantCountry || "",
+        creditOwnerEmail: (input.ledger.actorEmail || role.requesterEmail || "").trim().toLowerCase(),
+        resumeFileId: resumeFile?.id || null,
+      }).onConflictDoNothing({ target: applications.externalId }).returning();
+      const application = created || (await tx.select().from(applications).where(eq(applications.externalId, externalId)).for("update").limit(1))[0];
+      if (!application) return { processed: false, duplicate: false, error: "application_persistence_failed" as const };
+      applicationRow = { application, requesterName: role.requesterName };
+      createdApplication = Boolean(created);
+    }
     if (!applicationRow) return { processed: false, duplicate: false, error: "missing_application" as const };
     const application = applicationRow.application;
 
@@ -1750,10 +1826,27 @@ export async function finalizeBulkScreening(input: {
       raw: (input.screening.raw ?? null) as object | null,
     }).onConflictDoNothing({ target: screeningResults.applicationId }).returning();
     if (!result) return { processed: false, duplicate: true, error: null };
-
+    // The guarded ledger append is in this transaction. If it throws for an
+    // exhausted balance, the application, result, history, and queue update
+    // are all rolled back together.
     const credit = organizationCreditsEnabled()
       ? await appendAccountLedgerEntryOnExecutor(tx, { organizationId: application.organizationId, ownerEmail: application.creditOwnerEmail || input.ledger.actorEmail || "", entry: { ...input.ledger, actorName: input.ledger.actorName || applicationRow.requesterName || application.creditOwnerEmail.split("@")[0] || "Recruitment system", actorEmail: input.ledger.actorEmail || application.creditOwnerEmail } }, { guard: true })
       : await appendPostgresLedgerEntryOnExecutor(tx, { ...input.ledger, actorName: input.ledger.actorName || applicationRow.requesterName || application.creditOwnerEmail.split("@")[0] || "Recruitment system", actorEmail: input.ledger.actorEmail || application.creditOwnerEmail }, { guard: true });
+    if (createdApplication) {
+      await tx.insert(applicationStatusHistory).values({
+        organizationId: application.organizationId,
+        applicationId: application.id,
+        stage: "application_received",
+        previousStage: "",
+        newStage: application.currentStage,
+        source: "target:application",
+        actionRequestId: `email:application_acknowledgment:${application.externalId}`,
+        notificationStatus: "pending",
+        notificationEventType: "application_acknowledgment",
+        notificationRecipient: pilotEmailRecipient(application.email).to,
+        notificationIntendedRecipient: application.email,
+      }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
+    }
     const actionRequestId = `screening:${input.dedupeKey.trim()}`;
     await tx.insert(applicationStatusHistory).values({
       organizationId: application.organizationId,
@@ -1775,7 +1868,7 @@ export async function finalizeBulkScreening(input: {
     await tx.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, application.id));
     await tx.update(bulkScreeningQueueItems).set({ status: "screened", errorMessage: "", processedAt: new Date(), updatedAt: new Date() })
       .where(eq(bulkScreeningQueueItems.id, queue.id));
-    return { processed: true, duplicate: false, error: null, result, credit };
+    return { processed: true, duplicate: false, error: null, result, credit, applicationId: application.externalId };
   });
 }
 
