@@ -58,16 +58,15 @@ test("OneDrive import enforces the same 6-file cap as Google Drive (URS parity)"
 
 test("the bulk panel enforces the cap in the UI, imported from the shared module (no local literal)", () => {
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
-  assert.match(panel, /import \{ MAX_FILES_PER_SUBMISSION \} from "@\/lib\/bulk-resume-limits";/);
+  assert.match(panel, /MAX_CAMPAIGN_FILES, MAX_FILES_PER_SUBMISSION/);
   assert.doesNotMatch(panel, /const MAX_FILES_PER_SUBMISSION\s*=\s*\d/);
-  // extra dropped files surface an explanation and the list is truncated
-  assert.match(panel, /merged\.length > MAX_FILES_PER_SUBMISSION/);
-  assert.match(panel, /return merged\.slice\(0, MAX_FILES_PER_SUBMISSION\)/);
-  // start button disabled if somehow over the cap
-  assert.match(panel, /files\.length > MAX_FILES_PER_SUBMISSION \|\| uploading/);
-  // dropzone copy reflects the cap, not 25
-  assert.match(panel, /Up to \{MAX_FILES_PER_SUBMISSION\} PDF, DOC, or DOCX files per batch/);
-  assert.doesNotMatch(panel, /Up to 25 PDF/);
+  // extra dropped files surface an explanation and the list is truncated at
+  // the campaign-sized ceiling; requests are split separately into six-file
+  // server-safe chunks when screening starts.
+  assert.match(panel, /merged\.length > MAX_CAMPAIGN_FILES/);
+  assert.match(panel, /return merged\.slice\(0, MAX_CAMPAIGN_FILES\)/);
+  assert.match(panel, /files\.length > MAX_FILES_PER_SUBMISSION \? runBulkQueue\(files\) : uploadResumes\(files\)/);
+  assert.match(panel, /Up to \{MAX_CAMPAIGN_FILES\} PDF, DOC, or DOCX files at once/);
 });
 
 // These routes await intake to completion before responding. The live
@@ -85,14 +84,19 @@ test("every bulk intake route declares maxDuration at the Vercel Hobby ceiling",
   }
 });
 
-test("the Google Drive picker caps selection at 6 via the shared component", () => {
+test("cloud pickers allow campaign-sized selection and split imports into 6-file requests", () => {
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
   const picker = read("src/components/DriveFilePicker.tsx");
   // shared picker takes a maxSelection prop
   assert.match(picker, /maxSelection = DEFAULT_MAX_SELECTION/);
   assert.match(picker, /const MAX_SELECTION = maxSelection;/);
-  // both the Google Drive and OneDrive instances pass the 6-file cap
-  assert.match(panel, /cloudPicker === "google"[\s\S]*?maxSelection=\{MAX_FILES_PER_SUBMISSION\}/);
+  // both cloud pickers allow the campaign-sized selection; each request still
+  // stays within the server's six-file limit via sequential chunking.
+  assert.match(panel, /maxSelection=\{MAX_CAMPAIGN_FILES\}/g);
+  assert.match(panel, /selectedCloudFiles\(selections\)/);
+  assert.match(panel, /index \+= MAX_FILES_PER_SUBMISSION/);
+  assert.match(panel, /buildCloudImportRequest\(provider, roleId, chunk\)/);
+  assert.match(panel, /Submitting \$\{label\} batch/);
   const oneDriveBlock = panel.slice(panel.indexOf('cloudPicker === "microsoft"'));
-  assert.match(oneDriveBlock.slice(0, 400), /maxSelection=\{MAX_FILES_PER_SUBMISSION\}/);
+  assert.match(oneDriveBlock.slice(0, 400), /maxSelection=\{MAX_CAMPAIGN_FILES\}/);
 });

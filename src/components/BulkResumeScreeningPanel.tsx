@@ -7,7 +7,7 @@ import DriveFilePicker from "@/components/DriveFilePicker";
 import EllaCreditsMeter from "@/components/EllaCreditsMeter";
 import GoogleDriveIcon from "@/components/GoogleDriveIcon";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
-import { buildCloudImportRequest, type CloudImportSelection } from "@/lib/cloud-import-request";
+import { buildCloudImportRequest, selectedCloudFiles, type CloudImportSelection } from "@/lib/cloud-import-request";
 import { formatPortalDateTime } from "@/lib/portal-time";
 import { MAX_CAMPAIGN_FILES, MAX_FILES_PER_SUBMISSION } from "@/lib/bulk-resume-limits";
 
@@ -423,8 +423,8 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   async function importFromCloud(provider: "google" | "microsoft", selections: CloudImportSelection[]) {
     if (driveImporting) return;
     const label = provider === "microsoft" ? "OneDrive" : "Google Drive";
-    const request = buildCloudImportRequest(provider, roleId, selections);
-    if (!request) {
+    const normalizedSelections = selectedCloudFiles(selections);
+    if (!roleId || normalizedSelections.length === 0) {
       setError(`Select a published role and at least one file from ${label}.`);
       return;
     }
@@ -436,11 +436,28 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     setBatchResultStatuses(new Map());
     batchFiles.current = new Map();
     try {
-      console.info("[Cloud Import] request", { roleId, files: selections.map(({ id, name }) => ({ id, name })), fileIds: JSON.parse(request.init.body).fileIds });
-      const response = await fetch(request.endpoint, request.init);
-      const result = await response.json();
-      if (!response.ok || result.success !== true) throw new Error(result.error || `Unable to import from ${label}.`);
-      applyBatchResult(result, new Map());
+      const chunks: CloudImportSelection[][] = [];
+      for (let index = 0; index < normalizedSelections.length; index += MAX_FILES_PER_SUBMISSION) {
+        chunks.push(normalizedSelections.slice(index, index + MAX_FILES_PER_SUBMISSION));
+      }
+      for (let index = 0; index < chunks.length; index += 1) {
+        const chunk = chunks[index];
+        setUploadMessage(`Submitting ${label} batch ${index + 1} of ${chunks.length} (${chunk.length} resumes) — keep this tab open until the queue finishes.`);
+        const request = buildCloudImportRequest(provider, roleId, chunk);
+        if (!request) throw new Error(`Unable to prepare the ${label} batch.`);
+        console.info("[Cloud Import] request", { roleId, files: chunk.map(({ id, name }) => ({ id, name })), fileIds: JSON.parse(request.init.body).fileIds });
+        let response = await fetch(request.endpoint, request.init);
+        if (response.status === 429) {
+          const retryAfterSeconds = Number(response.headers.get("Retry-After")) || 30;
+          setUploadMessage(`${label} batch ${index + 1} was rate limited; waiting ${retryAfterSeconds}s before retrying it.`);
+          await new Promise((resolve) => setTimeout(resolve, retryAfterSeconds * 1000));
+          response = await fetch(request.endpoint, request.init);
+        }
+        const result = await response.json();
+        if (!response.ok || result.success !== true) throw new Error(result.error || `Unable to import from ${label}.`);
+        applyBatchResult(result, new Map());
+        if (index < chunks.length - 1) await new Promise((resolve) => setTimeout(resolve, BATCH_GAP_MS));
+      }
       setCloudPicker(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : `Unable to import from ${label}.`);
@@ -680,14 +697,14 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       <DriveFilePicker
         open={cloudPicker === "google" && Boolean(roleId)}
         importing={driveImporting}
-        maxSelection={MAX_FILES_PER_SUBMISSION}
+        maxSelection={MAX_CAMPAIGN_FILES}
         onClose={() => setCloudPicker(null)}
         onImport={(selections) => void importFromCloud("google", selections)}
       />
       <DriveFilePicker
         open={cloudPicker === "microsoft" && Boolean(roleId)}
         importing={driveImporting}
-        maxSelection={MAX_FILES_PER_SUBMISSION}
+        maxSelection={MAX_CAMPAIGN_FILES}
         listUrl="/api/resume-screening/onedrive/list"
         pageParam="pageUrl"
         providerLabel="OneDrive"

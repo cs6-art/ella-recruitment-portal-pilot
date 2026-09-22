@@ -249,7 +249,7 @@ test("the bulk panel shows auto-dismissing feedback and portal-timezone timestam
   assert.match(panel, /<ActionFeedback kind="error"[^>]*>\{error\}<\/ActionFeedback>/);
   assert.doesNotMatch(panel, /<div className="success-box">\{uploadMessage\}<\/div>/);
   // the over-cap notice is a transient warning, not a sticky error
-  assert.match(panel, /setWarning\(`You can screen up to \$\{MAX_FILES_PER_SUBMISSION\}/);
+  assert.match(panel, /setWarning\(`You can queue up to \$\{MAX_CAMPAIGN_FILES\}/);
   // the queue table renders Asia/Singapore local time, never a raw UTC ISO string
   assert.match(panel, /import \{ formatPortalDateTime \} from "@\/lib\/portal-time"/);
   assert.match(panel, /formatPortalDateTime\(ts\)/);
