@@ -130,7 +130,7 @@ test("Drive picker exposes Shared Drives and the list API uses shared-drive quer
   const picker = read("src/components/DriveFilePicker.tsx");
   assert.match(list, /drive\.drives\.list\(/);
   assert.match(list, /fields: "nextPageToken, drives\(id, name\)"/);
-  assert.match(list, /corpora: currentSharedDrive \? "drive" : "allDrives"/);
+  assert.match(list, /corpora: currentSharedDrive \? "drive" : "user"/);
   assert.match(list, /driveId: currentSharedDrive\.id/);
   assert.match(list, /includeItemsFromAllDrives: true/);
   assert.match(list, /supportsAllDrives: true/);

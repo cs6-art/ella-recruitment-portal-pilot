@@ -21,6 +21,22 @@ function maskDriveId(value: string | null | undefined) {
   return id.length > 8 ? `${id.slice(0, 4)}…${id.slice(-4)}` : id || "[missing]";
 }
 
+function driveApiStatus(error: unknown) {
+  const responseStatus = (error as { response?: { status?: number } })?.response?.status;
+  const code = (error as { code?: number })?.code;
+  return Number(responseStatus || code || 0);
+}
+
+function driveListError(error: unknown) {
+  const status = driveApiStatus(error);
+  if (status === 401 || status === 403) {
+    return { error: "Google Drive access has expired or is no longer available. Disconnect and reconnect Google Drive.", code: "DRIVE_RECONNECT_REQUIRED" };
+  }
+  if (status === 404) return { error: "That Google Drive folder is no longer available. Return to My Drive and try again.", code: "DRIVE_FOLDER_NOT_FOUND" };
+  if (status === 429) return { error: "Google Drive is rate limiting this request. Try again in a moment.", code: "DRIVE_RATE_LIMITED" };
+  return { error: "Google Drive rejected the folder request. Try reconnecting Google Drive, then try again.", code: "DRIVE_LIST_FAILED" };
+}
+
 export async function GET(request: Request) {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
@@ -77,7 +93,11 @@ export async function GET(request: Request) {
       pageToken,
       includeItemsFromAllDrives: true,
       supportsAllDrives: true,
-      corpora: currentSharedDrive ? "drive" : "allDrives",
+      // `root` is the user's My Drive root. Querying it with the broad
+      // `allDrives` corpus can be rejected by Drive even when Shared Drive
+      // access is valid. Use the user's corpus for My Drive and the dedicated
+      // drive corpus only after the user navigates into a Shared Drive.
+      corpora: currentSharedDrive ? "drive" : "user",
       ...(currentSharedDrive ? { driveId: currentSharedDrive.id } : {}),
     });
 
@@ -131,7 +151,14 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ success: true, folderId, sharedDrives, folders, files, breadcrumb, nextPageToken: list.data.nextPageToken || null }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("[Drive List] failed:", error);
-    return NextResponse.json({ success: false, error: "Unable to read that Google Drive folder." }, { status: 502 });
+    const status = driveApiStatus(error);
+    const failure = driveListError(error);
+    console.error("[Drive List] failed:", {
+      status: status || "unknown",
+      message: error instanceof Error ? error.message : String(error),
+      folderId: maskDriveId(folderId),
+      code: failure.code,
+    });
+    return NextResponse.json({ success: false, ...failure }, { status: status === 401 || status === 403 ? status : 502 });
   }
 }
