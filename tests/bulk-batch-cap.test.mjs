@@ -66,6 +66,9 @@ test("the bulk panel enforces the cap in the UI, imported from the shared module
   assert.match(panel, /merged\.length > MAX_CAMPAIGN_FILES/);
   assert.match(panel, /return merged\.slice\(0, MAX_CAMPAIGN_FILES\)/);
   assert.match(panel, /files\.length > MAX_FILES_PER_SUBMISSION \? runBulkQueue\(files\) : uploadResumes\(files\)/);
+  assert.match(panel, /function retryFailedFiles\(failedFileList: File\[\]\)/);
+  assert.match(panel, /failedFileList\.length > MAX_FILES_PER_SUBMISSION/);
+  assert.match(panel, /void runBulkQueue\(failedFileList\)/);
   assert.match(panel, /Up to \{MAX_CAMPAIGN_FILES\} PDF, DOC, or DOCX files at once/);
 });
 

@@ -375,6 +375,14 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     setQueueRunning(false);
   }
 
+  function retryFailedFiles(failedFileList: File[]) {
+    if (failedFileList.length > MAX_FILES_PER_SUBMISSION) {
+      void runBulkQueue(failedFileList);
+      return;
+    }
+    void uploadResumes(failedFileList);
+  }
+
   type BatchResult = { fileName?: string; queueId?: string; status?: string; skipped?: boolean; message?: string };
 
   // Shared post-response handling for both the local upload and the Google
@@ -618,7 +626,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
         {failedFiles.length > 0 && !uploading && !queueRunning && !batchFinished && (
           <div className="warning-box bulk-screening-retry-box">
             <span>{failedFiles.length} resume{failedFiles.length === 1 ? "" : "s"} failed to process.</span>
-            <button type="button" className="btn btn-secondary" onClick={() => void uploadResumes(failedFiles)}>Retry failed ({failedFiles.length})</button>
+            <button type="button" className="btn btn-secondary" onClick={() => retryFailedFiles(failedFiles)}>Retry failed ({failedFiles.length})</button>
           </div>
         )}
 
@@ -656,7 +664,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
             </div>
             <div className="bulk-screening-finished-actions">
               <a className="btn btn-primary" href="/applicants">View Processed Applicants</a>
-              {failedFiles.length > 0 && <button type="button" className="btn btn-secondary" onClick={() => void uploadResumes(failedFiles)}>Retry {failedFiles.length} Failed</button>}
+              {failedFiles.length > 0 && <button type="button" className="btn btn-secondary" onClick={() => retryFailedFiles(failedFiles)}>Retry {failedFiles.length} Failed</button>}
             </div>
           </div>
         )}
