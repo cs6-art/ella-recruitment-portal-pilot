@@ -5,7 +5,7 @@ import { demoActionBlockReason } from "@/lib/candidate-applications";
 import { z } from "zod";
 
 import { canDeleteApplicant, canEditApplicant } from "@/lib/access-control";
-import { deleteApplicant, updateApplicantProfile } from "@/lib/applicant-workflow";
+import { deleteApplicant, isPreferredMobileValid, normalizePreferredMobile, updateApplicantProfile } from "@/lib/applicant-workflow";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ applicationId: string }> };
 
 const applicantUpdateSchema = z.object({
-  candidateName: z.string().trim().min(2).max(150),
+  candidateName: z.string().trim().min(3).max(150),
   email: z.string().trim().email().max(320),
   preferredMobile: z.string().trim().min(8).max(50),
   applicantCountry: z.enum(["PH", "SG", "MY"]).default("PH"),
@@ -32,6 +32,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!canEditApplicant(user)) return NextResponse.json({ success: false, error: "You do not have permission to edit applicants." }, { status: 403 });
     const { applicationId } = await context.params;
     const input = applicantUpdateSchema.parse(await request.json());
+    if (!isPreferredMobileValid(normalizePreferredMobile(input.preferredMobile))) {
+      return NextResponse.json({ success: false, error: "Enter a valid local mobile number for the selected country.", field: "preferredMobile" }, { status: 422 });
+    }
     // Demo mode: protect real applicant records from presentation clicks.
     const blocked = await demoActionBlockReason(applicationId);
     if (blocked) return NextResponse.json({ success: false, error: blocked }, { status: 503 });

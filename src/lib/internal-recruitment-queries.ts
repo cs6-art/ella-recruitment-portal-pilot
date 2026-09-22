@@ -787,6 +787,7 @@ export async function completeAvatarInterview(input: { rawToken: string; session
 export async function updateApplicationProfile(input: {
   externalId: string;
   candidateName?: string;
+  email?: string;
   phone?: string;
   preferredMobile?: string;
   applicantCountry?: string;
@@ -799,6 +800,7 @@ export async function updateApplicationProfile(input: {
     if (!current) return { application: null, error: "unknown_application" as const };
     const applicationPatch = {
       ...(input.candidateName === undefined ? {} : { candidateName: input.candidateName }),
+      ...(input.email === undefined ? {} : { email: input.email.trim().toLowerCase() }),
       ...(input.phone === undefined ? {} : { phone: input.phone }),
       ...(input.preferredMobile === undefined ? {} : { preferredMobile: input.preferredMobile }),
       ...(input.applicantCountry === undefined ? {} : { applicantCountry: input.applicantCountry }),

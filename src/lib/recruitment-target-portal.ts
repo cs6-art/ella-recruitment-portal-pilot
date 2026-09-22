@@ -661,7 +661,7 @@ export async function targetCreateInterviewSlot(input: { slotCode?: string; role
 }
 
 export async function targetUpdateApplicantProfile(input: { applicationId: string; candidateName: string; email: string; preferredMobile: string; applicantCountry: string }) {
-  return updateApplicationProfile({ externalId: input.applicationId, candidateName: input.candidateName, phone: input.preferredMobile, preferredMobile: input.preferredMobile, applicantCountry: input.applicantCountry });
+  return updateApplicationProfile({ externalId: input.applicationId, candidateName: input.candidateName, email: input.email, phone: input.preferredMobile, preferredMobile: input.preferredMobile, applicantCountry: input.applicantCountry });
 }
 
 export async function targetRecordApplicantDecision(input: { applicationId: string; stage: "resume" | "voice" | "final"; decision: string; comments: string; reviewer: { name: string; email: string } }) {

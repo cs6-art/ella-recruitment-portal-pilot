@@ -767,17 +767,22 @@ export type ApplicantProfileUpdate = {
 };
 
 export async function updateApplicantProfile(applicationId: string, input: ApplicantProfileUpdate) {
+  const candidateName = input.candidateName.trim();
+  const email = input.email.trim().toLowerCase();
+  const preferredMobile = normalizePreferredMobile(input.preferredMobile);
+  if (candidateName.length < 3) throw new Error("Full name must be at least 3 characters.");
+  if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Enter a valid email address.");
+  if (!isPreferredMobileValid(preferredMobile)) throw new Error("Enter a valid international mobile number.");
+
   if (isPostgresRecruitmentTarget()) {
-    const result = await targetUpdateApplicantProfile({ applicationId, ...input });
+    const result = await targetUpdateApplicantProfile({ applicationId, candidateName, email, preferredMobile, applicantCountry: input.applicantCountry });
     if (!result.application) throw new Error(result.error || "Applicant not found.");
-    return { applicationId, candidateName: input.candidateName.trim(), email: input.email.trim().toLowerCase(), preferredMobile: normalizePreferredMobile(input.preferredMobile) };
+    return { applicationId, candidateName, email, preferredMobile };
   }
   const applicantData = await readSheet("High_Match_Profile", "CZ");
   const found = findApplicant(applicantData, applicationId);
   if (!found) throw new Error("Applicant not found.");
 
-  const preferredMobile = normalizePreferredMobile(input.preferredMobile);
-  if (!isPreferredMobileValid(preferredMobile)) throw new Error("Enter a valid international mobile number.");
   const now = new Date().toISOString();
   await updateCells([
     { tab: "High_Match_Profile", row: found.rowNumber, header: "Candidate_Name", value: input.candidateName.trim() },
