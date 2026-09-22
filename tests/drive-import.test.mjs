@@ -141,11 +141,14 @@ test("Drive picker exposes Shared Drives and the list API uses shared-drive quer
   assert.match(picker, /selectedFiles = Array\.from\(selected\.values\(\)\)/);
 });
 
-test("target resume screening uses the configured Shared Drive for navigation", () => {
+test("resume screening starts Google Drive navigation from the connected user's root", () => {
   const page = read("src/app/resume-screening/page.tsx");
-  assert.match(page, /RESUME_STORAGE_DRIVE_FOLDER_ID/);
-  assert.match(page, /const driveRootFolderId = targetRecruitment/);
-  assert.match(read("src/components/BulkResumeScreeningPanel.tsx"), /initialFolderId=\{driveRootFolderId \|\| "root"\}/);
+  const panel = read("src/components/BulkResumeScreeningPanel.tsx");
+  const picker = read("src/components/DriveFilePicker.tsx");
+  assert.doesNotMatch(page, /RESUME_STORAGE_DRIVE_FOLDER_ID/);
+  assert.doesNotMatch(page, /driveRootFolderId/);
+  assert.doesNotMatch(panel, /initialFolderId=/);
+  assert.match(picker, /initialFolderId = "root"/);
 });
 
 test("Drive intake keeps queue and credit safety guarantees", () => {

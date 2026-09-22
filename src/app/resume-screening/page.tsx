@@ -31,8 +31,6 @@ export default async function ResumeScreeningPage() {
     // Keep every resume-screening role selector predictable as the published
     // role catalogue grows; IDs remain the option values.
     .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
-  const driveRootFolderId = targetRecruitment ? (process.env.RESUME_STORAGE_DRIVE_FOLDER_ID || "").trim() : "";
-
   return (
     <AppShell user={user}>
       <main className="container page resume-screening-page">
@@ -44,7 +42,7 @@ export default async function ResumeScreeningPage() {
           </div>
         </header>
         {isBulkResumeUatMode() ? <div className="uat-mode-banner">UAT MODE · Bulk resume data is routed to the configured UAT destinations.</div> : null}
-        <BulkResumeScreeningPanel roleOptions={roleOptions} driveRootFolderId={driveRootFolderId} />
+        <BulkResumeScreeningPanel roleOptions={roleOptions} />
         <ResumeScreeningInviteGenerator roleOptions={roleOptions} />
         <CandidateApplicationForm
           submitUrl="/api/applicants"
