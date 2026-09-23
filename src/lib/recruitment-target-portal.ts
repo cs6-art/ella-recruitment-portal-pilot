@@ -358,11 +358,18 @@ async function repairPublishedRoleIds(sourceRoles: Awaited<ReturnType<typeof lis
       continue;
     }
     const nextExternalId = generateRoleId(text(role.title), usedIds);
-    const result = await renameRoleExternalId({ currentExternalId: externalId, nextExternalId, organizationId: text(role.organizationId), actorEmail: "system:published-role-id-repair" });
-    if (result.renamed) {
-      usedIds.push(nextExternalId);
-      repaired.push({ ...role, externalId: nextExternalId });
-    } else {
+    try {
+      const result = await renameRoleExternalId({ currentExternalId: externalId, nextExternalId, organizationId: text(role.organizationId), actorEmail: "system:published-role-id-repair" });
+      if (result.renamed) {
+        usedIds.push(nextExternalId);
+        repaired.push({ ...role, externalId: nextExternalId });
+      } else {
+        repaired.push(role);
+      }
+    } catch (error) {
+      // Best-effort repair: a rename failure (e.g. a stale unique constraint)
+      // must not take down the roles/applicants page — keep the original id.
+      console.error(`[Roles] renameRoleExternalId failed for ${externalId} -> ${nextExternalId}:`, error);
       repaired.push(role);
     }
   }
@@ -980,7 +987,12 @@ export async function targetApplicantSummaries() {
   const organizationId = await targetOrganizationId();
   // Repair legacy/partial intake rows before reading the portal pipeline so a
   // stored resume cannot remain permanently outside the screening worker.
-  await reconcileMissingTargetScreeningQueue(organizationId);
+  // Best-effort: a failure here must not take down the applicants page itself.
+  try {
+    await reconcileMissingTargetScreeningQueue(organizationId);
+  } catch (error) {
+    console.error(`[Applicants] reconcileMissingTargetScreeningQueue failed for org ${organizationId}:`, error);
+  }
   const rows = await listApplications(undefined, undefined, organizationId);
   return rows.map(targetApplicantSummary);
 }
