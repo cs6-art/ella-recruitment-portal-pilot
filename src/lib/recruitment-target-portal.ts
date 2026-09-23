@@ -1219,7 +1219,7 @@ export async function targetAppendBulkResumeQueue(event: { driveFileId: string; 
 
 export async function targetBookings() {
   const organizationId = await targetOrganizationId();
-  const rows = await listBookingSlots(undefined, undefined, organizationId);
+  const rows = await listBookingSlots(undefined, undefined, organizationId, { availableOnly: false });
   return rows.map((row) => {
     const slot = (row as { slot?: Record<string, unknown> }).slot || row as unknown as Record<string, unknown>;
     const timezone = text(slot.timezone) || "Asia/Singapore";

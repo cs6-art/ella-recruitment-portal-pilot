@@ -1880,9 +1880,12 @@ export async function updateBulkQueueStatus(input: { dedupeKey: string; status: 
   return { updated: rowsOf(result).length > 0, error: null };
 }
 
-export async function listBookingSlots(kind?: string, roleExternalId?: string, organizationId = DEFAULT_ORGANIZATION_ID) {
+export async function listBookingSlots(kind?: string, roleExternalId?: string, organizationId = DEFAULT_ORGANIZATION_ID, options: { availableOnly?: boolean } = {}) {
   const db = getDb();
-  const conditions = [eq(interviewSlots.status, "available")];
+  // Default true to preserve the candidate-facing booking flow's behavior
+  // (only offer open slots); the admin bookings view opts out to see every
+  // status (booked, completed, no show, cancelled), not just available ones.
+  const conditions = options.availableOnly === false ? [] : [eq(interviewSlots.status, "available")];
   if (kind) conditions.push(eq(interviewSlots.interviewType, kind));
   if (roleExternalId) conditions.push(eq(roles.externalId, roleExternalId));
   return db.select({ slot: interviewSlots, roleExternalId: roles.externalId }).from(interviewSlots).innerJoin(roles, eq(roles.id, interviewSlots.roleId)).where(and(...conditions, eq(roles.organizationId, organizationId.trim()))).orderBy(asc(interviewSlots.startsAt)).limit(LIMIT);
