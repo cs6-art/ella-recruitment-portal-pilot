@@ -23,8 +23,8 @@ test("booking invitation and confirmation events retain redirectable intended-re
   const query = read("src/lib/internal-recruitment-queries.ts");
   assert.match(query, /notificationEventType: input\.kind === "voice" \? "voice_booking_invitation" : "final_booking_invitation"/);
   assert.match(query, /notificationEventType: slot\.interviewType === "voice" \? "voice_booking_confirmation" : "final_booking_confirmation"/);
-  assert.match(query, /notificationRecipient: pilotEmailRecipient\(application\.email\)\.to/);
-  assert.match(query, /notificationIntendedRecipient: application\.email/);
+  assert.match(query, /const confirmationIsEmailed = false/);
+  assert.match(query, /notificationStatus: confirmationIsEmailed \? "pending" : "skipped"/);
 });
 
 test("booking-token replay is idempotent while terminal tokens can be reissued", () => {
@@ -100,6 +100,7 @@ test("notification queue carries ready-to-send candidate email copy per booking 
   assert.match(labels, /if \(key === "final_booking_confirmation"\) return null/);
   assert.match(query, /email: notificationEmail\(history\.notificationEventType/);
   assert.match(query, /confirmationIsEmailed \? "pending" : "skipped"/);
+  assert.match(query, /not\(eq\(applicationStatusHistory\.notificationEventType, "voice_booking_confirmation"\)\)/);
   assert.match(query, /return `\$\{dateParts\.year\}-\$\{dateParts\.month\}-\$\{dateParts\.day\} \$\{timeParts\.hour\}:\$\{timeParts\.minute\} \$\{tz\}`/);
 });
 

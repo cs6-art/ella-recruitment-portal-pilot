@@ -2087,8 +2087,10 @@ export async function bookInterviewSlot(input: { slotId: string; applicationExte
     // The face-to-face booking confirmation is delivered by the Google
     // Calendar invitation (the candidate is added as an attendee), so its
     // history row is recorded for audit but never queued for an email.
-    const confirmationIsEmailed = slot.interviewType === "voice";
-     await tx.insert(applicationStatusHistory).values({ organizationId: application.organizationId, applicationId: application.id, stage: slot.interviewType, previousStage, newStage: nextStage, actorEmail: input.actorEmail, source: "internal_api:booking", actionRequestId: input.actionRequestId, notificationStatus: confirmationIsEmailed ? "pending" : "skipped", notificationEventType: slot.interviewType === "voice" ? "voice_booking_confirmation" : "final_booking_confirmation", notificationRecipient: confirmationIsEmailed ? pilotEmailRecipient(application.email).to : "", notificationIntendedRecipient: confirmationIsEmailed ? application.email : "" });
+    // Booking confirmation emails are disabled; the portal confirmation page
+    // and applicant record already provide the needed confirmation.
+    const confirmationIsEmailed = false;
+    await tx.insert(applicationStatusHistory).values({ organizationId: application.organizationId, applicationId: application.id, stage: slot.interviewType, previousStage, newStage: nextStage, actorEmail: input.actorEmail, source: "internal_api:booking", actionRequestId: input.actionRequestId, notificationStatus: confirmationIsEmailed ? "pending" : "skipped", notificationEventType: slot.interviewType === "voice" ? "voice_booking_confirmation" : "final_booking_confirmation", notificationRecipient: confirmationIsEmailed ? pilotEmailRecipient(application.email).to : "", notificationIntendedRecipient: confirmationIsEmailed ? application.email : "" });
     if (slot.interviewType === "voice") {
       const existing = await tx.select({ id: voiceCallAttempts.id }).from(voiceCallAttempts).where(and(eq(voiceCallAttempts.applicationId, application.id), inArray(voiceCallAttempts.status, ["scheduled", "queued", "calling", "initiated", "in_progress"]))).limit(1);
       if (existing.length === 0) {
@@ -2302,6 +2304,9 @@ export async function notificationQueue(stage?: string) {
         // outbound notifications. Excluding them prevents a stage-filtered
         // worker from claiming and sending an unrelated email.
         not(eq(applicationStatusHistory.notificationEventType, "")),
+        // Voice booking confirmations are intentionally disabled. Exclude
+        // older pending rows too, so a deploy cannot send backlog notices.
+        not(eq(applicationStatusHistory.notificationEventType, "voice_booking_confirmation")),
         or(isNull(applicationStatusHistory.notificationAttemptedAt), lte(applicationStatusHistory.notificationAttemptedAt, leaseCutoff)),
         cleanStage ? eq(applicationStatusHistory.newStage, cleanStage) : undefined,
       ))
