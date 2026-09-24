@@ -301,7 +301,10 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
 
   return (
     <>
-      <ApplicantLiveRefresh enabled={hasPendingScreening} intervalMs={5_000} throttleMs={5_000} />
+      {/* Screening status is asynchronous; a 30-second refresh keeps the list
+          current without waking the database every five seconds for every
+          reviewer who leaves this page open. */}
+      <ApplicantLiveRefresh enabled={hasPendingScreening} intervalMs={30_000} throttleMs={30_000} />
       <main className="container page applicants-page">
       <div className="hero-row applicants-header">
         <div>

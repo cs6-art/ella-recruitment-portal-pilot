@@ -6,12 +6,14 @@ const read = (path) => readFileSync(path, "utf8");
 
 test("applicant live refresh is visible-only, throttled, slower, and terminal-aware", () => {
   const refresh = read("src/components/ApplicantLiveRefresh.tsx");
+  const list = read("src/components/ApplicantsList.tsx");
   const page = read("src/app/applicants/[applicationId]/page.tsx");
   assert.match(refresh, /REFRESH_MS = 5 \* 60_000/);
   assert.match(refresh, /EVENT_REFRESH_THROTTLE_MS = 30_000/);
   assert.match(refresh, /if \(!enabled\) return/);
   assert.match(refresh, /document\.visibilityState !== "visible"/);
   assert.match(refresh, /lastRefreshAt/);
+  assert.match(list, /enabled=\{hasPendingScreening\} intervalMs=\{30_000\} throttleMs=\{30_000\}/);
   assert.match(page, /TERMINAL_APPLICANT_STAGES/);
   assert.match(page, /enabled=\{!TERMINAL_APPLICANT_STAGES\.has/);
 });
