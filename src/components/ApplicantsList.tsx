@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import ApplicantLiveRefresh from "@/components/ApplicantLiveRefresh";
@@ -202,10 +202,17 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  // A refresh after a new submission should return HR to the first page,
-  // where the newest applicant is now visible.
+  const previousApplicantIds = useRef<Set<string> | null>(null);
+
+  // Return HR to page one only when a genuinely new application arrives.
+  // Background screening refreshes also replace the applicants array, but
+  // they must not interrupt pagination while HR is reviewing another page.
   useEffect(() => {
-    setPage(1);
+    const currentApplicantIds = new Set(applicants.map((applicant) => applicant.applicationId.trim()).filter(Boolean));
+    const previousIds = previousApplicantIds.current;
+    previousApplicantIds.current = currentApplicantIds;
+    if (!previousIds) return;
+    if ([...currentApplicantIds].some((applicationId) => !previousIds.has(applicationId))) setPage(1);
   }, [applicants]);
 
   const voiceCount = activeApplicants.filter((applicant) => applicant.voiceStatus || applicant.finalStatus.toLowerCase().includes("voice")).length;
