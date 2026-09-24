@@ -204,3 +204,13 @@ test("candidate emails never fall back to HR-facing event summaries", () => {
   }
   assert.match(labels, /case "final_decision_pass":\s*case "final_decision_reject":\s*return null;/);
 });
+
+test("a voice no-show queues one candidate email under the voice_no_show stage", () => {
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(query, /async function queueVoiceNoShowNotification/);
+  assert.match(query, /actionRequestId: `email:voice_no_show:\$\{attemptId\}`/);
+  assert.match(query, /newStage: "voice_no_show"/);
+  // Both paths a no-show can arrive by must queue it (result ingestion and status update).
+  assert.match(query, /if \(settled\.status === "no_show"\) await queueVoiceNoShowNotification\(db, attemptId\)/);
+  assert.match(query, /input\.status === "no_show"\) await queueVoiceNoShowNotification\(db, input\.attemptId\)/);
+});

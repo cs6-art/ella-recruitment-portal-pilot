@@ -267,10 +267,36 @@ function settledVoiceAttempt(input: VoiceOutcomeInput): SettledVoiceAttempt | nu
 
 const ACTIVE_VOICE_ATTEMPT_STATUSES = ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "retry_scheduled"];
 
+/**
+ * Queue the candidate's "we could not complete your interview" email for an
+ * attempt that ended as a no-show. Keyed by attempt ID so the result ingestion
+ * and the status update (both of which see the same no-show) queue it once.
+ * It is filed under the `voice_no_show` stage, which only the no-show sender
+ * claims.
+ */
+async function queueVoiceNoShowNotification(db: ReturnType<typeof getDb>, attemptId: string) {
+  const [row] = await db.select({ applicationId: voiceCallAttempts.applicationId, organizationId: voiceCallAttempts.organizationId, email: applications.email }).from(voiceCallAttempts).innerJoin(applications, eq(applications.id, voiceCallAttempts.applicationId)).where(eq(voiceCallAttempts.id, attemptId)).limit(1);
+  if (!row) return;
+  await db.insert(applicationStatusHistory).values({
+    organizationId: row.organizationId,
+    applicationId: row.applicationId,
+    stage: "voice_no_show",
+    previousStage: "voice_scheduled",
+    newStage: "voice_no_show",
+    source: "internal_api:voice_no_show",
+    actionRequestId: `email:voice_no_show:${attemptId}`,
+    notificationStatus: "pending",
+    notificationEventType: "voice_no_show",
+    notificationRecipient: pilotEmailRecipient(row.email).to,
+    notificationIntendedRecipient: row.email,
+  }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
+}
+
 async function settleVoiceAttemptFromResult(db: ReturnType<typeof getDb>, attemptId: string, input: VoiceOutcomeInput) {
   const settled = settledVoiceAttempt(input);
   if (!settled) return null;
   await db.update(voiceCallAttempts).set({ status: settled.status, outcome: settled.outcome, updatedAt: new Date() }).where(and(eq(voiceCallAttempts.id, attemptId), inArray(voiceCallAttempts.status, ACTIVE_VOICE_ATTEMPT_STATUSES)));
+  if (settled.status === "no_show") await queueVoiceNoShowNotification(db, attemptId);
   return settled;
 }
 export function isValidStage(value: string): value is (typeof STAGES)[number] { return (STAGES as readonly string[]).includes(value); }
@@ -1238,6 +1264,8 @@ export async function updateVoiceAttemptStatus(input: { attemptId: string; statu
   if (outcome) {
     const context = await voiceAttemptContext(input.attemptId);
     if (context) chargedCredits = await recordVoiceInterviewDeduction({ applicationId: context.applicationExternalId, attemptId: input.attemptId, outcome, actorEmail: context.creditOwnerEmail, organizationId: context.organizationId });
+    // Only a real no-show: never for an attempt that failed before the call.
+    if (context && input.status === "no_show") await queueVoiceNoShowNotification(db, input.attemptId);
   }
   return { updated, chargedCredits, billingOutcome: outcome, error: null };
 }
