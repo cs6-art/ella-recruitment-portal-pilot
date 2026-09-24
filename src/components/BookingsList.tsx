@@ -12,7 +12,7 @@ import UiIcon from "@/components/UiIcon";
 import type { InterviewBooking } from "@/lib/candidate-applications";
 import type { RoleRequestSummary } from "@/lib/google-sheets";
 import { scheduledInstant } from "@/lib/interview-time";
-import { isBeforeTargetHiringDate, isCurrentCalendarMonth, isDefaultFinalInterviewSlot, isStandardVoiceInterviewSlot, isTargetHiringDateOverdue, roleAvailabilityRules, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
+import { isBeforeTargetHiringDate, isDefaultFinalInterviewSlot, isTargetHiringDateOverdue, roleAvailabilityRules, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { formatPortalDateKey, PORTAL_TIME_ZONE } from "@/lib/portal-time";
 
 type BookingKind = "voice" | "final";
@@ -68,14 +68,6 @@ function virtualBookings(role: BookingRole): CalendarInterviewBooking[] {
     });
   });
 }
-function hasActiveBookingLink(role: BookingRole, interviewType: string) {
-  return interviewType.toLowerCase().includes("voice") ? role.hasActiveVoiceBookingLink === true : role.hasActiveFinalBookingLink === true;
-}
-function candidateVisibleAvailability(booking: InterviewBooking, role: BookingRole | undefined) {
-  const status = booking.status.toLowerCase();
-  if (!role) return status !== "available" && status !== "blocked";
-  return status !== "available" && status !== "blocked" || hasActiveBookingLink(role, booking.interviewType);
-}
 function summarizeBookings(bookings: InterviewBooking[]) { const summary = { available: 0, booked: 0, blocked: 0, expired: 0, completed: 0, cancelled: 0, noShow: 0 }; bookings.forEach((booking) => { const normalized = booking.status.toLowerCase().replace(/\s+/g, ""); const status = (normalized === "noshow" ? "noShow" : normalized) as keyof typeof summary; if (status in summary) summary[status] += 1; }); return summary; }
 function activeWindowCount(roles: BookingRole[]) {
   const windows = new Set<string>();
@@ -94,6 +86,14 @@ function calendarDisplayBookings(bookings: InterviewBooking[]) {
     if (hasStarted(booking)) return ["booked", "completed", "no show", "cancelled"].includes(status);
     return ["available", "booked", "blocked", "completed", "no show", "cancelled"].includes(status);
   });
+}
+
+function calendarMonthKey(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function isInDisplayedMonth(value: string, month: Date) {
+  return dateKey(value).slice(0, 7) === calendarMonthKey(month);
 }
 
 function bookingFromSavedException(input: Pick<InterviewBooking, "roleId" | "date" | "startTime" | "endTime" | "timezone">, responseSlot: unknown): InterviewBooking {
@@ -239,7 +239,9 @@ export default function BookingsList({ bookings: initialBookings, roles }: { boo
     .sort((a, b) => a.roleId.localeCompare(b.roleId)), [roles, calendarBusyWindows, calendarConnected]);
   const allBookings = useMemo(() => {
     const legacy = bookings
-      .filter((booking) => booking.status.toLowerCase() !== "available" || (!booking.interviewType.toLowerCase().includes("voice") && !booking.interviewType.toLowerCase().includes("final")) || ((!booking.interviewType.toLowerCase().includes("voice") || isStandardVoiceInterviewSlot(booking)) && isCurrentCalendarMonth(booking.date, booking.timezone || "Asia/Singapore")))
+      // Persisted exception slots belong to the month the HR user is viewing;
+      // using the real current month here hid future slots after they saved.
+      .filter((booking) => booking.status.toLowerCase() !== "available" || isInDisplayedMonth(booking.date, month))
       .map((booking) => {
         const role = roleOptions.find((candidate) => candidate.roleId.toLowerCase() === booking.roleId.toLowerCase());
         const calendarUnavailable = booking.interviewType.toLowerCase().includes("final") && booking.status.toLowerCase() === "available" && calendarLookupState === "ready" && role?.finalCalendarConnected !== true;
@@ -248,8 +250,7 @@ export default function BookingsList({ bookings: initialBookings, roles }: { boo
         if (blocked) return { ...booking, status: "Blocked", calendarEventStatus: "Conflict", calendarEventError: "HR Google Calendar conflict" };
         if (booking.status.toLowerCase() === "available" && role && !isBeforeTargetHiringDate(booking.date, role.targetHiringDate)) return { ...booking, status: "Expired" };
         return booking.status.toLowerCase() === "available" && !hasFutureTime(booking) ? { ...booking, status: "Expired" } : booking;
-      })
-      .filter((booking) => candidateVisibleAvailability(booking, roleOptions.find((role) => role.roleId.toLowerCase() === booking.roleId.toLowerCase())));
+      });
     const existing = new Set(legacy.map((booking) => slotKey(booking)));
     // The HR calendar is the source of truth for role availability, so show
     // generated slots for every approved role even before its first candidate
@@ -261,7 +262,7 @@ export default function BookingsList({ bookings: initialBookings, roles }: { boo
     // booking link has not been issued yet; the public workflow applies its
     // own booking-link visibility rules separately.
     return [...legacy, ...generated.filter((booking) => !existing.has(slotKey(booking)))].sort((a, b) => `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`));
-  }, [bookings, roleOptions, calendarLookupState]);
+  }, [bookings, roleOptions, calendarLookupState, month]);
   const calendarBookings = useMemo(() => allBookings.filter((booking) => (calendarRole === "All Roles" || booking.roleId.toLowerCase() === calendarRole.toLowerCase()) && (calendarType === "All Types" || (calendarType === "voice" ? booking.interviewType.toLowerCase().includes("voice") : booking.interviewType.toLowerCase().includes("final")))), [allBookings, calendarRole, calendarType]);
   const voiceBookings = calendarBookings.filter((booking) => booking.interviewType.toLowerCase().includes("voice")); const finalBookings = calendarBookings.filter((booking) => booking.interviewType.toLowerCase().includes("final")); const selectedBookings = selectedDate && selectedKind ? calendarDisplayBookings(calendarBookings).filter((booking) => dateKey(booking.date) === selectedDate && (selectedKind === "voice" ? booking.interviewType.toLowerCase().includes("voice") : booking.interviewType.toLowerCase().includes("final"))) : []; const selectedRole = roleOptions.find((role) => role.roleId === form.roleId); const stats = summarizeBookings(allBookings); const activeWindows = useMemo(() => activeWindowCount(roleOptions), [roleOptions]); const statuses = [...new Set(allBookings.map((booking) => statusLabel(booking.status)).filter(Boolean))].sort(); const filtered = allBookings.filter((booking) => { const query = search.trim().toLowerCase(); return (!query || `${booking.slotId} ${booking.applicationId} ${booking.candidateName} ${booking.candidateEmail} ${booking.roleId}`.toLowerCase().includes(query)) && (status === "All Statuses" || statusLabel(booking.status) === status); }); const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize)); const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
   async function saveAvailability() { if (!selectedRole) return; setSaving(true); setError(""); setMessage(""); try { const response = await fetch("/api/bookings/slots", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ interviewType: "Final Interview", roleId: selectedRole.roleId, date: form.date, startTime: form.startTime, endTime: form.endTime, timezone: form.timezone }) }); const data = await response.json().catch(() => ({})); if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to create the HR interview slot."); const savedBooking = bookingFromSavedException({ roleId: selectedRole.roleId, date: form.date, startTime: form.startTime, endTime: form.endTime, timezone: form.timezone }, data.slot); setBookings((current) => current.some((booking) => slotKey(booking) === slotKey(savedBooking)) ? current : [...current, savedBooking]); setShowAvailability(false); setForm(initialRuleForm); setMessage("HR exception slot saved and added to the calendar."); router.refresh(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to create the HR interview slot."); } finally { setSaving(false); } }

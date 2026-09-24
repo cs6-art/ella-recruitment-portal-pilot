@@ -38,6 +38,7 @@ export async function POST(request: Request) {
       organizationId: user.organizationId,
       dedupeKeys: parsed.data.queueIds,
     });
+    if (retried.length === 0) return responseError("No matching failed queue items were found. Refresh the status and try again.", 409);
     return NextResponse.json({ success: true, roleId: parsed.data.roleId, queueIds: retried.map((item) => item.dedupeKey), retried: retried.length });
   } catch (error) {
     console.error("[Bulk Resume Retry] POST failed:", error);

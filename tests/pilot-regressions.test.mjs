@@ -96,12 +96,13 @@ test("applicant reads reconcile stored resumes that lost their screening queue r
   assert.match(portal, /await reconcileMissingTargetScreeningQueue\(organizationId\)/);
 });
 
-test("bulk frontend matches Pilot queue status by job identity, not storage identity", () => {
+test("bulk frontend matches Pilot queue status by retryable dedupe identity", () => {
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
   const target = read("src/lib/recruitment-target-portal.ts");
   assert.match(panel, /function queueIdentity/);
-  assert.match(panel, /return item\.jobId \|\| item\.driveFileId/);
+  assert.match(panel, /return item\.dedupeKey \|\| item\.jobId \|\| item\.driveFileId/);
   assert.doesNotMatch(panel, /items\.find\(\(entry\) => entry\.driveFileId === queueId\)/);
+  assert.match(target, /dedupeKey: text\(item\.dedupeKey\) \|\| text\(item\.driveFileId\)/);
   assert.match(target, /jobId: text\(item\.jobId\)/);
 });
 

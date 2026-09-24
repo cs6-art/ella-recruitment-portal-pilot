@@ -76,7 +76,10 @@ export async function processTargetBulkScreening(input: {
       actorName: input.actorName,
     });
     if (result.duplicate) return { status: "duplicate" as const, dedupeKey };
-    if (result.error) return { status: "failed" as const, error: result.error };
+    if (result.error) {
+      await updateBulkQueueStatus({ dedupeKey, status: "failed", errorMessage: result.error }).catch(() => undefined);
+      return { status: "failed" as const, error: result.error };
+    }
     return { status: "screened" as const, dedupeKey, applicationId: result.applicationId || context.application?.externalId || "", creditApplied: result.credit?.applied === true };
   } catch (error) {
     const message = error instanceof EllaCreditsError ? "insufficient_credits" : error instanceof Error ? error.message : "screening_failed";

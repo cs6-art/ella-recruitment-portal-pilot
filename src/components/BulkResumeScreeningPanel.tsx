@@ -13,6 +13,7 @@ import { MAX_CAMPAIGN_FILES, MAX_FILES_PER_SUBMISSION } from "@/lib/bulk-resume-
 
 type RoleOption = { roleId: string; label: string };
 type QueueItem = {
+  dedupeKey: string;
   driveFileId: string;
   driveFileName: string;
   driveFileUrl: string;
@@ -38,11 +39,10 @@ const POLL_INTERVAL_MS = 90_000;
 // and drive/import.
 const TERMINAL_STATUSES = new Set(["screened", "processed", "failed", "skipped"]);
 
-// Pilot Postgres keeps the Drive object ID for storage traceability, while
-// the upload UI tracks the role-scoped queue/job ID. Legacy rows may not have
-// jobId, so retain driveFileId as a compatibility fallback.
-function queueIdentity(item: Pick<QueueItem, "jobId" | "driveFileId">) {
-  return item.jobId || item.driveFileId;
+// The retry endpoint matches the database dedupe key. Older rows may not have
+// that field in the UI payload, so retain the historical job/file fallbacks.
+function queueIdentity(item: Pick<QueueItem, "dedupeKey" | "jobId" | "driveFileId">) {
+  return item.dedupeKey || item.jobId || item.driveFileId;
 }
 
 function statusClass(status: string) {
@@ -401,7 +401,9 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to retry the failed resumes.");
-      const retriedIds = new Set<string>(Array.isArray(result.queueIds) ? result.queueIds : queueIds);
+      const returnedQueueIds = Array.isArray(result.queueIds) ? result.queueIds.filter((value: unknown): value is string => typeof value === "string" && value.length > 0) : [];
+      if (returnedQueueIds.length === 0) throw new Error("No failed queue items were re-queued. Refresh the status and try again.");
+      const retriedIds = new Set<string>(returnedQueueIds);
       const retriedBatch = new Map(queueItems.filter((item) => retriedIds.has(queueIdentity(item))).map((item) => [queueIdentity(item), item.driveFileName || "Resume"]));
       setActiveBatch(retriedBatch);
       setBatchResultStatuses(new Map([...retriedBatch.keys()].map((queueId) => [queueId, "Queued"])));

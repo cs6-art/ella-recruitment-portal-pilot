@@ -1904,7 +1904,7 @@ export async function finalizeBulkScreening(input: {
       notificationIntendedRecipient: application.email,
     }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     await tx.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, application.id));
-    await tx.update(bulkScreeningQueueItems).set({ status: "screened", errorMessage: "", processedAt: new Date(), updatedAt: new Date() })
+    await tx.update(bulkScreeningQueueItems).set({ applicationId: application.id, status: "screened", errorMessage: "", processedAt: new Date(), updatedAt: new Date() })
       .where(eq(bulkScreeningQueueItems.id, queue.id));
     return { processed: true, duplicate: false, error: null, result, credit, applicationId: application.externalId };
   });

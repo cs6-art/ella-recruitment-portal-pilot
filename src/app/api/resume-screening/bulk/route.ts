@@ -5,6 +5,7 @@ import { canManagePipeline } from "@/lib/access-control";
 import { getBulkResumeQueue, getBulkResumeQueueTotals, getBulkResumeScreeningEvidence } from "@/lib/candidate-applications";
 import { bulkResumeEnvironment, bulkResumeIsUatMarked, productionUatBatchId, STALE_PROCESSING_MS } from "@/lib/bulk-resume-config";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
+import { updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { logServerTiming, measureServerOperation } from "@/lib/server-timing";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
@@ -63,6 +64,25 @@ export async function GET(request: Request) {
       const timestamp = Date.parse(item.lastUpdated || item.processedAt || item.processingStartedAt || item.discoveredAt);
       return Number.isFinite(timestamp) ? now - timestamp : Number.MAX_SAFE_INTEGER;
     };
+    // The UI can detect a stale Screened/Processing row when the worker wrote
+    // the queue event but the applicant transaction was not visible. Persist
+    // that reconciliation so the retry endpoint can find the same row instead
+    // of only showing a derived failure that cannot be re-queued.
+    if (isPostgresRecruitmentTarget()) {
+      const staleFailures = queueItems.filter((item) => {
+        const rawStatus = item.status.toLowerCase();
+        const hasEvidence = screeningEvidence.has(`${item.roleId.toLowerCase()}|${item.driveFileId.toLowerCase()}`);
+        return !hasEvidence && queueAge(item) >= STALE_PROCESSING_MS && ["screened", "processed", "processing"].includes(rawStatus);
+      });
+      await Promise.all(staleFailures.map((item) => updateBulkQueueStatus({
+        dedupeKey: item.dedupeKey || item.driveFileId,
+        status: "failed",
+        applicationId: item.applicationId || undefined,
+        errorMessage: item.status.toLowerCase() === "processing"
+          ? "Screening did not produce a saved result within 10 minutes."
+          : "Applicant result could not be persisted.",
+      })));
+    }
     const items = queueItems.map((item) => {
       const rawStatus = item.status.toLowerCase();
       const hasEvidence = screeningEvidence.has(`${item.roleId.toLowerCase()}|${item.driveFileId.toLowerCase()}`);
