@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { canAdministerAccess } from "@/lib/access-control";
 import { syncOrganizationMembership } from "@/lib/organization-accounts";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { findCredential, isPlausibleEmail, loadDirectoryUser, normalizeEmail, recordLogin, verifyAgainstDummyHash, verifyPassword } from "@/lib/registration";
@@ -30,7 +31,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Please verify your email first. Check your inbox for the verification link.", needsVerification: true }, { status: 403 });
     }
 
-    const directoryUser = await loadDirectoryUser(email, credential.organizationId);
+    const directory = await loadDirectoryUser(email, credential.organizationId);
+    const directoryUser = directory?.user;
     if (!directoryUser) return NextResponse.json({ error: "Your account is not set up in this organization's directory. Contact your HR administrator." }, { status: 403 });
     if (directoryUser.active !== true) return NextResponse.json({ error: "Your recruitment portal account is inactive." }, { status: 403 });
 
@@ -52,6 +54,8 @@ export async function POST(request: Request) {
       canManageUsers: directoryUser.canManageUsers,
       canManageCredits: directoryUser.canManageCredits,
       canReviewDepartmentRole: directoryUser.canReviewDepartmentRole,
+      // Only McLink staff listed in the staff directory are platform admins.
+      platformAdmin: directory?.source === "sheet" && canAdministerAccess(directoryUser),
     });
 
     const response = NextResponse.json({ success: true });

@@ -1,16 +1,17 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb } from "@/db/client";
-import { organizations } from "@/db/schema";
+import { organizations, userCredentials } from "@/db/schema";
 import { getDirectoryUsers, updateDirectoryUser, upsertDirectoryUser, type DirectoryUser } from "@/lib/google-sheets";
 import { DEFAULT_ORGANIZATION_ID, syncOrganizationMembership } from "@/lib/organization-accounts";
 import { getPostgresDirectoryUsers, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
-import { canAdministerAccess } from "@/lib/access-control";
+import { canAdministerAccess, isPlatformAdmin } from "@/lib/access-control";
 import { applyAccessRolePolicy } from "@/lib/access-roles";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
+import { normalizeEmail } from "@/lib/registration";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { runWithTenantDatabase } from "@/lib/tenant-database";
 
@@ -54,9 +55,9 @@ async function requireAdmin(request: Request) {
 async function resolveTargetOrganization(request: Request, user: Awaited<ReturnType<typeof currentUser>>) {
   if (!user) return { error: responseError("Authentication required.", 401) } as const;
   const requestedOrganizationId = new URL(request.url).searchParams.get("organizationId")?.trim() || "";
-  const isPlatformAdmin = user.organizationId === DEFAULT_ORGANIZATION_ID && canAdministerAccess(user);
+  const platformAdmin = isPlatformAdmin(user);
   const organizationId = requestedOrganizationId || user.organizationId;
-  if (!isPlatformAdmin && organizationId !== user.organizationId) {
+  if (!platformAdmin && organizationId !== user.organizationId) {
     return { error: responseError("You can only manage users in your own organization.", 403) } as const;
   }
   if (organizationId === DEFAULT_ORGANIZATION_ID) return { organizationId } as const;
@@ -66,6 +67,15 @@ async function resolveTargetOrganization(request: Request, user: Awaited<ReturnT
   return { organizationId } as const;
 }
 
+/** McLink's directory is the staff Sheet plus accounts that registered themselves in the database. */
+async function listOrganizationUsers(organizationId: string): Promise<DirectoryUser[]> {
+  const registered = await runWithTenantDatabase(organizationId, () => getPostgresDirectoryUsers(organizationId));
+  if (organizationId !== DEFAULT_ORGANIZATION_ID) return registered;
+  const sheetUsers = await getDirectoryUsers();
+  const sheetEmails = new Set(sheetUsers.map((user) => user.email));
+  return [...sheetUsers, ...registered.filter((user) => !sheetEmails.has(user.email))];
+}
+
 export async function GET(request: Request) {
   const access = await requireAdmin(request);
   if ("error" in access) return access.error;
@@ -73,10 +83,8 @@ export async function GET(request: Request) {
   try {
     const target = await resolveTargetOrganization(request, access.user);
     if ("error" in target) return target.error;
-    const users = target.organizationId === DEFAULT_ORGANIZATION_ID
-      ? await getDirectoryUsers()
-      : await runWithTenantDatabase(target.organizationId, () => getPostgresDirectoryUsers(target.organizationId));
-    return NextResponse.json({ success: true, users }, { headers: { "Cache-Control": "no-store" } });
+    const users = await listOrganizationUsers(target.organizationId);
+    return NextResponse.json({ success: true, users, platformAdmin: isPlatformAdmin(access.user) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API User Directory] GET failed:", error);
     return responseError("Unable to load user accounts.", 500);
@@ -104,6 +112,12 @@ async function saveAccount(request: Request, originalEmail?: string) {
   if ("error" in target) return target.error;
 
   try {
+    const platformAdmin = isPlatformAdmin(access.user);
+    // Organization HR accounts manage their own colleagues in a simple way:
+    // people join by registering, and HR can only rename, set the department
+    // of, or deactivate them. Roles, permissions and credit top-ups are
+    // McLink-administrator controls.
+    if (!platformAdmin && !originalEmail) return responseError("Teammates join by registering with their organization email address.", 403);
     const user = userSchema.parse(await request.json());
     const normalizedEmail = user.email.toLowerCase();
     const normalizedUser: DirectoryUser = applyAccessRolePolicy({
@@ -123,10 +137,13 @@ async function saveAccount(request: Request, originalEmail?: string) {
       active: user.active,
     });
     const isDefaultOrganization = target.organizationId === DEFAULT_ORGANIZATION_ID;
-    const users = isDefaultOrganization
-      ? await getDirectoryUsers()
-      : await runWithTenantDatabase(target.organizationId, () => getPostgresDirectoryUsers(target.organizationId));
+    const users = await listOrganizationUsers(target.organizationId);
     const normalizedOriginalEmail = originalEmail?.trim().toLowerCase();
+    if (!platformAdmin) {
+      const current = users.find((existing) => existing.email === normalizedOriginalEmail);
+      if (!current) return responseError("The account being edited no longer exists.", 404);
+      Object.assign(normalizedUser, current, { email: current.email, fullName: normalizedUser.fullName, department: normalizedUser.department, active: normalizedUser.active });
+    }
     const duplicate = users.some((existing) => existing.email === normalizedEmail && existing.email !== normalizedOriginalEmail);
     if (duplicate) return responseError("An account already exists for that email address.", 409);
 
@@ -137,7 +154,8 @@ async function saveAccount(request: Request, originalEmail?: string) {
       return responseError("The account being edited no longer exists.", 404);
     }
 
-    if (isDefaultOrganization) {
+    const inSheet = isDefaultOrganization && (await getDirectoryUsers()).some((existing) => existing.email === (normalizedOriginalEmail || normalizedEmail));
+    if (isDefaultOrganization && (inSheet || !normalizedOriginalEmail)) {
       if (normalizedOriginalEmail) await updateDirectoryUser(normalizedOriginalEmail, normalizedUser);
       else await upsertDirectoryUser(normalizedUser);
     } else {
@@ -162,4 +180,35 @@ export async function PATCH(request: Request) {
   const originalEmail = url.searchParams.get("originalEmail") || undefined;
   if (!originalEmail) return responseError("The original account email is required.", 400);
   return saveAccount(request, originalEmail);
+}
+
+/** Reset only a self-registration credential so the same directory identity can register again. */
+export async function DELETE(request: Request) {
+  const access = await requireAdmin(request);
+  if ("error" in access) return access.error;
+  if (!isPlatformAdmin(access.user)) return responseError("Only a McLink platform administrator can reset registration credentials.", 403);
+
+  const url = new URL(request.url);
+  const email = normalizeEmail(url.searchParams.get("originalEmail"));
+  if (!email) return responseError("The account email is required.", 400);
+  if (email === normalizeEmail(access.user.email)) return responseError("You cannot reset your own registration credential.", 400);
+
+  try {
+    const target = await resolveTargetOrganization(request, access.user);
+    if ("error" in target) return target.error;
+    const users = await listOrganizationUsers(target.organizationId);
+    if (!users.some((user) => user.email === email)) return responseError("The account being reset no longer exists.", 404);
+
+    const [deleted] = await getDb()
+      .delete(userCredentials)
+      .where(and(eq(userCredentials.email, email), eq(userCredentials.organizationId, target.organizationId)))
+      .returning({ id: userCredentials.id });
+    if (!deleted) return responseError("No registration credential was found for this account.", 404);
+
+    await syncOrganizationMembership({ organizationId: target.organizationId, email, active: false });
+    return NextResponse.json({ success: true, message: "Registration reset. The user can register again with this email address." });
+  } catch (error) {
+    console.error("[API User Directory] RESET REGISTRATION failed:", error);
+    return responseError("Unable to reset the registration.", 500);
+  }
 }

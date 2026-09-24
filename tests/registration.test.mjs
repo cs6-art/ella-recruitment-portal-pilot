@@ -37,6 +37,12 @@ test("passwords are hashed and verification tokens are stored hashed with an exp
   assert.match(migration, /"password_hash" text NOT NULL/);
 });
 
+test("registration emails use Smile branding", () => {
+  assert.match(source, /Reset your Smile Recruitment Portal password/);
+  assert.match(source, /Verify your Smile Recruitment Portal account/);
+  assert.doesNotMatch(source, /your Ella Recruitment Portal/);
+});
+
 test("verification never overwrites an existing directory row", () => {
   assert.match(source, /findDirectoryUser\(email\)\)\) return/);
   assert.match(source, /findPostgresDirectoryUser\(email, organizationId\)\) return/);

@@ -47,18 +47,28 @@ export function applyAccessRolePolicy<T extends AccessControlledUser>(user: T): 
   return { ...user, canManageUsers: false };
 }
 
+/**
+ * Every self-registered account is HR: full access to the recruitment
+ * workflow, settings and its own organization's user list. The only things
+ * withheld are the McLink-administrator powers (manual credit top-ups and
+ * cross-organization management), which are never granted by registration.
+ */
+export const HR_FULL_ACCESS: AccessRolePermissions = {
+  canCreateRole: true,
+  canReviewRole: true,
+  canApproveRole: true,
+  canEditSettings: true,
+  canManageUsers: true,
+  canManageCredits: false,
+  canReviewDepartmentRole: false,
+};
+
 export const ACCESS_ROLE_OPTIONS: AccessRoleOption[] = [
   {
     value: "HR",
     label: "HR",
-    description: "Manage user access and the recruitment workflow.",
-    canCreateRole: true,
-    canReviewRole: true,
-    canApproveRole: false,
-    canEditSettings: false,
-    canManageUsers: true,
-    canManageCredits: false,
-    canReviewDepartmentRole: false,
+    description: "Full recruitment access and management of this organization's accounts.",
+    ...HR_FULL_ACCESS,
   },
   {
     value: "Admin",

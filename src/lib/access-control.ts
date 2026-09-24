@@ -1,6 +1,7 @@
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import type { SessionUser } from "@/lib/session";
 
+
 // Capability checks are deliberately independent. The access-role label is a
 // human-readable preset, not an authorization shortcut. HR is the only access
 // administrator; all other access comes from explicit capability flags.
@@ -28,6 +29,15 @@ export function canViewRoleList(user: SessionUser): boolean {
  * change portal capabilities, even if they have a descriptive "Admin" label. */
 export function canAdministerAccess(user: { accessRole?: string; canReviewRole?: boolean }): boolean {
   return user.accessRole?.trim().toLowerCase() === "hr" && user.canReviewRole === true;
+}
+
+// McLink's own tenant (same value as DEFAULT_ORGANIZATION_ID). Repeated here so
+// this module stays free of runtime imports and can be unit-tested directly.
+const MCLINK_ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
+
+/** McLink platform administrator: signed in from the McLink staff directory as HR. */
+export function isPlatformAdmin(user: { organizationId?: string; platformAdmin?: boolean; accessRole?: string; canReviewRole?: boolean }): boolean {
+  return user.platformAdmin === true && user.organizationId === MCLINK_ORGANIZATION_ID && canAdministerAccess(user);
 }
 
 export function isCreatorOnly(user: SessionUser): boolean {

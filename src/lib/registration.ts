@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { organizations, userCredentials } from "@/db/schema";
+import { HR_FULL_ACCESS } from "@/lib/access-roles";
 import { findDirectoryUser, type DirectoryUser } from "@/lib/google-sheets";
 import { DEFAULT_ORGANIZATION_ID, syncOrganizationMembership } from "@/lib/organization-accounts";
 import { findPostgresDirectoryUser, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
@@ -173,15 +174,9 @@ async function ensureDirectoryUser(organizationId: string, email: string, fullNa
     await upsertPostgresDirectoryUser(organizationId, {
       email,
       fullName,
-      accessRole: "Custom",
+      accessRole: "HR",
       department: "",
-      canCreateRole: false,
-      canReviewRole: false,
-      canApproveRole: false,
-      canEditSettings: false,
-      canManageUsers: false,
-      canManageCredits: false,
-      canReviewDepartmentRole: false,
+      ...HR_FULL_ACCESS,
       active: true,
     });
   });
@@ -234,12 +229,13 @@ export async function recordLogin(id: string) {
 }
 
 /** Permissions always come from the organization directory, never from the credential row. */
-export async function loadDirectoryUser(email: string, organizationId: string): Promise<DirectoryUser | null> {
+export async function loadDirectoryUser(email: string, organizationId: string): Promise<{ user: DirectoryUser; source: "sheet" | "database" } | null> {
   if (organizationId === DEFAULT_ORGANIZATION_ID) {
     const sheetUser = await findDirectoryUser(email);
-    if (sheetUser) return sheetUser;
+    if (sheetUser) return { user: sheetUser, source: "sheet" };
   }
-  return runWithTenantDatabase(organizationId, () => findPostgresDirectoryUser(email, organizationId));
+  const user = await runWithTenantDatabase(organizationId, () => findPostgresDirectoryUser(email, organizationId));
+  return user ? { user, source: "database" } : null;
 }
 
 // --- Verification email (n8n) ----------------------------------------------
@@ -248,7 +244,7 @@ export type AuthEmailResult = { status: "sent" | "failed" | "not_configured"; er
 
 export function sendPasswordResetEmail(input: { email: string; fullName: string; link: string }): Promise<AuthEmailResult> {
   return postAuthEmail("password_reset_requested", input, {
-    subject: "Reset your Ella Recruitment Portal password",
+    subject: "Reset your Smile Recruitment Portal password",
     heading: "Reset your password",
     message: "We received a request to reset your password. Use the link below to choose a new one.",
     note: "This link expires in 1 hour. If you did not request it, you can ignore this email.",
@@ -257,7 +253,7 @@ export function sendPasswordResetEmail(input: { email: string; fullName: string;
 
 export function sendVerificationEmail(input: { email: string; fullName: string; link: string }): Promise<AuthEmailResult> {
   return postAuthEmail("registration_verification_requested", input, {
-    subject: "Verify your Ella Recruitment Portal account",
+    subject: "Verify your Smile Recruitment Portal account",
     heading: "Confirm your email address",
     message: "Thanks for registering. Please confirm your email address to activate your account.",
     note: "This link expires in 24 hours. If you did not register, you can ignore this email.",

@@ -22,6 +22,10 @@ export type SessionUser = {
   // the user's own department, distinct from canReviewRole's company-wide
   // pipeline management rights. See access-control.ts.
   canReviewDepartmentRole?: boolean;
+  // McLink platform administrator (manage organizations, other tenants' users
+  // and credit top-ups). Set only at login from the McLink staff directory;
+  // self-registered accounts never carry it.
+  platformAdmin?: boolean;
 };
 
 const COOKIE_NAME = "mclink_session";

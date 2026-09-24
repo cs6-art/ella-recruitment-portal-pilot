@@ -5590,3 +5590,24 @@ textarea:focus-visible {
 .auth-tabs button { background: none; border: 0; padding: 10px 14px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; }
 .auth-tabs button.active { color: var(--navy); border-bottom-color: var(--navy); }
 .auth-link { background: none; border: 0; padding: 0; color: var(--navy); text-decoration: underline; cursor: pointer; font: inherit; align-self: flex-start; }
+
+/* ---- Forms: every field flows in one column, top to bottom ---- */
+.form-grid, .grid-2, .user-account-form { grid-template-columns: 1fr; }
+.form-stack { display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 760px; }
+.form-grid, .grid-2 { max-width: 760px; gap: 20px; }
+.user-account-form { gap: 20px; }
+.user-account-permissions { grid-template-columns: 1fr; }
+.form-stack .field, .form-grid .field, .grid-2 .field { width: 100%; }
+.field input, .field select, .field textarea { width: 100%; box-sizing: border-box; min-height: 44px; }
+.field textarea { min-height: 110px; }
+.field label { line-height: 1.4; }
+.field-optional { color: var(--muted); font-weight: 500; }
+.rule-chip { display: inline-block; margin: 2px 6px 2px 0; padding: 2px 9px; border-radius: 999px; background: #eaf2fb; color: var(--navy); font-size: 12px; font-weight: 600; }
+
+/* ---- Sign in / register ---- */
+.auth-form { gap: 18px; max-width: 400px; width: 100%; }
+.auth-form label { gap: 8px; }
+.auth-form input { min-height: 44px; box-sizing: border-box; width: 100%; }
+.auth-form .btn { width: 100%; min-height: 44px; justify-content: center; }
+.auth-form h3 { margin: 0; color: var(--navy); font-size: 20px; }
+.auth-tabs button { flex: 1; }

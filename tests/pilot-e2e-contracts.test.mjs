@@ -22,7 +22,8 @@ test("role workflow supports draft, HR review, approval, rejection, and idempote
   assert.match(route, /submit_draft_for_hr/);
   assert.match(route, /approve_role/);
   assert.match(route, /reject_role/);
-  assert.match(route, /return_for_revision_hr/);
+  assert.doesNotMatch(route, /return_for_revision_hr/);
+  assert.doesNotMatch(route, /place_on_hold_hr/);
   assert.match(route, /statusRequestSchema/);
   assert.match(route, /actionRequestId/);
   assert.match(route, /idempotentReplay/);

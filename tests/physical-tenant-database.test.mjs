@@ -69,5 +69,5 @@ test("organization administration is restricted to the McLink platform admin", (
   assert.match(directory, /runWithTenantDatabase/);
   assert.match(editor, /\/api\/organizations/);
   assert.match(editor, /Manage users for/);
-  assert.match(editor, /Every organization shares one database/);
+  assert.match(editor, /isolated per organization/);
 });
