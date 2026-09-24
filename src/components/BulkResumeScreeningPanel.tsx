@@ -32,7 +32,10 @@ type QueueItem = {
 };
 
 const statusOrder = ["Queued", "Processing", "Completed", "Failed", "Skipped"];
-const POLL_INTERVAL_MS = 90_000;
+// The status endpoint performs fresh queue and screening-evidence reads. Keep
+// feedback responsive for a newly submitted batch, then back off when the
+// queue is unchanged so a stuck historical row cannot create endless load.
+const POLL_INTERVALS_MS = [30_000, 60_000, 120_000] as const;
 // MAX_FILES_PER_SUBMISSION imported from @/lib/bulk-resume-limits above — a
 // dependency-free module client code can safely import (bulk-resume-intake.ts
 // itself is server-only). The server also enforces this cap — see bulk/upload
@@ -98,16 +101,18 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   const [cloudPicker, setCloudPicker] = useState<"google" | "microsoft" | null>(null);
   const [driveImporting, setDriveImporting] = useState(false);
   const [retryingSavedFailures, setRetryingSavedFailures] = useState(false);
-  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const batchFiles = useRef<Map<string, File>>(new Map());
   const refreshInFlight = useRef(false);
   const refreshAbort = useRef<AbortController | null>(null);
   const statusRequestId = useRef(0);
+  const pollDelayIndex = useRef(0);
+  const statusSignature = useRef("");
 
   const selectedRole = useMemo(() => roleOptions.find((role) => role.roleId === roleId), [roleId, roleOptions]);
 
-  const refreshStatus = useCallback(async () => {
-    if (!roleId || refreshInFlight.current) return;
+  const refreshStatus = useCallback(async (): Promise<boolean> => {
+    if (!roleId || refreshInFlight.current) return false;
     refreshInFlight.current = true;
     const requestId = ++statusRequestId.current;
     const controller = new AbortController();
@@ -119,17 +124,27 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to load bulk screening status.");
       // Ignore a response that belongs to an older role/request. This keeps a
       // slow poll from overwriting a newer queue snapshot.
-      if (requestId !== statusRequestId.current) return;
-      setItems(result.items || []);
+      if (requestId !== statusRequestId.current) return false;
+      const nextItems = (Array.isArray(result.items) ? result.items : []) as QueueItem[];
+      const nextCounts = (result.counts || result.roleTotals || {}) as Record<string, number>;
+      const nextSignature = JSON.stringify({
+        counts: Object.entries(nextCounts).sort(([left], [right]) => left.localeCompare(right)),
+        items: nextItems.map((item) => [queueIdentity(item), item.status, item.lastUpdated, item.errorMessage]),
+      });
+      const changed = Boolean(statusSignature.current) && statusSignature.current !== nextSignature;
+      statusSignature.current = nextSignature;
+      setItems(nextItems);
       setRetrySupported(result.retrySupported === true);
       // Use the reconciled latest-state counts. Historical retry-event totals
       // are useful for diagnostics but must not make this summary disagree
       // with the live batch bar above it.
-      setCounts(result.counts || result.roleTotals || {});
+      setCounts(nextCounts);
       setConfigured(result.configured !== false);
       if (result.error) setError(result.error);
+      return changed;
     } catch (caught) {
       if (requestId === statusRequestId.current && !(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : "Unable to load bulk screening status.");
+      return false;
     } finally {
       if (refreshAbort.current === controller) {
         refreshAbort.current = null;
@@ -146,6 +161,8 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     refreshAbort.current = null;
     refreshInFlight.current = false;
     statusRequestId.current += 1;
+    pollDelayIndex.current = 0;
+    statusSignature.current = "";
     setRoleId(nextRoleId);
     setItems([]);
     setCounts({});
@@ -161,6 +178,8 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   }
 
   useEffect(() => {
+    pollDelayIndex.current = 0;
+    statusSignature.current = "";
     void refreshStatus();
   }, [refreshStatus]);
 
@@ -204,9 +223,9 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   }, [loadDriveStatus, loadMsDriveStatus]);
 
 
-  // Polls automatically, without requiring a manual refresh, while any
-  // tracked item (from the active batch, or otherwise) is still Queued or
-  // Processing. Stops on its own once everything reaches a terminal state.
+  // Poll automatically only for a batch submitted in this tab. Historical
+  // pending rows can be refreshed manually, but must not keep this page
+  // polling forever after a worker or data issue has already gone stale.
   const pendingInBatch = useMemo(() => {
     if (activeBatch.size === 0) return false;
     return Array.from(activeBatch.keys()).some((queueId) => {
@@ -219,8 +238,6 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       return !TERMINAL_STATUSES.has(status.toLowerCase());
     });
   }, [activeBatch, batchResultStatuses, items]);
-  const anyPending = pendingInBatch || items.some((item) => !TERMINAL_STATUSES.has(item.status.toLowerCase()));
-
   // The queue only advances while this tab is open and running its own JS
   // loop -- there's no server-side job behind it. Warn before an accidental
   // close mid-run so the reviewer knows the remaining files won't submit.
@@ -232,21 +249,42 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   }, [queueRunning]);
 
   useEffect(() => {
-    if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
-    if (!roleId || !anyPending) return;
-    // Poll only while a batch is actually processing AND the tab is visible; a
-    // backgrounded screening page should not keep hitting the queue API.
-    pollTimer.current = setInterval(() => {
-      if (typeof document === "undefined" || document.visibilityState === "visible") void refreshStatus();
-    }, POLL_INTERVAL_MS);
+    if (pollTimer.current) { clearTimeout(pollTimer.current); pollTimer.current = null; }
+    if (!roleId || !pendingInBatch) return;
+    let cancelled = false;
+    const schedulePoll = () => {
+      if (cancelled) return;
+      const delay = POLL_INTERVALS_MS[pollDelayIndex.current];
+      pollTimer.current = setTimeout(async () => {
+        if (cancelled) return;
+        if (typeof document === "undefined" || document.visibilityState !== "visible") {
+          pollDelayIndex.current = Math.min(pollDelayIndex.current + 1, POLL_INTERVALS_MS.length - 1);
+          schedulePoll();
+          return;
+        }
+        const changed = await refreshStatus();
+        if (cancelled) return;
+        pollDelayIndex.current = changed
+          ? 0
+          : Math.min(pollDelayIndex.current + 1, POLL_INTERVALS_MS.length - 1);
+        schedulePoll();
+      }, delay);
+    };
+    schedulePoll();
     // Catch up immediately when the user returns to a tab with a batch running.
-    const onVisible = () => { if (document.visibilityState === "visible") void refreshStatus(); };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        pollDelayIndex.current = 0;
+        void refreshStatus();
+      }
+    };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
+      cancelled = true;
+      if (pollTimer.current) { clearTimeout(pollTimer.current); pollTimer.current = null; }
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [roleId, anyPending, refreshStatus]);
+  }, [roleId, pendingInBatch, refreshStatus]);
 
   function addFiles(nextFiles: FileList | File[]) {
     const incoming = Array.from(nextFiles).filter((file) => /\.(pdf|docx?|doc)$/i.test(file.name));
@@ -707,7 +745,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
         )}
 
         <div className="bulk-screening-status-header">
-          <div><strong>Role Total</strong><small>{roleId ? `All saved screening records for ${roleId}${anyPending ? " · latest status updates automatically every minute" : ""}` : "Select a role to view its records"}</small></div>
+          <div><strong>Role Total</strong><small>{roleId ? `All saved screening records for ${roleId}${pendingInBatch ? " · current batch updates automatically, then backs off when unchanged" : ""}` : "Select a role to view its records"}</small></div>
           <button type="button" className="btn btn-secondary" onClick={() => void refreshStatus()} disabled={loading}>{loading ? "Refreshing..." : "Refresh status"}</button>
         </div>
 

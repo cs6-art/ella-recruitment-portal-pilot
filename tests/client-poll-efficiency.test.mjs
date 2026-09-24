@@ -43,8 +43,10 @@ test("the recent-applicants feed is a single shared poll for both callers", () =
 });
 
 test("bulk screening polls only while a batch is pending and the tab is visible", () => {
-  assert.match(bulk, /if \(!roleId \|\| !anyPending\) return;/);        // no poll when nothing is processing
+  assert.match(bulk, /if \(!roleId \|\| !pendingInBatch\) return;/);    // no poll for historical pending rows
   assert.match(bulk, /TERMINAL_STATUSES/);                              // stops on terminal state
-  assert.match(bulk, /document\.visibilityState === "visible"\) void refreshStatus\(\)/); // hidden = no poll
+  assert.match(bulk, /document\.visibilityState !== "visible"/);      // hidden = no poll
+  assert.match(bulk, /setTimeout\(async \(\) =>/);                    // adaptive timer, not a fixed interval
+  assert.match(bulk, /void refreshStatus\(\)/);                        // catch up on return
   assert.match(bulk, /addEventListener\("visibilitychange", onVisible\)/); // catch up on return
 });
