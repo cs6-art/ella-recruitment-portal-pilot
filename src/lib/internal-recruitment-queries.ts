@@ -1494,6 +1494,30 @@ export async function hrDecisionQueue(stage?: "resume" | "voice" | "final") {
   return db.select({ externalId: applications.externalId, roleId: applications.roleId, candidateName: applications.candidateName, email: applications.email, currentStage: applications.currentStage, resumeHrDecision: applications.resumeHrDecision, voiceHrDecision: applications.voiceHrDecision, finalHrDecision: applications.finalHrDecision, updatedAt: applications.updatedAt }).from(applications).where(and(eq(applications.withdrawn, false), inArray(applications.currentStage, stageFilter))).orderBy(desc(applications.updatedAt)).limit(LIMIT);
 }
 
+/**
+ * Applications approved at resume review and awaiting a voice-interview
+ * booking invitation. `createBookingToken` moves an application off
+ * `resume_approved` to `voice_booking_pending` as soon as a voice token is
+ * issued, so this stage filter alone already excludes anything already
+ * invited -- no separate booking-token lookup needed (mirrors the simple
+ * stage-filter shape of hrDecisionQueue above).
+ */
+export async function pendingVoiceBookingInvitations() {
+  const db = getDb();
+  return db.select({ externalId: applications.externalId, roleId: applications.roleId, candidateName: applications.candidateName, email: applications.email, currentStage: applications.currentStage, updatedAt: applications.updatedAt }).from(applications).where(and(eq(applications.withdrawn, false), eq(applications.currentStage, "resume_approved"))).orderBy(desc(applications.updatedAt)).limit(LIMIT);
+}
+
+/**
+ * Applications that already have a voice interview result but are still at
+ * `voice_scheduled`. ingestVoiceResult normally advances the stage in the same
+ * transaction, so this is only the reconciliation safety net for n8n. It is
+ * deliberately not filtered by organization so one worker covers all clients.
+ */
+export async function staleVoiceStageApplications() {
+  const db = getDb();
+  return db.select({ externalId: applications.externalId, latestResultAt: sql<string>`max(${voiceInterviewResults.createdAt})` }).from(applications).innerJoin(voiceInterviewResults, eq(voiceInterviewResults.applicationId, applications.id)).where(and(eq(applications.withdrawn, false), eq(applications.currentStage, "voice_scheduled"))).groupBy(applications.externalId).limit(LIMIT);
+}
+
 export async function applyHrDecision(input: { applicationExternalId: string; stage: "resume" | "voice" | "final"; decision: string; comments?: string; actorEmail: string; actorName?: string; actionRequestId: string }) {
   const db = getDb();
   if (!isValidDecision(input.decision)) return { updated: false, error: "invalid_decision" as const };
