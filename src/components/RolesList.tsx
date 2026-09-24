@@ -15,8 +15,6 @@ const statusFilters = [
   "All",
   "Draft",
   "Pending HR Discussion",
-  "Returned for Revision",
-  "On Hold",
   "Approved",
   "Rejected",
   "Recruitment Setup",

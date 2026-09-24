@@ -83,7 +83,6 @@ export default function HrReview({
   const actions = status === "Pending HR Discussion"
     ? [
         ...(canApproveRole ? ["approve_role", "reject_role"] : []),
-        ...(canReviewRole ? ["return_for_revision_hr", "place_on_hold_hr"] : []),
       ]
     : (status === "Returned for Revision" || status === "On Hold") && canReviewRole
       ? ["resume_hr_review"]
