@@ -1,10 +1,18 @@
 # n8n hot paths → internal API (Postgres) — migration spec
 
-> **Status: SPEC + SCAFFOLD.** The `/api/internal/recruitment/*` endpoints and
-> the recruitment-core schema exist in the repo (drafted, feature-flagged off).
-> **No workflow cutover is published.** Do not repoint a live pilot workflow
-> until: the recruitment-core migration is applied to the pilot DB, the entity
-> is shadow-written and parity-checked, and `INTERNAL_API_ENTITIES` lists it.
+> **Status (updated 2026-09-23): PARTIALLY LIVE.** This doc's per-workflow
+> table below is stale where it lists Bulk Resume Intake at cutover order 6 —
+> that one is already live (`intakeTargetResumeBatch` + `bulk/queue` +
+> `bulk/process`, see [[batch-timeout-risk]] memory). All routes in the
+> Endpoints table exist in the repo; most are already in dev's
+> `INTERNAL_API_ENTITIES`. The `notifications` route additionally gates on
+> `RECRUITMENT_BACKEND=postgres` at the route level. **No live pilot n8n
+> workflow cutover has been confirmed from the repo for voice/hr-decisions/
+> booking** — verify directly in n8n before assuming any of these are wired
+> up in production. Do not repoint a live pilot workflow until: the
+> recruitment-core migration is applied to the pilot DB, the entity is
+> shadow-written and parity-checked, and `INTERNAL_API_ENTITIES` lists it in
+> that environment specifically (dev's `.env.local` list does not imply prod).
 
 ## Why
 
@@ -50,6 +58,8 @@ the reporting/export/history mirror.
 | `POST /api/internal/recruitment/voice/logs` | `voice_logs` | provider call-log dedupe |
 | `GET/POST /api/internal/recruitment/bookings` | `booking` | slot listing and atomic booking |
 | `POST /api/internal/recruitment/bookings/tokens` | `booking` | single-use booking token creation |
+| `GET /api/internal/recruitment/voice/bookings/queue` | `booking` | applications awaiting a voice booking invite (added 2026-09-23; write side reuses `bookings/tokens`) |
+| `GET /api/internal/recruitment/voice/results/stale` | `voice_results` | applications (all orgs) with a voice result still at `voice_scheduled`; fix via `POST status-history` -> `voice_review_pending` (added 2026-09-24, hourly safety-net sync) |
 | `GET/POST /api/internal/recruitment/status-history` | `status_history` | transactional application stage/history |
 | `GET/POST /api/internal/recruitment/notifications` | `notifications` | notification queue/status data |
 
@@ -65,8 +75,8 @@ These target endpoints remain inactive until each entity is explicitly added to
 | `29HvXI7H4eKUJ1Uv` Voice Result Status Sync | **R** `High_Match_Profile` (full), `Voice_Interview_Results` (full), `Voice_Call_Queue` (full); **W** `High_Match_Profile` status cells | **R** `GET voice/results?ids=…` + `GET voice/queue`; **W** `POST voice/results` (Vapi already) then portal reconciles stage | `applications`, `voice_interview_results`, `voice_call_attempts`, `application_status_history` | **1** — worst 429 offender, read-only reconciler, lowest blast radius |
 | `cTJHm2ZAJQap7uWW` Scheduled Voice Calling | **R** `Voice_Call_Queue` (full), `High_Match_Profile` (gid), `Role_Requests` (System Prompt); **W** `Voice_Call_Queue` lock/status cells, `High_Match_Profile` status | **R** `GET voice/queue` (returns due attempts + resolved prompt); **W** `POST voice/attempts/{id}/status` (`calling`/`initiated`/`missed`/`error`) | `voice_call_attempts`, `applications`, `roles` (setup jsonb for the prompt), `interview_slots` | **2** — writes call state; needs the attempt state machine in Postgres first |
 | HR decision / F2F invite (`rsfQl6nkVWd7Zo3B`) | **R** `High_Match_Profile` (full) for `Resume_HR_Decision`/`Voice_HR_Decision`; **W** booking token cols, `High_Match_Profile` status, `Final_Interview_Tracking` | **R** `GET hr-decisions/queue`; **W** `POST applications/{extId}/decision` + `POST booking-tokens` | `applications`, `booking_tokens`, `application_status_history`, `interview_slots` (final) | **3** — decision writes; RBAC-sensitive, keep portal as the only writer |
-| Voice Booking Invitations (`gGTvRHKaHTX95y0b`) | **R** `High_Match_Profile` (full) for approved-awaiting-booking; **W** `High_Match_Profile` invitation status + booking link | **R** `GET voice/bookings/queue`; **W** `POST applications/{extId}/voice-invitation` | `applications`, `booking_tokens` | **4** — already stabilised on Sheets; migrate after the readers above |
-| HR Approval Notifications (`fBL9aYz5PNne0jh6`) | **R** `High_Match_Profile` (full); **W** rejection/approval status, secure booking token | **R** `GET hr-decisions/queue?stage=resume`; **W** `POST applications/{extId}/resume-decision` | `applications`, `booking_tokens`, `application_status_history` | **4** — pairs with the decision workflow |
+| Voice Booking Invitations (`gGTvRHKaHTX95y0b`) | **R** `High_Match_Profile` (full) for approved-awaiting-booking; **W** `High_Match_Profile` invitation status + booking link | **R** `GET voice/bookings/queue` (built 2026-09-23); **W** `POST bookings/tokens` (`kind: "voice"` — already built/generic, not a dedicated `voice-invitation` route) | `applications`, `booking_tokens` | **4** — already stabilised on Sheets; migrate after the readers above |
+| HR Approval Notifications (`fBL9aYz5PNne0jh6`) | **R** `High_Match_Profile` (full); **W** rejection/approval status, secure booking token | **R** `GET hr-decisions/queue?stage=resume`; **W** `POST hr-decisions` (`stage: "resume"` — already built/generic, not a dedicated `resume-decision` route) | `applications`, `booking_tokens`, `application_status_history` | **4** — pairs with the decision workflow; both read+write routes already exist, only the n8n cutover + `notifications` status-write gate remain |
 | Voice Booking Confirmation (`NN8r5PPUktrPkVIr`) | **R** `High_Match_Profile` (booked, confirmation not sent) | **R** `GET bookings/confirmations/queue?kind=voice` | `interview_slots`, `applications` | **5** |
 | Final Booking Confirmation (`SQgv92WepQCNmAgx`) | **R** `High_Match_Profile` / `Final_Interview_Tracking` | **R** `GET bookings/confirmations/queue?kind=final` | `interview_slots`, `final` state on `applications` | **5** |
 | Bulk Resume Intake (`P3cEDCDf70Os1Ae9`) | **R/W** `Bulk_Resume_Queue` (append-only events) | **R** `GET bulk/queue`; **W** `POST bulk/queue/{dedupeKey}/status` | `bulk_screening_queue_items` | **6** — the portal already owns intake; n8n only updates status |
