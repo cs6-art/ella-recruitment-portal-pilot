@@ -40,6 +40,27 @@ const NO_ANSWER_SIGNALS = new Set([
   "customer did not answer",
   "did-not-answer",
   "did_not_answer",
+  "rejected",
+  "call-rejected",
+  "call_rejected",
+  "call rejected",
+  "declined",
+  "call-declined",
+  "call_declined",
+  "call declined",
+  "customer-declined",
+  "customer_declined",
+  "customer declined",
+  "canceled",
+]);
+
+// A customer ending the call is not automatically an incomplete interview.
+// If the transcript and answer-completeness evidence show that the interview
+// was finished, it should receive the normal completed-call charge.
+const CUSTOMER_ENDED_SIGNALS = new Set([
+  "customer-ended-call",
+  "customer_ended_call",
+  "customer ended call",
 ]);
 
 const INCOMPLETE_SIGNALS = new Set([
@@ -88,10 +109,14 @@ export function classifyVoiceInterviewBillingOutcome(input: {
     || normalizedSignal(structured.interview_completed) === "false"
     || INCOMPLETE_SIGNALS.has(normalizedSignal(structured.status))
     || (Number.isFinite(answeredQuestionCount) && answeredQuestionCount === 0 && Boolean(String(input.transcript ?? "").trim()));
-  if (signals.some((signal) => INCOMPLETE_SIGNALS.has(signal)) || input.isComplete === false || rawIncomplete) return "incomplete";
-
   const transcript = String(input.transcript ?? "").trim();
   const terminal = signals.some((signal) => signal === "completed" || signal === "complete" || signal === "ended" || signal === "finished") || Boolean(transcript);
+  const customerEndedWithFullEvidence = signals.some((signal) => CUSTOMER_ENDED_SIGNALS.has(signal))
+    && Boolean(transcript)
+    && input.completenessScore != null
+    && input.completenessScore >= 100;
+  if (customerEndedWithFullEvidence) return "completed";
+  if (signals.some((signal) => INCOMPLETE_SIGNALS.has(signal)) || input.isComplete === false || rawIncomplete) return "incomplete";
   if (!terminal) return null;
   if (input.completenessScore !== undefined && input.completenessScore !== null && input.completenessScore < 100) return "incomplete";
   return transcript ? "completed" : "incomplete";

@@ -1338,7 +1338,20 @@ export async function ingestVoiceResult(rawInput: VoiceResultInput) {
     return { inserted: Boolean(inserted), applicationId: application.id, attemptId, candidateEmail: application.email, creditOwnerEmail: application.creditOwnerEmail, organizationId: application.organizationId, chargedCredits: 0, billingOutcome: null, error: null };
   });
   if (!result.applicationId || !result.attemptId) return { ...result, chargedCredits: 0, billingOutcome: null };
-  const billingOutcome = classifyVoiceInterviewBillingOutcome(input);
+  // n8n may deliver the result callback without the completeness fields that
+  // were already persisted by the provider call-log callback. Reuse that
+  // durable evidence so a fully answered customer-ended call is not downgraded
+  // to the incomplete rate merely because the result payload was sparse.
+  const [billingLog] = await db.select({ transcript: voiceCallLogs.transcript, completenessScore: voiceCallLogs.completenessScore })
+    .from(voiceCallLogs)
+    .where(eq(voiceCallLogs.voiceCallAttemptId, result.attemptId))
+    .orderBy(desc(voiceCallLogs.createdAt))
+    .limit(1);
+  const billingOutcome = classifyVoiceInterviewBillingOutcome({
+    ...input,
+    transcript: input.transcript || billingLog?.transcript || "",
+    completenessScore: input.completenessScore ?? billingLog?.completenessScore,
+  });
   const chargedCredits = billingOutcome ? await recordVoiceInterviewDeduction({ applicationId: input.applicationExternalId, attemptId: result.attemptId, outcome: billingOutcome, actorEmail: result.creditOwnerEmail, organizationId: result.organizationId }) : 0;
   return { ...result, chargedCredits, billingOutcome };
 }

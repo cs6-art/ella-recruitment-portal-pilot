@@ -19,6 +19,7 @@ test("voice billing maps the requested outcomes to the requested costs", () => {
   assert.equal(classifyVoiceInterviewBillingOutcome({ callFinalStatus: "busy" }), "no_answer");
   assert.equal(classifyVoiceInterviewBillingOutcome({ callStatus: "completed", isComplete: false, transcript: "partial" }), "incomplete");
   assert.equal(classifyVoiceInterviewBillingOutcome({ callStatus: "completed", completenessScore: 80, transcript: "partial" }), "incomplete");
+  assert.equal(classifyVoiceInterviewBillingOutcome({ callStatus: "ended", callFinalStatus: "customer-ended-call", isComplete: false, completenessScore: 100, transcript: "Q1: answer\nQ2: answer" }), "completed");
   assert.equal(classifyVoiceInterviewBillingOutcome({ callStatus: "ended", callFinalStatus: "customer-ended-call", transcript: "User: Hello", raw: { body: { message: { analysis: { structuredData: { interview_completed: false, answered_question_count: 0 } } } } } }), "incomplete");
   assert.deepEqual(VOICE_INTERVIEW_BILLING_COST, { completed: 10, no_answer: 5, incomplete: 8 });
   assert.equal(CREDIT_COST.phone_interview, 10);
@@ -85,6 +86,7 @@ test("terminal billing is owned by voice result ingestion and remains idempotent
   assert.match(credits, /idempotencyKey: `voice-attempt:\$\{input\.attemptId\}`/);
   assert.match(queries, /export async function ingestVoiceResult/);
   assert.match(queries, /export async function createVoiceCallLog/);
+  assert.match(queries, /billingLog\?\.completenessScore/);
 });
 
 test("dispatch retains the maximum voice charge preflight", () => {

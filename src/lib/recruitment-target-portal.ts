@@ -1099,6 +1099,7 @@ export async function targetApplicantDetails(externalId: string) {
         callStatus: text(voiceResult?.callStatus),
         callFinalStatus: text(voiceResult?.callFinalStatus),
         transcript: text(voiceResult?.transcript || voiceLog?.transcript),
+        completenessScore: voiceLog?.completenessScore,
         raw: voiceResult?.raw,
       })
     : null;
