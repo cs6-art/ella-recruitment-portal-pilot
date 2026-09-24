@@ -1620,9 +1620,27 @@ export async function updateApplicationStage(input: { applicationExternalId: str
   });
 }
 
-export async function bulkScreeningQueue(statuses: string[] = ["queued", "processing"]) {
+/**
+ * Queue overview for the n8n bulk intake poll. The worker only needs to know
+ * what is waiting: it claims work through POST bulk/queue/claim and ignores this
+ * list. Returning every column of up to 100 rows (file URLs, candidate contact
+ * details, ...) every 2 minutes was pure database transfer, so return a short
+ * page of the few identifying columns.
+ */
+export async function bulkScreeningQueue(statuses: string[] = ["queued", "processing"], limit = 20) {
   const db = getDb();
-  return db.select().from(bulkScreeningQueueItems).where(inArray(bulkScreeningQueueItems.status, statuses)).orderBy(asc(bulkScreeningQueueItems.discoveredAt)).limit(LIMIT);
+  const safeLimit = Math.max(1, Math.min(LIMIT, Math.trunc(limit)));
+  return db.select({
+    id: bulkScreeningQueueItems.id,
+    dedupeKey: bulkScreeningQueueItems.dedupeKey,
+    batchId: bulkScreeningQueueItems.batchId,
+    status: bulkScreeningQueueItems.status,
+    filename: bulkScreeningQueueItems.filename,
+    attemptCount: bulkScreeningQueueItems.attemptCount,
+    errorMessage: bulkScreeningQueueItems.errorMessage,
+    discoveredAt: bulkScreeningQueueItems.discoveredAt,
+    processingStartedAt: bulkScreeningQueueItems.processingStartedAt,
+  }).from(bulkScreeningQueueItems).where(inArray(bulkScreeningQueueItems.status, statuses)).orderBy(asc(bulkScreeningQueueItems.discoveredAt)).limit(safeLimit);
 }
 
 /**

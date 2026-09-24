@@ -97,3 +97,13 @@ test("bulk claims can recover only stale processing rows", () => {
   assert.match(queries, /export const DEFAULT_BULK_CLAIM_LIMIT = 3;/);
   assert.match(queries, /FOR UPDATE SKIP LOCKED/);
 });
+
+test("the n8n bulk queue poll returns a short page of identifying columns only", () => {
+  const queries = read("src/lib/internal-recruitment-queries.ts");
+  const route = read("src/app/api/internal/recruitment/bulk/queue/route.ts");
+  const fn = queries.slice(queries.indexOf("export async function bulkScreeningQueue"), queries.indexOf("export async function bulkScreeningQueue") + 1200);
+  assert.match(fn, /limit = 20/);
+  assert.match(fn, /db\.select\(\{/);
+  assert.doesNotMatch(fn, /fileUrl|candidateEmail|preferredMobile/);
+  assert.match(route, /params\.get\("limit"\)/);
+});

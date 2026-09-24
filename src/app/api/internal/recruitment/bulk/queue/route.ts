@@ -7,12 +7,16 @@ export const dynamic = "force-dynamic";
 
 // Bulk resume screening queue — replaces the n8n Bulk_Resume_Queue poll.
 // ?status=queued,processing (default) | screened | failed | skipped
+// ?limit=N (default 20, max 100). Rows carry only identifying columns; work is
+// claimed through POST bulk/queue/claim, not read from this list.
 export const GET = withInternalAuth("bulk_queue", async (request) => {
-  const statuses = (new URL(request.url).searchParams.get("status") || "queued,processing")
+  const params = new URL(request.url).searchParams;
+  const statuses = (params.get("status") || "queued,processing")
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter((value) => ["queued", "processing", "screened", "failed", "skipped"].includes(value));
-  const items = await bulkScreeningQueue(statuses.length > 0 ? statuses : ["queued", "processing"]);
+  const requestedLimit = Number(params.get("limit") || "20");
+  const items = await bulkScreeningQueue(statuses.length > 0 ? statuses : ["queued", "processing"], Number.isFinite(requestedLimit) ? requestedLimit : 20);
   return internalJson({ ok: true, migrated: true, count: items.length, items });
 });
 
