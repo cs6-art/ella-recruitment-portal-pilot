@@ -91,6 +91,9 @@ test("bulk claims can recover only stale processing rows", () => {
   const queries = read("src/lib/internal-recruitment-queries.ts");
   assert.match(queries, /status = 'queued'/);
   assert.match(queries, /status = 'processing'/);
-  assert.match(queries, /processing_started_at < now\(\) - interval '5 minutes'/);
+  assert.match(queries, /processing_started_at < now\(\) - \(\$\{BULK_CLAIM_LEASE_MINUTES\} \* interval '1 minute'\)/);
+  // A claim must outlive the time the worker needs to screen the whole claimed batch.
+  assert.match(queries, /const BULK_CLAIM_LEASE_MINUTES = 15;/);
+  assert.match(queries, /export const DEFAULT_BULK_CLAIM_LIMIT = 3;/);
   assert.match(queries, /FOR UPDATE SKIP LOCKED/);
 });

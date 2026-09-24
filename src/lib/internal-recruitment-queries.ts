@@ -1698,13 +1698,23 @@ export async function enqueueBulkScreening(input: {
 }
 
 /** Claim bulk rows atomically; a row can never be claimed twice concurrently. */
-export async function claimBulkQueue(limit = 10) {
+// The n8n worker screens a claimed batch one resume at a time (about 100 s each
+// with the AI call), so a claim must stay valid for longer than
+// DEFAULT_BULK_CLAIM_LIMIT resumes take. With the previous 10-item claim and a
+// 5-minute lease, overlapping 2-minute runs re-claimed resumes that were still
+// waiting their turn: the same resumes were screened by the AI many times, only
+// one result was kept, and the rest ended as "duplicate" (wasted model calls and
+// database reads).
+const BULK_CLAIM_LEASE_MINUTES = 15;
+export const DEFAULT_BULK_CLAIM_LIMIT = 3;
+
+export async function claimBulkQueue(limit = DEFAULT_BULK_CLAIM_LIMIT) {
   const db = getDb();
   const safeLimit = Math.max(1, Math.min(LIMIT, Math.trunc(limit)));
   const result = await db.execute(sql`WITH claimed AS (
     SELECT id FROM bulk_screening_queue_items
     WHERE status = 'queued'
-       OR (status = 'processing' AND (processing_started_at IS NULL OR processing_started_at < now() - interval '5 minutes'))
+       OR (status = 'processing' AND (processing_started_at IS NULL OR processing_started_at < now() - (${BULK_CLAIM_LEASE_MINUTES} * interval '1 minute')))
     ORDER BY discovered_at, id
     FOR UPDATE SKIP LOCKED LIMIT ${safeLimit}
   )
