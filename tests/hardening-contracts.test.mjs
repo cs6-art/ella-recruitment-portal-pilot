@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-const authSource = fs.readFileSync("src/app/api/auth/google/route.ts", "utf8");
+const authSource = fs.readFileSync("src/app/api/auth/login/route.ts", "utf8");
 const logoutSource = fs.readFileSync("src/app/api/auth/logout/route.ts", "utf8");
 const statusSource = fs.readFileSync("src/app/api/roles/[roleId]/status/route.ts", "utf8");
 const setupSource = fs.readFileSync("src/app/api/roles/[roleId]/recruitment-setup/route.ts", "utf8");

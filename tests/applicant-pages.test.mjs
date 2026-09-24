@@ -462,7 +462,8 @@ test("past booked interviews reconcile to No Show without overwriting completed 
 
 test("high-cost and state-changing APIs apply request throttling", () => {
   const routes = [
-    "src/app/api/auth/google/route.ts",
+    "src/app/api/auth/login/route.ts",
+    "src/app/api/auth/register/route.ts",
     "src/app/api/roles/route.ts",
     "src/app/api/roles/[roleId]/status/route.ts",
     "src/app/api/roles/[roleId]/recruitment-setup/route.ts",

@@ -5580,3 +5580,13 @@ textarea:focus-visible {
     min-width: 0;
   }
 }
+
+/* Email + password sign-in / registration form */
+.auth-form { display: flex; flex-direction: column; gap: 14px; max-width: 360px; margin-bottom: 20px; }
+.auth-form label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; color: var(--navy); font-size: 14px; }
+.auth-form input { padding: 11px 12px; border: 1px solid #c9d3df; border-radius: 8px; font: inherit; }
+.auth-form small { color: var(--muted); }
+.auth-tabs { display: flex; gap: 6px; border-bottom: 1px solid #dde4ec; }
+.auth-tabs button { background: none; border: 0; padding: 10px 14px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; }
+.auth-tabs button.active { color: var(--navy); border-bottom-color: var(--navy); }
+.auth-link { background: none; border: 0; padding: 0; color: var(--navy); text-decoration: underline; cursor: pointer; font: inherit; align-self: flex-start; }

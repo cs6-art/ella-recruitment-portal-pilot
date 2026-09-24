@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import GoogleLogin from "@/components/GoogleLogin";
+import AuthForm from "@/components/AuthForm";
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { safeAuthRedirect } from "@/lib/auth-redirect";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
@@ -9,6 +9,8 @@ type HomePageProps = {
   searchParams?: Promise<{
     next?: string | string[];
     invite?: string | string[];
+    verify?: string | string[];
+    reset?: string | string[];
   }>;
 };
 
@@ -35,6 +37,15 @@ export default async function Home({ searchParams }: HomePageProps) {
 
   if (user) redirect(redirectTo);
 
+  const verifyValue = Array.isArray(query?.verify) ? query.verify[0] : query?.verify;
+  const resetToken = (Array.isArray(query?.reset) ? query.reset[0] : query?.reset) || "";
+  const verifyNotice = ({
+    verified: "Your email is verified. You can now log in.",
+    expired: "That verification link has expired. Log in and choose “Resend verification email”.",
+    invalid: "That verification link is not valid or was already used.",
+    error: "We could not verify your email. Please try again.",
+  } as Record<string, string>)[verifyValue || ""];
+
   return (
     <main className="login-page">
       <section className="login-card">
@@ -50,9 +61,10 @@ export default async function Home({ searchParams }: HomePageProps) {
         </div>
         <div className="login-panel">
           <h2>Welcome</h2>
-          <p>Sign in with the Google account listed in the portal user directory to create and monitor role requests.</p>
-          <GoogleLogin redirectTo={redirectTo} />
-          <div className="notice"><strong>Directory access only.</strong><br />Your Google account must be verified and listed as an active user in the portal directory.</div>
+          <p>Register with your organization email, verify it from the link we send you, then log in to create and monitor role requests.</p>
+          {verifyNotice ? <div className="notice" role="status">{verifyNotice}</div> : null}
+          <AuthForm redirectTo={redirectTo} resetToken={resetToken} />
+          <div className="notice"><strong>Organization members only.</strong><br />Registration is limited to participating organizations. Your account is created in your organization and must be verified by email before you can log in.</div>
         </div>
       </section>
     </main>

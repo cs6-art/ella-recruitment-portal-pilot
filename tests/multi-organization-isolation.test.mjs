@@ -29,11 +29,11 @@ test("credit operations use one shared wallet per tenant", () => {
 
 test("sessions and login resolve an organization before tenant-scoped requests", () => {
   const session = read("src/lib/session.ts");
-  const auth = read("src/app/api/auth/google/route.ts");
+  const auth = read("src/app/api/auth/login/route.ts");
   const target = read("src/lib/recruitment-target-portal.ts");
   assert.match(session, /!user\.organizationId/);
-  assert.match(auth, /resolveOrganizationForLogin/);
-  assert.match(auth, /organizationId,/);
+  assert.match(auth, /credential\.organizationId/);
+  assert.match(auth, /organizationId: credential\.organizationId/);
   assert.match(target, /listApplications\(undefined, undefined, organizationId\)/);
   assert.match(target, /targetPublicRoleDetails/);
 });
@@ -48,20 +48,20 @@ test("directory provisioning cannot grant a user access to another tenant", () =
 });
 
 test("client organizations can log in without a row in McLink's own user directory", () => {
-  const auth = read("src/app/api/auth/google/route.ts");
+  const registration = read("src/lib/registration.ts");
   const directory = read("src/lib/postgres-directory.ts");
-  assert.match(auth, /findPostgresDirectoryUser/);
-  assert.match(auth, /findPostgresDirectoryUserByEmail/);
-  assert.match(auth, /The directory, not the Google hosted domain/);
+  assert.match(registration, /findPostgresDirectoryUser/);
+  assert.match(registration, /organizationId === DEFAULT_ORGANIZATION_ID/);
   // The Postgres fallback must never run for the default (McLink) organization
   // — the Sheet-only login path for existing McLink staff stays untouched.
   assert.match(directory, /from\(users\)\s*\.innerJoin\(organizations/);
   assert.match(directory, /eq\(users\.organizationId, organizationId\)/);
 });
 
-test("deactivated McLink identities can resolve to an active client tenant", () => {
-  const auth = read("src/app/api/auth/google/route.ts");
-  assert.match(auth, /sheetDirectoryUser\?\.active === true/);
+test("login is gated on a verified email and the organization directory", () => {
+  const auth = read("src/app/api/auth/login/route.ts");
+  assert.match(auth, /credential\.verified/);
+  assert.match(auth, /directoryUser\.active !== true/);
 });
 
 test("user identities are unique within a tenant and McLink login wins for shared test identities", () => {

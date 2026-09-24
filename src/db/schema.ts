@@ -8,9 +8,34 @@ export const organizations = pgTable("organizations", {
   databaseKey: text("database_key").notNull().default("mclinkgroup"),
   databaseStatus: text("database_status").notNull().default("ready"),
   active: boolean("active").notNull().default(true),
+  /** Email domains (e.g. "mclinkgroup.com") that may self-register into this organization. */
+  allowedDomains: text("allowed_domains").array().notNull().default(sql`'{}'::text[]`),
+  /** Individual addresses (any domain) that may self-register into this organization. */
+  allowedEmails: text("allowed_emails").array().notNull().default(sql`'{}'::text[]`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Email + password login identity created by self-registration. */
+export const userCredentials = pgTable(
+  "user_credentials",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    fullName: text("full_name").notNull().default(""),
+    passwordHash: text("password_hash").notNull(),
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+    verificationTokenHash: text("verification_token_hash"),
+    verificationExpiresAt: timestamp("verification_expires_at", { withTimezone: true }),
+    resetTokenHash: text("reset_token_hash"),
+    resetExpiresAt: timestamp("reset_expires_at", { withTimezone: true }),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("user_credentials_email_uidx").on(table.email), index("user_credentials_token_idx").on(table.verificationTokenHash)],
+);
 
 export const organizationMemberships = pgTable(
   "organization_memberships",
