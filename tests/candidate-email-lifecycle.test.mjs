@@ -196,3 +196,11 @@ test("Pilot target notifier is candidate-event allowlisted and never sends to an
   const safety = read("src/lib/pilot-test-safety.ts");
   assert.match(safety, /PILOT_TEST_EMAIL = "cs6@mclinkgroup\.com"/);
 });
+
+test("candidate emails never fall back to HR-facing event summaries", () => {
+  const labels = read("src/lib/notification-labels.ts");
+  for (const event of ["application_acknowledgment", "screening_next_step", "voice_result_next_step", "voice_no_show", "voice_retry", "voice_rejection"]) {
+    assert.match(labels, new RegExp(`case "${event}":`), `${event} needs candidate-facing copy`);
+  }
+  assert.match(labels, /case "final_decision_pass":\s*case "final_decision_reject":\s*return null;/);
+});

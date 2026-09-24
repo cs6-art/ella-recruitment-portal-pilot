@@ -150,6 +150,49 @@ export function notificationEmail(eventType: string | null | undefined, context:
         cta: "Schedule final interview",
         ctaLink: link,
       };
+    // The event summaries above are written for HR reviewers, so events that are
+    // emailed to the candidate need their own candidate-facing wording.
+    case "application_acknowledgment":
+      return {
+        ...base,
+        heading: "Application received",
+        message: `Dear ${name},\n\nThank you for applying for ${rolePhrase} at McLink Group. We have received your application and our recruitment team will review it. We will be in touch if we would like to take the next step.`,
+      };
+    case "screening_next_step":
+      return {
+        ...base,
+        heading: "Your application is being reviewed",
+        message: `Dear ${name},\n\nThank you for your interest in ${rolePhrase}. Your application has been assessed and is now with our recruitment team for review. We will contact you about the next steps.`,
+      };
+    case "voice_result_next_step":
+      return {
+        ...base,
+        heading: "Thank you for completing your interview",
+        message: `Dear ${name},\n\nThank you for completing your AI voice interview for ${rolePhrase}. Our recruitment team is now reviewing your interview and will contact you about the next steps.`,
+      };
+    case "voice_no_show":
+      return {
+        ...base,
+        heading: "We could not complete your interview",
+        message: `Dear ${name},\n\nWe were unable to complete your scheduled AI voice interview for ${rolePhrase}. Our recruitment team will be in touch about whether a new time can be arranged.`,
+      };
+    case "voice_retry":
+      return {
+        ...base,
+        heading: "We will call you again",
+        message: `Dear ${name},\n\nWe tried to call you for your AI voice interview for ${rolePhrase} but could not connect. We will try again shortly, so please keep your phone available.`,
+      };
+    case "voice_rejection":
+      return {
+        ...base,
+        heading: "Update on your application",
+        message: `Dear ${name},\n\nThank you for taking the time to interview for ${rolePhrase}. After careful consideration we will not be moving forward with your application at this time. We appreciate your interest in McLink Group and wish you every success.`,
+      };
+    // Internal outcome notes for HR; the candidate hears about these through a
+    // separate, deliberate follow-up, not an automatic email.
+    case "final_decision_pass":
+    case "final_decision_reject":
+      return null;
     default:
       return {
         ...base,
