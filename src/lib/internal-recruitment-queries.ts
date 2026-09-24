@@ -1044,6 +1044,20 @@ export async function pendingVoiceCalls() {
 }
 
 /**
+ * Voice attempts that Vapi has accepted (a provider call ID is stored) but that
+ * have not received a terminal result yet. n8n polls the provider for these so
+ * an unanswered call, for which Vapi may send no end-of-call report, still
+ * settles as `no_show` instead of waiting for the nightly reconciliation to
+ * fail it. `minAgeMinutes` keeps the poll off calls that are still ringing or
+ * in progress. Not organization-filtered: one worker serves every client.
+ */
+export async function inFlightVoiceAttempts(minAgeMinutes = 2) {
+  const db = getDb();
+  const age = Math.max(1, Math.min(60, Math.trunc(minAgeMinutes)));
+  return db.select({ attemptId: voiceCallAttempts.id, applicationExternalId: applications.externalId, providerCallId: voiceCallAttempts.providerCallId, status: voiceCallAttempts.status, updatedAt: voiceCallAttempts.updatedAt }).from(voiceCallAttempts).innerJoin(applications, eq(applications.id, voiceCallAttempts.applicationId)).where(and(inArray(voiceCallAttempts.status, ["initiated", "in_progress"]), not(eq(voiceCallAttempts.providerCallId, "")), lte(voiceCallAttempts.updatedAt, sql`now() - (${age} * interval '1 minute')`))).orderBy(asc(voiceCallAttempts.updatedAt)).limit(LIMIT);
+}
+
+/**
  * Reconcile dispatch rows that have outlived a real provider call. This is a
  * maintenance repair, not a billing path: there is no reliable terminal
  * interview evidence, so the attempt is failed without charging credits.
