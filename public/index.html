@@ -1733,6 +1733,28 @@ function resetRecruitmentView() {
   ["candidateNameError", "contactNumberError", "emailError", "roleError", "resumeError"].forEach((id) => setFieldError(id, ""));
   validationSummary.textContent = "";
   validationSummary.classList.remove("visible");
+  // form.reset() blanks the invitation-provided name and email while their
+  // read-only lock stays on, leaving an empty field the candidate cannot fill.
+  applyInvitationDetails();
+}
+
+/* Pre-fill and lock the name/email HR supplied on the invitation. */
+function applyInvitationDetails() {
+  if (!activeInvitation) return;
+  if (activeInvitation.candidateName) {
+    const candidateNameField = document.getElementById("candidateName");
+    candidateNameField.value = activeInvitation.candidateName;
+    candidateNameField.readOnly = true;
+    candidateNameField.setAttribute("aria-readonly", "true");
+    candidateNameField.title = "This name was provided by the recruitment team.";
+  }
+  if (activeInvitation.candidateEmail) {
+    const candidateEmailField = document.getElementById("email");
+    candidateEmailField.value = activeInvitation.candidateEmail;
+    candidateEmailField.readOnly = true;
+    candidateEmailField.setAttribute("aria-readonly", "true");
+    candidateEmailField.title = "This email was provided by the recruitment team.";
+  }
 }
 
 /* Legacy status code retained in docs/LEGACY-APPLICATION-STATUS.md. */
@@ -1990,20 +2012,7 @@ async function initApplicationForm() {
     recruitmentRole.appendChild(new Option(data.roleTitle || data.roleId, data.roleId, true, true));
     recruitmentRole.disabled = true;
     recruitmentRolesStatus.textContent = "Application link verified";
-    if (data.candidateName) {
-      const candidateNameField = document.getElementById("candidateName");
-      candidateNameField.value = data.candidateName;
-      candidateNameField.readOnly = true;
-      candidateNameField.setAttribute("aria-readonly", "true");
-      candidateNameField.title = "This name was provided by the recruitment team.";
-    }
-    if (data.candidateEmail) {
-      const candidateEmailField = document.getElementById("email");
-      candidateEmailField.value = data.candidateEmail;
-      candidateEmailField.readOnly = true;
-      candidateEmailField.setAttribute("aria-readonly", "true");
-      candidateEmailField.title = "This email was provided by the recruitment team.";
-    }
+    applyInvitationDetails();
   } catch (error) {
     console.error("Unable to verify the application link:", error);
     showInviteLinkError("invalid");

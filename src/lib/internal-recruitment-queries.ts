@@ -15,6 +15,7 @@ import { pilotOutboundEmailEnabled } from "@/lib/pilot-email-policy";
 import { avatarInterviewLink } from "@/lib/public-url";
 import type { LiveAvatarEvaluation, LiveAvatarTranscriptTurn } from "@/lib/live-avatar-screening";
 import { evaluateVoiceInterview } from "@/lib/voice-interview-evaluation";
+import { MAX_CONCURRENT_VOICE_INTERVIEWS } from "@/lib/voice-interview-capacity";
 import {
   applicants,
   applicantAliases,
@@ -1978,9 +1979,33 @@ export async function createInterviewSlot(input: {
   return { slot: existing ?? null, created: false, error: null };
 }
 
+/**
+ * Booked AI voice interviews per exact start/end instant. Vapi can run only
+ * MAX_CONCURRENT_VOICE_INTERVIEWS calls at once, so a time at that count is
+ * full. Keyed `${startsAt ISO}|${endsAt ISO}`; counts every role and
+ * organization because the Vapi account is shared.
+ */
+export async function bookedVoiceCountsByInterval() {
+  const db = getDb();
+  const rows = await db.select({ startsAt: interviewSlots.startsAt, endsAt: interviewSlots.endsAt, count: sql<number>`count(*)::int` })
+    .from(interviewSlots)
+    .where(and(eq(interviewSlots.interviewType, "voice"), eq(interviewSlots.status, "booked"), gte(interviewSlots.startsAt, new Date())))
+    .groupBy(interviewSlots.startsAt, interviewSlots.endsAt);
+  return new Map(rows.map((row) => [`${new Date(row.startsAt).toISOString()}|${new Date(row.endsAt).toISOString()}`, Number(row.count)]));
+}
+
 export async function bookInterviewSlot(input: { slotId: string; applicationExternalId: string; actorEmail: string; actionRequestId: string }) {
   const db = getDb();
   return db.transaction(async (tx) => {
+    // Serialize voice bookings so concurrent requests cannot both read a count
+    // of nine and each take the tenth (or eleventh) place for the same time.
+    const [target] = await tx.select({ interviewType: interviewSlots.interviewType, startsAt: interviewSlots.startsAt, endsAt: interviewSlots.endsAt }).from(interviewSlots).where(eq(interviewSlots.id, input.slotId)).limit(1);
+    if (target?.interviewType === "voice") {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('voice-capacity'))`);
+      const [{ count }] = await tx.select({ count: sql<number>`count(*)::int` }).from(interviewSlots)
+        .where(and(eq(interviewSlots.interviewType, "voice"), eq(interviewSlots.status, "booked"), eq(interviewSlots.startsAt, target.startsAt), eq(interviewSlots.endsAt, target.endsAt)));
+      if (Number(count) >= MAX_CONCURRENT_VOICE_INTERVIEWS) return { booked: false, error: "voice_capacity_full" as const };
+    }
     const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, applicantId: applications.applicantId, candidateName: applications.candidateName, email: applications.email, phone: applications.phone, preferredMobile: applications.preferredMobile, currentStage: applications.currentStage }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
     if (!application) return { booked: false, error: "unknown_application" as const };
     const [applicant] = await tx.select({ phoneE164: applicants.phoneE164 }).from(applicants).where(eq(applicants.id, application.applicantId)).limit(1);

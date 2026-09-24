@@ -8,6 +8,7 @@ import {
   getBookingToken,
   applyHrDecision,
   bookInterviewSlot,
+  bookedVoiceCountsByInterval,
   createApplication,
   createInterviewSlot,
   createScreeningInvitation,
@@ -56,6 +57,11 @@ import { applicationLinkWithOrganization } from "@/lib/public-url";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { runWithTenantDatabase } from "@/lib/tenant-database";
+import { MAX_CONCURRENT_VOICE_INTERVIEWS, voiceInterviewConcurrencyKey } from "@/lib/voice-interview-capacity";
+
+function isVoiceTimeFull(counts: Map<string, number>, slot: { date: string; startTime: string; endTime: string; timezone?: string }) {
+  return (counts.get(voiceInterviewConcurrencyKey(slot)) || 0) >= MAX_CONCURRENT_VOICE_INTERVIEWS;
+}
 
 async function targetOrganizationId() {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
@@ -473,7 +479,10 @@ async function targetBookingContextInTenant(kind: "voice" | "final", tokenHash: 
       .filter((slot) => hasValidFutureTime(slot))
       .map((slot) => ({ ...slot, roleId, status: "Available" as const }))
     : [];
-  let available = [...persistedAvailable, ...virtualAvailable].sort((left, right) => `${left.date} ${left.startTime}`.localeCompare(`${right.date} ${right.startTime}`));
+  const voiceCounts = kind === "voice" ? await bookedVoiceCountsByInterval() : new Map<string, number>();
+  let available = [...persistedAvailable, ...virtualAvailable]
+    .filter((slot) => kind !== "voice" || !isVoiceTimeFull(voiceCounts, slot))
+    .sort((left, right) => `${left.date} ${left.startTime}`.localeCompare(`${right.date} ${right.startTime}`));
   if (kind === "final" && available.length > 0) {
     // Calendar availability is the applicant-facing source of truth. Check
     // the complete range once so stale persisted rows cannot be displayed as
@@ -527,6 +536,12 @@ async function targetReserveBookingInTenant(kind: "voice" | "final", tokenHash: 
   if (!context) return { booked: false, error: "invalid_booking_token" as const };
   let persistedSlotId = slotId;
   const virtualSlot = isVirtualSlotId(slotId) ? context.slots.find((slot) => slot.slotId === slotId) : undefined;
+  // Reject a full time before materializing a virtual slot so no orphan
+  // "available" row is left behind; bookInterviewSlot re-checks under a lock.
+  if (kind === "voice") {
+    const chosen = virtualSlot || context.slots.find((slot) => slot.slotId === slotId);
+    if (chosen && isVoiceTimeFull(await bookedVoiceCountsByInterval(), chosen)) return { booked: false, error: "voice_capacity_full" as const };
+  }
   const persistedSlot = !virtualSlot ? context.slots.find((slot) => slot.slotId === slotId) : undefined;
   if (kind === "final" && persistedSlot) {
     // Recheck persisted slots at confirmation time as well as during the

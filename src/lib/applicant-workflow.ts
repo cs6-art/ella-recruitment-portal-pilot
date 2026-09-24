@@ -954,7 +954,10 @@ async function reserveTargetBooking(kind: BookingKind, token: string, slotId: st
   if (!context) throw new Error("This booking link is invalid or expired.");
   if (kind === "voice" && confirmedMobile) await targetUpdateApplicantProfile({ applicationId: context.applicationId, candidateName: context.candidateName, email: context.email, preferredMobile: confirmedMobile, applicantCountry: "" });
   const result = await targetReserveBooking(kind, hashToken(token), slotId, "public-booking");
-  if (!result.booked) throw new Error(result.error || "The selected interview slot is no longer available.");
+  if (!result.booked) {
+    if (result.error === "voice_capacity_full") throw new Error("This AI Voice Interview time has reached the maximum of 10 concurrent calls. Choose another time.");
+    throw new Error(result.error || "The selected interview slot is no longer available.");
+  }
   // The booking token is now spent, so targetBookingContext() can no longer
   // rebuild the context. Return the same context-shaped payload the Sheets
   // path returns so the booking page can render the confirmed state instead
