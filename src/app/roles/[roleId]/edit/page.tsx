@@ -146,6 +146,7 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
           roleId={role.roleId}
           status={role.status}
           editable={user.canReviewRole === true}
+          version={role.lastUpdatedAt}
           updatedAt={role.recruitmentSetupUpdatedAt}
           updatedBy={role.recruitmentSetupUpdatedByName}
           updatedByEmail={role.recruitmentSetupUpdatedByEmail}

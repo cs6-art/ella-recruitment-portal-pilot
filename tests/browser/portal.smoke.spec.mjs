@@ -34,7 +34,10 @@ const settingsAdmin = {
   sub: "browser-settings-admin",
   name: "Settings Administrator",
   email: "settings-admin@mclinkgroup.com",
+  accessRole: "HR",
+  canReviewRole: true,
   canEditSettings: true,
+  platformAdmin: true,
 };
 
 async function signIn(page, user) {

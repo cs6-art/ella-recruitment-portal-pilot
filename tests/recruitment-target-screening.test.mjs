@@ -98,6 +98,14 @@ test("bulk claims can recover only stale processing rows", () => {
   assert.match(queries, /FOR UPDATE SKIP LOCKED/);
 });
 
+test("bulk claims stop retrying an unavailable worker forever", () => {
+  const queries = read("src/lib/internal-recruitment-queries.ts");
+  assert.match(queries, /MAX_BULK_CLAIM_ATTEMPTS = 3/);
+  assert.match(queries, /status = 'failed'/);
+  assert.match(queries, /maximum retry window/);
+  assert.match(queries, /attempt_count >= \$\{MAX_BULK_CLAIM_ATTEMPTS\}/);
+});
+
 test("the n8n bulk queue poll returns a short page of identifying columns only", () => {
   const queries = read("src/lib/internal-recruitment-queries.ts");
   const route = read("src/app/api/internal/recruitment/bulk/queue/route.ts");

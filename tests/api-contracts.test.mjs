@@ -75,6 +75,19 @@ test("draft writes use fresh role reads across app instances", () => {
   assert.match(form, /await draftSaveInFlight\.current/);
 });
 
+test("recruitment setup rejects stale browser saves instead of overwriting newer values", () => {
+  const route = fs.readFileSync("src/app/api/roles/[roleId]/recruitment-setup/route.ts", "utf8");
+  const editor = fs.readFileSync("src/components/RecruitmentSetupEditor.tsx", "utf8");
+  const queries = fs.readFileSync("src/lib/internal-recruitment-queries.ts", "utf8");
+  assert.match(route, /getRoleRequestById\(roleId, \{ fresh: true \}\)/);
+  assert.match(route, /ROLE_WRITE_CONFLICT/);
+  assert.match(route, /status: 409/);
+  assert.match(route, /expectedUpdatedAt/);
+  assert.match(editor, /expectedUpdatedAt: expectedVersion/);
+  assert.match(editor, /Reload latest saved setup/);
+  assert.match(queries, /eq\(roles\.updatedAt, new Date\(expectedUpdatedAt\)\)/);
+});
+
 test("Postgres draft writes stay on the target and normalize constrained labels", () => {
   const createRoute = fs.readFileSync("src/app/api/roles/route.ts", "utf8");
   const statusRoute = fs.readFileSync("src/app/api/roles/[roleId]/status/route.ts", "utf8");

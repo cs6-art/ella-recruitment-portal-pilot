@@ -76,6 +76,8 @@ type Props = {
   status: string;
   setup: Setup;
   editable: boolean;
+  /** Version token used to prevent one browser session overwriting another. */
+  version?: string;
   updatedAt?: string;
   updatedBy?: string;
   updatedByEmail?: string;
@@ -337,10 +339,10 @@ function Field({
   );
 }
 
-export default function RecruitmentSetupEditor({ roleId, status, setup, editable: canReview, updatedAt, updatedBy, updatedByEmail, onSaved }: Props) {
+export default function RecruitmentSetupEditor({ roleId, status, setup, editable: canReview, version, updatedAt, updatedBy, updatedByEmail, onSaved }: Props) {
   // Published roles are a viewing surface. Keep the setup controls disabled
   // there so opening a role does not expose a misleading Save action.
-  const editable = canReview && (status === "Approved" || status === "Recruitment Setup");
+  const baseEditable = canReview && (status === "Approved" || status === "Recruitment Setup");
   const canAdvanceWorkflow = status !== "Job Posted";
   const router = useRouter();
   const setupKey = JSON.stringify(setup);
@@ -352,6 +354,8 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
+  const [conflict, setConflict] = useState(false);
+  const [expectedVersion, setExpectedVersion] = useState(version || "");
   const [templates, setTemplates] = useState<RecruitmentTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateName, setTemplateName] = useState("");
@@ -366,13 +370,16 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   const initialSetupKey = useMemo(() => JSON.stringify(initialValues), [initialValues]);
   const [savedSetupKey, setSavedSetupKey] = useState(initialSetupKey);
+  const editable = baseEditable && !conflict;
 
   useEffect(() => {
     setValues(initialValues);
     setSavedSetupKey(initialSetupKey);
+    setExpectedVersion(version || "");
+    setConflict(false);
     setAdvancedPrompt(false);
     setSelectedTemplateId("");
-  }, [initialSetupKey, initialValues]);
+  }, [initialSetupKey, initialValues, version]);
 
   useEffect(() => {
     if (!editable) return;
@@ -609,16 +616,24 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
       return;
     }
 
+    let conflictDetected = false;
     try {
       saveInFlight.current = true;
       const response = await fetch(`/api/roles/${encodeURIComponent(roleId)}/recruitment-setup`, {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, expectedUpdatedAt: expectedVersion }),
       });
-      const result = await response.json();
-      if (!response.ok || result.success !== true) throw new Error(result.message || result.error || "Unable to save recruitment setup.");
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.success !== true) {
+        if (response.status === 409 && result.code === "ROLE_WRITE_CONFLICT") {
+          conflictDetected = true;
+          setConflict(true);
+          throw new Error("Another browser session saved this setup while you were editing. Your changes were not saved. Reload the latest setup before continuing.");
+        }
+        throw new Error(result.message || result.error || "Unable to save recruitment setup.");
+      }
       const notification = notificationPresentation(result.notificationStatus || "not_configured", result.notificationError);
       const confirmationMessages: Record<string, string> = {
         save_draft: "Changes saved successfully.",
@@ -630,6 +645,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
       setMessage(confirmationMessages[action] || result.message || "Recruitment setup saved successfully.");
       setWarning([notification.warning, typeof result.voiceSlotWarning === "string" ? result.voiceSlotWarning : ""].filter(Boolean).join(" "));
       setSavedSetupKey(JSON.stringify(values));
+      if (typeof result.updatedAt === "string" && result.updatedAt) setExpectedVersion(result.updatedAt);
       actionRequestId.current = globalThis.crypto.randomUUID();
       // Keep the local draft mounted after a normal Save. Reloading the parent
       // immediately can race the workflow's sheet write and make selected
@@ -640,7 +656,8 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
       }
     } catch (caught) {
       setValidationIssues([]);
-      setError(`${caught instanceof Error ? caught.message : "Unable to save recruitment setup."} Your entries were reloaded from the saved record below, so you can see exactly what was kept before retrying.`);
+      const message = caught instanceof Error ? caught.message : "Unable to save recruitment setup.";
+      setError(conflictDetected || conflict ? message : `${message} Your entries remain on screen so you can review them before retrying.`);
       // The setup fields are written before the workflow call. Keep the local
       // draft mounted after an error so HR can retry without losing checkbox
       // selections or other in-progress fields.
@@ -664,10 +681,11 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
           <p className="section-subtitle">Set up what Smile asks and looks for when she calls candidates for this role.</p>
           {updatedAt && <small>Last saved {formatDate(updatedAt)}{updatedBy ? ` by ${updatedBy}` : ""}</small>}
         </div>
-        <span className="setup-readonly">{editable ? "Editable by HR reviewers" : "Read-only"}</span>
+        <span className="setup-readonly">{conflict ? "Refresh required" : editable ? "Editable by HR reviewers" : "Read-only"}</span>
       </div>
 
       {error && <ValidationSummary error={error} title="Setup save failed" issues={validationIssues} summaryRef={errorSummaryRef} />}
+      {conflict && <div className="section" role="alert"><button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}>Reload latest saved setup</button></div>}
       {message && <ActionFeedback kind="success" className="vapi-message">{message}</ActionFeedback>}
       {warning && <ActionFeedback kind="warning" className="vapi-message">{warning}</ActionFeedback>}
       {editable && <>

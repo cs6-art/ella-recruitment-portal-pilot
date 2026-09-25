@@ -15,7 +15,7 @@ import { publicApplicationLink, resolvePublicAppBaseUrl } from "@/lib/public-url
 import { createConfiguredVoiceInterviewSlots } from "@/lib/applicant-workflow";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleDetails, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
-import { listRoles, renameRoleExternalId } from "@/lib/internal-recruitment-queries";
+import { listRoles, renameRoleExternalId, RoleWriteConflictError } from "@/lib/internal-recruitment-queries";
 import { generateRoleId } from "@/lib/role-id";
 import { serializeVoiceInterviewSlots } from "@/lib/voice-interview-availability";
 
@@ -34,11 +34,21 @@ export async function POST(request: Request, context: Context) {
 
   const { roleId: encodedRoleId } = await context.params;
   const roleId = decodeURIComponent(encodedRoleId);
-  const role = isPostgresRecruitmentTarget() ? await targetRoleDetails(roleId, user.organizationId) : await getRoleRequestById(roleId);
+  const role = isPostgresRecruitmentTarget() ? await targetRoleDetails(roleId, user.organizationId) : await getRoleRequestById(roleId, { fresh: true });
   if (!role || !canViewRole(user, role)) return NextResponse.json({ success: false, error: "Role request not found." }, { status: 404 });
 
   try {
     const requestBody = await request.json() as Record<string, unknown>;
+    const expectedUpdatedAt = typeof requestBody.expectedUpdatedAt === "string" ? requestBody.expectedUpdatedAt.trim() : "";
+    const currentUpdatedAt = role.lastUpdatedAt || "";
+    if (expectedUpdatedAt && currentUpdatedAt && Date.parse(expectedUpdatedAt) !== Date.parse(currentUpdatedAt)) {
+      return NextResponse.json({
+        success: false,
+        code: "ROLE_WRITE_CONFLICT",
+        error: "This recruitment setup was changed in another browser session. Reload the latest saved setup before saving again.",
+        latestUpdatedAt: currentUpdatedAt,
+      }, { status: 409 });
+    }
     const isAutosaveRequest = requestBody.setupAction === "autosave_draft";
     const autosaveCustomFields = Array.isArray(requestBody.customEvaluationFields)
       ? requestBody.customEvaluationFields.filter((field) => typeof field === "object" && field !== null && typeof (field as { key?: unknown }).key === "string" && typeof (field as { label?: unknown }).label === "string" && typeof (field as { description?: unknown }).description === "string" && String((field as { key: string }).key).trim() && String((field as { label: string }).label).trim() && String((field as { description: string }).description).trim()).slice(0, 3)
@@ -341,8 +351,11 @@ export async function POST(request: Request, context: Context) {
       Recruitment_Setup_Updated_By_Name: user.name,
        Recruitment_Setup_Updated_By_Email: performerEmail,
     };
+    let targetPersistedUpdatedAt = updatedAt;
     if (isPostgresRecruitmentTarget()) {
-      await targetUpdateRoleFields(role.roleId, persistedFields);
+      const persistedRole = await targetUpdateRoleFields(role.roleId, persistedFields, { expectedUpdatedAt });
+      if (!persistedRole) return NextResponse.json({ success: false, error: "Role request not found." }, { status: 404 });
+      targetPersistedUpdatedAt = persistedRole.updatedAt instanceof Date ? persistedRole.updatedAt.toISOString() : String(persistedRole.updatedAt || updatedAt);
     } else {
       await updateRoleRequestFields(role.roleId, persistedFields);
     }
@@ -361,7 +374,8 @@ export async function POST(request: Request, context: Context) {
             targetHiringDate: role.targetHiringDate,
           });
           voiceSlotsGeneratedAt = voiceSlots.created > 0 || voiceSlots.skipped > 0 ? updatedAt : voiceSlotsGeneratedAt;
-          await targetUpdateRoleFields(role.roleId, { Voice_Interview_Slots_Generated_At: voiceSlotsGeneratedAt, Last_Updated_By_Email: performerEmail });
+          const updatedRole = await targetUpdateRoleFields(role.roleId, { Voice_Interview_Slots_Generated_At: voiceSlotsGeneratedAt, Last_Updated_By_Email: performerEmail });
+          if (updatedRole?.updatedAt) targetPersistedUpdatedAt = updatedRole.updatedAt instanceof Date ? updatedRole.updatedAt.toISOString() : String(updatedRole.updatedAt);
         } catch (voiceSlotError) {
           voiceSlotWarning = voiceSlotError instanceof Error ? `Recruitment setup saved, but AI Voice Interview slots could not be generated: ${voiceSlotError.message}` : "Recruitment setup saved, but AI Voice Interview slots could not be generated.";
           console.error("[API Recruitment Setup] Target voice slot generation failed:", voiceSlotError);
@@ -373,7 +387,7 @@ export async function POST(request: Request, context: Context) {
         status: setupAction === "publish_role" ? "Job Posted" : role.status,
         action: "recruitment_setup_updated",
         recruitmentSetupStatus: nextRecruitmentSetupStatus,
-        updatedAt,
+        updatedAt: targetPersistedUpdatedAt,
         actionRequestId,
         notificationStatus: setupAction === "publish_role" ? "pending" : "",
         notificationError: "",
@@ -472,6 +486,13 @@ export async function POST(request: Request, context: Context) {
       voiceSlotsGeneratedAt,
     });
   } catch (error) {
+    if (error instanceof RoleWriteConflictError) {
+      return NextResponse.json({
+        success: false,
+        code: error.code,
+        error: error.message,
+      }, { status: 409 });
+    }
     if (error instanceof Error && error.name === "ZodError") return NextResponse.json({ success: false, error: "Please check the recruitment setup fields." }, { status: 400 });
     console.error("[API Recruitment Setup] POST failed:", error instanceof Error ? { name: error.name, message: error.message } : error);
     return NextResponse.json({ success: false, error: "Unable to save recruitment setup." }, { status: 500 });

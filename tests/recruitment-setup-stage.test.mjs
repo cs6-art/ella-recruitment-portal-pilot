@@ -58,7 +58,7 @@ test("successful publishing returns durable validation and queues notification w
   assert.match(route, /validation: setupAction === "publish_role"/);
   assert.match(route, /notificationStatus: setupAction === "publish_role" \? "pending"/);
   assert.match(route, /Job_Description: role\.jobDescription \|\| setup\.jobDescription/);
-  assert.match(route, /targetUpdateRoleFields\(role\.roleId, persistedFields\)/);
+  assert.match(route, /targetUpdateRoleFields\(role\.roleId, persistedFields(?:, \{ expectedUpdatedAt \})?\)/);
   assert.match(editor, /roles\?published=1/);
   const queries = fs.readFileSync("src/lib/internal-recruitment-queries.ts", "utf8");
   assert.match(queries, /notificationStatus: "pending"/);

@@ -370,6 +370,7 @@ export async function updateRoleStatus(input: { externalId: string; organization
 export async function updateRoleDetails(input: {
   externalId: string;
   organizationId?: string;
+  expectedUpdatedAt?: string;
   status?: string;
   title?: string;
   code?: string | null;
@@ -423,9 +424,14 @@ export async function updateRoleDetails(input: {
     updatedAt: new Date(),
   };
   return db.transaction(async (tx) => {
-    const [current] = await tx.select({ id: roles.id, status: roles.status, organizationId: roles.organizationId }).from(roles).where(and(eq(roles.externalId, input.externalId.trim()), eq(roles.organizationId, input.organizationId?.trim() || DEFAULT_ORGANIZATION_ID))).limit(1);
+    const [current] = await tx.select({ id: roles.id, status: roles.status, organizationId: roles.organizationId, updatedAt: roles.updatedAt }).from(roles).where(and(eq(roles.externalId, input.externalId.trim()), eq(roles.organizationId, input.organizationId?.trim() || DEFAULT_ORGANIZATION_ID))).limit(1);
     if (!current) return null;
-    const [role] = await tx.update(roles).set(patch).where(eq(roles.id, current.id)).returning();
+    const expectedUpdatedAt = input.expectedUpdatedAt?.trim();
+    const updateWhere = expectedUpdatedAt
+      ? and(eq(roles.id, current.id), eq(roles.updatedAt, new Date(expectedUpdatedAt)))
+      : eq(roles.id, current.id);
+    const [role] = await tx.update(roles).set(patch).where(updateWhere).returning();
+    if (!role && expectedUpdatedAt) throw new RoleWriteConflictError();
     const normalizedStatus = input.status === undefined ? undefined : normalizeRoleStatus(input.status);
     if (role && normalizedStatus && current.status !== normalizedStatus && input.actionRequestId) {
       await tx.insert(roleStatusHistory).values({
@@ -444,6 +450,15 @@ export async function updateRoleDetails(input: {
     }
     return role ?? null;
   });
+}
+
+export class RoleWriteConflictError extends Error {
+  readonly code = "ROLE_WRITE_CONFLICT" as const;
+
+  constructor() {
+    super("This role was changed in another browser session. Refresh to load the latest saved version before saving again.");
+    this.name = "RoleWriteConflictError";
+  }
 }
 
 /** Target-mode role deletion is a reversible archive, never a hard delete. */
@@ -1777,11 +1792,28 @@ export async function enqueueBulkScreening(input: {
 // database reads).
 const BULK_CLAIM_LEASE_MINUTES = 15;
 export const DEFAULT_BULK_CLAIM_LIMIT = 3;
+/**
+ * Do not let an unavailable downstream worker reclaim the same item forever.
+ * The failed row remains retryable from the portal after the worker/config is
+ * repaired, and the attempt count is retained for diagnosis.
+ */
+export const MAX_BULK_CLAIM_ATTEMPTS = 3;
 
 export async function claimBulkQueue(limit = DEFAULT_BULK_CLAIM_LIMIT) {
   const db = getDb();
   const safeLimit = Math.max(1, Math.min(LIMIT, Math.trunc(limit)));
-  const result = await db.execute(sql`WITH claimed AS (
+  const result = await db.execute(sql`WITH exhausted AS (
+    UPDATE bulk_screening_queue_items
+    SET status = 'failed',
+        error_message = 'The screening worker did not complete this item after the maximum retry window.',
+        processed_at = now(),
+        updated_at = now()
+    WHERE status = 'processing'
+      AND processing_started_at IS NOT NULL
+      AND processing_started_at < now() - (${BULK_CLAIM_LEASE_MINUTES} * interval '1 minute')
+      AND attempt_count >= ${MAX_BULK_CLAIM_ATTEMPTS}
+    RETURNING id
+  ), claimed AS (
     SELECT id FROM bulk_screening_queue_items
     WHERE status = 'queued'
        OR (status = 'processing' AND (processing_started_at IS NULL OR processing_started_at < now() - (${BULK_CLAIM_LEASE_MINUTES} * interval '1 minute')))

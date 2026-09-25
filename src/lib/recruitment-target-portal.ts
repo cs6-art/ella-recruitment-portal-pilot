@@ -863,7 +863,7 @@ export async function targetUseScreeningInvitation(token: string, applicationId:
   return { updated: false, error: null };
 }
 
-export async function targetUpdateRoleFields(roleId: string, fields: Record<string, string>) {
+export async function targetUpdateRoleFields(roleId: string, fields: Record<string, string>, options: { expectedUpdatedAt?: string } = {}) {
   const setup = {
     jobDescription: fields.Job_Description,
     screeningCriteria: fields.Screening_Criteria,
@@ -923,6 +923,7 @@ export async function targetUpdateRoleFields(roleId: string, fields: Record<stri
   return updateRoleDetails({
     externalId: roleId,
     organizationId: await targetOrganizationId(),
+    expectedUpdatedAt: options.expectedUpdatedAt,
     status: normalizeTargetRoleStatus(fields.Status) || (["true", "1", "yes"].includes(text(fields.Posting_Confirmed).toLowerCase()) ? "job_posted" : undefined),
     title: fields.Job_Title,
     departmentSnapshot: fields.Department,
