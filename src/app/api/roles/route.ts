@@ -16,6 +16,7 @@ import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE } from "@/lib/recruitment-prompt";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -650,7 +651,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: detail || "Role automation failed without a response. Please try again.",
+        error: publicErrorMessage(error, "Role automation failed without a response. Please try again.", "API Roles"),
       },
       { status: error instanceof Error && /role automation|webhook|fetch|abort|timeout/i.test(detail) ? 502 : 400 },
     );

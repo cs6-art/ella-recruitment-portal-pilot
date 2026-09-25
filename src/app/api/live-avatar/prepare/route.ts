@@ -6,6 +6,7 @@ import { isLiveAvatarConfigured } from "@/lib/live-avatar";
 import { prepareLiveAvatarScreening } from "@/lib/live-avatar-screening";
 import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { publicErrorMessage } from "@/lib/safe-error";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
@@ -26,6 +27,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, preparation, creditsCharged: 0 }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API Live Avatar Prepare] POST failed:", error);
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to analyze the resume." }, { status: 400 });
+    return NextResponse.json({ success: false, error: publicErrorMessage(error, "Unable to analyze the resume.", "API Live Avatar Prepare") }, { status: 400 });
   }
 }

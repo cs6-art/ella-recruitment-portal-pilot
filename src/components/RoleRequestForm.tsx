@@ -15,6 +15,7 @@ import { EVALUATION_FIELD_CATALOG } from "@/lib/recruitment-setup-schema";
 import { getSetupReadiness } from "@/lib/recruitment-setup-readiness";
 import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
 import type { RoleAiDraft } from "@/lib/role-ai-draft-schema";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type RoleRequestFormProps = {
   user: {
@@ -230,7 +231,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
         setSavedFormKey(JSON.stringify(snapshot));
         setDraftSavedAt(new Date().toISOString());
       } catch (caught) {
-        setDraftError(caught instanceof Error ? caught.message : "Unable to autosave this draft.");
+        setDraftError(clientErrorMessage(caught, "Unable to autosave this draft."));
       } finally {
         setDraftSaving(false);
         draftSaveInFlight.current = null;
@@ -305,7 +306,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
         recruitmentSetupDraft: result.draft?.recruitmentSetup || current.recruitmentSetupDraft,
       }));
     } catch (error) {
-      setParseError(error instanceof Error ? error.message : "Unable to generate the role draft.");
+      setParseError(clientErrorMessage(error, "Unable to generate the role draft."));
     } finally {
       setParsing(false);
     }

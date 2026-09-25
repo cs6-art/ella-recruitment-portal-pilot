@@ -9,6 +9,7 @@ import { getPostgresDirectoryUsers } from "@/lib/postgres-directory";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -134,6 +135,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("[API Smile Credits] POST failed:", error);
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to update the balance." }, { status: 500 });
+    return NextResponse.json({ success: false, error: publicErrorMessage(error, "Unable to update the balance.", "API Ella Credits") }, { status: 500 });
   }
 }

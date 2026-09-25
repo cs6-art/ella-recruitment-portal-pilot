@@ -7,6 +7,7 @@ import ActionFeedback from "@/components/ActionFeedback";
 import { countryOptions, CountrySelect } from "@/components/CountryOptions";
 import ValidationSummary from "@/components/ValidationSummary";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type RoleOption = {
   roleId: string;
@@ -212,7 +213,7 @@ export default function CandidateApplicationForm({
       if (successRedirectTo) router.push(successRedirectTo);
       else router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to submit application.");
+      setError(clientErrorMessage(caught, "Unable to submit application."));
     } finally {
       setSaving(false);
     }

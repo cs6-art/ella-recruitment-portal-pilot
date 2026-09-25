@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { CloudImportSelection } from "@/lib/cloud-import-request";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type DriveFolder = { id: string; name: string };
 type DriveSharedDrive = { id: string; name: string };
@@ -88,7 +89,7 @@ export default function DriveFilePicker({
       setNextPageToken(data.nextPageToken || null);
     } catch (caught) {
       if (version !== loadVersion.current) return;
-      setError(caught instanceof Error ? caught.message : `Unable to read that ${providerLabel} folder.`);
+      setError(clientErrorMessage(caught, `Unable to read that ${providerLabel} folder.`));
     } finally {
       if (version === loadVersion.current) setLoading(false);
     }

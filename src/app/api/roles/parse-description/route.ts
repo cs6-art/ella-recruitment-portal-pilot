@@ -5,6 +5,7 @@ import { extractDocumentText, MAX_DOCUMENT_FILE_BYTES } from "@/lib/document-ext
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { roleAiDraftSchema } from "@/lib/role-ai-draft-schema";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 
@@ -91,8 +92,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error && error.name === "AbortError"
       ? "The AI parser took too long to respond. Please try again."
-      : error instanceof Error ? error.message : "Unable to parse the job description.";
-    console.error("[Role Description Parser] POST failed:", message);
+      : publicErrorMessage(error, "Unable to parse the job description. Please try again.", "Role Description Parser");
     return failure(message, 422);
   }
 }

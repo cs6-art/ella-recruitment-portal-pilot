@@ -7,6 +7,7 @@ import { useState } from "react";
 import ValidationSummary, { type ValidationIssue } from "@/components/ValidationSummary";
 import { countryOptions, CountrySelect } from "@/components/CountryOptions";
 import { countryForPhone, localNumberForCountry } from "@/lib/country-codes";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type ApplicantEditValues = { applicationId: string; candidateName: string; email: string; contactNumber: string; roleId: string; selectedRole: string; department: string; applicantCountry: string };
 
@@ -54,7 +55,7 @@ export default function ApplicantEditForm({ applicant }: { applicant: ApplicantE
       router.push(`/applicants/${encodeURIComponent(applicant.applicationId)}?updated=1`);
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to update the applicant.");
+      setError(clientErrorMessage(caught, "Unable to update the applicant."));
       setSaving(false);
     }
   }

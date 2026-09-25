@@ -8,6 +8,7 @@ import { useConfirmation } from "@/components/ConfirmationModal";
 import { DEPARTMENT_OPTIONS, isKnownDepartment } from "@/lib/department-options";
 import ValidationSummary, { type ValidationIssue } from "@/components/ValidationSummary";
 import { ACCESS_ROLE_OPTIONS, getAccessRolePreset } from "@/lib/access-roles";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type DirectoryUser = {
   email: string;
@@ -285,7 +286,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       await loadUsers(selectedOrganizationId);
       router.refresh();
     } catch (caught) {
-      setSaveError(caught instanceof Error ? caught.message : "Unable to save the user account.");
+      setSaveError(clientErrorMessage(caught, "Unable to save the user account."));
     } finally {
       setSaving(false);
     }
@@ -316,7 +317,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       await loadOrganizations();
       router.refresh();
     } catch (caught) {
-      setOrganizationError(caught instanceof Error ? caught.message : "Unable to save the organization.");
+      setOrganizationError(clientErrorMessage(caught, "Unable to save the organization."));
     } finally {
       setOrganizationSaving(false);
     }

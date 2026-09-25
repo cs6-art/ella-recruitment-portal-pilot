@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { extractDocumentText } from "@/lib/document-extraction";
+import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +37,6 @@ export async function POST(request: Request) {
       roleId: url.searchParams.get("roleId") || "",
     });
   } catch (error) {
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to extract resume text." }, { status: 422 });
+    return NextResponse.json({ success: false, error: publicErrorMessage(error, "Unable to extract resume text.", "API Bulk Extract") }, { status: 422 });
   }
 }

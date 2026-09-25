@@ -18,6 +18,7 @@ import {
   COOKIE_NAME,
   verifySessionToken,
 } from "@/lib/session";
+import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -165,9 +166,7 @@ export async function GET(
       {
         success: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Unable to load the role request.",
+          publicErrorMessage(error, "Unable to load the role request.", "API Role"),
       },
       { status: 500 },
     );
@@ -299,7 +298,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ success: true, roleId: access.role.roleId, status: access.role.status, message: "Role request updated successfully." });
   } catch (error) {
     console.error("[API Role Details] PATCH failed:", error);
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to update the role request." }, { status: 400 });
+    return NextResponse.json({ success: false, error: publicErrorMessage(error, "Unable to update the role request.", "API Role") }, { status: 400 });
   }
 }
 
@@ -321,6 +320,6 @@ export async function DELETE(_request: Request, context: RouteContext) {
     return NextResponse.json({ success: true, roleId: access.role.roleId, message: "Role request deleted successfully." });
   } catch (error) {
     console.error("[API Role Details] DELETE failed:", error);
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to delete the role request." }, { status: 400 });
+    return NextResponse.json({ success: false, error: publicErrorMessage(error, "Unable to delete the role request.", "API Role") }, { status: 400 });
   }
 }

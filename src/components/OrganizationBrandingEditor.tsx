@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type Branding = { name: string; subtitle: string };
 
@@ -20,7 +21,7 @@ export default function OrganizationBrandingEditor() {
         if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to load organization branding.");
         if (data.branding) setBranding(data.branding);
       })
-      .catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to load organization branding."))
+      .catch((caught) => setError(clientErrorMessage(caught, "Unable to load organization branding.")))
       .finally(() => setLoading(false));
   }, []);
 
@@ -36,7 +37,7 @@ export default function OrganizationBrandingEditor() {
       setMessage(data.message || "Organization branding saved successfully.");
       window.dispatchEvent(new CustomEvent("portal-branding-updated"));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to save organization branding.");
+      setError(clientErrorMessage(caught, "Unable to save organization branding."));
     } finally {
       setSaving(false);
     }

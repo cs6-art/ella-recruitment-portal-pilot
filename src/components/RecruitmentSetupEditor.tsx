@@ -26,6 +26,7 @@ import {
 import { parseVoiceInterviewSlots, type VoiceInterviewSlot } from "@/lib/voice-interview-availability";
 import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
 import { formatPortalDateTime } from "@/lib/portal-time";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type Setup = {
   roleTitle?: string;
@@ -393,7 +394,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
         if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to load recruitment templates.");
         if (!cancelled) setTemplates(Array.isArray(result.templates) ? result.templates : []);
       } catch (caught) {
-        if (!cancelled) setTemplateError(caught instanceof Error ? caught.message : "Unable to load recruitment templates.");
+        if (!cancelled) setTemplateError(clientErrorMessage(caught, "Unable to load recruitment templates."));
       } finally {
         if (!cancelled) setTemplateLoading(false);
       }
@@ -505,7 +506,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
       setTemplateName("");
       setMessage(`Template \"${name}\" saved.`);
     } catch (caught) {
-      setTemplateError(caught instanceof Error ? caught.message : "Unable to save recruitment template.");
+      setTemplateError(clientErrorMessage(caught, "Unable to save recruitment template."));
     } finally {
       setTemplateActionId("");
     }
@@ -523,7 +524,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
       if (selectedTemplateId === template.id) setSelectedTemplateId("");
       setMessage(`Template \"${template.name}\" deleted.`);
     } catch (caught) {
-      setTemplateError(caught instanceof Error ? caught.message : "Unable to delete recruitment template.");
+      setTemplateError(clientErrorMessage(caught, "Unable to delete recruitment template."));
     } finally {
       setTemplateActionId("");
     }
@@ -656,7 +657,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
       }
     } catch (caught) {
       setValidationIssues([]);
-      const message = caught instanceof Error ? caught.message : "Unable to save recruitment setup.";
+      const message = clientErrorMessage(caught, "Unable to save recruitment setup.");
       setError(conflictDetected || conflict ? message : `${message} Your entries remain on screen so you can review them before retrying.`);
       // The setup fields are written before the workflow call. Keep the local
       // draft mounted after an error so HR can retry without losing checkbox

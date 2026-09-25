@@ -9,6 +9,7 @@ import { updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { logServerTiming, measureServerOperation } from "@/lib/server-timing";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { publicErrorMessage } from "@/lib/safe-error";
 
 export const dynamic = "force-dynamic";
 function errorResponse(error: string, status: number) {
@@ -140,7 +141,7 @@ export async function GET(request: Request) {
       configured: false,
       counts: {},
       items: [],
-      error: configured ? message : "Create the Bulk_Resume_Queue tab to view processing status.",
+      error: configured ? publicErrorMessage(error, "Bulk screening status is temporarily unavailable.", "API Bulk Status") : "Create the Bulk_Resume_Queue tab to view processing status.",
     });
   }
 }

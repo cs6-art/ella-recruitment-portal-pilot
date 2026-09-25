@@ -6,6 +6,7 @@ import UiIcon from "@/components/UiIcon";
 import { deviceErrorMessage, INTERVIEW_CONSENT_PARAGRAPHS, INTERVIEW_CONSENT_TITLE, INTERVIEW_CONSENT_VERSION } from "@/lib/live-interview";
 
 import "./live-interview.css";
+import { clientErrorMessage } from "@/lib/client-error";
 
 export type PrecheckResult = { camera: MediaStream; microphone: MediaStream };
 
@@ -162,7 +163,7 @@ export default function InterviewPrecheck({ avatarToken, onReady, onCancel }: Pr
       await postJson("/api/live-avatar/consent", { avatarToken, agreed: true, consentVersion: INTERVIEW_CONSENT_VERSION, recording: true, camera: true, microphone: true });
       await requestDevices();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "We could not save your consent. Please try again.");
+      setError(clientErrorMessage(caught, "We could not save your consent. Please try again."));
       setPhase("consent");
     }
   }
@@ -184,7 +185,7 @@ export default function InterviewPrecheck({ avatarToken, onReady, onCancel }: Pr
       handedOffRef.current = true;
       onReady({ camera: cameraRef.current, microphone: microphoneRef.current });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "We could not save your device check. Please try again.");
+      setError(clientErrorMessage(caught, "We could not save your device check. Please try again."));
       setPhase("preview");
     }
   }

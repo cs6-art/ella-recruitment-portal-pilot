@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import InterviewPrecheck, { type PrecheckResult } from "@/components/InterviewPrecheck";
 import { InterviewRecorder, type RecorderStatus } from "@/lib/interview-recorder";
 import type { LiveAvatarEvaluation, LiveAvatarPreparation } from "@/lib/live-avatar-screening";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type WidgetState = "idle" | "precheck" | "starting" | "connecting" | "live" | "ending" | "evaluating" | "ended" | "error" | "results";
 
@@ -243,7 +244,7 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
         setMicrophoneWarning("");
       }
     } catch (caught) {
-      setMicrophoneWarning(caught instanceof Error ? caught.message : microphoneErrorMessage(caught));
+      setMicrophoneWarning(microphoneErrorMessage(caught));
     }
   }
 
@@ -265,7 +266,7 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
       setLastResponse(text);
       setTypedResponse("");
     } catch (caught) {
-      setMicrophoneWarning(caught instanceof Error ? caught.message : "Smile could not receive that response yet.");
+      setMicrophoneWarning(clientErrorMessage(caught, "Smile could not receive that response yet."));
     }
   }
 
@@ -426,7 +427,7 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
       }
     } catch (caught) {
       console.error("[LiveAvatarInterview] Failed to start session:", caught);
-      setError(caught instanceof Error ? caught.message : "Smile isn't available right now.");
+      setError(clientErrorMessage(caught, "Smile isn't available right now."));
       setState("error");
       sessionRef.current = null;
       if (recorderRef.current) void recorderRef.current.finish(5_000);
@@ -494,7 +495,7 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
       setEvaluation(result.evaluation as LiveAvatarEvaluation);
       setState("results");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to process the interview response.");
+      setError(clientErrorMessage(caught, "Unable to process the interview response."));
       setState("error");
     } finally {
       sessionRef.current = null;

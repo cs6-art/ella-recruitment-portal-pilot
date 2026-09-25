@@ -9,6 +9,7 @@ import { MAX_RESUME_FILE_BYTES } from "@/lib/resume-files";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -149,6 +150,6 @@ export async function POST(request: Request) {
       });
     }
     console.error("[Drive Import] POST failed:", error);
-    return responseError(error instanceof Error ? error.message : "Unable to import resumes from Google Drive.", 400);
+    return responseError(publicErrorMessage(error, "Unable to import resumes from Google Drive.", "API Drive Import"), 400);
   }
 }

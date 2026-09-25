@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import ValidationSummary from "@/components/ValidationSummary";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type Setting = {
   key: string;
@@ -89,7 +90,7 @@ export default function SettingsEditor() {
       setMessage(data.message || "Settings saved successfully.");
       router.refresh();
     } catch (caught) {
-      setSaveError(caught instanceof Error ? caught.message : "Unable to save settings.");
+      setSaveError(clientErrorMessage(caught, "Unable to save settings."));
     } finally {
       setSaving(false);
     }

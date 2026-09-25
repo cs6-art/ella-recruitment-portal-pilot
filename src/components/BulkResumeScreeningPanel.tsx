@@ -10,6 +10,7 @@ import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 import { buildCloudImportRequest, selectedCloudFiles, type CloudImportSelection } from "@/lib/cloud-import-request";
 import { formatPortalDateTime } from "@/lib/portal-time";
 import { MAX_CAMPAIGN_FILES, MAX_FILES_PER_SUBMISSION } from "@/lib/bulk-resume-limits";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type RoleOption = { roleId: string; label: string };
 type QueueItem = {
@@ -143,7 +144,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       if (result.error) setError(result.error);
       return changed;
     } catch (caught) {
-      if (requestId === statusRequestId.current && !(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : "Unable to load bulk screening status.");
+      if (requestId === statusRequestId.current && !(caught instanceof DOMException && caught.name === "AbortError")) setError(clientErrorMessage(caught, "Unable to load bulk screening status."));
       return false;
     } finally {
       if (refreshAbort.current === controller) {
@@ -362,7 +363,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       if (!outcome.ok) throw new Error(outcome.error);
       setFiles((current) => current.filter((file) => !fileList.includes(file) || outcome.failedFileSet.has(file)));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to submit the bulk resumes.");
+      setError(clientErrorMessage(caught, "Unable to submit the bulk resumes."));
     } finally {
       setUploading(false);
     }
@@ -450,7 +451,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       setUploadMessage(`${retriedBatch.size} failed resume${retriedBatch.size === 1 ? "" : "s"} queued for retry. Screening will resume when credits are available.`);
       await refreshStatus();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to retry the failed resumes.");
+      setError(clientErrorMessage(caught, "Unable to retry the failed resumes."));
     } finally {
       setRetryingSavedFailures(false);
     }
@@ -541,7 +542,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       }
       setCloudPicker(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : `Unable to import from ${label}.`);
+      setError(clientErrorMessage(caught, `Unable to import from ${label}.`));
     } finally {
       setCloudPicker(null);
       setDriveImporting(false);

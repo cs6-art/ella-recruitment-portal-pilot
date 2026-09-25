@@ -12,6 +12,7 @@ import { canDeleteRoleRequest, canEditRoleRequest } from "@/lib/access-control";
 import { formatEmail } from "@/lib/formatters";
 import { getStatusActionLabel } from "@/lib/status-actions";
 import { formatPortalDateTime } from "@/lib/portal-time";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type RoleRequestDetails = {
   roleId: string; createdAt: string; lastUpdatedAt: string; lastUpdatedByName: string; lastUpdatedByEmail: string;
@@ -109,7 +110,7 @@ export default function RoleDetails({ roleId, userEmail, canReviewRole, canAppro
   const { confirm } = useConfirmation();
   const [role, setRole] = useState<RoleRequestDetails | null>(null); const [history, setHistory] = useState<RoleStatusHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [deleting, setDeleting] = useState(false); const [error, setError] = useState(""); const [successMessage, setSuccessMessage] = useState(""); const [warningMessage, setWarningMessage] = useState("");
-  async function loadRole(preserveView = false, expectedStatus = "") { if (!preserveView) setLoading(true); setError(""); try { const response = await fetch(`/api/roles/${encodeURIComponent(roleId)}`, { cache: "no-store", credentials: "same-origin" }); const raw = await response.text(); const data: ApiResponse = raw ? JSON.parse(raw) : {}; if (!response.ok || data.success !== true || !data.role) throw new Error(data.error || "Unable to load the role request."); const refreshedRole = expectedStatus && data.role.status !== expectedStatus ? { ...data.role, status: expectedStatus } : data.role; setRole(refreshedRole); setHistory(Array.isArray(data.history) ? data.history : []); } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to load the role request."); } finally { if (!preserveView) setLoading(false); } }
+  async function loadRole(preserveView = false, expectedStatus = "") { if (!preserveView) setLoading(true); setError(""); try { const response = await fetch(`/api/roles/${encodeURIComponent(roleId)}`, { cache: "no-store", credentials: "same-origin" }); const raw = await response.text(); const data: ApiResponse = raw ? JSON.parse(raw) : {}; if (!response.ok || data.success !== true || !data.role) throw new Error(data.error || "Unable to load the role request."); const refreshedRole = expectedStatus && data.role.status !== expectedStatus ? { ...data.role, status: expectedStatus } : data.role; setRole(refreshedRole); setHistory(Array.isArray(data.history) ? data.history : []); } catch (caught) { setError(clientErrorMessage(caught, "Unable to load the role request.")); } finally { if (!preserveView) setLoading(false); } }
   async function deleteRole() {
     const activeWarning = role && ["Approved", "Recruitment Setup", "Job Posted"].includes(role.status.trim())
       ? " This may also remove an approved or published role from the role list."
@@ -122,7 +123,7 @@ export default function RoleDetails({ roleId, userEmail, canReviewRole, canAppro
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to delete the role request.");
       router.push("/roles"); router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to delete the role request.");
+      setError(clientErrorMessage(caught, "Unable to delete the role request."));
       setDeleting(false);
     }
   }

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { canDeleteApplicant, canEditApplicant } from "@/lib/access-control";
 import { deleteApplicant, isPreferredMobileValid, normalizePreferredMobile, updateApplicantProfile } from "@/lib/applicant-workflow";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,7 +42,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const result = await updateApplicantProfile(applicationId, input);
     return NextResponse.json({ success: true, applicant: result, message: "Applicant details updated successfully." });
   } catch (error) {
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to update the applicant." }, { status: 400 });
+    return NextResponse.json({ success: false, error: publicErrorMessage(error, "Unable to update the applicant.", "API Applicant") }, { status: 400 });
   }
 }
 
@@ -57,6 +58,6 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const result = await deleteApplicant(applicationId);
     return NextResponse.json({ success: true, applicant: result, message: "Applicant and linked records deleted successfully." });
   } catch (error) {
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to delete the applicant." }, { status: 400 });
+    return NextResponse.json({ success: false, error: publicErrorMessage(error, "Unable to delete the applicant.", "API Applicant") }, { status: 400 });
   }
 }

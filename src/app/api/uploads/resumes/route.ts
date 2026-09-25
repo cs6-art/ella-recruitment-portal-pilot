@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { MAX_RESUME_FILE_BYTES, MAX_RESUME_REQUEST_BYTES, storeResumeFile } from "@/lib/resume-files";
+import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
       extractedTextLength: stored.extractedText.length,
     }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to process the resume file.";
+    const message = publicErrorMessage(error, "Unable to process the resume file.", "API Resume Upload");
     console.error("[Resume Upload] POST failed:", message);
     return failure(message, 422);
   }

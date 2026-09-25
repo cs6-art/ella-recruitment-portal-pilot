@@ -7,6 +7,7 @@ import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
 import { retryFailedBulkQueueItems } from "@/lib/internal-recruitment-queries";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +43,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, roleId: parsed.data.roleId, queueIds: retried.map((item) => item.dedupeKey), retried: retried.length });
   } catch (error) {
     console.error("[Bulk Resume Retry] POST failed:", error);
-    return responseError(error instanceof Error ? error.message : "Unable to retry the failed resumes.", 400);
+    return responseError(publicErrorMessage(error, "Unable to retry the failed resumes.", "API Bulk Retry"), 400);
   }
 }

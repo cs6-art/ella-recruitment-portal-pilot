@@ -8,6 +8,7 @@ import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resoluti
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { logServerTiming } from "@/lib/server-timing";
+import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,6 +85,6 @@ export async function POST(request: Request) {
       });
     }
     console.error("[Bulk Resume Upload] POST failed:", error);
-    return responseError(error instanceof Error ? error.message : "Unable to upload bulk resumes.", 400);
+    return responseError(publicErrorMessage(error, "Unable to upload bulk resumes.", "API Bulk Upload"), 400);
   }
 }

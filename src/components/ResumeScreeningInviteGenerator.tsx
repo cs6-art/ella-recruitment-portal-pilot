@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type RoleOption = { roleId: string; label: string };
 
@@ -30,7 +31,7 @@ export default function ResumeScreeningInviteGenerator({ roleOptions }: { roleOp
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to generate the application link.");
       setResult({ link: data.link, expiresAt: data.expiresAt, emailStatus: data.emailStatus || "not_requested", emailError: data.emailError || "" });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to generate the application link.");
+      setError(clientErrorMessage(caught, "Unable to generate the application link."));
     } finally {
       setSaving("");
     }

@@ -7,6 +7,7 @@ import { useState } from "react";
 import ActionFeedback from "@/components/ActionFeedback";
 import { useConfirmation } from "@/components/ConfirmationModal";
 import UiIcon from "@/components/UiIcon";
+import { clientErrorMessage } from "@/lib/client-error";
 
 export default function ApplicantDetailActions({ applicationId, candidateName, canManage = true }: { applicationId: string; candidateName: string; canManage?: boolean }) {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function ApplicantDetailActions({ applicationId, candidateName, c
       router.push("/applicants");
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to delete the applicant.");
+      setError(clientErrorMessage(caught, "Unable to delete the applicant."));
       setDeleting(false);
     }
   }

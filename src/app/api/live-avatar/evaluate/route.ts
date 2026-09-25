@@ -3,6 +3,7 @@ import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheet
 import { evaluateLiveAvatarTranscript, type LiveAvatarTranscriptTurn } from "@/lib/live-avatar-screening";
 import { completeAvatarInterview, getAvatarInterviewContext } from "@/lib/internal-recruitment-queries";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { publicErrorMessage } from "@/lib/safe-error";
 const LIVEAVATAR_API_URL = process.env.LIVEAVATAR_API_URL || "https://api.liveavatar.com";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,6 +41,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, evaluation }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API Live Avatar Evaluate] POST failed:", error);
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to process the interview response." }, { status: 502 });
+    return NextResponse.json({ success: false, error: publicErrorMessage(error, "Unable to process the interview response.", "API Live Avatar Evaluate") }, { status: 502 });
   }
 }
