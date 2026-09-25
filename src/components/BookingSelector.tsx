@@ -46,6 +46,7 @@ export default function BookingSelector({ token, initialContext }: { token: stri
   const [country, setCountry] = useState(initialCountry.country);
   const [localMobile, setLocalMobile] = useState(initialMobile.localNumber);
   const [error, setError] = useState("");
+  const [quotaBusy, setQuotaBusy] = useState(false);
   const [confirmationMessage, setConfirmationMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -85,6 +86,7 @@ export default function BookingSelector({ token, initialContext }: { token: stri
     }
     setSaving(true);
     setError("");
+    setQuotaBusy(false);
     setConfirmationMessage("");
     try {
       const response = await fetch(`/api/public/bookings/${context.kind}/${encodeURIComponent(token)}`, {
@@ -93,6 +95,7 @@ export default function BookingSelector({ token, initialContext }: { token: stri
         body: JSON.stringify({ slotId: selected, preferredMobile, slot: { date: selectedSlot.date, startTime: selectedSlot.startTime, endTime: selectedSlot.endTime, timezone: selectedSlot.timezone } }),
       });
       const data = await response.json();
+      if (data.code === "service_quota") setQuotaBusy(true);
       if (!response.ok || !data.success) throw new Error(data.error || "That time is no longer available. Please select another time.");
       setContext({ ...data.booking, preferredMobile });
       setSelected("");
@@ -107,9 +110,11 @@ export default function BookingSelector({ token, initialContext }: { token: stri
   async function refreshAvailability() {
     setRefreshing(true);
     setError("");
+    setQuotaBusy(false);
     try {
       const response = await fetch(`/api/public/bookings/${context.kind}/${encodeURIComponent(token)}`, { cache: "no-store" });
       const data = await response.json();
+      if (data.code === "service_quota") setQuotaBusy(true);
       if (!response.ok || !data.success || !data.context) throw new Error(data.error || "Unable to refresh available times.");
       setContext(data.context);
       setSelected("");
@@ -146,7 +151,7 @@ export default function BookingSelector({ token, initialContext }: { token: stri
         <div className="booking-section-heading booking-time-heading"><h2>Select a time</h2><span>{selectedDate ? displayDate(selectedDate) : "Select a date first"}</span></div>
         <div className="booking-time-list">{selectedDateSlots.map((slot) => <button type="button" className={`booking-slot ${selected === slot.slotId ? "booking-slot-selected" : ""}`} key={slot.slotId} onClick={() => setSelected(slot.slotId)}><strong>{slot.startTime} - {slot.endTime}</strong><small>{slot.timezone}</small></button>)}</div>
       </>}
-      {error && <><ValidationSummary error={error} title="We couldn&apos;t confirm this time" /><div className="booking-refresh-action"><button type="button" className="booking-inline-action" disabled={saving || refreshing} onClick={() => void refreshAvailability()}>{refreshing ? "Refreshing available times…" : "Refresh available times"}</button></div></>}
+      {error && <><ValidationSummary error={error} title={quotaBusy ? "Scheduling is temporarily busy" : "We couldn&apos;t confirm this time"} /><div className="booking-refresh-action"><button type="button" className="booking-inline-action" disabled={saving || refreshing} onClick={() => void refreshAvailability()}>{refreshing ? "Refreshing available times…" : quotaBusy ? "Try again" : "Refresh available times"}</button></div></>}
       <button type="button" className="booking-submit" disabled={saving || refreshing || !selected || (context.kind === "voice" && !localMobile.trim()) || context.slots.length === 0} onClick={() => void reserve()}>{saving ? "Confirming your time…" : noShow ? "Confirm new interview time" : "Confirm this interview time"}</button>
     </>}
     <p className="booking-help">Need help? Reply to your invitation email and our recruitment team will assist you.</p>
