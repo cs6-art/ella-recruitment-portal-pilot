@@ -160,7 +160,23 @@ async function loadLiveInterviewReview(applicationId: string, organizationId: st
   }
 }
 
+// The avatar interview is scored by the rubric assessment (job-related
+// evidence only), not by the phone-call fields, so show that value directly.
+function liveAssessmentFields(liveReview: LiveReview | null) {
+  if (!liveReview) return null;
+  const assessment = liveReview.analysis?.assessment;
+  if (assessment) {
+    return {
+      score: assessment.status === "scored" && assessment.score !== null ? formatMatchScore(String(assessment.score)) : "Not scored — manual HR review",
+      recommendation: assessment.bandLabel,
+    };
+  }
+  const pending = liveReview.status === "FAILED" ? "Not available — processing failed" : "Awaiting AI review";
+  return { score: pending, recommendation: pending };
+}
+
 function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }: { applicant: ApplicantDetails; liveReview: LiveReview | null; canRetryLiveReview: boolean }) {
+  const liveFields = liveAssessmentFields(liveReview);
   const voiceCallStatus = applicant.voiceCallStatus?.trim() || "";
   const voiceBookingLink = externalUrl(applicant.voiceBookingLink);
   // The candidate declined, missed, or cut the call short — no system fault.
@@ -208,8 +224,8 @@ function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }
           <DetailField label="Invitation status" value={bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "completed"].includes(voiceCallStatus.toLowerCase()) })} />
           <DetailField label="Interview time" value={scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />
           <DetailField label="Timezone" value={recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || applicant.voiceTimezone || "Not provided"} />
-          <DetailField label="Voice AI Score" value={applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : voiceScorePending} />
-          <DetailField label="AI Recommendation" value={applicant.voiceRecommendation || voiceRecommendationPending} />
+          <DetailField label="Voice AI Score" value={liveFields ? liveFields.score : applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : voiceScorePending} />
+          <DetailField label="AI Recommendation" value={liveFields ? liveFields.recommendation : applicant.voiceRecommendation || voiceRecommendationPending} />
         </div>
         {voiceBookingLink && <div className="applicant-copy-block"><span>Candidate booking page</span><p><Link href={voiceBookingLink} target="_blank" rel="noreferrer">Open the candidate booking page</Link></p></div>}
         <div className="applicant-copy-block"><span>AI Summary</span><p>{applicant.voiceSummary || (voiceSystemFailure ? "The call did not go through due to a system or dispatch error — the candidate was never reached, so there is no AI summary. Check the voice call logs, or ask a developer to, for the failure reason and consider re-sending the booking link." : voiceNotConducted ? "No interview took place, so there is no AI summary." : voiceCompletedNoScore ? "The call ended before the candidate answered enough questions to evaluate, so there is no AI summary." : "No AI summary is available.")}</p></div>

@@ -66,3 +66,17 @@
 .live-review-video { width: 100%; max-width: 640px; border-radius: 12px; background: #0b1b2b; }
 .live-review-integrity { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; color: #405b70; font-size: 13px; }
 .live-review-loading { color: var(--muted); font-size: 13px; }
+
+/* Rubric assessment */
+.live-review-assessment { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: #f8fbfe; }
+.live-review-assessment p { margin: 3px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.live-review-assessment strong { color: var(--navy); font-size: 15px; }
+.live-review-assessment.is-strong, .live-review-assessment.is-good { border-color: #b7e0cb; background: #f1faf6; }
+.live-review-assessment.is-partial { border-color: #f0dca0; background: #fff9e8; }
+.live-review-assessment.is-limited, .live-review-assessment.is-unscored { border-color: var(--line); background: #f4f7fb; }
+.live-review-score { display: grid; gap: 2px; min-width: 76px; text-align: center; }
+.live-review-score span { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.live-review-score strong { font-size: 28px; line-height: 1; }
+.live-review-method { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.live-review-method summary { cursor: pointer; color: var(--blue); font-weight: 700; }
+.live-review-method p { margin: 8px 0; }

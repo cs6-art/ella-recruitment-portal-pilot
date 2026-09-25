@@ -290,3 +290,114 @@ test("the HR page shows the live interview review under Voice Interview Review w
   assert.match(review, /POLL_LIMIT_MS/, "polling stops instead of loading forever");
   assert.match(review, /never used to accept or reject an applicant/);
 });
+
+// ---------------------------------------------------------------------------
+// Rubric scoring
+// ---------------------------------------------------------------------------
+import { bandForScore, computeAssessment, evidenceSupported, MIN_ASSESSABLE_ANSWERS, NOT_SCORED_LABEL, RATING_SCALE, redactApplicantIdentity } from "../src/lib/live-interview-scoring.ts";
+
+const scoringTurns = () => normalizeProviderTranscript(providerTranscript);
+const scoringPairs = () => buildQuestionPairs(scoringTurns());
+
+test("assessment score is computed in code from per-question ratings, not by the model", () => {
+  const pairs = scoringPairs();
+  const result = computeAssessment({
+    pairs,
+    reviews: [
+      { questionIndex: pairs[0].questionIndex, rating: 4, evidence: "handled about 30 customer inquiries per day by email and phone" },
+      { questionIndex: pairs[1].questionIndex, rating: 2, evidence: "I would allow the customer to explain" },
+    ],
+    transcriptSource: "provider",
+    interrupted: false,
+  });
+  assert.equal(result.status, "scored");
+  assert.equal(result.score, 75, "(4+2)/(2*4) = 75%");
+  assert.equal(result.band, "strong");
+  assert.equal(result.countedQuestions, 2);
+  assert.doesNotMatch(result.bandLabel + result.suggestedNextStep, /reject|fail|decline|disqualif/i, "status wording never says reject");
+  assert.deepEqual(RATING_SCALE.map((item) => item.rating), [0, 1, 2, 3, 4]);
+  assert.deepEqual([34, 35, 54, 55, 74, 75].map(bandForScore), ["limited", "partial", "partial", "good", "good", "strong"]);
+});
+
+test("a rating whose quote is not in the applicant's words is not counted", () => {
+  const pairs = scoringPairs();
+  assert.equal(evidenceSupported("handled about 30 customer inquiries per day", pairs[0].answer), true);
+  assert.equal(evidenceSupported("led a team of fifty engineers to a record quarter", pairs[0].answer), false);
+  assert.equal(evidenceSupported("ok", pairs[0].answer), false, "too short to verify");
+  const result = computeAssessment({
+    pairs,
+    reviews: [
+      { questionIndex: pairs[0].questionIndex, rating: 4, evidence: "led a team of fifty engineers to a record quarter" },
+      { questionIndex: pairs[1].questionIndex, rating: 3, evidence: "allow the customer to explain, then confirm the issue" },
+    ],
+    transcriptSource: "provider",
+    interrupted: false,
+  });
+  assert.equal(result.questionRatings[0].counted, false);
+  assert.match(result.questionRatings[0].reason, /could not be matched/);
+  assert.equal(result.status, "not_scored", "one countable answer is below the minimum");
+  assert.equal(MIN_ASSESSABLE_ANSWERS, 2);
+});
+
+test("technical problems and thin interviews are never scored low, only not scored", () => {
+  const pairs = scoringPairs();
+  const reviews = pairs.map((pair) => ({ questionIndex: pair.questionIndex, rating: 3, evidence: pair.answer.split(" ").slice(0, 8).join(" ") }));
+  const interrupted = computeAssessment({ pairs, reviews, transcriptSource: "provider", interrupted: true });
+  const fallback = computeAssessment({ pairs, reviews, transcriptSource: "client_capture", interrupted: false });
+  const none = computeAssessment({ pairs: [], reviews: [], transcriptSource: "provider", interrupted: false });
+  for (const result of [interrupted, fallback, none]) {
+    assert.equal(result.status, "not_scored");
+    assert.equal(result.score, null);
+    assert.equal(result.bandLabel, NOT_SCORED_LABEL);
+    assert.ok(result.notScoredReason.length > 10);
+  }
+  assert.match(interrupted.notScoredReason, /ended before it was finished/);
+  assert.match(fallback.notScoredReason, /official session transcript/);
+});
+
+test("answer length and language style are not scoring inputs", () => {
+  const pairs = scoringPairs();
+  const base = { transcriptSource: "provider", interrupted: false };
+  const shortAnswer = "Handled thirty customer inquiries daily, cutting response time by half.";
+  const shortPairs = pairs.map((pair, index) => index === 0 ? { ...pair, answer: shortAnswer } : pair);
+  const review = (evidence) => [
+    { questionIndex: pairs[0].questionIndex, rating: 4, evidence },
+    { questionIndex: pairs[1].questionIndex, rating: 4, evidence: "allow the customer to explain" },
+  ];
+  const short = computeAssessment({ pairs: shortPairs, reviews: review("Handled thirty customer inquiries daily, cutting response time by half"), ...base });
+  const long = computeAssessment({ pairs, reviews: review("handled about 30 customer inquiries per day by email and phone"), ...base });
+  assert.equal(short.score, long.score, "same rating gives the same score regardless of answer length");
+  const scoring = readFileSync(new URL("../src/lib/live-interview-scoring.ts", import.meta.url), "utf8");
+  const computeBody = scoring.slice(scoring.indexOf("export function computeAssessment"), scoring.indexOf("const EMAIL"));
+  assert.doesNotMatch(computeBody, /wordCount|\.length \/|fluen|grammar|accent|sentiment|filler/i);
+  assert.match(INTERVIEW_ANALYSIS_INSTRUCTIONS, /Do NOT let fluency, grammar, accent, vocabulary, speaking speed, tone, or answer length affect a rating/);
+  assert.match(INTERVIEW_ANALYSIS_INSTRUCTIONS, /copied word-for-word from the applicant's answer/);
+});
+
+test("applicant identity is removed before the model sees the transcript", () => {
+  const turns = normalizeProviderTranscript([
+    { role: "avatar", transcript: "Hello Alex Chen, can you tell me about your role at Acme?", absolute_timestamp: 1_790_000_000, relative_timestamp: 0 },
+    { role: "user", transcript: "Sure, I'm Alex. You can reach me at alex.chen@example.com or +65 9123 4567.", absolute_timestamp: 1_790_000_005, relative_timestamp: 5 },
+  ]);
+  const blind = redactApplicantIdentity(turns, ["Alex Chen"]);
+  const text = blind.map((turn) => turn.text).join(" ");
+  assert.doesNotMatch(text, /Alex|Chen|alex\.chen|example\.com|9123/);
+  assert.match(text, /\[Applicant\].*\[email\].*\[phone\]|\[Applicant\]/);
+  assert.match(text, /Acme/, "job-related content is kept");
+  assert.equal(blind[0].seq, turns[0].seq, "turn numbers are unchanged so evidence links still work");
+  assert.equal(turns[0].text.includes("Alex"), true, "the stored transcript is not modified");
+});
+
+test("assessment is wired into processing, the shared voice fields, and the HR view", () => {
+  const store = readFileSync(new URL("../src/lib/live-interview-store.ts", import.meta.url), "utf8");
+  assert.match(store, /redactApplicantIdentity\(turns, \[application\?\.candidateName/, "the model rates a blinded copy");
+  assert.match(store, /computeAssessment\(\{ pairs: blindPairs, reviews: result\.analysis\.questionReviews/);
+  assert.match(store, /score: assessment\.score,\s*recommendation: assessment\.bandLabel/, "the shared voice result mirrors the assessment");
+  assert.match(store, /if \(written && session\.voiceResultId\)/, "only the run that stored the analysis writes the shared fields");
+  assert.match(store, /code: "not_scored"/, "unscored interviews are flagged for HR");
+  assert.doesNotMatch(store, /evaluateLiveAvatarTranscript/, "the keyword heuristic no longer produces the avatar score");
+  const review = readFileSync(new URL("../src/components/LiveInterviewReview.tsx", import.meta.url), "utf8");
+  for (const text of ["AI Interview Assessment", "How this is scored", "Evidence Rating", "Suggested next step"]) assert.ok(review.includes(text), text);
+  const page = readFileSync(new URL("../src/app/applicants/[applicationId]/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /liveAssessmentFields\(liveReview\)/);
+});

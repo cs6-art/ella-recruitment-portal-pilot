@@ -269,6 +269,7 @@ export const interviewAnalysisSchema = z.object({
   notableResponses: z.array(z.object({ title: shortText, quote: z.string().trim().max(1200).default(""), turnRefs })).max(8).default([]),
   questionReviews: z.array(z.object({
     questionIndex: z.number().int().positive(),
+    rating: z.number().int().min(0).max(4).nullable().default(null),
     analysis: z.string().trim().max(1500).default(""),
     jobCriteria: z.string().trim().max(300).default(""),
     evidence: z.string().trim().max(1200).default(""),

@@ -791,7 +791,7 @@ export async function completeAvatarInterview(input: { rawToken: string; session
  * the voice result and moves the application to HR review; later callers get
  * `completed: false` because the token is no longer `booked`.
  */
-export async function completeAvatarInterviewByHash(input: { tokenHash: string; sessionId: string; evaluation: LiveAvatarEvaluation; transcript: LiveAvatarTranscriptTurn[] }) {
+export async function completeAvatarInterviewByHash(input: { tokenHash: string; sessionId: string; evaluation: Omit<LiveAvatarEvaluation, "score"> & { score: number | null }; transcript: LiveAvatarTranscriptTurn[] }) {
   const db = getDb();
   const tokenHash = input.tokenHash;
   const transcript = input.transcript.map((turn) => `${String(turn.role || "unknown")}: ${String(turn.transcript || "").trim()}`).filter((line) => !line.endsWith(": ")).join("\n");

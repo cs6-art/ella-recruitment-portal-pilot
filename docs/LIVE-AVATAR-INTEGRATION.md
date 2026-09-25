@@ -103,6 +103,22 @@ check → Start Interview → live avatar → saving → Interview completed.**
   emotion, gaze, personality, honesty, or protected characteristics, and a
   server-side filter removes any such statement. It is an HR aid only.
 
+### Scoring rubric (`src/lib/live-interview-scoring.ts`, version `2026-09-25.v1`)
+
+The model only rates each answer 0-4 for how much specific, job-related
+evidence the applicant's own words contain (0 not addressed, 1 general
+statement, 2 relevant but missing specifics, 3 specific example with actions,
+4 specific example with actions and outcome). Code computes the score
+(average rating as a percentage) and the band: 75+ strong, 55-74 good, 35-54
+partial, under 35 limited. Fluency, grammar, accent, vocabulary, speed, tone,
+and answer length are not criteria. The transcript is blinded (name, email,
+phone removed) before rating, and a rating counts only if its quote matches
+the applicant's words. Interrupted interviews, fallback transcripts, or fewer
+than 2 assessable answers are "Not scored - manual HR review", never a low
+score. The result mirrors into the shared voice-review score/recommendation
+fields. It never approves, rejects, or advances an applicant. Bump
+`RUBRIC_VERSION` whenever the scale, thresholds, or prompt change.
+
 Apply `drizzle/0026_live_interview_sessions.sql` before deploying this code
 (`npm run db:migrate -- --target=0026_live_interview_sessions.sql`).
 

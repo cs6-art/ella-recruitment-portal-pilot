@@ -57,7 +57,13 @@ import {
   type TranscriptTurn,
 } from "@/lib/live-interview";
 import { analyzeInterviewTranscript, isInterviewAnalysisConfigured, type AnalysisClient } from "@/lib/live-interview-analysis";
-import { evaluateLiveAvatarTranscript } from "@/lib/live-avatar-screening";
+import {
+  computeAssessment,
+  NOT_SCORED_LABEL,
+  redactApplicantIdentity,
+  type InterviewAssessment,
+  type StoredInterviewAnalysis,
+} from "@/lib/live-interview-scoring";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 
 const LIVEAVATAR_API_URL = (process.env.LIVEAVATAR_API_URL || "https://api.liveavatar.com").replace(/\/+$/, "");
@@ -383,10 +389,10 @@ async function ensureApplicationCompleted(session: SessionRow, turns: Transcript
   if (session.voiceResultId) return;
   const [token] = await getDb().select({ tokenHash: bookingTokens.tokenHash }).from(bookingTokens).where(eq(bookingTokens.id, session.bookingTokenId)).limit(1);
   if (!token) throw new Error("The interview invitation no longer exists.");
-  const role = await roleContext(session);
-  const firstQuestion = turns.find((turn) => turn.speaker === "ai_interviewer" && turn.text.includes("?"))?.text || "";
   const providerTurns = turns.map((turn) => ({ role: turn.speaker === "applicant" ? "user" : "avatar", transcript: turn.text }));
-  const evaluation = evaluateLiveAvatarTranscript({ roleTitle: role.roleTitle, roleDescription: role.jobDescription, question: firstQuestion, transcript: providerTurns });
+  // No score yet: the rubric-based assessment replaces this placeholder once
+  // the analysis finishes. The old keyword heuristic is deliberately unused.
+  const evaluation = { score: null, answered: turns.some((turn) => turn.speaker === "applicant"), answer: "", summary: "", strengths: [] as string[], focusAreas: [] as string[], recommendation: "Awaiting AI review" };
   const completed = await completeAvatarInterviewByHash({ tokenHash: token.tokenHash, sessionId: session.providerSessionId, evaluation, transcript: providerTurns });
   let voiceResultId = completed.completed ? completed.voiceResultId : "";
   if (!voiceResultId) {
@@ -474,17 +480,21 @@ export async function processLiveInterviewSession(sessionId: string, deps: Proce
     return { claimed: true as const, session: await getSessionById(session.id) };
   }
 
-  // Stage 3: AI analysis.
+  // Stage 3: AI analysis and rubric assessment.
+  session = (await getSessionById(session.id)) ?? session;
   if (session.analysis) {
     await getDb().update(liveInterviewSessions).set({ status: "REVIEW_READY", processingLeaseUntil: null, updatedAt: new Date() }).where(eq(liveInterviewSessions.id, session.id));
     return { claimed: true as const, session: await getSessionById(session.id) };
   }
   await getDb().update(liveInterviewSessions).set({ status: "ANALYSIS_PROCESSING", updatedAt: new Date() }).where(eq(liveInterviewSessions.id, session.id));
   const pairs = buildQuestionPairs(turns);
+  const interrupted = Array.isArray(session.reviewFlags) && (session.reviewFlags as ReviewFlag[]).some((flag) => flag.code === "interview_interrupted");
   let analysis: InterviewAnalysis;
+  let assessment: InterviewAssessment;
   let model = "";
   if (!turns.some((turn) => turn.speaker === "applicant")) {
     analysis = emptyAnalysis("The transcript contains no spoken answers from the applicant.", "Whether the applicant was able to answer the interview questions");
+    assessment = computeAssessment({ pairs, reviews: [], transcriptSource: session.transcriptSource, interrupted });
     model = "none";
   } else {
     if (!deps.analysisClient && !isInterviewAnalysisConfigured()) {
@@ -494,23 +504,45 @@ export async function processLiveInterviewSession(sessionId: string, deps: Proce
     try {
       const role = await roleContext(session);
       const client = deps.analysisClient || (new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 1 }) as unknown as AnalysisClient);
-      const result = await analyzeInterviewTranscript(client, { ...role, turns, pairs });
+      // The model rates a blinded copy (no name/email/phone); the stored and
+      // displayed transcript stays unredacted for HR.
+      const [application] = await getDb().select({ candidateName: applications.candidateName }).from(applications).where(eq(applications.id, session.applicationId)).limit(1);
+      const blindTurns = redactApplicantIdentity(turns, [application?.candidateName || ""]);
+      const blindPairs = buildQuestionPairs(blindTurns);
+      const result = await analyzeInterviewTranscript(client, { ...role, turns: blindTurns, pairs: blindPairs });
       analysis = result.analysis;
+      assessment = computeAssessment({ pairs: blindPairs, reviews: result.analysis.questionReviews, transcriptSource: session.transcriptSource, interrupted });
       model = result.model;
     } catch (error) {
       await recordFailure(session.id, "analysis", error, terminal);
       return { claimed: true as const, session: await getSessionById(session.id) };
     }
   }
-  await getDb().update(liveInterviewSessions).set({
-    analysis,
+  const stored: StoredInterviewAnalysis = { ...analysis, assessment };
+  const unscored = assessment.status !== "scored";
+  const [written] = await getDb().update(liveInterviewSessions).set({
+    analysis: stored,
     analysisModel: model,
     analysisCompletedAt: new Date(),
     status: "REVIEW_READY",
     processingLeaseUntil: null,
     failureStage: "",
+    ...(unscored ? { needsHrReview: true, reviewFlags: addReviewFlag(session.reviewFlags, { code: "not_scored", message: `${NOT_SCORED_LABEL}: ${assessment.notScoredReason}` }) } : {}),
     updatedAt: new Date(),
-  }).where(and(eq(liveInterviewSessions.id, session.id), isNull(liveInterviewSessions.analysis)));
+  }).where(and(eq(liveInterviewSessions.id, session.id), isNull(liveInterviewSessions.analysis))).returning({ id: liveInterviewSessions.id });
+  // Keep the shared voice-review fields (score, recommendation, strengths,
+  // concerns, summary) consistent with the assessment. Written only by the
+  // run that stored the analysis, so retries and duplicates cannot overwrite it.
+  if (written && session.voiceResultId) {
+    await getDb().update(voiceInterviewResults).set({
+      score: assessment.score,
+      recommendation: assessment.bandLabel,
+      strengths: stored.strengthsEvidenced.map((item) => item.strength).join("; "),
+      concerns: stored.areasToClarify.map((item) => item.topic).join("; "),
+      summary: stored.interviewSummary,
+      evaluationScores: assessment as unknown as object,
+    }).where(eq(voiceInterviewResults.id, session.voiceResultId));
+  }
   return { claimed: true as const, session: await getSessionById(session.id) };
 }
 
@@ -689,7 +721,7 @@ export type LiveInterviewReview = {
   transcriptSource: string;
   turns: TranscriptTurn[];
   questions: ReturnType<typeof buildQuestionPairs>;
-  analysis: InterviewAnalysis | null;
+  analysis: StoredInterviewAnalysis | null;
   analysisCompletedAt: string;
   failureStage: string;
   lastError: string;
@@ -740,7 +772,7 @@ export async function getLiveInterviewReview(applicationExternalId: string, orga
     transcriptSource: session.transcriptSource,
     turns,
     questions: buildQuestionPairs(turns),
-    analysis: (session.analysis as InterviewAnalysis | null) ?? null,
+    analysis: (session.analysis as StoredInterviewAnalysis | null) ?? null,
     analysisCompletedAt: session.analysisCompletedAt?.toISOString() || "",
     failureStage: session.failureStage,
     lastError: session.lastError,

@@ -9,6 +9,7 @@ import {
   type IntegrityEventType,
   type TranscriptTurn,
 } from "@/lib/live-interview";
+import { ASSESSMENT_BASIS, RATING_SCALE, ratingLabel, RUBRIC_VERSION } from "@/lib/live-interview-scoring";
 import type { LiveInterviewReview as Review } from "@/lib/live-interview-store";
 
 import "./live-interview.css";
@@ -145,6 +146,8 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
   }, [query, review.turns]);
 
   const analysis = review.analysis;
+  const assessment = analysis?.assessment;
+  const ratingsByQuestion = new Map((assessment?.questionRatings || []).map((item) => [item.questionIndex, item]));
   const questionReview = new Map((analysis?.questionReviews || []).map((item) => [item.questionIndex, item]));
   const refs = (turnRefs: number[]) => turnRefs.length > 0 && <button type="button" className="live-review-ref" onClick={() => jumpTo(turnRefs[0])}>View in transcript (turn {turnRefs.join(", ")})</button>;
   const failed = review.status === "FAILED";
@@ -181,6 +184,26 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
     </div>}
 
     <div className="live-review-block">
+      <h4>AI Interview Assessment</h4>
+      {assessment ? <>
+        <div className={`live-review-assessment ${assessment.status === "scored" ? `is-${assessment.band}` : "is-unscored"}`}>
+          <div className="live-review-score"><span>Score</span><strong>{assessment.status === "scored" ? `${assessment.score}%` : "—"}</strong></div>
+          <div>
+            <strong>{assessment.bandLabel}</strong>
+            <p>Suggested next step: {assessment.suggestedNextStep}</p>
+            {assessment.status === "scored" ? <p>Based on {assessment.countedQuestions} of {assessment.totalQuestions} questions.</p> : <p>{assessment.notScoredReason}</p>}
+          </div>
+        </div>
+        <details className="live-review-method">
+          <summary>How this is scored</summary>
+          <p>{ASSESSMENT_BASIS}</p>
+          <ul className="live-review-evidence">{RATING_SCALE.map((item) => <li key={item.rating}><strong>{item.rating} — {item.label}</strong><span>{item.description}</span></li>)}</ul>
+          <p>Score = average rating across the questions that could be assessed, as a percentage of the maximum. 75+ strong, 55–74 good, 35–54 partial, under 35 limited. Rubric version {RUBRIC_VERSION}.</p>
+        </details>
+      </> : <p className="live-review-loading">{processing ? "The assessment is being prepared from the transcript." : "No assessment is available for this interview."}</p>}
+    </div>
+
+    <div className="live-review-block">
       <h4>AI Interview Summary</h4>
       {analysis ? <>
         <div className="applicant-copy-block"><span>Interview Summary</span><p>{analysis.interviewSummary || "No summary was produced."}</p></div>
@@ -206,6 +229,7 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
             <dl>
               <div><dt>AI Question</dt><dd>{pair.question}</dd></div>
               <div><dt>Applicant Answer</dt><dd>{pair.answer || "No spoken answer was captured for this question."}</dd></div>
+              {ratingsByQuestion.get(pair.questionIndex) && <div><dt>Evidence Rating</dt><dd>{ratingsByQuestion.get(pair.questionIndex)?.rating !== null ? `${ratingsByQuestion.get(pair.questionIndex)?.rating} / 4 — ${ratingLabel(ratingsByQuestion.get(pair.questionIndex)?.rating ?? null)}` : "Not rated"}{ratingsByQuestion.get(pair.questionIndex)?.counted ? "" : ` (not counted: ${ratingsByQuestion.get(pair.questionIndex)?.reason})`}</dd></div>}
               {item?.analysis && <div><dt>AI Analysis</dt><dd>{item.analysis}</dd></div>}
               {item?.jobCriteria && <div><dt>Relevant Job Criteria</dt><dd>{item.jobCriteria}</dd></div>}
               {item?.evidence && <div><dt>Evidence</dt><dd>{item.evidence}</dd></div>}
