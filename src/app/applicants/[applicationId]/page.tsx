@@ -7,6 +7,7 @@ import ApplicantDetailActions from "@/components/ApplicantDetailActions";
 import ApplicantDecisionPanel from "@/components/ApplicantDecisionPanel";
 import ApplicantLiveRefresh from "@/components/ApplicantLiveRefresh";
 import CandidateHistoryTimeline from "@/components/CandidateHistoryTimeline";
+import LiveInterviewReview from "@/components/LiveInterviewReview";
 import UiIcon, { type UiIconName } from "@/components/UiIcon";
 import { canDecideApplicant, canEditApplicant, canViewApplicant } from "@/lib/access-control";
 import {
@@ -22,6 +23,8 @@ import { formatMatchScore } from "@/lib/score-format";
 import { formatPortalClock, formatPortalDateTime } from "@/lib/portal-time";
 import { applicantDecisionLabel, applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { parseTextList } from "@/lib/formatters";
+import { getLiveInterviewReview, type LiveInterviewReview as LiveReview } from "@/lib/live-interview-store";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -146,7 +149,18 @@ function FinalInterviewCard({ applicant, role }: { applicant: ApplicantDetails; 
   </section>;
 }
 
-function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails }) {
+async function loadLiveInterviewReview(applicationId: string, organizationId: string) {
+  if (!isPostgresRecruitmentTarget()) return null;
+  try {
+    return await getLiveInterviewReview(applicationId, organizationId);
+  } catch (error) {
+    // Never block the applicant profile on the interview review.
+    console.error("[Applicant Details] Live interview review unavailable:", error);
+    return null;
+  }
+}
+
+function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }: { applicant: ApplicantDetails; liveReview: LiveReview | null; canRetryLiveReview: boolean }) {
   const voiceCallStatus = applicant.voiceCallStatus?.trim() || "";
   const voiceBookingLink = externalUrl(applicant.voiceBookingLink);
   // The candidate declined, missed, or cut the call short — no system fault.
@@ -187,6 +201,7 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
       </div>
       <div className="applicant-evidence-subsection">
         <div className="applicant-evidence-subsection-heading"><UiIcon name="microphone" size={16} /><h3>Voice Interview Review</h3></div>
+        {liveReview && <LiveInterviewReview applicationId={applicant.applicationId} initialReview={liveReview} canRetry={canRetryLiveReview} />}
         <div className="applicant-detail-inline-fields">
           <DetailField label="Status" value={applicantStageLabel(voiceCallStatus) || applicantStageLabel(applicant.voiceStatus) || "Not Started"} />
           <DetailField label="Booking Status" value={applicant.voiceBookingStatus || "Not Booked"} />
@@ -202,7 +217,7 @@ function CombinedScreeningEvidence({ applicant }: { applicant: ApplicantDetails 
         <div className="applicant-copy-columns"><div><span>Communication Quality</span><p>{applicant.voiceCommunicationQuality || "Not provided."}</p></div><div><span>Answer Completeness</span><p>{applicant.voiceAnswerCompleteness || "Not provided."}</p></div></div>
         {applicant.voiceEvaluationFields.length > 0 && <div className="applicant-copy-columns">{applicant.voiceEvaluationFields.map((evaluation) => <div key={evaluation.key}><span>{evaluation.label}</span><p>{evaluation.value}</p></div>)}</div>}
         <div className="applicant-copy-block"><span>Recommended Follow-up Questions</span><ReadableList value={applicant.voiceFollowUpQuestions} empty="No follow-up questions were recommended." /></div>
-        {applicant.voiceTranscript ? <details className="applicant-transcript"><summary>View full transcript</summary><pre>{applicant.voiceTranscript}</pre></details> : <div className="applicant-copy-block"><span>Transcript</span><p>No transcript is available.</p></div>}
+        {liveReview ? null : applicant.voiceTranscript ? <details className="applicant-transcript"><summary>View full transcript</summary><pre>{applicant.voiceTranscript}</pre></details> : <div className="applicant-copy-block"><span>Transcript</span><p>No transcript is available.</p></div>}
       </div>
     </div>
   </section>;
@@ -236,13 +251,14 @@ export default async function ApplicantDetailsPage({ params }: { params: Promise
   const resumeComments = applicant.resumeComments || latestDecisionComment(history, "resume");
   const voiceComments = applicant.voiceComments || latestDecisionComment(history, "voice");
   const finalComments = applicant.finalComments || latestDecisionComment(history, "final");
+  const liveReview = await loadLiveInterviewReview(applicant.applicationId, user.organizationId);
 
   return <AppShell user={user}><main className="container page applicant-details-page">
     <ApplicantLiveRefresh enabled={!TERMINAL_APPLICANT_STAGES.has(applicant.currentStage.trim().toLowerCase())} intervalMs={applicant.currentStage.trim().toLowerCase() === "voice_scheduled" ? 30_000 : undefined} />
     <header className="applicant-detail-header"><Link href="/applicants" className="portal-back-link applicant-back-link"><UiIcon name="arrow-left" size={15} />Back to Applicants</Link><div className="applicant-detail-title-row"><div><span className="eyebrow-dark">APPLICANT PROFILE</span><h1>{applicant.candidateName || "Unnamed Candidate"}</h1><p>{applicant.applicationId} · {applicant.email || "No Email Provided"}</p></div><span className={applicantStageClass(applicant.currentStage)}>{applicantStageLabel(applicant.currentStage)}</span></div><div className="applicant-detail-actions"><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}`}><UiIcon name="briefcase" size={15} />View Role</Link><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}/applicants`}><UiIcon name="applicants" size={15} />Role Applicants</Link><ApplicantDetailActions applicationId={applicant.applicationId} candidateName={applicant.candidateName} canManage={canEditApplicant(user)} /></div></header>
     <div className="applicant-detail-summary"><DetailField label="Selected Role" value={applicant.selectedRole} /><DetailField label="Department" value={applicant.department} /><DetailField label="Applied" value={dateValue(applicant.appliedAt)} /><DetailField label="Match Score" value={formatMatchScore(applicant.matchScore)} /><DetailField label="Recommendation" value={applicant.recommendation} /><DetailField label="Next Action" value={applicant.nextAction} /></div>
     <div className="applicant-detail-grid"><div className="applicant-detail-main">
-      <CombinedScreeningEvidence applicant={applicant} />
+      <CombinedScreeningEvidence applicant={applicant} liveReview={liveReview} canRetryLiveReview={canDecideApplicant(user)} />
       <ApplicantDecisionPanel applicationId={applicant.applicationId} currentStage={applicant.currentStage} resumeDecision={applicant.resumeDecision} resumeComments={resumeComments} voiceDecision={applicant.voiceDecision} voiceComments={voiceComments} voiceStatus={applicant.voiceCallStatus || applicant.voiceStatus} finalInterviewStatus={applicant.finalInterviewStatus} finalStatus={applicant.finalStatus} finalComments={finalComments} finalBookingLink={applicant.finalBookingLink} voiceBookingLink={externalUrl(applicant.voiceBookingLink)} voiceRetryEligible={!/(?:^|[^a-z])failed(?:[^a-z]|$)|blocked|system[_ -]?failure|provider[_ -]?failure|technical[_ -]?failure|dispatch[_ -]?fail/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus}`) && /no[_ -]?answer|no[_ -]?show|incomplete|not connected|voicemail|busy|declined|cancell?ed/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus} ${applicant.voiceBookingStatus}`)} canReview={canDecideApplicant(user)} />
       <section className="card applicant-detail-card"><DetailCardHeader icon="document" title="Resume / CV" description="The candidate's submitted resume document." /><ResumeResource value={applicant.resumeText} fileId={applicant.resumeFileId} fileName={applicant.resumeFileName} expiresAt={applicant.resumeFileExpiresAt} /></section>
       <section className="card applicant-detail-card"><DetailCardHeader icon="microphone" title="Interview Questions" description="Questions prepared for the candidate's interview." /><InterviewQuestions value={applicant.interviewQuestions} /></section>
