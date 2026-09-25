@@ -15,6 +15,19 @@ type Setting = {
   updatedBy: string;
   connectionStatus?: "active" | "stored";
   type?: "text" | "url" | "number" | "choice";
+  effectiveValue?: string;
+  source?: "sheet" | "env" | "default" | "stored";
+  min?: number;
+  max?: number;
+};
+
+// Where the value in effect comes from. A blank field means "not overridden":
+// the portal uses the environment value or the built-in default shown here.
+const SOURCE_LABELS: Record<string, { label: string; className: string }> = {
+  sheet: { label: "Custom", className: "is-active" },
+  stored: { label: "Custom", className: "is-active" },
+  env: { label: "From environment", className: "is-muted" },
+  default: { label: "Default", className: "is-muted" },
 };
 
 const categories = ["Access & Security", "Booking & Interview", "Workflow Rules", "Notifications", "Smile Credits"];
@@ -85,11 +98,11 @@ export default function SettingsEditor() {
   return (
     <main className="container page settings-page">
       <header className="hero-row settings-header">
-        <div><span className="eyebrow-dark">PORTAL CONFIGURATION</span><h1>Settings</h1><p>Adjust the live defaults HR uses for interview scheduling, workflow, notifications, and credits.</p></div>
-        <div className="settings-header-note"><strong>HR Defaults</strong><span>Safe to edit. Secrets stay outside this page.</span></div>
+        <div><span className="eyebrow-dark">PORTAL CONFIGURATION</span><h1>Settings</h1><p>Shared defaults for every organization on this portal. Only the McLink administrator can change these.</p></div>
+        <div className="settings-header-note"><strong>Applies to everyone</strong><span>Leave a field blank to use the value shown. Secrets stay outside this page.</span></div>
       </header>
 
-      <section className="settings-guide"><span className="settings-guide-icon">i</span><div><strong>What should I change?</strong><p>These are the live controls used by the portal and recruitment automation. Changes apply to new actions.</p></div></section>
+      <section className="settings-guide"><span className="settings-guide-icon">i</span><div><strong>Only live settings are listed</strong><p>Each setting below is read by the portal or its automation. The badge shows whether the value in effect is your custom value, an environment value or the built-in default. Changes apply to new actions.</p></div></section>
 
       {loading && <div className="empty">Loading settings...</div>}
       {error && <ActionFeedback kind="error">{error}</ActionFeedback>}
@@ -99,14 +112,18 @@ export default function SettingsEditor() {
       {!loading && !error && grouped.filter(({ items }) => items.length > 0).map(({ category, items }) => <section className="card settings-section" key={category}>
         <div className="settings-section-header"><div><h2>{category}</h2><p>{categoryDescriptions[category] || "Additional portal configuration."}</p></div><span>{items.length} setting{items.length === 1 ? "" : "s"}</span></div>
         <div className="settings-grid">{items.length === 0 ? <p className="settings-empty">No settings in this category.</p> : items.map((setting) => {
-          const badge = "Active";
-          const badgeClass = "is-active";
+          const source = SOURCE_LABELS[setting.source || "sheet"] || SOURCE_LABELS.sheet;
+          const badge = source.label;
+          const badgeClass = source.className;
+          const inEffect = setting.effectiveValue ?? setting.value;
           return <div className="settings-field" key={setting.key}>
             <div className="settings-field-heading"><label htmlFor={`setting-${setting.key}`}>{labelFor(setting.key)}</label><span className={`settings-runtime-status ${badgeClass}`}>{badge}</span></div>
             {isChoice(setting)
-              ? <select id={`setting-${setting.key}`} value={setting.value || "No"} onChange={(event) => update(setting.key, event.target.value)}><option>Yes</option><option>No</option></select>
-              : <input id={`setting-${setting.key}`} value={setting.value} placeholder="Not configured" onChange={(event) => update(setting.key, event.target.value)} />}
-            <small>{setting.description || "No description provided."}</small>
+              ? <select id={`setting-${setting.key}`} value={setting.value || inEffect || "No"} onChange={(event) => update(setting.key, event.target.value)}><option>Yes</option><option>No</option></select>
+              : setting.type === "number"
+                ? <input id={`setting-${setting.key}`} type="number" inputMode="numeric" step={1} min={setting.min} max={setting.max} value={setting.value} placeholder={inEffect ? `${inEffect} (in effect)` : ""} onChange={(event) => update(setting.key, event.target.value)} />
+                : <input id={`setting-${setting.key}`} value={setting.value} placeholder={inEffect ? `${inEffect} (in effect)` : ""} onChange={(event) => update(setting.key, event.target.value)} />}
+            <small>{setting.description || "No description provided."}{setting.type === "number" && setting.min !== undefined && setting.max !== undefined ? ` Allowed: ${setting.min}–${setting.max}.` : ""}</small>
           </div>;
         })}</div>
       </section>)}

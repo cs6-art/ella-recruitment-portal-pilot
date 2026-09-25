@@ -21,6 +21,9 @@ export async function POST(request: Request) {
     if (result.status === "not_eligible") {
       return NextResponse.json({ error: "Registration is limited to members of a participating organization. Use your organization email address." }, { status: 403 });
     }
+    if (result.status === "verification_pending") {
+      return NextResponse.json({ error: "A verification request is already pending for this email. The link is valid for 24 hours. Check your inbox or choose Resend verification email.", needsVerification: true }, { status: 409 });
+    }
     if (result.status === "already_registered") {
       return NextResponse.json({ error: "An account already exists for this email. Log in instead." }, { status: 409 });
     }
@@ -29,9 +32,9 @@ export async function POST(request: Request) {
     const sent = await sendVerificationEmail({ email, fullName, link });
     if (sent.status !== "sent") {
       console.error("[Register] Verification email not sent:", sent.status, sent.error || "");
-      return NextResponse.json({ success: true, emailSent: false, message: "Your account was created, but the verification email could not be sent. Use “Resend verification email” to try again." });
+      return NextResponse.json({ success: true, emailSent: false, needsVerification: true, message: "Your account was created, but the verification email could not be sent. The verification request remains valid for 24 hours. Use Resend verification email to try again." });
     }
-    return NextResponse.json({ success: true, emailSent: true, message: "Check your email for a verification link. You can log in once it is confirmed." });
+    return NextResponse.json({ success: true, emailSent: true, needsVerification: true, message: "Check your email for a verification link. It expires in 24 hours. You can log in once it is confirmed." });
   } catch (error) {
     console.error("[Register] Failed:", error instanceof Error ? error.message : error);
     return NextResponse.json({ error: "Registration failed. Please try again." }, { status: 500 });

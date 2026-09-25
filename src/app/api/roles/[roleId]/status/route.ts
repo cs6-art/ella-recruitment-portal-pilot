@@ -28,9 +28,12 @@ export const dynamic = "force-dynamic";
 
 // Status transitions are handled by this dynamic API route.
 
-// The old Management-approval status was removed. Approval is now an explicit
-// capability on the HR-stage transition, while review-only users can return or
-// hold a requisition without approving it.
+// The workflow is deliberately short: Draft -> Pending HR Discussion ->
+// Approved or Rejected. "Return for revision" and "On hold" were retired to
+// keep the process simple; requests already sitting in those legacy states
+// can still be approved or rejected.
+const LEGACY_PAUSED_STATUSES = ["Returned for Revision", "On Hold"];
+
 const transitions = {
   submit_draft_for_hr: {
     source: ["Draft"],
@@ -38,31 +41,22 @@ const transitions = {
     permission: "create",
   },
   approve_role: {
-    source: ["Pending HR Discussion"],
+    source: ["Pending HR Discussion", ...LEGACY_PAUSED_STATUSES],
     target: "Approved",
     permission: "approve",
   },
   reject_role: {
-    source: ["Pending HR Discussion"],
+    source: ["Pending HR Discussion", ...LEGACY_PAUSED_STATUSES],
     target: "Rejected",
     permission: "approve",
   },
-  return_for_revision_hr: {
-    source: ["Pending HR Discussion"],
-    target: "Returned for Revision",
-    permission: "review",
-  },
-  place_on_hold_hr: {
-    source: ["Pending HR Discussion"],
-    target: "On Hold",
-    permission: "review",
-  },
-  resume_hr_review: {
-    source: ["Returned for Revision", "On Hold"],
-    target: "Pending HR Discussion",
-    permission: "review",
-  },
 } as const;
+
+// Comments are only mandatory when rejecting (the requester needs a reason).
+const DEFAULT_COMMENTS: Record<string, string> = {
+  submit_draft_for_hr: "Submitted for HR approval.",
+  approve_role: "Approved.",
+};
 
 type Action = keyof typeof transitions;
 
@@ -74,7 +68,7 @@ type RouteContext = {
 
 const statusRequestSchema = z.object({
   action: z.string().trim().min(1).max(100),
-  comments: z.string().trim().min(1).max(5000),
+  comments: z.string().trim().max(5000).default(""),
   actionRequestId: z.string().trim().min(1).max(200),
 });
 
@@ -153,15 +147,16 @@ export async function POST(
 
     const action = body.action as Action;
 
-    const comments = body.comments;
+    if (body.action === "reject_role" && !body.comments) {
+      return jsonError("Tell the requester why this role request is being rejected.", 400);
+    }
+    const comments = body.comments || DEFAULT_COMMENTS[body.action] || "Status updated.";
     const actionRequestId = body.actionRequestId;
 
     const transition = transitions[action];
-    const permitted = transition.permission === "review"
-      ? user.canReviewRole === true
-      : transition.permission === "approve"
-        ? user.canApproveRole === true
-        : user.canCreateRole === true;
+    const permitted = transition.permission === "approve"
+      ? user.canApproveRole === true
+      : user.canCreateRole === true;
 
     if (!permitted) {
       return jsonError("You do not have permission to perform this action.", 403);
@@ -260,9 +255,6 @@ export async function POST(
       );
     }
 
-    // All holds and revision returns now resume to HR discussion — there is no
-    // separate management-approval hold target to disambiguate.
-
     if (isPostgresRecruitmentTarget()) {
       const normalizedCurrent = role.status.toLowerCase().replace(/\s+/g, "_");
       const normalizedSource = transition.source.map((source) => source.toLowerCase().replace(/\s+/g, "_"));
@@ -283,7 +275,7 @@ export async function POST(
       return jsonError("The role status workflow is not configured.", 503);
     }
 
-    const resumeTargetStatus = action === "place_on_hold_hr" ? "Pending HR Discussion" : "";
+    const resumeTargetStatus = "";
     const timestamp = new Date().toISOString();
     const appBaseUrl = await resolvePublicAppBaseUrl(request);
 

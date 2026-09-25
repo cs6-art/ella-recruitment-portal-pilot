@@ -19,6 +19,11 @@ export const roleAiRecruitmentSetupDraftSchema = z.object({
   evaluationFieldToggles: z.array(z.string().trim().max(60)).max(8).default([]),
   customEvaluationFields: z.array(z.object({ key: text(40), label: text(60), description: text(200) })).max(3).default([]),
   postingChannels: z.array(z.string().trim().max(100)).max(10).default([]),
+  // Publishing choices made on the single "create role" form.
+  salaryDisclosureStatus: text(30),
+  licenseRequirementStatus: text(30),
+  hodInterviewRequired: text(30),
+  finalInterviewVenue: text(2000),
 });
 
 export const roleAiDraftSchema = z.object({

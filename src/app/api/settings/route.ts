@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { isPlatformAdmin } from "@/lib/access-control";
 import { defaultPortalSettings, getPortalSettings, upsertPortalSettings } from "@/lib/google-sheets";
 import { PORTAL_CONFIG_CATALOG, resolvePortalConfigValue } from "@/lib/portal-config";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
@@ -11,6 +12,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const configByKey = new Map(PORTAL_CONFIG_CATALOG.map((entry) => [entry.key, entry]));
+// These values live in ONE shared Settings sheet and apply to every
+// organization, so only the McLink platform administrator may read or change
+// them. Organization HR accounts manage branding and their calendar instead.
 // Only expose settings that are backed by live runtime behaviour. Hosting
 // environment variables, webhook endpoints, and legacy sheet-only values are
 // intentionally kept out of the HR-facing Settings page.
@@ -63,7 +67,7 @@ async function currentUser() {
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
-  if (user.canEditSettings !== true) return NextResponse.json({ success: false, error: "Settings permission required." }, { status: 403 });
+  if (user.canEditSettings !== true || !isPlatformAdmin(user)) return NextResponse.json({ success: false, error: "Only the McLink platform administrator can view shared portal settings." }, { status: 403 });
   try {
     const stored = await getPortalSettings();
     const storedByKey = new Map(stored.map((setting) => [setting.key, setting]));
@@ -79,7 +83,7 @@ export async function GET() {
         if (entry) {
           const rawValue = storedByKey.get(setting.key)?.value?.trim() || "";
           const resolved = resolvePortalConfigValue(setting.key, stored);
-          return { ...base, value: rawValue, effectiveValue: resolved.value, source: resolved.source, type: entry.type };
+          return { ...base, value: rawValue, effectiveValue: resolved.value, source: resolved.source, type: entry.type, min: entry.min, max: entry.max };
         }
         return { ...base, source: "stored" as const };
       });
@@ -93,7 +97,7 @@ export async function GET() {
 export async function PUT(request: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
-  if (user.canEditSettings !== true) return NextResponse.json({ success: false, error: "Settings permission required." }, { status: 403 });
+  if (user.canEditSettings !== true || !isPlatformAdmin(user)) return NextResponse.json({ success: false, error: "Only the McLink platform administrator can change shared portal settings." }, { status: 403 });
   const rate = consumeRateLimit(`settings:${user.email}:${requestClientKey(request)}`, 30, 15 * 60 * 1000);
   if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many settings updates. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
   try {

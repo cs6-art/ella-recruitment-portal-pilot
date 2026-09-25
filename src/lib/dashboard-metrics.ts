@@ -3,6 +3,8 @@ import type { RoleRequestSummary } from "@/lib/google-sheets";
 export function calculateDashboardMetrics(roles: RoleRequestSummary[]) {
   const count = (status: string) => roles.filter((role) => role.status === status).length;
   return {
+    total: roles.length,
+    jobPosted: count("Job Posted"),
     pendingHrDiscussion: count("Pending HR Discussion"),
     approved: count("Approved"),
     rejected: count("Rejected"),

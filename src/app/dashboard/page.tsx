@@ -61,7 +61,7 @@ export default async function DashboardPage() {
           {user.canCreateRole === true && <div className="hero-actions dashboard-welcome-actions"><Link className="btn btn-primary" href="/roles/new">Create Role Request</Link></div>}
         </section>
 
-        {hasRecruitmentAccess ? <section className="dashboard-stats"><DashboardMetrics scope={creatorOnly ? "personal" : "organization"} /></section> : <LimitedAccessCard user={user} />}
+        {hasRecruitmentAccess ? <section className="dashboard-stats"><DashboardMetrics scope={creatorOnly ? "personal" : "organization"} organizationId={user.organizationId} /></section> : <LimitedAccessCard user={user} />}
         <section className="dashboard-grid">
           <article className="dashboard-panel">
             <div className="dashboard-panel-header">
@@ -71,7 +71,7 @@ export default async function DashboardPage() {
                 </h2>
 
                 <p>
-                  Every approved request follows these five stages.
+                  Every role follows these four stages.
                 </p>
               </div>
             </div>
@@ -105,9 +105,9 @@ export default async function DashboardPage() {
                   </strong>
 
                   <p>
-                    HR reviews the requirements, then
-                    approves, returns, rejects, or
-                    holds the request.
+                    HR accounts approve as they submit.
+                    Anyone else waits for an HR approver
+                    to approve or reject the request.
                   </p>
                 </div>
               </div>

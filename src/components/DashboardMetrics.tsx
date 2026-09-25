@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import GettingStarted from "@/components/GettingStarted";
 import InfoTip from "@/components/InfoTip";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
 type RecentRequest = { roleId: string; jobTitle: string; department: string; status: string; createdAt: string; targetHiringDate: string };
 type ApplicantStageCount = { key: string; label: string; tone: string; value: number };
 type ApplicantMetrics = { total: number; today: number; screened: number; interviewed: number; resumeApproved: number; voiceBookingPending: number; voiceScheduled: number; voiceReviewPending: number; approvedForFinal: number; finalScheduled: number; finalDecisionPending: number; rejected: number; passedFinalInterview: number; stageCounts: ApplicantStageCount[] };
-type Metrics = { pendingHrDiscussion: number; approved: number; rejected: number; openPositions: number; openPositionsAssumption?: string; recentRequests?: RecentRequest[]; applicantMetrics?: ApplicantMetrics };
+type Metrics = { total?: number; jobPosted?: number; pendingHrDiscussion: number; approved: number; rejected: number; openPositions: number; openPositionsAssumption?: string; recentRequests?: RecentRequest[]; applicantMetrics?: ApplicantMetrics };
 
 function formatDate(value: string, includeTime = true) {
   return formatPortalDateTime(value, includeTime);
@@ -19,7 +20,7 @@ function statusClass(status: string) { return `status-badge status-${status.toLo
 function MetricSkeleton() { return <article className="dashboard-stat-card dashboard-stat-skeleton" aria-hidden="true"><span /><strong /><small /></article>; }
 function percentage(value: number, total: number) { return total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0; }
 
-export default function DashboardMetrics({ scope = "organization" }: { scope?: "personal" | "organization" }) {
+export default function DashboardMetrics({ scope = "organization", organizationId }: { scope?: "personal" | "organization"; organizationId?: string }) {
   const personalScope = scope === "personal";
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [error, setError] = useState("");
@@ -41,10 +42,11 @@ export default function DashboardMetrics({ scope = "organization" }: { scope?: "
   const applicantBars = applicantMetrics?.stageCounts ?? [];
 
   return <>
+    {organizationId && !personalScope && metrics && <GettingStarted organizationId={organizationId} metrics={metrics} />}
     <section className="dashboard-role-actions dashboard-role-actions-overview" aria-labelledby="dashboard-role-actions-title">
       <div className="dashboard-candidate-heading"><div><span className="dashboard-metrics-overview-label dashboard-stat-title-with-info">Role Request Actions<InfoTip label="What are Role Request Actions?">These are the role requests grouped by their current workflow state, so each count is shown only once.</InfoTip></span><h2 id="dashboard-role-actions-title">{personalScope ? "My Role Request Overview" : "Role Request Overview"}</h2><p>Pending HR review, approved, rejected, and active recruitment positions.</p></div><Link className="dashboard-panel-link" href="/roles">View Role Requests <span aria-hidden="true">&rarr;</span></Link></div>
       <div className="dashboard-role-action-grid">{!metrics && !error ? <><MetricSkeleton /><MetricSkeleton /><MetricSkeleton /><MetricSkeleton /></> : metrics ? <>
-        <Link className="dashboard-role-action-card dashboard-role-action-review" href="/roles?status=Pending%20HR%20Discussion"><span>Pending HR Review</span><strong>{metrics.pendingHrDiscussion}</strong><small>Review the requisition, then approve, reject, return, or hold.</small></Link>
+        <Link className="dashboard-role-action-card dashboard-role-action-review" href="/roles?status=Pending%20HR%20Discussion"><span>Pending HR Review</span><strong>{metrics.pendingHrDiscussion}</strong><small>Review the requisition, then approve or reject it.</small></Link>
         <Link className="dashboard-role-action-card dashboard-role-action-approved" href="/roles?status=Approved"><span>Approved Roles</span><strong>{metrics.approved}</strong><small>Ready for recruitment setup and posting.</small></Link>
         <Link className="dashboard-role-action-card dashboard-role-action-rejected" href="/roles?status=Rejected"><span>Rejected Role Requests</span><strong>{metrics.rejected}</strong><small>Explicit role-request rejection recorded.</small></Link>
         <Link className="dashboard-role-action-card dashboard-role-action-open" href="/roles"><span>Open Positions</span><strong>{metrics.openPositions}</strong><small>Approved or active roles currently in recruitment.</small></Link>

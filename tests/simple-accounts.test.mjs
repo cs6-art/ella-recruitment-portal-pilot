@@ -63,3 +63,46 @@ test("forms flow in a single column", () => {
   const form = read("src/components/RoleRequestForm.tsx");
   assert.doesNotMatch(form, /className="grid-2"/);
 });
+
+test("the single role form fills the setup and publishes in one pass", () => {
+  const form = read("src/components/RoleRequestForm.tsx");
+  const newPage = read("src/app/roles/new/page.tsx");
+  const editPage = read("src/app/roles/[roleId]/edit/page.tsx");
+  assert.match(form, /unified\?: boolean/);
+  assert.match(form, /Create & publish/);
+  assert.match(form, /Save as draft/);
+  assert.match(form, /setupAction: "publish_role"|setupPayload\("publish_role"\)/);
+  assert.match(form, /recruitment-setup`/);
+  // Publishing only proceeds once the role is approved.
+  assert.match(form, /finalStatus !== "Approved"/);
+  assert.match(newPage, /unified=\{user\.canReviewRole === true && user\.canApproveRole === true\}/);
+  assert.match(editPage, /role\.status === "Draft"/);
+  // Sections run top to bottom: role, screening and interview, publishing.
+  assert.ok(form.indexOf("Screening and interview") < form.indexOf("<h2>Publishing</h2>"));
+});
+
+test("shared portal settings are platform-administrator only and show what is in effect", () => {
+  const api = read("src/app/api/settings/route.ts");
+  const page = read("src/app/settings/page.tsx");
+  const editor = read("src/components/SettingsEditor.tsx");
+  assert.match(api, /isPlatformAdmin\(user\)/);
+  assert.match(page, /isPlatformAdmin\(user\)/);
+  assert.match(editor, /effectiveValue/);
+  assert.match(editor, /type="number"/);
+});
+
+test("the dashboard guides a new organization with a self-completing checklist", () => {
+  const card = read("src/components/GettingStarted.tsx");
+  const metrics = read("src/components/DashboardMetrics.tsx");
+  const dashboard = read("src/app/dashboard/page.tsx");
+  const lib = read("src/lib/dashboard-metrics.ts");
+  for (const step of ["Create and publish your first role", "Add Smile credits", "Get your first candidates", "Connect Google Calendar"]) assert.match(card, new RegExp(step));
+  assert.match(card, /jobPosted/);
+  assert.match(card, /\/api\/ella-credits/);
+  assert.match(card, /google-calendar\/status/);
+  assert.match(card, /completed === steps\.length/);
+  assert.match(metrics, /<GettingStarted/);
+  assert.match(dashboard, /organizationId=\{user\.organizationId\}/);
+  assert.match(lib, /jobPosted: count\("Job Posted"\)/);
+  assert.doesNotMatch(dashboard, /approves, returns, rejects/);
+});

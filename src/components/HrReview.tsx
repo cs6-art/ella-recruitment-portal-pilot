@@ -65,7 +65,6 @@ function latestHold(history: RoleStatusHistoryEntry[]) {
 export default function HrReview({
   roleId,
   status,
-  canReviewRole,
   canApproveRole,
   history,
   onSuccess,
@@ -80,24 +79,21 @@ export default function HrReview({
 
   const hold = latestHold(history);
 
-  const actions = status === "Pending HR Discussion"
-    ? [
-        ...(canApproveRole ? ["approve_role", "reject_role"] : []),
-      ]
-    : (status === "Returned for Revision" || status === "On Hold") && canReviewRole
-      ? ["resume_hr_review"]
-      : [];
+  // Requests that were returned or put on hold before those steps were retired
+  // can be decided directly like any pending request.
+  const decidable = ["Pending HR Discussion", "Returned for Revision", "On Hold"].includes(status);
+  const actions = decidable && canApproveRole ? ["approve_role", "reject_role"] : [];
 
   async function submitAction(action: string) {
     if (submissionLock.current) return;
 
     const trimmedComments = comments.trim();
-    if (!trimmedComments) {
-      setError("Comments are required for every status change.");
+    if (action === "reject_role" && !trimmedComments) {
+      setError("Tell the requester why this role request is being rejected.");
       return;
     }
 
-    if (!(await confirm({ title: actionLabels[action] || "Confirm status change", message: actionPrompt(action), confirmLabel: actionLabels[action] || "Confirm" }))) return;
+    if (action === "reject_role" && !(await confirm({ title: actionLabels[action], message: actionPrompt(action), confirmLabel: actionLabels[action], tone: "danger" }))) return;
 
     submissionLock.current = true;
     setSubmittingAction(action);
@@ -199,24 +195,24 @@ export default function HrReview({
       {actions.length > 0 && (
         <section className="card role-section">
           <div className="card-header">
-            <h2>{status === "Pending HR Discussion" ? "HR Review" : "Workflow Action"}</h2>
+            <h2>Approve or reject this request</h2>
           </div>
 
           <div className="section">
             <div className="field">
-              <label htmlFor="workflow-comments">Comments</label>
+              <label htmlFor="workflow-comments">Note <span className="field-optional">(optional when approving, required when rejecting)</span></label>
               <textarea
                 id="workflow-comments"
                 value={comments}
                 maxLength={5000}
                 disabled={submittingAction !== null}
-                placeholder="Required comments for this status change."
+                placeholder="Add a note for the requester and the status history."
                 onChange={(event) => {
                   setComments(event.target.value);
                   setError("");
                 }}
               />
-              <small>Required and saved in Status History.</small>
+              <small>Saved in Status History.</small>
             </div>
             {error && <ValidationSummary error={error} title="Status update failed" />}
           </div>
@@ -226,7 +222,7 @@ export default function HrReview({
               <button
                 key={action}
                 type="button"
-                className={action === "approve_role" || action.includes("resume") ? "btn btn-primary" : "btn btn-secondary"}
+                className={action === "approve_role" ? "btn btn-primary" : "btn btn-danger-outline"}
                 disabled={submittingAction !== null}
                 onClick={() => void submitAction(action)}
               >

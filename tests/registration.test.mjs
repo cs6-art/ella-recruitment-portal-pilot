@@ -3,6 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 const source = fs.readFileSync("src/lib/registration.ts", "utf8");
+const registerRoute = fs.readFileSync("src/app/api/auth/register/route.ts", "utf8");
 const migration = fs.readFileSync("drizzle/0025_user_registration.sql", "utf8");
 
 // Extract the pure matcher so it can be exercised without a database.
@@ -46,4 +47,11 @@ test("registration emails use Smile branding", () => {
 test("verification never overwrites an existing directory row", () => {
   assert.match(source, /findDirectoryUser\(email\)\)\) return/);
   assert.match(source, /findPostgresDirectoryUser\(email, organizationId\)\) return/);
+});
+
+test("a live verification request cannot be replaced by another registration", () => {
+  assert.match(source, /status: "verification_pending"/);
+  assert.match(source, /verificationExpiresAt\.getTime\(\) > Date\.now\(\)/);
+  assert.match(registerRoute, /A verification request is already pending/);
+  assert.match(registerRoute, /status: 409/);
 });

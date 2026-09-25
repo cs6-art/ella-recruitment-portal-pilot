@@ -74,6 +74,10 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
       evaluationFieldToggles: role.evaluationFieldToggles ? setupChannels(role.evaluationFieldToggles) : [],
       customEvaluationFields: role.customEvaluationFields || [],
       postingChannels: setupChannels(role.postingChannels),
+      salaryDisclosureStatus: role.salaryDisclosureStatus || "",
+      licenseRequirementStatus: role.licenseRequirementStatus || "",
+      hodInterviewRequired: role.hodInterviewRequired || "",
+      finalInterviewVenue: role.finalInterviewVenue || "",
     },
   };
   const recruitmentSetup = {
@@ -138,6 +142,8 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
         </div>
         <RoleRequestForm
           user={{ name: String(user.name ?? ""), email: String(user.email ?? "") }}
+          canApproveRole={user.canApproveRole === true}
+          unified={user.canReviewRole === true && user.canApproveRole === true && role.status === "Draft"}
           roleId={role.roleId}
           status={role.status}
           initialValues={initialValues}

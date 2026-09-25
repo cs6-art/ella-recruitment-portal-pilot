@@ -95,21 +95,22 @@ function hashToken(token: string) {
 export type RegisterResult =
   | { status: "created"; token: string; organizationId: string }
   | { status: "not_eligible" }
+  | { status: "verification_pending" }
   | { status: "already_registered" };
 
 /**
- * Create (or re-issue, if still unverified) a credential for an eligible
- * email and return a fresh verification token. The password of an unverified
- * registration may be replaced, because nobody can log in until the mailbox
- * owner clicks the emailed link.
+ * Create a credential for an eligible email and return a fresh verification
+ * token. A second registration while the original 24-hour token is still
+ * active is rejected so it cannot replace the pending password or token.
  */
 export async function registerUser(input: { email: string; fullName: string; password: string }): Promise<RegisterResult> {
   const organizationId = await resolveRegistrationOrganization(input.email);
   if (!organizationId) return { status: "not_eligible" };
 
   const db = getDb();
-  const [existing] = await db.select({ id: userCredentials.id, verifiedAt: userCredentials.emailVerifiedAt }).from(userCredentials).where(eq(userCredentials.email, input.email)).limit(1);
+  const [existing] = await db.select({ id: userCredentials.id, verifiedAt: userCredentials.emailVerifiedAt, verificationExpiresAt: userCredentials.verificationExpiresAt }).from(userCredentials).where(eq(userCredentials.email, input.email)).limit(1);
   if (existing?.verifiedAt) return { status: "already_registered" };
+  if (existing?.verificationExpiresAt && existing.verificationExpiresAt.getTime() > Date.now()) return { status: "verification_pending" };
 
   const token = crypto.randomBytes(32).toString("base64url");
   const values = {

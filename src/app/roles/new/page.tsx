@@ -49,6 +49,8 @@ export default async function NewRolePage() {
               user.email ?? "",
             ),
           }}
+          canApproveRole={user.canApproveRole === true}
+          unified={user.canReviewRole === true && user.canApproveRole === true}
         />
       </main>
     </AppShell>

@@ -24,7 +24,8 @@ export async function POST(request: Request) {
     }
     return NextResponse.json(generic);
   } catch (error) {
+    // An infrastructure failure says nothing about whether the account exists, so report it honestly.
     console.error("[Forgot] Failed:", error instanceof Error ? error.message : error);
-    return NextResponse.json(generic);
+    return NextResponse.json({ error: "We couldn't process your request right now. Please try again later." }, { status: 503 });
   }
 }

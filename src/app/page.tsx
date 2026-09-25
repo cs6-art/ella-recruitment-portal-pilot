@@ -52,19 +52,19 @@ export default async function Home({ searchParams }: HomePageProps) {
         <div className="login-hero">
           <span className="eyebrow">Recruitment Portal</span>
           <h1>Start every hire with the right role.</h1>
-          <p>Create a staff addition or replacement request, align the job requirements with HR, and get HR approval before recruitment begins.</p>
+          <p>Create a staff addition or replacement request, approve it, and start screening candidates, all in one place.</p>
           <div className="steps-preview">
-            <div><span className="step-dot">1</span> HR or the authorised requester submits a request</div>
-            <div><span className="step-dot">2</span> HR confirms the role requirements</div>
-            <div><span className="step-dot">3</span> HR approves the request before posting</div>
+            <div><span className="step-dot">1</span> Register with your organization email</div>
+            <div><span className="step-dot">2</span> Submit a role request. HR accounts approve it instantly</div>
+            <div><span className="step-dot">3</span> Set up, publish and screen candidates</div>
           </div>
         </div>
         <div className="login-panel">
           <h2>Welcome</h2>
-          <p>Register with your organization email, verify it from the link we send you, then log in to create and monitor role requests.</p>
+          <p>New here? Register with your organization email, then click the verification link we send you. Already verified? Log in.</p>
           {verifyNotice ? <div className="notice" role="status">{verifyNotice}</div> : null}
           <AuthForm redirectTo={redirectTo} resetToken={resetToken} />
-          <div className="notice"><strong>Organization members only.</strong><br />Registration is limited to participating organizations. Your account is created in your organization and must be verified by email before you can log in.</div>
+          <div className="notice"><strong>Organization members only.</strong><br />Your account is created in your organization automatically, based on your email address.</div>
         </div>
       </section>
     </main>

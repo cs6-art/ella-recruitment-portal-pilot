@@ -5,6 +5,7 @@ import AppShell from "@/components/AppShell";
 import GoogleCalendarConnect from "@/components/GoogleCalendarConnect";
 import OrganizationBrandingEditor from "@/components/OrganizationBrandingEditor";
 import SettingsEditor from "@/components/SettingsEditor";
+import { isPlatformAdmin } from "@/lib/access-control";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,13 @@ export default async function SettingsPage() {
   if (!user) redirect("/");
   if (user.canEditSettings !== true) redirect("/dashboard");
   return <AppShell user={user}>
-    <SettingsEditor />
+    {isPlatformAdmin(user)
+      ? <SettingsEditor />
+      : <main className="container page settings-page">
+        <header className="hero-row settings-header">
+          <div><span className="eyebrow-dark">YOUR ORGANIZATION</span><h1>Settings</h1><p>Set how your organization appears and connect the calendar used for interviews. Everything else is managed automatically.</p></div>
+        </header>
+      </main>}
     <OrganizationBrandingEditor />
     <main className="container page settings-page">
       <section className="card settings-section" aria-labelledby="calendar-settings-title">

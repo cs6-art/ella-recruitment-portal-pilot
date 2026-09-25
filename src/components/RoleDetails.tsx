@@ -50,7 +50,7 @@ function Card({ id, title, children, className = "" }: { id?: string; title: str
 }
 function DefinitionList({ children }: { children: ReactNode }) { return <dl className="role-definition-list">{children}</dl>; }
 
-const workflowStages = ["Role Request Submitted", "HR Discussion", "Recruitment Setup", "Job Posting"];
+const workflowStages = ["Role Request Submitted", "HR Approval", "Recruitment Setup", "Job Posting"];
 type WorkflowState = "complete" | "current" | "upcoming" | "rejected" | "paused";
 
 function workflowIndex(status: string) {

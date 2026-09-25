@@ -10,6 +10,10 @@ import ValidationSummary from "@/components/ValidationSummary";
 import { DEPARTMENT_OPTIONS, isKnownDepartment } from "@/lib/department-options";
 import { todayDateInputValue, toDateInputValue } from "@/lib/date-only";
 import { roleRequestSchema } from "@/lib/role-schema";
+import { renderRecruitmentSystemPrompt, STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE } from "@/lib/recruitment-prompt";
+import { EVALUATION_FIELD_CATALOG } from "@/lib/recruitment-setup-schema";
+import { getSetupReadiness } from "@/lib/recruitment-setup-readiness";
+import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
 import type { RoleAiDraft } from "@/lib/role-ai-draft-schema";
 
 type RoleRequestFormProps = {
@@ -20,6 +24,25 @@ type RoleRequestFormProps = {
   roleId?: string;
   status?: string;
   initialValues?: Partial<FormState>;
+  /** Approvers (every HR account) get their new request approved on submission. */
+  canApproveRole?: boolean;
+  /** One top-to-bottom form that also fills in the recruitment setup and can publish. */
+  unified?: boolean;
+};
+
+const POSTING_CHANNELS = ["LinkedIn", "Facebook", "JobStreet"];
+const QUESTION_NUMBERS = [1, 2, 3, 4, 5] as const;
+
+// Setup problems are keyed like form fields so they reuse the same error
+// summary; each key is also the id of the input it points at.
+const SETUP_FIELD_FOR_KEY: Record<string, string> = {
+  Screening_Criteria: "setup_screeningCriteria",
+  Required_Interview_Question_1: "setup_question1",
+  Required_Interview_Question_2: "setup_question2",
+  Required_Interview_Question_3: "setup_question3",
+  Posting_Channels: "setup_channels",
+  License_or_Certificate_Required: "setup_license",
+  Final_Interview_Venue: "setup_venue",
 };
 
 type RoleSubmissionResult = {
@@ -84,6 +107,10 @@ const initial: FormState = {
     evaluationFieldToggles: [],
     customEvaluationFields: [],
     postingChannels: [],
+    salaryDisclosureStatus: "",
+    licenseRequirementStatus: "",
+    hodInterviewRequired: "",
+    finalInterviewVenue: "",
   },
 };
 
@@ -99,9 +126,16 @@ const fieldLabels: Record<string, string> = {
   hodEmail: "HR interviewer email",
   customScreeningQuestion1: "Custom Screening Question 1",
   customScreeningQuestion2: "Custom Screening Question 2",
+  setup_screeningCriteria: "Screening criteria",
+  setup_question1: "Interview question 1",
+  setup_question2: "Interview question 2",
+  setup_question3: "Interview question 3",
+  setup_channels: "Posting channels",
+  setup_license: "License or certificate",
+  setup_venue: "Face-to-face interview venue",
 };
 
-export default function RoleRequestForm({ user, roleId, status = "", initialValues }: RoleRequestFormProps) {
+export default function RoleRequestForm({ user, roleId, status = "", initialValues, canApproveRole = false, unified = false }: RoleRequestFormProps) {
   const router = useRouter();
   const initialForm = useMemo<FormState>(() => ({
     ...initial,
@@ -116,6 +150,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
   const isAutoDraft = !roleId && Boolean(draftRoleId);
   const isDraftRole = isAutoDraft || status === "Draft";
   const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState("");
   const [draftSaving, setDraftSaving] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState("");
   const [draftError, setDraftError] = useState("");
@@ -276,6 +311,108 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
     }
   }
 
+  // ---- Single-form mode: setup values, defaults and payload -------------
+  const setupDraft = form.recruitmentSetupDraft;
+  const salaryStatus = setupDraft.salaryDisclosureStatus || "Not disclosed";
+  const licenseStatus = setupDraft.licenseRequirementStatus || (setupDraft.licenseOrCertificateRequired?.trim() ? "Required" : "Not required");
+  const interviewStatus = setupDraft.hodInterviewRequired || "Not required";
+
+  function updateSetup(key: keyof FormState["recruitmentSetupDraft"], value: string | string[]) {
+    setForm((current) => ({ ...current, recruitmentSetupDraft: { ...current.recruitmentSetupDraft, [key]: value } }));
+    setError("");
+    setFieldErrors((current) => {
+      const next = { ...current };
+      for (const field of Object.values(SETUP_FIELD_FOR_KEY)) if (field !== "setup_channels" || key === "postingChannels") delete next[field];
+      return next;
+    });
+  }
+
+  function toggleChannel(channel: string) {
+    const selected = setupDraft.postingChannels || [];
+    updateSetup("postingChannels", selected.includes(channel) ? selected.filter((item) => item !== channel) : [...selected, channel]);
+  }
+
+  function setupPayload(setupAction: "publish_role" | "save_draft") {
+    const questions = QUESTION_NUMBERS.map((number) => String(setupDraft[`requiredInterviewQuestion${number}` as const] || "").trim());
+    const licenseRequired = licenseStatus === "Not required" ? "" : String(setupDraft.licenseOrCertificateRequired || "").trim();
+    const values = {
+      ...setupDraft,
+      jobDescription: form.jobDescription,
+      salaryDisclosureStatus: salaryStatus,
+      licenseRequirementStatus: licenseStatus,
+      licenseOrCertificateRequired: licenseRequired,
+      hodInterviewRequired: interviewStatus,
+      finalInterviewVenue: interviewStatus === "Required" ? String(setupDraft.finalInterviewVenue || "").trim() : "",
+      postingChannels: setupDraft.postingChannels || [],
+      requiredInterviewQuestion1: questions[0],
+      requiredInterviewQuestion2: questions[1],
+      requiredInterviewQuestion3: questions[2],
+      requiredInterviewQuestion4: questions[3],
+      requiredInterviewQuestion5: questions[4],
+    };
+    // Every role starts from the standard interview script and the default
+    // scoring fields; HR can fine-tune both later in Recruitment Setup.
+    const evaluationFields = [
+      ...EVALUATION_FIELD_CATALOG.filter((field) => (values.evaluationFieldToggles || []).includes(field.key)),
+      ...(values.customEvaluationFields || []),
+    ];
+    const resolvedAiSystemPrompt = renderRecruitmentSystemPrompt(STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE, {
+      roleTitle: form.jobTitle,
+      jobDescription: form.jobDescription,
+      screeningCriteria: values.screeningCriteria,
+      interviewQuestions: buildNumberedInterviewQuestions(questions).join("\n"),
+      licenseOrCertificateRequired: values.licenseOrCertificateRequired,
+      keywordsToLookFor: values.keywordsToLookFor,
+      transferableSkillsAccepted: values.transferableSkillsAccepted,
+      experienceRequired: String(values.minimumYearsOfExperience || ""),
+      salaryOrBudgetRange: values.salaryOrBudgetRange,
+      noticePeriodRequirement: values.earliestAvailabilityRule,
+      earliestAvailabilityRule: values.earliestAvailabilityRule,
+      evaluationFields,
+    });
+    return {
+      ...values,
+      aiSystemPrompt: STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE,
+      resolvedAiSystemPrompt,
+      initialInterviewBookingLink: "",
+      hodInterviewBookingLink: "",
+      setupAction,
+      actionRequestId: globalThis.crypto.randomUUID(),
+    };
+  }
+
+  function validateSetup() {
+    const readiness = getSetupReadiness(setupPayload("publish_role"), "ready-for-publishing");
+    if (readiness.valid) return true;
+    const messages: Record<string, string> = {
+      setup_screeningCriteria: "Describe what a strong candidate looks like.",
+      setup_question1: "Write the first interview question.",
+      setup_question2: "Write the second interview question.",
+      setup_question3: "Write the third interview question.",
+      setup_channels: "Choose at least one place to post this role.",
+      setup_license: "Say which license or certificate is needed.",
+      setup_venue: "Enter the address and arrival instructions for the interview.",
+    };
+    const next: Record<string, string> = {};
+    for (const missing of readiness.missingFields) {
+      const field = SETUP_FIELD_FOR_KEY[missing.key];
+      if (field) next[field] = messages[field];
+    }
+    if (Object.keys(next).length === 0) return true;
+    setFieldErrors((current) => ({ ...current, ...next }));
+    setError("Please complete the highlighted fields before publishing.");
+    scrollToErrorSummary();
+    return false;
+  }
+
+  async function saveDraftAndExit() {
+    setError("");
+    if (draftSaveInFlight.current) await draftSaveInFlight.current;
+    await autosaveDraft();
+    if (draftSaveInFlight.current) await draftSaveInFlight.current;
+    window.location.assign("/roles");
+  }
+
   function fieldErrorProps(field: string) {
     return { "aria-invalid": Boolean(fieldErrors[field]) };
   }
@@ -317,9 +454,12 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!validateForm()) return;
+    const roleValid = validateForm();
+    const setupValid = !unified || validateSetup();
+    if (!roleValid || !setupValid) return;
 
     setLoading(true);
+    setStage("Saving the role…");
     setError("");
     setSuccess(null);
 
@@ -374,9 +514,46 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
       }
 
       const savedRoleId = result.roleId || effectiveRoleId || "";
+      let finalStatus = result.status || "Pending HR Discussion";
+      // An approver submitting a new request is the reviewer too, so approve it
+      // in the same step instead of leaving a formality to click through. If
+      // this fails the request simply stays pending for a manual approval.
+      if (canApproveRole && (!isEditing || isDraftRole) && savedRoleId) {
+        setStage("Approving…");
+        try {
+          const approval = await fetch(`/api/roles/${encodeURIComponent(savedRoleId)}/status`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ action: "approve_role", comments: "Approved on submission.", actionRequestId: globalThis.crypto.randomUUID() }),
+          });
+          const approved = await approval.json().catch(() => ({})) as RoleSubmissionResult;
+          if (approval.ok && approved.success === true) finalStatus = approved.status || "Approved";
+        } catch (approvalError) {
+          console.error("[Role Request Form] Automatic approval failed:", approvalError);
+        }
+      }
+      if (unified && savedRoleId) {
+        if (finalStatus !== "Approved") {
+          throw new Error(`The role ${savedRoleId} was saved but could not be approved automatically, so it has not been published. Open it from Role Requests to finish.`);
+        }
+        setStage("Publishing…");
+        const published = await fetch(`/api/roles/${encodeURIComponent(savedRoleId)}/recruitment-setup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(setupPayload("publish_role")),
+        });
+        const publishResult = await published.json().catch(() => ({})) as RoleSubmissionResult & { message?: string; missingFieldLabels?: string[] };
+        if (!published.ok || publishResult.success !== true) {
+          const detail = publishResult.missingFieldLabels?.length ? `Missing: ${publishResult.missingFieldLabels.join(", ")}.` : publishResult.error || publishResult.message || "Please try again from the role page.";
+          throw new Error(`The role ${savedRoleId} was created and approved, but publishing failed. ${detail}`);
+        }
+        finalStatus = publishResult.status || "Job Posted";
+      }
       setSuccess({
         roleId: savedRoleId || "Not provided",
-        status: result.status || "Pending HR Discussion",
+        status: finalStatus,
         notificationStatus: result.notificationStatus || "not_configured",
         notificationError: result.notificationError || "",
       });
@@ -396,6 +573,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
       scrollToErrorSummary();
     } finally {
       setLoading(false);
+      setStage("");
     }
   }
 
@@ -423,7 +601,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
           </div>
           <p className="section-intro">Provide the information HR and Smile need to understand the vacancy.</p>
 
-          <div className="grid-2">
+          <div className="form-stack">
             <div className="field full">
               <div className="ai-draft-panel">
                 <div>
@@ -452,6 +630,18 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
               </select>
             </div>
 
+            {form.requestType === "Staff Replacement" && (
+              <div className="field full">
+                <label htmlFor="replacementEmployee">Employee or Position Being Replaced <strong className="required-mark">*</strong></label>
+                <input id="replacementEmployee" {...fieldErrorProps("replacementEmployee")} required value={form.replacementEmployee} onChange={(event) => update("replacementEmployee", event.target.value)} placeholder="Name or position" />
+              </div>
+            )}
+
+            <div className="field">
+              <label htmlFor="jobTitle">Job Title <strong className="required-mark">*</strong></label>
+              <input id="jobTitle" {...fieldErrorProps("jobTitle")} required value={form.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} placeholder="e.g. Inside Sales Specialist" />
+            </div>
+
             <div className="field">
               <label htmlFor="department">Department <strong className="required-mark">*</strong></label>
               <select id="department" {...fieldErrorProps("department")} required value={form.department} onChange={(event) => update("department", event.target.value)}>
@@ -473,11 +663,6 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
             </div>
 
             <div className="field">
-              <label htmlFor="jobTitle">Job Title <strong className="required-mark">*</strong></label>
-              <input id="jobTitle" {...fieldErrorProps("jobTitle")} required value={form.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} placeholder="e.g. Inside Sales Specialist" />
-            </div>
-
-            <div className="field">
               <label htmlFor="numberOfVacancies">Number of Vacancies <strong className="required-mark">*</strong></label>
               <input id="numberOfVacancies" {...fieldErrorProps("numberOfVacancies")} required min="1" max="100" type="number" value={form.numberOfVacancies} onChange={(event) => update("numberOfVacancies", Number(event.target.value))} />
             </div>
@@ -488,13 +673,6 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
               <small className="field-help">Select today or a future date. Earlier dates cannot be submitted.</small>
             </div>
 
-            {form.requestType === "Staff Replacement" && (
-              <div className="field full">
-                <label htmlFor="replacementEmployee">Employee or Position Being Replaced <strong className="required-mark">*</strong></label>
-                <input id="replacementEmployee" {...fieldErrorProps("replacementEmployee")} required value={form.replacementEmployee} onChange={(event) => update("replacementEmployee", event.target.value)} placeholder="Name or position" />
-              </div>
-            )}
-
             <div className="field full">
               <label htmlFor="reasonForRequest">Reason for Request <strong className="required-mark">*</strong></label>
               <textarea id="reasonForRequest" {...fieldErrorProps("reasonForRequest")} required value={form.reasonForRequest} onChange={(event) => update("reasonForRequest", event.target.value)} placeholder="Why is this additional or replacement staff member needed?" />
@@ -502,6 +680,87 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
           </div>
         </section>
 
+        {unified ? (
+          <>
+            <section className="section">
+              <div className="section-title">
+                <span className="section-number">2</span>
+                <h2>Screening and interview</h2>
+              </div>
+              <p className="section-intro">Smile screens every resume against these criteria and asks the questions below exactly as written, in order. They are prefilled from the job description, so just review and adjust.</p>
+              <div className="form-stack">
+                <div className="field">
+                  <label htmlFor="setup_screeningCriteria">Screening criteria <strong className="required-mark">*</strong></label>
+                  <textarea id="setup_screeningCriteria" {...fieldErrorProps("setup_screeningCriteria")} value={setupDraft.screeningCriteria} onChange={(event) => updateSetup("screeningCriteria", event.target.value)} placeholder="What does a strong candidate look like? Must-have experience, skills and qualifications." />
+                </div>
+                {QUESTION_NUMBERS.map((number) => {
+                  const key = `requiredInterviewQuestion${number}` as const;
+                  const required = number <= 3;
+                  return (
+                    <div className="field" key={number}>
+                      <label htmlFor={`setup_question${number}`}>Interview question {number} {required ? <strong className="required-mark">*</strong> : <span className="field-optional">(optional)</span>}</label>
+                      <textarea id={`setup_question${number}`} {...fieldErrorProps(`setup_question${number}`)} value={setupDraft[key] || ""} onChange={(event) => updateSetup(key, event.target.value)} placeholder={required ? "A question Smile should ask every candidate" : "Add another question if you need one"} />
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="section">
+              <div className="section-title">
+                <span className="section-number">3</span>
+                <h2>Publishing</h2>
+              </div>
+              <p className="section-intro">Choose where the role is posted and a few hiring policies. Sensible defaults are already selected.</p>
+              <div className="form-stack">
+                <fieldset className="field publish-channels" id="setup_channels" aria-invalid={Boolean(fieldErrors.setup_channels)}>
+                  <legend>Post this role on <strong className="required-mark">*</strong></legend>
+                  {POSTING_CHANNELS.map((channel) => (
+                    <label key={channel} className="publish-channel-option">
+                      <input type="checkbox" checked={(setupDraft.postingChannels || []).includes(channel)} onChange={() => toggleChannel(channel)} />
+                      <span>{channel}</span>
+                    </label>
+                  ))}
+                </fieldset>
+                <div className="field">
+                  <label htmlFor="setup_salary">Show the salary to candidates?</label>
+                  <select id="setup_salary" value={salaryStatus} onChange={(event) => updateSetup("salaryDisclosureStatus", event.target.value)}>
+                    <option value="Not disclosed">No, keep it private</option>
+                    <option value="Disclosed">Yes, show it</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="setup_licenseStatus">Is a license or certificate needed?</label>
+                  <select id="setup_licenseStatus" value={licenseStatus} onChange={(event) => updateSetup("licenseRequirementStatus", event.target.value)}>
+                    <option value="Not required">Not required</option>
+                    <option value="Preferred">Preferred</option>
+                    <option value="Required">Required</option>
+                  </select>
+                </div>
+                {licenseStatus === "Required" && (
+                  <div className="field">
+                    <label htmlFor="setup_license">Which license or certificate? <strong className="required-mark">*</strong></label>
+                    <input id="setup_license" {...fieldErrorProps("setup_license")} value={setupDraft.licenseOrCertificateRequired} onChange={(event) => updateSetup("licenseOrCertificateRequired", event.target.value)} placeholder="e.g. Professional Engineer license" />
+                  </div>
+                )}
+                <div className="field">
+                  <label htmlFor="setup_interview">Add a face-to-face interview with HR?</label>
+                  <select id="setup_interview" value={interviewStatus} onChange={(event) => updateSetup("hodInterviewRequired", event.target.value)}>
+                    <option value="Not required">No</option>
+                    <option value="Required">Yes</option>
+                  </select>
+                  <small className="field-help">Times come from the HR Google Calendar connected in Settings.</small>
+                </div>
+                {interviewStatus === "Required" && (
+                  <div className="field">
+                    <label htmlFor="setup_venue">Interview venue and arrival instructions <strong className="required-mark">*</strong></label>
+                    <textarea id="setup_venue" {...fieldErrorProps("setup_venue")} value={setupDraft.finalInterviewVenue} onChange={(event) => updateSetup("finalInterviewVenue", event.target.value)} placeholder="Address, floor or room, and who to ask for." />
+                  </div>
+                )}
+              </div>
+            </section>
+          </>
+        ) : (
         <section className="section">
           <div className="section-title">
             <span className="section-number">2</span>
@@ -509,7 +768,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
           </div>
           <p className="section-intro">Review the HR interviewer and add up to two optional questions. AI-generated questions appear below for HR guidance and can be refined later in Recruitment Setup.</p>
 
-          <div className="grid-2">
+          <div className="form-stack">
             <div className="field full">
               <label htmlFor="hodEmail">Shared HR Calendar Account</label>
               <input id="hodEmail" type="text" value="Configured in Settings" readOnly aria-readonly="true" />
@@ -536,23 +795,32 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
             )}
           </div>
         </section>
+        )}
 
         {(!isEditing || hasChanges || isDraftRole) && (
+          <>
           <div className="form-actions">
             <a className="btn btn-secondary" href="/roles">Cancel</a>
+            {unified && <button type="button" className="btn btn-secondary" disabled={loading || parsing} onClick={() => void saveDraftAndExit()}>Save as draft</button>}
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? "Submitting…" : (isDraftRole ? "Submit for HR discussion" : isEditing ? "Save role request" : "Submit for HR discussion")}
+              {loading ? (stage || "Submitting…") : unified ? "Create & publish" : isEditing && !isDraftRole ? "Save role request" : canApproveRole ? "Submit & approve" : "Submit for HR approval"}
             </button>
           </div>
+          {unified && <p className="form-actions-hint">Create &amp; publish approves the role and posts it to the channels you selected. Save as draft keeps it private so you can finish later.</p>}
+          </>
         )}
       </div>
 
       <aside className="sidebar-card">
         <h3>What happens next</h3>
         <div className="sidebar-list">
-          <div><strong>1. HR review and approval</strong><br />HR reviews the request and approves, returns, or rejects it.</div>
-          <div><strong>2. Recruitment setup</strong><br />HR confirms Smile's generated screening setup.</div>
-          <div><strong>3. Job posting</strong><br />Approved roles can be published to the selected channels.</div>
+          {unified
+            ? <><div><strong>1. Create &amp; publish</strong><br />The role is approved and posted to the channels you chose.</div>
+              <div><strong>2. Candidates apply</strong><br />Each candidate gets a link, is screened by Smile and can book an interview.</div>
+              <div><strong>3. You decide</strong><br />Review results in Applicants. Fine-tune the AI script any time in Recruitment Setup.</div></>
+            : <><div><strong>1. Submit</strong><br />{canApproveRole ? "As HR, your request is approved as soon as you submit it." : "HR reviews your request and approves or rejects it."}</div>
+              <div><strong>2. Recruitment setup</strong><br />HR confirms Smile's generated screening setup.</div>
+              <div><strong>3. Job posting</strong><br />Approved roles can be published to the selected channels.</div></>}
         </div>
       </aside>
     </form>
