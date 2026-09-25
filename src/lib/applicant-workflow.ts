@@ -952,6 +952,7 @@ async function reserveTargetBooking(kind: BookingKind, token: string, slotId: st
   const result = await targetReserveBooking(kind, hashToken(token), slotId, "public-booking", slotDetails);
   if (!result.booked) {
     if (result.error === "voice_capacity_full") throw new Error("This AI Voice Interview time has reached the maximum of 10 concurrent calls. Choose another time.");
+    if (result.error === "insufficient_credits") throw new Error("This interview time can't be confirmed right now. Please contact the recruiter who invited you.");
     if (result.error === "slot_unavailable") throw new Error("That time is no longer available. Refresh the available times and choose another slot.");
     throw new Error(result.error || "The selected interview slot is no longer available.");
   }

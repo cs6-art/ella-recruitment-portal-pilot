@@ -19,6 +19,10 @@ export type LedgerEntry = {
 
 export type CreditBalance = {
   balance: number;
+  /** Credits reserved by active holds (org wallets only). */
+  held?: number;
+  /** balance - held: what new work may spend (org wallets only). */
+  available?: number;
   totals: { toppedUp: number; consumed: number };
   entries: LedgerEntry[];
 };

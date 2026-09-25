@@ -86,6 +86,77 @@ export function perUserCreditsEnabled() {
   return false;
 }
 
+const ACTIVE_HOLD = sql`"status" = 'active' AND "expires_at" > now()`;
+
+async function activeHeldCredits(executor: Executor, accountId: string, excludeHoldKey = "") {
+  const [row] = rowsOf(await executor.execute(sql`
+    SELECT coalesce(sum("credits"), 0)::int AS held FROM "credit_holds"
+    WHERE "account_id" = ${accountId} AND ${ACTIVE_HOLD} AND "hold_key" <> ${excludeHoldKey}
+  `));
+  return int(row?.held);
+}
+
+/** Credits reserved by active holds, optionally ignoring one hold (the caller's own). */
+export async function getAccountHeldCredits(input: { organizationId: string; excludeHoldKey?: string }) {
+  const db = getDb();
+  const [account] = rowsOf(await db.execute(sql`
+    SELECT "id" FROM "credit_accounts" WHERE "organization_id" = ${organization(input.organizationId)} AND "owner_email" = 'org' LIMIT 1
+  `));
+  return account?.id ? activeHeldCredits(db, String(account.id), input.excludeHoldKey || "") : 0;
+}
+
+/**
+ * Reserve `credits` on the organization wallet under `holdKey`. Idempotent per
+ * key: an existing active hold is kept (its expiry is extended), so a
+ * reschedule never reserves twice. Throws EllaCreditsError when the *available*
+ * balance (balance - other active holds) cannot cover a new hold.
+ */
+export async function placeAccountCreditHold(input: { organizationId: string; holdKey: string; credits: number; expiresAt: Date; reference?: string }): Promise<{ created: boolean }> {
+  const orgId = organization(input.organizationId);
+  const credits = Math.max(1, Math.trunc(input.credits));
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    // The row lock serializes against deductions (same FOR UPDATE), so two
+    // concurrent bookings cannot both reserve the last 10 credits.
+    const [account] = rowsOf(await tx.execute(sql`
+      SELECT "id", "balance" FROM "credit_accounts"
+      WHERE "organization_id" = ${orgId} AND "owner_email" = 'org' FOR UPDATE
+    `));
+    if (!account) throw new Error(`Credit account is not provisioned for organization ${orgId}.`);
+    const accountId = String(account.id);
+    const [existing] = rowsOf(await tx.execute(sql`
+      SELECT "id" FROM "credit_holds" WHERE "account_id" = ${accountId} AND "hold_key" = ${input.holdKey} AND ${ACTIVE_HOLD}
+    `));
+    if (existing) {
+      await tx.execute(sql`UPDATE "credit_holds" SET "expires_at" = ${input.expiresAt.toISOString()} WHERE "id" = ${String(existing.id)}`);
+      return { created: false };
+    }
+    const held = await activeHeldCredits(tx, accountId);
+    const available = int(account.balance) - held;
+    if (available < credits) throw new EllaCreditsError(credits, Math.max(0, available));
+    await tx.execute(sql`
+      INSERT INTO "credit_holds" ("account_id", "hold_key", "credits", "status", "reference", "expires_at")
+      VALUES (${accountId}, ${input.holdKey}, ${credits}, 'active', ${input.reference ?? ""}, ${input.expiresAt.toISOString()})
+      ON CONFLICT ("account_id", "hold_key") DO UPDATE
+      SET "credits" = EXCLUDED."credits", "status" = 'active', "reference" = EXCLUDED."reference",
+          "expires_at" = EXCLUDED."expires_at", "created_at" = now(), "resolved_at" = NULL, "reason" = ''
+    `);
+    return { created: true };
+  });
+}
+
+/** Resolve an active hold as 'converted' (billed) or 'released' (call did not happen). */
+export async function resolveAccountCreditHold(input: { organizationId: string; holdKey: string; status: "converted" | "released"; reason?: string }): Promise<boolean> {
+  const db = getDb();
+  const rows = rowsOf(await db.execute(sql`
+    UPDATE "credit_holds" SET "status" = ${input.status}, "reason" = ${input.reason ?? ""}, "resolved_at" = now()
+    WHERE "hold_key" = ${input.holdKey} AND "status" = 'active'
+      AND "account_id" = (SELECT "id" FROM "credit_accounts" WHERE "organization_id" = ${organization(input.organizationId)} AND "owner_email" = 'org')
+    RETURNING "id"
+  `));
+  return rows.length > 0;
+}
+
 export async function getAccountCreditBalance(input: { organizationId: string; ownerEmail: string }): Promise<CreditBalance> {
   const db = getDb();
   const orgId = organization(input.organizationId);
@@ -113,8 +184,11 @@ export async function getAccountCreditBalance(input: { organizationId: string; o
     WHERE "organization_id" = ${orgId} AND "active" = true
   `));
   const names = new Map<string, string>(directory.map((row) => [String(row.email ?? "").trim().toLowerCase(), String(row.full_name ?? "").trim()] as const).filter(([email, name]) => email && name));
+  const held = account?.id ? await activeHeldCredits(db, String(account.id)) : 0;
   return {
     balance: int(account?.balance),
+    held,
+    available: Math.max(0, int(account?.balance) - held),
     totals: { toppedUp: int(totals.topped_up), consumed: int(totals.consumed) },
     entries: displayEntries(ledger, names),
   };
@@ -123,13 +197,18 @@ export async function getAccountCreditBalance(input: { organizationId: string; o
 export async function appendAccountLedgerEntryOnExecutor(
   executor: Executor,
   input: { organizationId: string; ownerEmail: string; entry: LedgerAppend },
-  options: { guard: boolean } = { guard: true },
+  options: { guard: boolean; excludeHoldKey?: string } = { guard: true },
 ) {
   const orgId = organization(input.organizationId);
   const owner = ownerEmail(input.ownerEmail);
   const delta = Math.trunc(input.entry.creditsDelta);
   const units = Math.trunc(input.entry.units);
-  const guard = options.guard ? sql` AND "credit_accounts"."balance" + ${delta} >= 0` : sql``;
+  // A guarded deduction may not dip into credits reserved by *other* holds;
+  // the caller's own hold (excludeHoldKey) is the reservation being spent.
+  const heldByOthers = delta < 0
+    ? sql`(SELECT coalesce(sum(h."credits"), 0) FROM "credit_holds" h WHERE h."account_id" = "credit_accounts"."id" AND h."status" = 'active' AND h."expires_at" > now() AND h."hold_key" <> ${options.excludeHoldKey ?? ""})`
+    : sql`0`;
+  const guard = options.guard ? sql` AND "credit_accounts"."balance" + ${delta} >= ${heldByOthers}` : sql``;
   const result = await executor.execute(sql`
     WITH account AS (
       SELECT "id" FROM "credit_accounts"
@@ -183,7 +262,7 @@ export async function appendAccountLedgerEntryOnExecutor(
 
 export async function appendAccountLedgerEntry(
   input: { organizationId: string; ownerEmail: string; entry: LedgerAppend },
-  options: { guard: boolean } = { guard: true },
+  options: { guard: boolean; excludeHoldKey?: string } = { guard: true },
 ) {
   return appendAccountLedgerEntryOnExecutor(getDb(), input, options);
 }

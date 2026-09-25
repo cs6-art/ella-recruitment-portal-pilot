@@ -5,7 +5,7 @@ import { getPortalConfig } from "@/lib/portal-config";
 import { isDatabaseConfigured } from "@/db/client";
 import { appendSheetLedgerEntry, getSheetCreditBalance } from "@/lib/ella-credits-sheets";
 import { appendPostgresLedgerEntry, getPostgresCreditBalance } from "@/lib/ella-credits-postgres";
-import { appendAccountLedgerEntry, organizationCreditsEnabled, getAccountCreditBalance } from "@/lib/ella-credits-accounts";
+import { appendAccountLedgerEntry, getAccountCreditBalance, getAccountHeldCredits, organizationCreditsEnabled, placeAccountCreditHold, resolveAccountCreditHold } from "@/lib/ella-credits-accounts";
 import { runWithTenantDatabase } from "@/lib/tenant-database";
 import type { CreditBalance, LedgerAppend } from "@/lib/ella-credits-store";
 
@@ -160,12 +160,49 @@ export async function volumeDiscountBonus(amount: number): Promise<{ bonus: numb
  * postgres mode the authoritative guard is the atomic `recordDeduction`; this
  * is still used up front (e.g. to fail a whole bulk batch before any work).
  */
-export async function assertCreditsAvailable(units: number, event: CreditEvent, scope: CreditScope = {}): Promise<number> {
+export async function assertCreditsAvailable(units: number, event: CreditEvent, scope: CreditScope & { holdKey?: string } = {}): Promise<number> {
   const [{ balance }, cost] = await Promise.all([getCreditBalance({ fresh: true, ...scope }), creditCostFor(event)]);
-  return assertBalanceCovers(balance, units, cost);
+  // Credits reserved by other holds are not spendable. The caller's own hold
+  // (holdKey) is the reservation this work will consume, so it stays available.
+  const held = organizationCreditsEnabled() && scope.organizationId
+    ? await runWithTenantDatabase(scope.organizationId, () => getAccountHeldCredits({ organizationId: scope.organizationId as string, excludeHoldKey: scope.holdKey }))
+    : 0;
+  return assertBalanceCovers(balance - held, units, cost);
 }
 
-async function append(entry: LedgerAppend, opts: { guard: boolean }, scope: CreditScope = {}): Promise<{ balanceAfter: number }> {
+// --- Voice interview holds ---------------------------------------------------
+
+/** Ledger-free reservation key: one hold per application's AI voice interview. */
+export function voiceHoldKey(applicationId: string) {
+  return `voice:${applicationId.trim()}`;
+}
+
+/**
+ * Reserve the full AI voice interview charge when a slot is booked, so the
+ * credits cannot be spent elsewhere before the call happens. Only the
+ * organization wallet supports holds; legacy Sheets balances return false and
+ * rely on the existing dispatch-time check.
+ */
+export async function placeVoiceInterviewHold(input: { organizationId?: string; applicationId: string; expiresAt: Date }): Promise<{ supported: boolean; created: boolean }> {
+  const organizationId = input.organizationId?.trim();
+  if (!organizationCreditsEnabled() || !organizationId) return { supported: false, created: false };
+  const credits = await creditCostFor("phone_interview");
+  const { created } = await runWithTenantDatabase(organizationId, () => placeAccountCreditHold({ organizationId, holdKey: voiceHoldKey(input.applicationId), credits, expiresAt: input.expiresAt, reference: input.applicationId }));
+  return { supported: true, created };
+}
+
+/** Best-effort: a failed release only means the hold lapses at its expiry. */
+export async function releaseVoiceInterviewHold(input: { organizationId?: string; applicationId: string; reason?: string; status?: "released" | "converted" }): Promise<void> {
+  const organizationId = input.organizationId?.trim();
+  if (!organizationCreditsEnabled() || !organizationId || !input.applicationId.trim()) return;
+  try {
+    await runWithTenantDatabase(organizationId, () => resolveAccountCreditHold({ organizationId, holdKey: voiceHoldKey(input.applicationId), status: input.status ?? "released", reason: input.reason }));
+  } catch (error) {
+    console.error(`[Credits][hold] Unable to resolve hold for ${input.applicationId}; it will expire on its own:`, error);
+  }
+}
+
+async function append(entry: LedgerAppend, opts: { guard: boolean; excludeHoldKey?: string }, scope: CreditScope = {}): Promise<{ balanceAfter: number }> {
   const account = accountScope(scope);
   if (account) {
     const { balanceAfter } = await runWithTenantDatabase(account.organizationId, () => appendAccountLedgerEntry({ organizationId: account.organizationId, ownerEmail: account.ownerEmail, entry }, opts));
@@ -197,6 +234,8 @@ export async function recordDeduction(input: {
    * bookingId the charge is "for".
    */
   idempotencyKey?: string;
+  /** Spend this hold instead of treating it as reserved by someone else. */
+  holdKey?: string;
 }): Promise<void> {
   const units = Math.max(1, Math.trunc(input.units));
   const cost = await creditCostFor(input.event);
@@ -215,7 +254,7 @@ export async function recordDeduction(input: {
     },
     // Only postgres mode enforces the guard; sheets/dual keep the Sheets
     // "append and only log on failure" posture.
-    { guard: true },
+    { guard: true, excludeHoldKey: input.holdKey },
     { organizationId: input.organizationId, ownerEmail: input.actorEmail },
   );
 }
@@ -246,7 +285,10 @@ export async function recordVoiceInterviewDeduction(input: {
     actorEmail: input.actorEmail,
     organizationId: input.organizationId,
     note: `AI voice interview outcome: ${input.outcome}`,
+    holdKey: voiceHoldKey(input.applicationId),
   });
+  // The real charge is on the ledger now; the reservation has done its job.
+  await releaseVoiceInterviewHold({ organizationId: input.organizationId, applicationId: input.applicationId, status: "converted", reason: `billed:${input.outcome}` });
   return cost;
 }
 

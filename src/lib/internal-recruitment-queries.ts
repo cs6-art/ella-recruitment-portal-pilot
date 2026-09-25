@@ -5,7 +5,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, lte, not, or, sql } from "dri
 import { getTenantDb as getDb } from "@/db/client";
 import { appendPostgresLedgerEntryOnExecutor } from "@/lib/ella-credits-postgres";
 import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
-import { creditCostFor, recordVoiceInterviewDeduction } from "@/lib/ella-credits";
+import { creditCostFor, EllaCreditsError, placeVoiceInterviewHold, recordVoiceInterviewDeduction, releaseVoiceInterviewHold } from "@/lib/ella-credits";
 import { appendAccountLedgerEntryOnExecutor, organizationCreditsEnabled } from "@/lib/ella-credits-accounts";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
@@ -55,6 +55,14 @@ const configuredVoiceAttemptStaleMinutes = Number(process.env.VOICE_ATTEMPT_STAL
 const VOICE_ATTEMPT_STALE_MINUTES = Number.isFinite(configuredVoiceAttemptStaleMinutes)
   ? Math.max(15, Math.min(24 * 60, Math.trunc(configuredVoiceAttemptStaleMinutes)))
   : 60;
+// A call that was dispatched but never reached "in_progress" (rejected, busy,
+// unanswered) gets no answered-call events, so it must settle much sooner than
+// a call that genuinely connected. Otherwise it reads "In Progress" until the
+// next full stale window.
+const configuredVoiceUnansweredMinutes = Number(process.env.VOICE_UNANSWERED_MINUTES || "10");
+const VOICE_UNANSWERED_MINUTES = Number.isFinite(configuredVoiceUnansweredMinutes)
+  ? Math.max(5, Math.min(VOICE_ATTEMPT_STALE_MINUTES, Math.trunc(configuredVoiceUnansweredMinutes)))
+  : 10;
 const STAGES = ["resume_review", "resume_approved", "voice_booking_pending", "voice_scheduled", "voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final", "rejected", "withdrawn"] as const;
 const DECISIONS = ["", "approve", "reject", "manual_review", "pending"] as const;
 const STAGE_TRANSITIONS: Record<string, readonly string[]> = {
@@ -1131,7 +1139,8 @@ export async function inFlightVoiceAttempts(minAgeMinutes = 2) {
 export async function reconcileStaleVoiceAttempts(limit = LIMIT) {
   const db = getDb();
   const safeLimit = Math.max(1, Math.min(LIMIT, Math.trunc(limit)));
-  return db.transaction(async (tx) => {
+  const settledAttemptIds: string[] = [];
+  const summary = await db.transaction(async (tx) => {
     const stale = await tx.select({
       id: voiceCallAttempts.id,
       applicationId: voiceCallAttempts.applicationId,
@@ -1142,9 +1151,15 @@ export async function reconcileStaleVoiceAttempts(limit = LIMIT) {
     })
       .from(voiceCallAttempts)
       .innerJoin(applications, eq(applications.id, voiceCallAttempts.applicationId))
-      .where(and(
-        inArray(voiceCallAttempts.status, ["calling", "dispatching", "initiated", "in_progress"]),
-        lte(voiceCallAttempts.updatedAt, sql`now() - (${VOICE_ATTEMPT_STALE_MINUTES} * interval '1 minute')`),
+      .where(or(
+        and(
+          inArray(voiceCallAttempts.status, ["calling", "dispatching", "initiated"]),
+          lte(voiceCallAttempts.updatedAt, sql`now() - (${VOICE_UNANSWERED_MINUTES} * interval '1 minute')`),
+        ),
+        and(
+          eq(voiceCallAttempts.status, "in_progress"),
+          lte(voiceCallAttempts.updatedAt, sql`now() - (${VOICE_ATTEMPT_STALE_MINUTES} * interval '1 minute')`),
+        ),
       ))
       .orderBy(asc(voiceCallAttempts.updatedAt))
       .limit(safeLimit)
@@ -1169,10 +1184,11 @@ export async function reconcileStaleVoiceAttempts(limit = LIMIT) {
         providerCallId: attempt.providerCallId || "",
         sourceEventKey: `stale-voice-reconcile:${attempt.id}`,
         callStatus: "failed",
-        errorDetails: `Voice attempt remained ${attempt.status} beyond the ${VOICE_ATTEMPT_STALE_MINUTES}-minute reconciliation window. No terminal provider result was received.`,
+        errorDetails: `Voice attempt remained ${attempt.status} beyond the ${attempt.status === "in_progress" ? VOICE_ATTEMPT_STALE_MINUTES : VOICE_UNANSWERED_MINUTES}-minute reconciliation window. No terminal provider result was received.`,
         rawResult: { maintenance: "stale_voice_attempt_reconciliation", previousStatus: attempt.status },
       }).onConflictDoNothing({ target: voiceCallLogs.sourceEventKey });
       reconciled += 1;
+      settledAttemptIds.push(attempt.id);
     }
 
     return {
@@ -1180,8 +1196,13 @@ export async function reconcileStaleVoiceAttempts(limit = LIMIT) {
       reconciled,
       staleAttemptIds: stale.filter((attempt) => attempt.id).map((attempt) => attempt.id),
       staleMinutes: VOICE_ATTEMPT_STALE_MINUTES,
+      unansweredMinutes: VOICE_UNANSWERED_MINUTES,
     };
   });
+  // Holds live outside this transaction; a failed release only means the hold
+  // lapses at its expiry, so it must not fail the sweep.
+  for (const attemptId of settledAttemptIds) await releaseHoldForAttempt(attemptId, "stale_attempt_reconciled");
+  return summary;
 }
 
 export async function dispatchVoiceAttemptDryRun(input: { attemptId: string; providerCallId: string }) {
@@ -1203,10 +1224,17 @@ export async function recordVoiceAttemptProviderCall(input: { attemptId: string;
   return rowsOf<Record<string, unknown>>(result)[0] || null;
 }
 
+/** Free the reserved interview credits when an attempt ends without a charge. */
+async function releaseHoldForAttempt(attemptId: string, reason: string) {
+  const context = await voiceAttemptContext(attemptId).catch(() => null);
+  if (context) await releaseVoiceInterviewHold({ organizationId: context.organizationId, applicationId: context.applicationExternalId, reason });
+}
+
 export async function failVoiceAttemptDispatch(attemptId: string, reason: string) {
   const db = getDb();
   const result = await db.execute(sql`UPDATE voice_call_attempts SET status = 'failed', outcome = 'system_failure', updated_at = now() WHERE id = ${attemptId.trim()} AND status = 'dispatching' RETURNING id, status, outcome`);
   if (rowsOf(result).length > 0) {
+    await releaseHoldForAttempt(attemptId, "dispatch_failed");
     await createVoiceCallLog({
       applicationExternalId: (await voiceAttemptContext(attemptId))?.applicationExternalId || "",
       voiceCallAttemptId: attemptId,
@@ -1227,6 +1255,7 @@ export async function blockVoiceAttempt(attemptId: string, reason: string) {
   const result = await db.execute(sql`UPDATE voice_call_attempts SET status = 'failed', outcome = 'system_failure', updated_at = now() WHERE id = ${attemptId.trim()} AND status = 'calling' RETURNING id, application_id AS "applicationId"`);
   const row = rowsOf<Record<string, unknown>>(result)[0];
   if (row) {
+    await releaseHoldForAttempt(attemptId, "dispatch_blocked");
     const context = await voiceAttemptContext(attemptId);
     if (context) await createVoiceCallLog({ applicationExternalId: context.applicationExternalId, voiceCallAttemptId: attemptId, provider: "vapi", sourceEventKey: `dispatch-blocked:${attemptId}`, callStatus: "blocked", errorDetails: reason, rawResult: { dispatchBlocked: true }, allowTerminalAttempt: true }).catch(() => undefined);
   }
@@ -1299,6 +1328,7 @@ export async function updateVoiceAttemptStatus(input: { attemptId: string; statu
   // safe to settle here because it is itself the terminal call outcome.
   const classified = classifyVoiceInterviewBillingOutcome({ outcome: input.outcome, callStatus: input.status });
   const outcome = classified === "no_answer" ? classified : null;
+  if (updated && !outcome && (input.status === "failed" || input.status === "cancelled")) await releaseHoldForAttempt(input.attemptId, `attempt_${input.status}`);
   let chargedCredits = 0;
   if (outcome) {
     const context = await voiceAttemptContext(input.attemptId);
@@ -2120,7 +2150,44 @@ export async function bookedVoiceCountsByInterval() {
   return new Map(rows.map((row) => [`${new Date(row.startsAt).toISOString()}|${new Date(row.endsAt).toISOString()}`, Number(row.count)]));
 }
 
-export async function bookInterviewSlot(input: { slotId: string; applicationExternalId: string; actorEmail: string; actionRequestId: string }) {
+// A held voice interview stays reserved through the slot plus room for the
+// call attempts and manual rebooking; the hold is resolved sooner on any
+// terminal outcome, so this is only the backstop.
+const VOICE_HOLD_GRACE_MS = 48 * 60 * 60 * 1000;
+
+type BookInterviewSlotInput = { slotId: string; applicationExternalId: string; actorEmail: string; actionRequestId: string };
+
+/**
+ * Book a slot. A voice interview first reserves its full charge on the
+ * organization wallet, so the credits cannot be spent elsewhere before the call
+ * happens; without enough available credit the booking is refused.
+ */
+export async function bookInterviewSlot(input: BookInterviewSlotInput) {
+  const db = getDb();
+  const [target] = await db.select({ interviewType: interviewSlots.interviewType, endsAt: interviewSlots.endsAt }).from(interviewSlots).where(eq(interviewSlots.id, input.slotId)).limit(1);
+  if (target?.interviewType !== "voice") return bookInterviewSlotInTransaction(input);
+  const [application] = await db.select({ organizationId: applications.organizationId }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
+  if (!application) return bookInterviewSlotInTransaction(input);
+
+  const hold = { organizationId: application.organizationId, applicationId: input.applicationExternalId };
+  let held = { supported: false, created: false };
+  try {
+    held = await placeVoiceInterviewHold({ ...hold, expiresAt: new Date(new Date(target.endsAt).getTime() + VOICE_HOLD_GRACE_MS) });
+  } catch (error) {
+    if (error instanceof EllaCreditsError) return { booked: false as const, error: "insufficient_credits" as const };
+    throw error;
+  }
+  try {
+    const result = await bookInterviewSlotInTransaction(input);
+    if (!result.booked && held.created) await releaseVoiceInterviewHold({ ...hold, reason: `booking_${result.error}` });
+    return result;
+  } catch (error) {
+    if (held.created) await releaseVoiceInterviewHold({ ...hold, reason: "booking_error" });
+    throw error;
+  }
+}
+
+async function bookInterviewSlotInTransaction(input: BookInterviewSlotInput) {
   const db = getDb();
   return db.transaction(async (tx) => {
     // Serialize voice bookings so concurrent requests cannot both read a count
