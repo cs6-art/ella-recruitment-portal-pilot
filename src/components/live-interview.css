@@ -1,0 +1,68 @@
+/* Live Avatar interview: candidate consent/device check and HR review.
+   Uses the portal design tokens from globals.css. */
+
+/* Candidate: consent + equipment check */
+.live-interview-consent { width: min(640px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; }
+.live-interview-consent-body { display: grid; gap: 10px; margin-top: 10px; }
+.live-interview-consent-body p { margin: 0; color: #405b70; font-size: 14px; line-height: 1.6; }
+.live-interview-consent .error-box { margin-top: 12px; }
+.live-interview-precheck { display: grid; gap: 14px; width: 100%; max-width: 640px; }
+.live-interview-precheck h3 { margin: 4px 0 6px; color: var(--navy); font-size: 18px; }
+.live-interview-precheck p { margin: 0; color: var(--muted); line-height: 1.55; }
+.live-interview-preview { position: relative; width: 100%; max-width: 420px; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 14px; background: #0b1b2b; }
+.live-interview-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.live-interview-device-status { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.live-interview-device-status div { display: grid; gap: 2px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: #f8fbfe; }
+.live-interview-device-status dt { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.live-interview-device-status dd { margin: 0; font-size: 14px; font-weight: 700; }
+.live-interview-device-status dd.is-ok { color: var(--success); }
+.live-interview-device-status dd.is-bad { color: var(--danger); }
+.live-interview-meter { width: 100%; max-width: 420px; height: 8px; overflow: hidden; border-radius: 999px; background: #e4ebf2; }
+.live-interview-meter span { display: block; height: 100%; border-radius: inherit; background: var(--success); transition: width .08s linear; }
+.live-interview-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.live-interview-self-view { position: absolute; right: 10px; bottom: 10px; width: 28%; min-width: 96px; aspect-ratio: 4 / 3; object-fit: cover; transform: scaleX(-1); border: 2px solid rgba(255,255,255,.85); border-radius: 10px; background: #0b1b2b; box-shadow: 0 6px 18px rgba(0,0,0,.3); }
+.live-interview-recording-pill { position: absolute; top: 10px; left: 10px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: rgba(7,27,44,.78); color: #fff; font-size: 11px; font-weight: 700; }
+.live-interview-recording-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #e5484d; }
+@media (max-width: 600px) { .live-interview-device-status { grid-template-columns: 1fr; } }
+
+/* HR: Applicant's Voice Interview Review — live avatar interview */
+.live-review { display: grid; gap: 18px; margin-top: 6px; }
+.live-review-disclaimer { margin: 0; padding: 11px 14px; border-left: 3px solid var(--blue); border-radius: 8px; background: #eef6fc; color: #405b70; font-size: 13px; line-height: 1.5; }
+.live-review-block { display: grid; gap: 10px; }
+.live-review-block > h4 { margin: 0; color: var(--navy); font-size: 15px; }
+.live-review-block > p { margin: 0; color: var(--ink); line-height: 1.6; }
+.live-review-status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 10px; background: #f8fbfe; color: #405b70; font-size: 13px; }
+.live-review-status.is-failed { border-color: #f0c2bc; background: #fdf4f3; color: #96261d; }
+.live-review-status .btn { padding: 6px 11px; font-size: 12px; }
+.live-review-flags { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.live-review-flags li { padding: 8px 11px; border-left: 3px solid #d99a00; border-radius: 6px; background: #fff9e8; color: #6b4d00; font-size: 13px; line-height: 1.45; }
+.live-review-evidence { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.live-review-evidence li { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.live-review-evidence strong { color: var(--ink); font-size: 14px; }
+.live-review-evidence q, .live-review-evidence span { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.live-review-ref { justify-self: start; padding: 0; border: 0; background: none; color: var(--blue); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.live-review-ref:hover, .live-review-ref:focus-visible { text-decoration: underline; }
+.live-review-question { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.live-review-question h5 { margin: 0; color: var(--navy); font-size: 14px; }
+.live-review-question dl { display: grid; gap: 8px; margin: 0; }
+.live-review-question dt { color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.live-review-question dd { margin: 2px 0 0; color: var(--ink); font-size: 14px; line-height: 1.55; white-space: pre-wrap; }
+.live-review-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.live-review-toolbar input, .live-review-toolbar select { min-width: 0; flex: 1 1 200px; padding: 8px 10px; border: 1px solid #cfd9e6; border-radius: 8px; font: inherit; font-size: 13px; }
+.live-review-toolbar .btn { padding: 7px 11px; font-size: 12px; }
+.live-review-transcript { display: grid; gap: 8px; max-height: 520px; overflow-y: auto; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #f8fbfe; }
+.live-review-transcript.is-expanded { max-height: none; }
+.live-review-turn { display: grid; gap: 3px; padding: 9px 12px; border-radius: 10px; scroll-margin-top: 12px; }
+.live-review-turn.is-ai { border-left: 3px solid var(--navy); background: #fff; }
+.live-review-turn.is-applicant { border-left: 3px solid var(--success); background: #f1faf6; }
+.live-review-turn.is-highlighted { box-shadow: 0 0 0 2px var(--yellow); }
+.live-review-turn header { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.live-review-turn header strong { font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.live-review-turn.is-ai header strong { color: var(--navy); }
+.live-review-turn.is-applicant header strong { color: var(--success); }
+.live-review-turn header span { color: var(--muted); font-size: 11px; }
+.live-review-turn p { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.55; }
+.live-review-turn mark { background: #fff1a8; }
+.live-review-video { width: 100%; max-width: 640px; border-radius: 12px; background: #0b1b2b; }
+.live-review-integrity { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; color: #405b70; font-size: 13px; }
+.live-review-loading { color: var(--muted); font-size: 13px; }

@@ -3,6 +3,7 @@ import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheet
 import { createLiveAvatarSession, isLiveAvatarConfigured } from "@/lib/live-avatar";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { finalizeAvatarInterviewStart, releaseAvatarInterviewStart, startAvatarInterview } from "@/lib/internal-recruitment-queries";
+import { assertReadyToStart, LiveInterviewError, markInterviewStarted } from "@/lib/live-interview-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +39,14 @@ export async function POST(request: NextRequest) {
     if (!isPostgresRecruitmentTarget()) return NextResponse.json({ success: false, error: "This avatar interview link is not available." }, { status: 404 });
     let sessionCreated = false;
     try {
+      // Consent and the camera/microphone check must be on record before the
+      // one-time invitation is consumed.
+      try {
+        await assertReadyToStart(avatarToken);
+      } catch (gateError) {
+        if (gateError instanceof LiveInterviewError) return NextResponse.json({ success: false, error: gateError.message, code: gateError.code }, { status: gateError.status });
+        throw gateError;
+      }
       const context = await startAvatarInterview(avatarToken);
       if (!context) return NextResponse.json({ success: false, error: "This avatar interview link has already been used, expired, or is no longer available." }, { status: 410 });
       const session = await createLiveAvatarSession({ roleTitle: context.roleTitle, jobDescription: context.roleDescription, candidateName: context.candidateName, resumeSummary: context.resumeSummary, screeningQuestion: context.screeningQuestion });
@@ -47,7 +56,15 @@ export async function POST(request: NextRequest) {
       } catch (finalizeError) {
         console.error("[API Live Avatar Candidate Session] Failed to finalize invitation state:", finalizeError);
       }
-      return NextResponse.json({ success: true, ...session }, { headers: { "Cache-Control": "no-store" } });
+      let recordingEnabled = false;
+      try {
+        const interview = await markInterviewStarted({ rawToken: avatarToken, providerSessionId: session.sessionId });
+        recordingEnabled = interview?.recordingStatus === "pending";
+      } catch (trackError) {
+        // The avatar session exists; completion re-links it by token.
+        console.error("[API Live Avatar Candidate Session] Failed to record interview start:", trackError);
+      }
+      return NextResponse.json({ success: true, ...session, recordingEnabled }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
       if (!sessionCreated) {
         try {
