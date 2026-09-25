@@ -69,8 +69,16 @@ export function interviewAnalysisModel() {
   return process.env.INTERVIEW_ANALYSIS_MODEL?.trim() || DEFAULT_INTERVIEW_ANALYSIS_MODEL;
 }
 
+/**
+ * The interview review can use its own OpenAI key so its usage and billing
+ * stay separate from the Smile help bot. It falls back to OPENAI_API_KEY.
+ */
+export function interviewAnalysisApiKey() {
+  return process.env.INTERVIEW_ANALYSIS_OPENAI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim() || "";
+}
+
 export function isInterviewAnalysisConfigured() {
-  return Boolean(process.env.OPENAI_API_KEY?.trim());
+  return Boolean(interviewAnalysisApiKey());
 }
 
 /** Throws on provider errors, timeouts, or invalid output so the caller can retry. */

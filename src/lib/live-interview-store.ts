@@ -56,7 +56,7 @@ import {
   type ReviewFlag,
   type TranscriptTurn,
 } from "@/lib/live-interview";
-import { analyzeInterviewTranscript, isInterviewAnalysisConfigured, type AnalysisClient } from "@/lib/live-interview-analysis";
+import { analyzeInterviewTranscript, interviewAnalysisApiKey, isInterviewAnalysisConfigured, type AnalysisClient } from "@/lib/live-interview-analysis";
 import {
   computeAssessment,
   NOT_SCORED_LABEL,
@@ -498,12 +498,12 @@ export async function processLiveInterviewSession(sessionId: string, deps: Proce
     model = "none";
   } else {
     if (!deps.analysisClient && !isInterviewAnalysisConfigured()) {
-      await recordFailure(session.id, "analysis", new Error("AI interview analysis is not configured (OPENAI_API_KEY is missing)."), true);
+      await recordFailure(session.id, "analysis", new Error("AI interview analysis is not configured (INTERVIEW_ANALYSIS_OPENAI_API_KEY or OPENAI_API_KEY is missing)."), true);
       return { claimed: true as const, session: await getSessionById(session.id) };
     }
     try {
       const role = await roleContext(session);
-      const client = deps.analysisClient || (new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 1 }) as unknown as AnalysisClient);
+      const client = deps.analysisClient || (new OpenAI({ apiKey: interviewAnalysisApiKey(), maxRetries: 1 }) as unknown as AnalysisClient);
       // The model rates a blinded copy (no name/email/phone); the stored and
       // displayed transcript stays unredacted for HR.
       const [application] = await getDb().select({ candidateName: applications.candidateName }).from(applications).where(eq(applications.id, session.applicationId)).limit(1);

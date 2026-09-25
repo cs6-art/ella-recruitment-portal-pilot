@@ -166,6 +166,28 @@ test("analysis failures surface as errors so processing can retry", async () => 
   await assert.rejects(analyzeInterviewTranscript({ responses: { create: async () => ({ output_text: "{}" }) } }, { roleTitle: "", jobDescription: "", turns: [], pairs: [] }), /no transcript/);
 });
 
+test("interview analysis can use its own OpenAI key, falling back to the shared one", async () => {
+  const { interviewAnalysisApiKey, isInterviewAnalysisConfigured } = await import("../src/lib/live-interview-analysis.ts");
+  const saved = { own: process.env.INTERVIEW_ANALYSIS_OPENAI_API_KEY, shared: process.env.OPENAI_API_KEY };
+  try {
+    process.env.OPENAI_API_KEY = "shared-key";
+    delete process.env.INTERVIEW_ANALYSIS_OPENAI_API_KEY;
+    assert.equal(interviewAnalysisApiKey(), "shared-key");
+    process.env.INTERVIEW_ANALYSIS_OPENAI_API_KEY = "  own-key  ";
+    assert.equal(interviewAnalysisApiKey(), "own-key");
+    delete process.env.OPENAI_API_KEY;
+    assert.equal(isInterviewAnalysisConfigured(), true, "the dedicated key alone is enough");
+    delete process.env.INTERVIEW_ANALYSIS_OPENAI_API_KEY;
+    assert.equal(isInterviewAnalysisConfigured(), false);
+  } finally {
+    for (const [name, value] of [["INTERVIEW_ANALYSIS_OPENAI_API_KEY", saved.own], ["OPENAI_API_KEY", saved.shared]]) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  }
+  const help = readFileSync(new URL("../src/app/api/help-bot/route.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(help, /INTERVIEW_ANALYSIS_OPENAI_API_KEY/, "the help bot never reads the interview key");
+});
+
 test("integrity events are limited to objective whitelisted session events", () => {
   const events = sanitizeIntegrityEvents([
     { type: "tab_hidden", at: "2026-09-25T10:00:00Z" },
