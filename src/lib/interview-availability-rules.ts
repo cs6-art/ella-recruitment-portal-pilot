@@ -254,7 +254,7 @@ export function virtualSlotsForRole(role: Parameters<typeof roleAvailabilityRule
   return [...new Map(slots.map((slot) => [slotKey(slot), slot])).values()];
 }
 
-export function isVirtualSlotId(slotId: string) { return slotId.startsWith("VIRTUAL-"); }
+export function isVirtualSlotId(slotId: string) { return text(slotId).toUpperCase().startsWith("VIRTUAL-"); }
 export function slotKey(slot: { interviewType: string; roleId: string; date: string; startTime: string; endTime?: string; timezone?: string }) { return `${slot.interviewType}|${slot.roleId}|${slot.date}|${slot.startTime}|${slot.endTime || ""}|${slot.timezone || ""}`.toLowerCase(); }
 export function isStandardVoiceInterviewSlot(slot: { interviewType: string; date?: string; startTime: string; endTime: string }) {
   if (!slot.interviewType.toLowerCase().includes("voice")) return true;

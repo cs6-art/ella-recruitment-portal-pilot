@@ -525,24 +525,44 @@ async function targetBookingContextInTenant(kind: "voice" | "final", tokenHash: 
   };
 }
 
-export async function targetReserveBooking(kind: "voice" | "final", tokenHash: string, slotId: string, actorEmail: string) {
+export async function targetReserveBooking(kind: "voice" | "final", tokenHash: string, slotId: string, actorEmail: string, details?: TargetBookingSlotDetails) {
   const organizationId = await findBookingTokenOrganization(tokenHash);
   if (!organizationId) return { booked: false, error: "invalid_booking_token" as const };
-  return runWithTenantDatabase(organizationId, () => targetReserveBookingInTenant(kind, tokenHash, slotId, actorEmail));
+  return runWithTenantDatabase(organizationId, () => targetReserveBookingInTenant(kind, tokenHash, slotId, actorEmail, organizationId, details));
 }
 
-async function targetReserveBookingInTenant(kind: "voice" | "final", tokenHash: string, slotId: string, actorEmail: string) {
+export type TargetBookingSlotDetails = { date: string; startTime: string; endTime: string; timezone: string };
+
+function selectedTargetBookingSlot(context: Awaited<ReturnType<typeof targetBookingContextInTenant>>, kind: "voice" | "final", slotId: string, details?: TargetBookingSlotDetails) {
+  if (!context) return undefined;
+  const cleanSlotId = text(slotId);
+  const direct = context.slots.find((slot) => text(slot.slotId).toLowerCase() === cleanSlotId.toLowerCase());
+  if (direct || !isVirtualSlotId(cleanSlotId) || !details) return direct;
+  const requestedKey = slotKey({
+    interviewType: kind === "voice" ? "AI Voice Interview" : "Final Interview",
+    roleId: context.roleId,
+    date: text(details.date),
+    startTime: text(details.startTime),
+    endTime: text(details.endTime),
+    timezone: text(details.timezone),
+  });
+  return context.slots.find((slot) => slotKey(slot) === requestedKey);
+}
+
+async function targetReserveBookingInTenant(kind: "voice" | "final", tokenHash: string, slotId: string, actorEmail: string, organizationId: string, details?: TargetBookingSlotDetails) {
   const context = await targetBookingContext(kind, tokenHash);
   if (!context) return { booked: false, error: "invalid_booking_token" as const };
   let persistedSlotId = slotId;
-  const virtualSlot = isVirtualSlotId(slotId) ? context.slots.find((slot) => slot.slotId === slotId) : undefined;
+  const selectedSlot = selectedTargetBookingSlot(context, kind, slotId, details);
+  if (!selectedSlot) return { booked: false, error: "slot_unavailable" as const };
+  const virtualSlot = isVirtualSlotId(slotId) ? selectedSlot : undefined;
   // Reject a full time before materializing a virtual slot so no orphan
   // "available" row is left behind; bookInterviewSlot re-checks under a lock.
   if (kind === "voice") {
-    const chosen = virtualSlot || context.slots.find((slot) => slot.slotId === slotId);
+    const chosen = virtualSlot || selectedSlot;
     if (chosen && isVoiceTimeFull(await bookedVoiceCountsByInterval(), chosen)) return { booked: false, error: "voice_capacity_full" as const };
   }
-  const persistedSlot = !virtualSlot ? context.slots.find((slot) => slot.slotId === slotId) : undefined;
+  const persistedSlot = !virtualSlot ? selectedSlot : undefined;
   if (kind === "final" && persistedSlot) {
     // Recheck persisted slots at confirmation time as well as during the
     // initial page load; the calendar may change while the applicant waits.
@@ -557,19 +577,33 @@ async function targetReserveBookingInTenant(kind: "voice" | "final", tokenHash: 
     if (!calendar.available) return { booked: false, error: "calendar_conflict" as const };
   }
   if (virtualSlot) {
-    const materialized = await targetCreateInterviewSlot({
-      slotCode: kind === "final" ? virtualSlot.slotId : undefined,
-      roleId: context.roleId,
-      interviewType: kind === "voice" ? "AI Voice Interview" : "Final Interview",
-      date: virtualSlot.date,
-      startTime: virtualSlot.startTime,
-      endTime: virtualSlot.endTime,
-      timezone: virtualSlot.timezone,
-    });
+    let materialized: Awaited<ReturnType<typeof targetCreateInterviewSlot>>;
+    try {
+      materialized = await targetCreateInterviewSlot({
+        slotCode: kind === "final" ? virtualSlot.slotId : undefined,
+        roleId: context.roleId,
+        interviewType: kind === "voice" ? "AI Voice Interview" : "Final Interview",
+        date: virtualSlot.date,
+        startTime: virtualSlot.startTime,
+        endTime: virtualSlot.endTime,
+        timezone: virtualSlot.timezone,
+        organizationId,
+      });
+    } catch {
+      return { booked: false, error: "slot_unavailable" as const };
+    }
     if (!materialized.slot) return { booked: false, error: materialized.error || "slot_unavailable" as const };
     persistedSlotId = materialized.slot.id;
   }
-  const result = await bookInterviewSlot({ slotId: persistedSlotId, applicationExternalId: context.applicationId, actorEmail, actionRequestId: `booking:${tokenHash}:${slotId}` });
+  let result: Awaited<ReturnType<typeof bookInterviewSlot>>;
+  try {
+    result = await bookInterviewSlot({ slotId: persistedSlotId, applicationExternalId: context.applicationId, actorEmail, actionRequestId: `booking:${tokenHash}:${slotId}` });
+  } catch {
+    // Never expose a database lookup error to a candidate. A concurrent
+    // availability change should return the same recoverable response as any
+    // other stale slot selection.
+    return { booked: false, error: "slot_unavailable" as const };
+  }
   if (!result.booked) return result;
   if (!result.slot) return { booked: false, error: "booking_missing_slot" as const };
   await markBookingTokenUsed(tokenHash);
@@ -655,7 +689,7 @@ export async function processTargetCalendarEventQueue(limit = 10) {
   return { processed: results.length, results };
 }
 
-export async function targetCreateInterviewSlot(input: { slotCode?: string; roleId: string; interviewType: "AI Voice Interview" | "Final Interview"; date: string; startTime: string; endTime: string; timezone: string }) {
+export async function targetCreateInterviewSlot(input: { slotCode?: string; roleId: string; interviewType: "AI Voice Interview" | "Final Interview"; date: string; startTime: string; endTime: string; timezone: string; organizationId?: string }) {
   let startsAt: string;
   let endsAt: string;
   try {
@@ -667,8 +701,9 @@ export async function targetCreateInterviewSlot(input: { slotCode?: string; role
   } catch {
     return { slot: null, created: false, error: "invalid_slot" as const };
   }
+  const organizationId = text(input.organizationId) || await targetOrganizationId();
   if (input.interviewType === "Final Interview") {
-    const role = await getRole(input.roleId, await targetOrganizationId());
+    const role = await getRole(input.roleId, organizationId);
     if (!role) return { slot: null, created: false, error: "unknown_role" as const };
     if (!["approved", "recruitment_setup", "job_posted"].includes(text(role.status).toLowerCase())) return { slot: null, created: false, error: "role_not_ready" as const };
     if (!isFinalInterviewSlotDuration({ interviewType: input.interviewType, startTime: input.startTime, endTime: input.endTime })) return { slot: null, created: false, error: "invalid_final_slot" as const };
@@ -679,7 +714,7 @@ export async function targetCreateInterviewSlot(input: { slotCode?: string; role
     if (!calendar.checked) return { slot: null, created: false, error: calendar.reason === "not_connected" ? "calendar_not_connected" as const : "calendar_unavailable" as const };
     if (!calendar.available) return { slot: null, created: false, error: "calendar_conflict" as const };
   }
-  return createInterviewSlot({ slotCode: input.slotCode, roleExternalId: input.roleId, organizationId: await targetOrganizationId(), interviewType: input.interviewType.toLowerCase().includes("voice") ? "voice" : "final", startsAt, endsAt, timezone: input.timezone });
+  return createInterviewSlot({ slotCode: input.slotCode, roleExternalId: input.roleId, organizationId, interviewType: input.interviewType.toLowerCase().includes("voice") ? "voice" : "final", startsAt, endsAt, timezone: input.timezone });
 }
 
 export async function targetUpdateApplicantProfile(input: { applicationId: string; candidateName: string; email: string; preferredMobile: string; applicantCountry: string }) {

@@ -18,7 +18,7 @@ import { normalizeDateOnly, normalizeTimeOnly } from "@/lib/date-only";
 import { countActiveVoiceInterviews, isActiveVoiceInterviewStatus, MAX_CONCURRENT_VOICE_INTERVIEWS, voiceCapacitySlotId, voiceInterviewConcurrencyKey } from "@/lib/voice-interview-capacity";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isCurrentCalendarMonth, isFinalInterviewSlotDuration, isStandardVoiceInterviewSlot, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { targetBookingContext, targetCreateInterviewSlot, targetDeleteApplicant, targetMarkInterviewNoShow, targetRecordApplicantDecision, targetReserveBooking, targetSendVoiceBookingInvitation, targetUpdateApplicantProfile, } from "@/lib/recruitment-target-portal";
+import { targetBookingContext, targetCreateInterviewSlot, targetDeleteApplicant, targetMarkInterviewNoShow, targetRecordApplicantDecision, targetReserveBooking, targetSendVoiceBookingInvitation, targetUpdateApplicantProfile, type TargetBookingSlotDetails, } from "@/lib/recruitment-target-portal";
 import { listApplicationHistory } from "@/lib/internal-recruitment-queries";
 
 export type BookingKind = "voice" | "final";
@@ -941,28 +941,30 @@ async function withReservationLock<T>(key: string, operation: () => Promise<T>) 
 // one shared lock because the ten-call limit is global across roles and time
 // rows. Multi-instance deployments should move this reservation primitive to a
 // shared database or distributed lock before running more than one app worker.
-export async function reserveBooking(kind: BookingKind, token: string, slotId: string, preferredMobile: string) {
+export async function reserveBooking(kind: BookingKind, token: string, slotId: string, preferredMobile: string, slotDetails?: TargetBookingSlotDetails) {
   const lockKey = kind === "voice" ? "voice-capacity" : `${kind}:${text(slotId)}`;
-  if (isPostgresRecruitmentTarget()) return reserveTargetBooking(kind, token, slotId, preferredMobile);
+  if (isPostgresRecruitmentTarget()) return reserveTargetBooking(kind, token, slotId, preferredMobile, slotDetails);
   return withReservationLock(lockKey, () => reserveBookingInternal(kind, token, slotId, preferredMobile));
 }
 
-async function reserveTargetBooking(kind: BookingKind, token: string, slotId: string, preferredMobile: string) {
+async function reserveTargetBooking(kind: BookingKind, token: string, slotId: string, preferredMobile: string, slotDetails?: TargetBookingSlotDetails) {
   const confirmedMobile = kind === "voice" ? normalizePreferredMobile(preferredMobile) : "";
   if (kind === "voice" && !isPreferredMobileValid(confirmedMobile)) throw new Error("Confirm a valid preferred mobile number in international format.");
   const context = await targetBookingContext(kind, hashToken(token));
   if (!context) throw new Error("This booking link is invalid or expired.");
   if (kind === "voice" && confirmedMobile) await targetUpdateApplicantProfile({ applicationId: context.applicationId, candidateName: context.candidateName, email: context.email, preferredMobile: confirmedMobile, applicantCountry: "" });
-  const result = await targetReserveBooking(kind, hashToken(token), slotId, "public-booking");
+  const result = await targetReserveBooking(kind, hashToken(token), slotId, "public-booking", slotDetails);
   if (!result.booked) {
     if (result.error === "voice_capacity_full") throw new Error("This AI Voice Interview time has reached the maximum of 10 concurrent calls. Choose another time.");
+    if (result.error === "slot_unavailable") throw new Error("That time is no longer available. Refresh the available times and choose another slot.");
     throw new Error(result.error || "The selected interview slot is no longer available.");
   }
   // The booking token is now spent, so targetBookingContext() can no longer
   // rebuild the context. Return the same context-shaped payload the Sheets
   // path returns so the booking page can render the confirmed state instead
   // of crashing on a missing `slots`/`kind`.
-  const bookedSlot = context.slots.find((slot) => slot.slotId === text(slotId));
+  const bookedSlot = context.slots.find((slot) => text(slot.slotId).toLowerCase() === text(slotId).toLowerCase())
+    || (slotDetails && context.slots.find((slot) => slot.date === text(slotDetails.date) && slot.startTime === text(slotDetails.startTime) && slot.endTime === text(slotDetails.endTime) && slot.timezone === text(slotDetails.timezone)));
   return {
     ...context,
     preferredMobile: confirmedMobile || context.preferredMobile,

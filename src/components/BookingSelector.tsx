@@ -46,6 +46,7 @@ export default function BookingSelector({ token, initialContext }: { token: stri
   const [error, setError] = useState("");
   const [confirmationMessage, setConfirmationMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const title = context.kind === "voice" ? "AI Voice Interview Booking" : "Face-to-Face Interview Booking";
   const roleName = context.selectedRole.trim();
   const noShow = context.currentSlot?.status?.toLowerCase() === "no show" || context.bookingStatus.toLowerCase() === "no show";
@@ -68,6 +69,12 @@ export default function BookingSelector({ token, initialContext }: { token: stri
       setError("Select an available time first.");
       return;
     }
+    const selectedSlot = context.slots.find((slot) => slot.slotId === selected);
+    if (!selectedSlot) {
+      setSelected("");
+      setError("That time is no longer in the current availability list. Refresh the available times and choose again.");
+      return;
+    }
     const preferredMobile = context.kind === "voice" ? `${countryCode}${cleanDigits(localMobile)}` : "";
     if (context.kind === "voice" && !localMobile.trim()) {
       setError("Confirm your preferred mobile number before booking.");
@@ -80,7 +87,7 @@ export default function BookingSelector({ token, initialContext }: { token: stri
       const response = await fetch(`/api/public/bookings/${context.kind}/${encodeURIComponent(token)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slotId: selected, preferredMobile }),
+        body: JSON.stringify({ slotId: selected, preferredMobile, slot: { date: selectedSlot.date, startTime: selectedSlot.startTime, endTime: selectedSlot.endTime, timezone: selectedSlot.timezone } }),
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "That time is no longer available. Please select another time.");
@@ -91,6 +98,24 @@ export default function BookingSelector({ token, initialContext }: { token: stri
       setError(bookingError instanceof Error ? bookingError.message : "Unable to complete booking.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function refreshAvailability() {
+    setRefreshing(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/public/bookings/${context.kind}/${encodeURIComponent(token)}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.context) throw new Error(data.error || "Unable to refresh available times.");
+      setContext(data.context);
+      setSelected("");
+      setSelectedDate((current) => data.context.slots.some((slot: Slot) => slot.date === current) ? current : (data.context.slots[0]?.date || ""));
+      setConfirmationMessage("Availability refreshed. Choose a current time.");
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : "Unable to refresh available times.");
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -111,14 +136,15 @@ export default function BookingSelector({ token, initialContext }: { token: stri
     </div> : noAvailability ? <div className="booking-empty booking-no-availability" role="status"><strong>No times are currently available</strong><p>Please reply to your invitation email so our recruitment team can provide a new booking link.</p></div> : <>
       {noShow && <div className="booking-notice">This interview was marked as a <strong>no-show</strong>. You can choose a new time below.</div>}
       {context.kind === "voice" && <div className="field booking-mobile-field"><span>Mobile number for the interview call *</span><div className="contact-number-controls"><label><CountrySelect ariaLabel="Country code" value={countryCode} disabled={saving} onChange={setCountryCode} /></label><label><span className="sr-only">Local mobile number</span><input required aria-label="Local mobile number" inputMode="numeric" value={localMobile} disabled={saving} placeholder={(countryOptions.find((country) => country.code === countryCode) || countryOptions[0]).placeholder} onChange={(event) => setLocalMobile(cleanDigits(event.target.value))} /></label></div><small>Enter the local number only, without the country code.</small></div>}
+      {confirmationMessage && !booked && <ActionFeedback kind="success" className="booking-confirmed-feedback">{confirmationMessage}</ActionFeedback>}
       <div className="booking-section-heading"><h2>Select a date</h2><span>{context.slots.length} available time{context.slots.length === 1 ? "" : "s"}</span></div>
       {context.slots.length === 0 ? <div className="booking-empty">There are no available times right now. Please contact the recruitment team for a new booking link.</div> : <>
       <div className="booking-date-cards" aria-label="Available interview dates">{dates.map((date) => <button type="button" key={date} className={`booking-date-card ${selectedDate === date ? "is-selected" : ""}`} onClick={() => { setSelectedDate(date); setSelected(""); setError(""); }}><strong>{displayDate(date)}</strong><span>{slotsByDate.get(date)?.length || 0} available time{slotsByDate.get(date)?.length === 1 ? "" : "s"}</span></button>)}</div>
         <div className="booking-section-heading booking-time-heading"><h2>Select a time</h2><span>{selectedDate ? displayDate(selectedDate) : "Select a date first"}</span></div>
         <div className="booking-time-list">{selectedDateSlots.map((slot) => <button type="button" className={`booking-slot ${selected === slot.slotId ? "booking-slot-selected" : ""}`} key={slot.slotId} onClick={() => setSelected(slot.slotId)}><strong>{slot.startTime} - {slot.endTime}</strong><small>{slot.timezone}</small></button>)}</div>
       </>}
-      {error && <ValidationSummary error={error} title="We couldn&apos;t confirm this time" />}
-      <button type="button" className="booking-submit" disabled={saving || !selected || (context.kind === "voice" && !localMobile.trim()) || context.slots.length === 0} onClick={() => void reserve()}>{saving ? "Confirming your time…" : noShow ? "Confirm new interview time" : "Confirm this interview time"}</button>
+      {error && <><ValidationSummary error={error} title="We couldn&apos;t confirm this time" /><div className="booking-refresh-action"><button type="button" className="booking-inline-action" disabled={saving || refreshing} onClick={() => void refreshAvailability()}>{refreshing ? "Refreshing available times…" : "Refresh available times"}</button></div></>}
+      <button type="button" className="booking-submit" disabled={saving || refreshing || !selected || (context.kind === "voice" && !localMobile.trim()) || context.slots.length === 0} onClick={() => void reserve()}>{saving ? "Confirming your time…" : noShow ? "Confirm new interview time" : "Confirm this interview time"}</button>
     </>}
     <p className="booking-help">Need help? Reply to your invitation email and our recruitment team will assist you.</p>
   </section></main>;

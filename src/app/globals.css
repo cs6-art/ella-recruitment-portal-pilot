@@ -709,6 +709,7 @@ a { color: inherit; text-decoration: none; }
 .booking-unavailable-link { display: block; box-sizing: border-box; margin-top: 24px; color: #fff; text-decoration: none; }
 @media (max-width: 600px) { .booking-mobile-field .contact-number-controls { grid-template-columns: 1fr; } }
 .booking-no-show-action { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.booking-refresh-action { margin-top: 12px; }
 .booking-inline-action { padding: 5px 8px; border: 1px solid #d5a33b; border-radius: 6px; background: #fffaf0; color: #795b1e; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
 .booking-inline-action:disabled { opacity: .6; cursor: wait; }
 .booking-no-show-action small { color: #795b1e; font-size: 11px; }

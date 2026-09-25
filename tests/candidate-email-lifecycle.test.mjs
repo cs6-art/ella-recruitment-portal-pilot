@@ -127,10 +127,17 @@ test("a scheduled voice interview no longer blocks applicant deletion", () => {
 
 test("target booking links expose generated availability and materialize the selected virtual slot", () => {
   const target = read("src/lib/recruitment-target-portal.ts");
+  const bookingRoute = read("src/app/api/public/bookings/[kind]/[token]/route.ts");
+  const selector = read("src/components/BookingSelector.tsx");
   assert.match(target, /virtualSlotsForRole\(role, kind === "voice" \? "AI Voice Interview" : "Final Interview", true, voiceTimezone\)/);
-  assert.match(target, /const virtualSlot = isVirtualSlotId\(slotId\) \? context\.slots\.find\(\(slot\) => slot\.slotId === slotId\) : undefined/);
+  assert.match(target, /selectedTargetBookingSlot\(context, kind, slotId, details\)/);
+  assert.match(target, /slotKey\(\{[\s\S]*interviewType: kind === "voice" \? "AI Voice Interview" : "Final Interview"/);
+  assert.match(target, /organizationId,\s*\n\s*\}\);/);
   assert.match(target, /slotCode: kind === "final" \? virtualSlot\.slotId : undefined/);
   assert.match(target, /persistedSlotId = materialized\.slot\.id/);
+  assert.match(bookingRoute, /slotDetails\(body\.slot\)/);
+  assert.match(selector, /slot: \{ date: selectedSlot\.date, startTime: selectedSlot\.startTime, endTime: selectedSlot\.endTime, timezone: selectedSlot\.timezone \}/);
+  assert.match(selector, /Refresh available times/);
 });
 
 test("notification state records attempt, sent time, provider ID, and recipient", () => {
