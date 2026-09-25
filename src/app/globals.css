@@ -466,6 +466,7 @@ a { color: inherit; text-decoration: none; }
 .resume-inline-submit .btn { flex: 0 0 auto; }
 
 .resume-file-picker {
+  position: relative;
   display: flex;
   align-items: center;
   flex-wrap: wrap;

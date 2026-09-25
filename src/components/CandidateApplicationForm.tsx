@@ -137,17 +137,22 @@ export default function CandidateApplicationForm({
 
   function selectResumeFile(file: File | null) {
     setResumeFile(null);
+    // Clear the native input after a rejected pick so the same file can be
+    // re-chosen and the form never keeps a stale, unusable selection.
+    const rejectFile = () => { if (fileInput.current) fileInput.current.value = ""; };
     setFieldErrors((current) => ({ ...current, resumeFile: "" }));
     if (!file) return;
     const extension = file.name.toLowerCase().split(".").pop();
     if (!extension || !["pdf", "doc", "docx"].includes(extension) || !resumeMimeTypes.has(file.type || "application/octet-stream")) {
       setFieldErrors((current) => ({ ...current, resumeFile: "Choose a valid PDF, DOC, or DOCX resume file." }));
       setError("The selected resume file is not supported.");
+      rejectFile();
       return;
     }
     if (file.size > maxResumeFileBytes) {
       setFieldErrors((current) => ({ ...current, resumeFile: "Resume files must be 10 MB or smaller." }));
       setError("The selected resume file is too large.");
+      rejectFile();
       return;
     }
     setResumeFile(file);

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { canManageInterviewAvailability, canManagePipeline } from "@/lib/access-control";
 import { createInterviewSlot } from "@/lib/applicant-workflow";
 import { getRoleRequestById } from "@/lib/google-sheets";
+import { safeErrorResponse } from "@/lib/safe-error";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
     const slot = await createInterviewSlot({ interviewType: body.interviewType, roleId, date: body.date, startTime: body.startTime, endTime: body.endTime, timezone: body.timezone });
     return NextResponse.json({ success: true, slot }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to create interview availability." }, { status: 400 });
+    const safe = safeErrorResponse(error, "Unable to create interview availability.", "slot-create");
+    return NextResponse.json({ error: safe.message, code: safe.code }, { status: safe.status });
   }
 }

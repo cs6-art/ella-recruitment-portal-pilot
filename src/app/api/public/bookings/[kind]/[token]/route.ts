@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getBookingContext, reserveBooking, type BookingKind } from "@/lib/applicant-workflow";
 import type { TargetBookingSlotDetails } from "@/lib/recruitment-target-portal";
+import { safeErrorResponse } from "@/lib/safe-error";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 
 function validKind(value: string): value is BookingKind { return value === "voice" || value === "final"; }
@@ -18,9 +19,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ kind
   if (!rate.allowed) return NextResponse.json({ error: "Too many booking requests. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
   const { kind, token } = await params;
   if (!validKind(kind)) return NextResponse.json({ error: "Booking type not found." }, { status: 404 });
-  const context = await getBookingContext(kind, token);
-  if (!context) return NextResponse.json({ error: "This booking link is invalid or expired." }, { status: 404 });
-  return NextResponse.json({ success: true, context });
+  try {
+    const context = await getBookingContext(kind, token);
+    if (!context) return NextResponse.json({ error: "This booking link is invalid or expired." }, { status: 404 });
+    return NextResponse.json({ success: true, context });
+  } catch (error) {
+    const safe = safeErrorResponse(error, "Unable to load available interview times.", "public-booking-read");
+    return NextResponse.json({ error: safe.message, code: safe.code }, { status: safe.status === 400 ? 500 : safe.status });
+  }
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ kind: string; token: string }> }) {
@@ -33,6 +39,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ kin
     const booking = await reserveBooking(kind, token, String(body.slotId || ""), String(body.preferredMobile || ""), slotDetails(body.slot));
     return NextResponse.json({ success: true, booking });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to reserve this interview slot." }, { status: 400 });
+    const safe = safeErrorResponse(error, "Unable to reserve this interview slot.", "public-booking-write");
+    return NextResponse.json({ error: safe.message, code: safe.code }, { status: safe.status });
   }
 }

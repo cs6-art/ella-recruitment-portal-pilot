@@ -497,6 +497,16 @@ function calendarDate(value: string, timeZone: string) {
 export function calculateApplicantMetrics(rows: SheetRow[], now = new Date(), timeZone = process.env.PORTAL_TIMEZONE || "Asia/Singapore"): ApplicantMetrics {
   const today = calendarDate(now.toISOString(), timeZone);
   const stageCounts = applicantStageDefinitions.map((stage) => ({ ...stage, value: 0 }));
+  const voiceActivityStages = new Set([
+    "voice_booking_pending",
+    "voice_scheduled",
+    "voice_review_pending",
+    "approved_for_final",
+    "final_scheduled",
+    "final_decision_pending",
+    "passed_final",
+  ]);
+  const finalInterviewStages = new Set(["approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"]);
   return rows.reduce<ApplicantMetrics>((result, record) => {
     const resumeStatus = field(record, "Status (Resume Processing)").toLowerCase();
     const voiceStatus = field(record, "Status 2 (Voice Interview)").toLowerCase();
@@ -508,9 +518,9 @@ export function calculateApplicantMetrics(rows: SheetRow[], now = new Date(), ti
     // normalized HR-review label used by the bulk and public workflows.
     if (["processed", "for hr review", "pending hr review"].includes(resumeStatus)) result.screened += 1;
     if (voiceStatus === "interviewed" || voiceStatus === "completed") result.interviewed += 1;
-    if (voiceStatus !== "" && !["pending", "not started"].includes(voiceStatus)) result.voiceActivity += 1;
+    if (voiceActivityStages.has(stage) || (voiceStatus !== "" && !["pending", "not started"].includes(voiceStatus))) result.voiceActivity += 1;
     const finalInterviewStatus = field(record, "Status 3 (Final Interview)").toLowerCase();
-    if (finalInterviewStatus !== "" && !["pending", "not started"].includes(finalInterviewStatus)) result.hrActivity += 1;
+    if (finalInterviewStages.has(stage) || (finalInterviewStatus !== "" && !["pending", "not started"].includes(finalInterviewStatus))) result.hrActivity += 1;
     const stageCount = result.stageCounts.find((entry) => entry.key === stage);
     if (stageCount) stageCount.value += 1;
     if (stage === "resume_approved") result.resumeApproved += 1;

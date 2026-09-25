@@ -1080,13 +1080,28 @@ export async function targetApplicantMetrics(rows?: Awaited<ReturnType<typeof ta
   const stageCounts = new Map<string, number>();
   for (const row of summaries) stageCounts.set(row.currentStage, (stageCounts.get(row.currentStage) || 0) + 1);
   const stage = (key: string) => stageCounts.get(key) || 0;
+  // The workflow stage is the source of truth for activity. Decision fields
+  // remain blank while an interview is queued, scheduled, or awaiting review,
+  // so using them alone makes active interview counts appear as zero. A
+  // cancelled booking is moved back to voice_booking_pending and therefore
+  // remains visible as voice workflow activity without being counted as a
+  // booked/active slot.
+  const voiceActivityStages = new Set([
+    "voice_booking_pending",
+    "voice_scheduled",
+    "voice_review_pending",
+    "approved_for_final",
+    "final_scheduled",
+    "final_decision_pending",
+    "passed_final",
+  ]);
   const finalInterviewStages = new Set(["approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"]);
   return {
     total: summaries.length,
     today: summaries.filter((row) => text(row.appliedAt).slice(0, 10) === new Date().toISOString().slice(0, 10)).length,
     screened: summaries.filter((row) => row.resumeStatus === "Processed").length,
     interviewed: summaries.filter((row) => ["voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"].includes(row.currentStage)).length,
-    voiceActivity: summaries.filter((row) => Boolean(row.voiceStatus)).length,
+    voiceActivity: summaries.filter((row) => voiceActivityStages.has(row.currentStage) || Boolean(row.voiceStatus)).length,
     // Face-to-face activity begins only after the voice stage. A CV
     // recommendation or voice decision must not make every screened applicant
     // appear as a face-to-face applicant. Include final decisions as well as

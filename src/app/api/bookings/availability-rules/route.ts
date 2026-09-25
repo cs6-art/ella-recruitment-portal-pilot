@@ -1,3 +1,4 @@
+import { safeErrorResponse } from "@/lib/safe-error";
 import crypto from "node:crypto";
 
 import { cookies } from "next/headers";
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, rule: parsed[0], updatedAt, message: "Availability rule saved successfully." });
   } catch (error) {
     console.error("[API Availability Rules] Save failed:", error);
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to save availability rule." }, { status: 500 });
+    const safe = safeErrorResponse(error, "Unable to save availability rule.", "availability-rule");
+    return NextResponse.json({ success: false, error: safe.message, code: safe.code }, { status: safe.status === 400 ? 500 : safe.status });
   }
 }

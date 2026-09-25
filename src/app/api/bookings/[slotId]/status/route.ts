@@ -1,3 +1,4 @@
+import { safeErrorResponse } from "@/lib/safe-error";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -18,6 +19,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slo
     const result = await markInterviewNoShow(decodeURIComponent((await params).slotId), { email: user.email, name: user.name });
     return NextResponse.json({ success: true, result });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to mark interview as No Show." }, { status: 400 });
+    const safe = safeErrorResponse(error, "Unable to mark interview as No Show.", "booking-status");
+    return NextResponse.json({ error: safe.message, code: safe.code }, { status: safe.status });
   }
 }
