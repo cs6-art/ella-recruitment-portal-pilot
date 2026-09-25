@@ -20,6 +20,7 @@ import { hasValidFutureTime, isBeforeTargetHiringDate, isCurrentCalendarMonth, i
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetBookingContext, targetCreateInterviewSlot, targetDeleteApplicant, targetMarkInterviewNoShow, targetRecordApplicantDecision, targetReserveBooking, targetSendVoiceBookingInvitation, targetUpdateApplicantProfile, type TargetBookingSlotDetails, } from "@/lib/recruitment-target-portal";
 import { listApplicationHistory } from "@/lib/internal-recruitment-queries";
+import { countryForPhone, hasSupportedCallingCode } from "@/lib/country-codes";
 
 export type BookingKind = "voice" | "final";
 export type ApplicantDecisionStage = "resume" | "voice" | "final";
@@ -166,6 +167,7 @@ export type BookingContext = {
   timezone: string;
   appliedAt: string;
   preferredMobile: string;
+  applicantCountry?: string;
   /** Physical venue for a face-to-face (final) interview, when configured. */
   finalInterviewVenue?: string;
   currentSlot?: BookingSlot;
@@ -229,25 +231,18 @@ export function normalizePreferredMobile(value: string) {
   return normalized;
 }
 
-// Applications are only supported for PH, SG, and MY. See CountryOptions.tsx.
 function inferApplicantCountry(value: string) {
   const digits = text(value).replace(/\D/g, "").replace(/^00/, "");
-  if (digits.startsWith("63")) return "PH";
-  if (digits.startsWith("65")) return "SG";
-  if (digits.startsWith("60")) return "MY";
-  return "";
+  return digits && hasSupportedCallingCode(value) ? countryForPhone(value).country : "";
 }
 
-// Restricted to the three countries applications are supported for (see
-// CountryOptions.tsx) rather than accepting any E.164 number — a candidate
-// typing a +966 number by hand, bypassing the dropdown, was previously
-// accepted by this generic check.
+// Accept every supported E.164 calling prefix while keeping the total number
+// length within the international dialing limit. Country-specific mobile
+// lengths are intentionally left to the carrier; shared prefixes such as +1
+// and +7 cannot be validated correctly from the prefix alone.
 export function isPreferredMobileValid(value: string) {
   const normalized = normalizePreferredMobile(value);
-  if (/^\+63\d{10}$/.test(normalized)) return true; // Philippines
-  if (/^\+65\d{8}$/.test(normalized)) return true; // Singapore
-  if (/^\+60\d{8,10}$/.test(normalized)) return true; // Malaysia
-  return false;
+  return /^\+[1-9]\d{7,14}$/.test(normalized) && hasSupportedCallingCode(normalized);
 }
 
 // Sheets' USER_ENTERED write mode parses cell values the same way the UI
@@ -686,6 +681,7 @@ export async function getBookingContext(kind: BookingKind, token: string): Promi
     roleId,
     bookingStatus: status,
     preferredMobile: field(row, "Preferred_Mobile", "Preferred Mobile", "Contact_Number", "Contact Number", "Phone"),
+    applicantCountry: field(row, "Applicant_Country", "Applicant Country") || inferApplicantCountry(field(row, "Preferred_Mobile", "Preferred Mobile", "Contact_Number", "Contact Number", "Phone")),
     scheduledDate,
     scheduledTime,
     timezone,
@@ -952,7 +948,7 @@ async function reserveTargetBooking(kind: BookingKind, token: string, slotId: st
   if (kind === "voice" && !isPreferredMobileValid(confirmedMobile)) throw new Error("Confirm a valid preferred mobile number in international format.");
   const context = await targetBookingContext(kind, hashToken(token));
   if (!context) throw new Error("This booking link is invalid or expired.");
-  if (kind === "voice" && confirmedMobile) await targetUpdateApplicantProfile({ applicationId: context.applicationId, candidateName: context.candidateName, email: context.email, preferredMobile: confirmedMobile, applicantCountry: "" });
+  if (kind === "voice" && confirmedMobile) await targetUpdateApplicantProfile({ applicationId: context.applicationId, candidateName: context.candidateName, email: context.email, preferredMobile: confirmedMobile, applicantCountry: context.applicantCountry || countryForPhone(confirmedMobile).country });
   const result = await targetReserveBooking(kind, hashToken(token), slotId, "public-booking", slotDetails);
   if (!result.booked) {
     if (result.error === "voice_capacity_full") throw new Error("This AI Voice Interview time has reached the maximum of 10 concurrent calls. Choose another time.");

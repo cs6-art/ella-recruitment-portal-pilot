@@ -32,6 +32,7 @@ type FormState = {
   candidateName: string;
   email: string;
   countryCode: string;
+  country: string;
   localContactNumber: string;
   resumeRoleId: string;
 };
@@ -50,13 +51,8 @@ function cleanDigits(value: string) {
   return value.replace(/\D/g, "");
 }
 
-function normalizeCountryCode(value: string) {
-  const digits = cleanDigits(value).slice(0, 4);
-  return digits ? `+${digits}` : "";
-}
-
 function normalizedContactNumber(countryCode: string, localNumber: string) {
-  return `${normalizeCountryCode(countryCode)}${cleanDigits(localNumber)}`;
+  return `${countryCode}${cleanDigits(localNumber)}`;
 }
 
 function readFieldError(errors: Partial<Record<keyof FormState | "resumeFile", string>>, key: keyof FormState | "resumeFile") {
@@ -97,6 +93,7 @@ export default function CandidateApplicationForm({
     candidateName: "",
     email: "",
     countryCode: "+63",
+    country: "PH",
     localContactNumber: "",
     resumeRoleId: roleId,
   });
@@ -112,7 +109,9 @@ export default function CandidateApplicationForm({
     () => roleOptions.find((option) => option.roleId === form.resumeRoleId)?.label || "",
     [form.resumeRoleId, roleOptions],
   );
-  const selectedCountry = countryOptions.find((country) => country.code === form.countryCode) || countryOptions[0];
+  const selectedCountry = countryOptions.find((country) => country.country === form.country)
+    || countryOptions.find((country) => country.code === form.countryCode)
+    || countryOptions[0];
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -121,9 +120,16 @@ export default function CandidateApplicationForm({
     setFieldErrors((current) => ({ ...current, [key]: "" }));
   };
 
+  function updateCountry(country: (typeof countryOptions)[number]) {
+    setForm((current) => ({ ...current, country: country.country, countryCode: country.code }));
+    setError("");
+    setMessage("");
+    setFieldErrors((current) => ({ ...current, localContactNumber: "" }));
+  }
+
   function validate() {
     const nextErrors: Partial<Record<keyof FormState | "resumeFile", string>> = {};
-    const contactNumber = normalizedContactNumber(form.countryCode, form.localContactNumber);
+    const contactNumber = normalizedContactNumber(selectedCountry.code, form.localContactNumber);
 
     if (!form.candidateName.trim()) nextErrors.candidateName = "Full name is required.";
     if (!/^\S+@\S+\.\S+$/.test(form.email.trim().toLowerCase())) nextErrors.email = "Enter a valid email address.";
@@ -174,7 +180,7 @@ export default function CandidateApplicationForm({
     }
 
     try {
-      const contactNumber = normalizedContactNumber(form.countryCode, form.localContactNumber);
+      const contactNumber = normalizedContactNumber(selectedCountry.code, form.localContactNumber);
       const body = new FormData();
       body.append("candidateName", form.candidateName.trim());
       body.append("email", form.email.trim().toLowerCase());
@@ -198,7 +204,7 @@ export default function CandidateApplicationForm({
       requestEllaCreditsRefresh(Number.isFinite(creditsCharged) && creditsCharged > 0 ? -creditsCharged : undefined);
 
       setMessage(result.message || `Application submitted. Application ID: ${result.applicationId}`);
-      setForm({ candidateName: "", email: "", countryCode: "+63", localContactNumber: "", resumeRoleId: roleId || "" });
+      setForm({ candidateName: "", email: "", countryCode: "+63", country: "PH", localContactNumber: "", resumeRoleId: roleId || "" });
       setResumeFile(null);
       setFileInputKey((value) => value + 1);
       if (fileInput.current) fileInput.current.value = "";
@@ -238,7 +244,7 @@ export default function CandidateApplicationForm({
             <span>Contact Number *</span>
             <div className="contact-number-controls">
               <label>
-                <CountrySelect ariaLabel="Country code" value={form.countryCode} disabled={saving} onChange={(value) => update("countryCode", value)} />
+                <CountrySelect ariaLabel="Country code" value={form.country} disabled={saving} onChange={updateCountry} />
               </label>
               <label>
                 <span className="sr-only">Local contact number</span>

@@ -520,7 +520,7 @@ async function targetBookingContextInTenant(kind: "voice" | "final", tokenHash: 
   return {
     kind, applicationId: text(row.application.externalId), candidateName: text(row.application.candidateName), email: text(row.application.email || row.applicantEmail),
     selectedRole: text(row.roleTitle), roleId, bookingStatus: text(token.token.status), scheduledDate: text(currentSlot?.date), scheduledTime: text(currentSlot?.startTime),
-    timezone: text(currentSlot?.timezone), appliedAt: text(row.application.appliedAt), preferredMobile: text(row.application.preferredMobile || row.application.phone),
+    timezone: text(currentSlot?.timezone), appliedAt: text(row.application.appliedAt), preferredMobile: text(row.application.preferredMobile || row.application.phone), applicantCountry: text(row.application.applicantCountry),
     finalInterviewVenue: text(roleSetup.finalInterviewVenue), roleHrCalendarEmail: text(row.roleHrCalendarEmail), currentSlot, slots: available,
   };
 }

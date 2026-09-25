@@ -10,6 +10,16 @@ test("portal timestamps use the shared Singapore/Manila timezone", () => {
   assert.match(time, /timeZone: PORTAL_TIME_ZONE/);
 });
 
+test("country-code catalog supports global and shared calling prefixes", async () => {
+  const { countryOptions, countryForPhone, hasSupportedCallingCode } = await import("../src/lib/country-codes.ts");
+  assert.equal(countryOptions.length, 248);
+  assert.equal(countryOptions.find((country) => country.country === "JP")?.code, "+81");
+  assert.equal(countryOptions.find((country) => country.country === "CA")?.code, "+1");
+  assert.equal(hasSupportedCallingCode("+819012345678"), true);
+  assert.equal(hasSupportedCallingCode("+99912345678"), false);
+  assert.equal(countryForPhone("+14155552671").country, "US");
+});
+
 test("applicant data reader uses the shared candidate workbook tabs", () => {
   const source = read("src/lib/candidate-applications.ts");
   assert.match(source, /High_Match_Profile/);
@@ -295,7 +305,9 @@ test("user account edits update the original directory row", () => {
 
 test("candidate intake forms and decisions expose the required fields", () => {
   const form = read("src/components/CandidateApplicationForm.tsx");
+  const booking = read("src/components/BookingSelector.tsx");
   const screening = read("src/app/resume-screening/page.tsx");
+  const countryCodes = read("src/lib/country-codes.ts");
   const countryOptions = read("src/components/CountryOptions.tsx");
   const editor = read("src/components/RecruitmentSetupEditor.tsx");
   const decisionPanel = read("src/components/ApplicantDecisionPanel.tsx");
@@ -313,12 +325,15 @@ test("candidate intake forms and decisions expose the required fields", () => {
   assert.match(form, /countryCode/);
   assert.match(form, /localContactNumber/);
   assert.match(form, /Contact Number/);
-  assert.match(countryOptions, /flag: "ph"/);
-  assert.match(countryOptions, /\+63/);
-  assert.match(countryOptions, /flag: "sg"/);
-  assert.match(countryOptions, /\+65/);
-  assert.match(countryOptions, /flag: "my"/);
-  assert.match(countryOptions, /\+60/);
+  assert.match(countryCodes, /AF\|\+93\|Afghanistan/);
+  assert.match(countryCodes, /CA\|\+1\|Canada/);
+  assert.match(countryCodes, /PH\|\+63\|Philippines/);
+  assert.match(countryCodes, /SG\|\+65\|Singapore/);
+  assert.match(countryCodes, /MY\|\+60\|Malaysia/);
+  assert.match(countryCodes, /countryOptionsByCode/);
+  assert.match(countryOptions, /Search country or code/);
+  assert.match(booking, /CountrySelect/);
+  assert.match(workflow, /hasSupportedCallingCode/);
   assert.doesNotMatch(form, /Roles loaded successfully/);
   assert.doesNotMatch(form, /Preferred mobile/);
   assert.doesNotMatch(form, /Salary expectation/);

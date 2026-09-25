@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import ActionFeedback from "@/components/ActionFeedback";
 import { countryOptions, CountrySelect } from "@/components/CountryOptions";
 import ValidationSummary from "@/components/ValidationSummary";
+import { countryForPhone, localNumberForCountry } from "@/lib/country-codes";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
 type Slot = { slotId: string; date: string; startTime: string; endTime: string; timezone: string; status?: string };
@@ -17,6 +18,7 @@ type Context = {
   scheduledTime: string;
   timezone: string;
   preferredMobile: string;
+  applicantCountry?: string;
   finalInterviewVenue?: string;
   currentSlot?: Slot;
   slots: Slot[];
@@ -31,9 +33,8 @@ function cleanDigits(value: string) {
 }
 
 function splitMobile(value: string) {
-  const digits = cleanDigits(value).replace(/^00/, "");
-  const country = countryOptions.find((option) => digits.startsWith(option.code.slice(1))) || countryOptions[0];
-  return { countryCode: country.code, localNumber: digits.startsWith(country.code.slice(1)) ? digits.slice(country.code.length - 1) : digits };
+  const country = countryForPhone(value);
+  return { country: country.country, localNumber: localNumberForCountry(value, country) };
 }
 
 export default function BookingSelector({ token, initialContext }: { token: string; initialContext: Context }) {
@@ -41,7 +42,8 @@ export default function BookingSelector({ token, initialContext }: { token: stri
   const [selected, setSelected] = useState("");
   const [selectedDate, setSelectedDate] = useState(initialContext.slots[0]?.date || "");
   const initialMobile = splitMobile(initialContext.preferredMobile || "");
-  const [countryCode, setCountryCode] = useState(initialMobile.countryCode);
+  const initialCountry = countryOptions.find((country) => country.country === initialContext.applicantCountry?.trim().toUpperCase()) || countryOptions.find((country) => country.country === initialMobile.country) || countryOptions[0];
+  const [country, setCountry] = useState(initialCountry.country);
   const [localMobile, setLocalMobile] = useState(initialMobile.localNumber);
   const [error, setError] = useState("");
   const [confirmationMessage, setConfirmationMessage] = useState("");
@@ -56,6 +58,7 @@ export default function BookingSelector({ token, initialContext }: { token: stri
   const booked = completed || context.currentSlot?.status?.toLowerCase() === "booked" || (!context.currentSlot && (context.bookingStatus.toLowerCase() === "used" || context.bookingStatus.toLowerCase().includes("scheduled") || context.bookingStatus.toLowerCase() === "booked" || Boolean(context.scheduledDate)));
   const selecting = !booked || noShow;
   const noAvailability = selecting && context.slots.length === 0;
+  const selectedCountry = countryOptions.find((option) => option.country === country) || countryOptions[0];
 
   const slotsByDate = useMemo(() => context.slots.reduce<Map<string, Slot[]>>((map, slot) => {
     map.set(slot.date, [...(map.get(slot.date) || []), slot]);
@@ -75,7 +78,7 @@ export default function BookingSelector({ token, initialContext }: { token: stri
       setError("That time is no longer in the current availability list. Refresh the available times and choose again.");
       return;
     }
-    const preferredMobile = context.kind === "voice" ? `${countryCode}${cleanDigits(localMobile)}` : "";
+    const preferredMobile = context.kind === "voice" ? `${selectedCountry.code}${cleanDigits(localMobile)}` : "";
     if (context.kind === "voice" && !localMobile.trim()) {
       setError("Confirm your preferred mobile number before booking.");
       return;
@@ -135,7 +138,7 @@ export default function BookingSelector({ token, initialContext }: { token: stri
       <small>{completed ? "The recruitment team has received the interview result." : "You may close this page. The recruitment team has received your booking."}</small>
     </div> : noAvailability ? <div className="booking-empty booking-no-availability" role="status"><strong>No times are currently available</strong><p>Please reply to your invitation email so our recruitment team can provide a new booking link.</p></div> : <>
       {noShow && <div className="booking-notice">This interview was marked as a <strong>no-show</strong>. You can choose a new time below.</div>}
-      {context.kind === "voice" && <div className="field booking-mobile-field"><span>Mobile number for the interview call *</span><div className="contact-number-controls"><label><CountrySelect ariaLabel="Country code" value={countryCode} disabled={saving} onChange={setCountryCode} /></label><label><span className="sr-only">Local mobile number</span><input required aria-label="Local mobile number" inputMode="numeric" value={localMobile} disabled={saving} placeholder={(countryOptions.find((country) => country.code === countryCode) || countryOptions[0]).placeholder} onChange={(event) => setLocalMobile(cleanDigits(event.target.value))} /></label></div><small>Enter the local number only, without the country code.</small></div>}
+      {context.kind === "voice" && <div className="field booking-mobile-field"><span>Mobile number for the interview call *</span><div className="contact-number-controls"><label><CountrySelect ariaLabel="Country code" value={country} disabled={saving} onChange={(option) => { setCountry(option.country); setLocalMobile(""); }} /></label><label><span className="sr-only">Local mobile number</span><input required aria-label="Local mobile number" inputMode="numeric" value={localMobile} disabled={saving} placeholder={selectedCountry.placeholder} onChange={(event) => setLocalMobile(cleanDigits(event.target.value))} /></label></div><small>Enter the local number only, without the country code.</small></div>}
       {confirmationMessage && !booked && <ActionFeedback kind="success" className="booking-confirmed-feedback">{confirmationMessage}</ActionFeedback>}
       <div className="booking-section-heading"><h2>Select a date</h2><span>{context.slots.length} available time{context.slots.length === 1 ? "" : "s"}</span></div>
       {context.slots.length === 0 ? <div className="booking-empty">There are no available times right now. Please contact the recruitment team for a new booking link.</div> : <>

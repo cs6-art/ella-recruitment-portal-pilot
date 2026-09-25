@@ -1,3 +1,5 @@
+import { countryForPhone } from "./country-codes.ts";
+
 /**
  * Resolve the IANA timezone to show a candidate on their booking link.
  *
@@ -7,8 +9,6 @@
  */
 export const DEFAULT_INTERVIEW_TIMEZONE = "Asia/Singapore";
 
-// Applications are currently accepted from PH / SG / MY (see CountryOptions),
-// but keep a wider map so a manually entered country still resolves sensibly.
 const COUNTRY_TIMEZONES: Record<string, string> = {
   PH: "Asia/Manila",
   SG: "Asia/Singapore",
@@ -26,23 +26,6 @@ const COUNTRY_TIMEZONES: Record<string, string> = {
   US: "America/New_York",
 };
 
-const DIALLING_CODE_COUNTRIES: Array<[string, string]> = [
-  ["63", "PH"],
-  ["65", "SG"],
-  ["60", "MY"],
-  ["62", "ID"],
-  ["66", "TH"],
-  ["84", "VN"],
-  ["91", "IN"],
-  ["852", "HK"],
-  ["86", "CN"],
-  ["81", "JP"],
-  ["82", "KR"],
-  ["61", "AU"],
-  ["44", "GB"],
-  ["1", "US"],
-];
-
 function isValidTimezone(value: string) {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
@@ -51,15 +34,12 @@ function isValidTimezone(value: string) {
     return false;
   }
 }
-
 /** ISO 3166-1 alpha-2 code from a stored country value or an E.164 phone number. */
 export function applicantCountryCode(country?: string | null, phone?: string | null): string {
   const raw = String(country ?? "").trim().toUpperCase();
   if (/^[A-Z]{2}$/.test(raw)) return raw;
   const digits = String(phone ?? "").replace(/\D/g, "").replace(/^0+/, "");
-  for (const [code, iso] of DIALLING_CODE_COUNTRIES) {
-    if (digits.startsWith(code)) return iso;
-  }
+  if (digits) return countryForPhone(phone || "").country;
   return "";
 }
 
