@@ -10,6 +10,7 @@ const confirmed = process.argv.includes("--confirm-pilot-reset");
 const rawUrl = process.env.DATABASE_URL?.trim();
 const protectedTables = ["credit_ledger", "credit_balance", "credit_balances", "payments", "payment_events", "_migrations"];
 const recruitmentTables = [
+  "live_interview_sessions",
   "booking_tokens",
   "screening_results",
   "screening_invitations",

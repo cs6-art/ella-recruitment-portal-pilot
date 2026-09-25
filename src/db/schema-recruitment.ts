@@ -1,4 +1,4 @@
-import { boolean, date, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, date, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { organizations } from "@/db/schema";
 
@@ -474,4 +474,91 @@ export const applicationStatusHistory = pgTable(
     index("application_status_history_application_id_changed_at_idx").on(t.applicationId, t.changedAt),
     index("application_status_history_notification_queue_idx").on(t.notificationStatus, t.notificationAttemptedAt, t.changedAt),
   ],
+);
+
+/** Mirrors drizzle/0026_live_interview_sessions.sql — one row per avatar invitation. */
+export const liveInterviewSessions = pgTable(
+  "live_interview_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    applicationId: uuid("application_id").notNull().references(() => applications.id),
+    applicantId: uuid("applicant_id").notNull().references(() => applicants.id),
+    roleId: uuid("role_id").notNull().references(() => roles.id),
+    bookingTokenId: uuid("booking_token_id").notNull().unique().references(() => bookingTokens.id),
+    provider: text("provider").notNull().default("liveavatar"),
+    providerSessionId: text("provider_session_id").notNull().default(""),
+    status: text("status").notNull().default("NOT_STARTED"),
+    consentGiven: boolean("consent_given").notNull().default(false),
+    consentVersion: text("consent_version").notNull().default(""),
+    consentAt: ts("consent_at"),
+    consentDeclinedAt: ts("consent_declined_at"),
+    recordingConsent: boolean("recording_consent").notNull().default(false),
+    cameraConsent: boolean("camera_consent").notNull().default(false),
+    microphoneConsent: boolean("microphone_consent").notNull().default(false),
+    consentUserAgent: text("consent_user_agent").notNull().default(""),
+    deviceCheckAt: ts("device_check_at"),
+    cameraReady: boolean("camera_ready").notNull().default(false),
+    microphoneReady: boolean("microphone_ready").notNull().default(false),
+    interviewStartedAt: ts("interview_started_at"),
+    interviewCompletedAt: ts("interview_completed_at"),
+    transcriptSource: text("transcript_source").notNull().default(""),
+    transcriptFetchedAt: ts("transcript_fetched_at"),
+    clientTranscript: jsonb("client_transcript").notNull().default([]),
+    analysis: jsonb("analysis"),
+    analysisModel: text("analysis_model").notNull().default(""),
+    analysisCompletedAt: ts("analysis_completed_at"),
+    processingAttempts: integer("processing_attempts").notNull().default(0),
+    processingLeaseUntil: ts("processing_lease_until"),
+    failureStage: text("failure_stage").notNull().default(""),
+    lastError: text("last_error").notNull().default(""),
+    lastErrorAt: ts("last_error_at"),
+    recordingStatus: text("recording_status").notNull().default("not_requested"),
+    recordingStorageRef: text("recording_storage_ref").notNull().default(""),
+    recordingUploadUrl: text("recording_upload_url").notNull().default(""),
+    recordingBytes: bigint("recording_bytes", { mode: "number" }).notNull().default(0),
+    recordingMimeType: text("recording_mime_type").notNull().default(""),
+    recordingError: text("recording_error").notNull().default(""),
+    needsHrReview: boolean("needs_hr_review").notNull().default(false),
+    reviewFlags: jsonb("review_flags").notNull().default([]),
+    voiceResultId: uuid("voice_result_id").references(() => voiceInterviewResults.id),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index("live_interview_sessions_application_idx").on(t.applicationId, t.createdAt),
+    index("live_interview_sessions_status_idx").on(t.status, t.updatedAt),
+  ],
+);
+
+export const liveInterviewTranscriptTurns = pgTable(
+  "live_interview_transcript_turns",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    sessionId: uuid("session_id").notNull().references(() => liveInterviewSessions.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    speaker: text("speaker").notNull(),
+    text: text("text").notNull(),
+    occurredAt: ts("occurred_at"),
+    relativeMs: integer("relative_ms"),
+    questionIndex: integer("question_index"),
+    source: text("source").notNull().default(""),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("live_interview_transcript_turns_session_seq_uidx").on(t.sessionId, t.seq)],
+);
+
+export const liveInterviewIntegrityEvents = pgTable(
+  "live_interview_integrity_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    sessionId: uuid("session_id").notNull().references(() => liveInterviewSessions.id, { onDelete: "cascade" }),
+    eventType: text("event_type").notNull(),
+    occurredAt: ts("occurred_at").notNull(),
+    detail: text("detail").notNull().default(""),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("live_interview_integrity_events_session_idx").on(t.sessionId, t.occurredAt)],
 );

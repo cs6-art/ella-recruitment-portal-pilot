@@ -24,6 +24,7 @@ import {
   bookingTokens,
   bulkScreeningQueueItems,
   interviewSlots,
+  liveInterviewSessions,
   roleStatusHistory,
   roles,
   resumeFiles,
@@ -766,14 +767,24 @@ export async function releaseAvatarInterviewStart(rawToken: string) {
 }
 
 export async function completeAvatarInterview(input: { rawToken: string; sessionId: string; evaluation: LiveAvatarEvaluation; transcript: LiveAvatarTranscriptTurn[] }) {
-  const db = getDb();
   const tokenHash = crypto.createHash("sha256").update(input.rawToken.trim()).digest("hex");
+  return completeAvatarInterviewByHash({ ...input, tokenHash });
+}
+
+/**
+ * Idempotent completion keyed by the invitation hash: the first caller stores
+ * the voice result and moves the application to HR review; later callers get
+ * `completed: false` because the token is no longer `booked`.
+ */
+export async function completeAvatarInterviewByHash(input: { tokenHash: string; sessionId: string; evaluation: LiveAvatarEvaluation; transcript: LiveAvatarTranscriptTurn[] }) {
+  const db = getDb();
+  const tokenHash = input.tokenHash;
   const transcript = input.transcript.map((turn) => `${String(turn.role || "unknown")}: ${String(turn.transcript || "").trim()}`).filter((line) => !line.endsWith(": ")).join("\n");
   return db.transaction(async (tx) => {
     const [token] = await tx.select({ id: bookingTokens.id, applicationId: bookingTokens.applicationId, organizationId: bookingTokens.organizationId }).from(bookingTokens).where(and(eq(bookingTokens.tokenHash, tokenHash), eq(bookingTokens.kind, "avatar"), eq(bookingTokens.status, "booked"))).for("update").limit(1);
     if (!token) return { completed: false, error: "avatar_link_already_used" as const };
     const now = new Date();
-    await tx.insert(voiceInterviewResults).values({
+    const [voiceResult] = await tx.insert(voiceInterviewResults).values({
       organizationId: token.organizationId,
       applicationId: token.applicationId,
       attemptId: null,
@@ -790,7 +801,7 @@ export async function completeAvatarInterview(input: { rawToken: string; session
       resultReceivedAt: now,
       callCompletedAt: now,
       raw: { sessionId: input.sessionId, source: "live_avatar" },
-    });
+    }).returning({ id: voiceInterviewResults.id });
     await tx.update(bookingTokens).set({ status: "used", usedAt: now }).where(eq(bookingTokens.id, token.id));
     const [application] = await tx.update(applications).set({ currentStage: "voice_review_pending", updatedAt: now }).where(eq(applications.id, token.applicationId)).returning({ externalId: applications.externalId, currentStage: applications.currentStage });
     await tx.insert(applicationStatusHistory).values({
@@ -807,7 +818,7 @@ export async function completeAvatarInterview(input: { rawToken: string; session
       notificationRecipient: "",
       notificationIntendedRecipient: "",
     }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
-    return { completed: true, error: null, applicationId: application?.externalId || "" } as const;
+    return { completed: true, error: null, applicationId: application?.externalId || "", voiceResultId: voiceResult?.id || "" } as const;
   });
 }
 
@@ -857,7 +868,8 @@ export async function deleteApplication(externalId: string) {
   const cleanExternalId = externalId.trim();
   if (!cleanExternalId) return { deleted: false, error: "invalid_application" as const };
 
-  return db.transaction(async (tx) => {
+  const recordingRefs: string[] = [];
+  const result = await db.transaction(async (tx) => {
     const [current] = await tx.select({ id: applications.id, applicantId: applications.applicantId })
       .from(applications)
       .where(eq(applications.externalId, cleanExternalId))
@@ -879,6 +891,11 @@ export async function deleteApplication(externalId: string) {
     // Delete children first because the recruitment migration deliberately
     // keeps foreign keys restrictive instead of silently cascading workflow
     // history and calendar data.
+    // Live avatar interview sessions reference the application, its booking
+    // token, and its voice result; their transcript turns and integrity
+    // events cascade. Private recordings are removed after the commit.
+    const liveSessions = await tx.delete(liveInterviewSessions).where(eq(liveInterviewSessions.applicationId, current.id)).returning({ recordingStorageRef: liveInterviewSessions.recordingStorageRef });
+    recordingRefs.push(...liveSessions.map((session) => session.recordingStorageRef).filter(Boolean));
     await tx.delete(voiceCallLogs).where(eq(voiceCallLogs.applicationId, current.id));
     await tx.delete(voiceInterviewResults).where(eq(voiceInterviewResults.applicationId, current.id));
     await tx.delete(voiceCallAttempts).where(eq(voiceCallAttempts.applicationId, current.id));
@@ -900,6 +917,13 @@ export async function deleteApplication(externalId: string) {
     }
     return { deleted: true, error: null } as const;
   });
+  if (result.deleted && recordingRefs.length > 0) {
+    const { deleteInterviewRecording } = await import("@/lib/interview-recording-storage");
+    await Promise.all(recordingRefs.map((ref) => deleteInterviewRecording(ref).catch((error) => {
+      console.error("[Applicant Delete] Failed to delete interview recording:", { ref, error: error instanceof Error ? error.message : String(error) });
+    })));
+  }
+  return result;
 }
 
 export async function markInterviewNoShow(slotId: string, actorEmail = "", actorName = "") {
