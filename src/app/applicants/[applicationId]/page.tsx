@@ -171,7 +171,7 @@ function liveAssessmentFields(liveReview: LiveReview | null) {
       recommendation: assessment.bandLabel,
     };
   }
-  const pending = liveReview.status === "FAILED" ? "Not available — processing failed" : "Awaiting AI review";
+  const pending = liveReview.analysisState === "failed" ? "AI review unavailable — retry available" : "Awaiting AI review";
   return { score: pending, recommendation: pending };
 }
 

@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
+  ANALYSIS_STATE_LABELS,
   HR_REVIEW_DISCLAIMER,
   INTEGRITY_EVENT_LABELS,
-  LIVE_INTERVIEW_STATUS_LABELS,
+  INTERVIEW_STATE_LABELS,
+  processingFailureMessage,
   type IntegrityEventType,
   type TranscriptTurn,
 } from "@/lib/live-interview";
@@ -19,6 +21,8 @@ type Props = { applicationId: string; initialReview: Review; canRetry: boolean }
 const PROCESSING = new Set(["INTERVIEW_IN_PROGRESS", "INTERVIEW_COMPLETED", "TRANSCRIPTION_PROCESSING", "ANALYSIS_PROCESSING"]);
 const POLL_MS = 5_000;
 const POLL_LIMIT_MS = 4 * 60 * 1000;
+// Fixed wording only: raw server/provider errors are never rendered here.
+const RETRY_REQUEST_FAILED = "The analysis could not be restarted. Please try again in a moment.";
 
 const dateTime = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Singapore" });
 const clock = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Singapore" });
@@ -77,6 +81,10 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
   const [review, setReview] = useState(initialReview);
   const [pollExpired, setPollExpired] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  // Set once HR retries in this view, so a repeat failure gets the
+  // "temporarily unavailable" wording instead of "please retry".
+  const [retriedByHr, setRetriedByHr] = useState(false);
+  const [pollKey, setPollKey] = useState(0);
   const [actionError, setActionError] = useState("");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -105,19 +113,25 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
       }
     }, POLL_MS);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [processing, endpoint]);
+  }, [processing, endpoint, pollKey]);
 
   async function retry() {
+    if (retrying) return;
     setRetrying(true);
     setActionError("");
-    setPollExpired(false);
     try {
       const response = await fetch(`${endpoint}/retry`, { method: "POST" });
-      const body = await response.json() as { success?: boolean; review?: Review | null; error?: string };
-      if (!response.ok || !body.success) throw new Error(body.error || "Retry failed.");
+      const body = await response.json().catch(() => ({})) as { success?: boolean; review?: Review | null };
+      if (!response.ok || !body.success) {
+        setActionError(response.status === 403 ? "You do not have permission to retry interview analysis." : RETRY_REQUEST_FAILED);
+        return;
+      }
+      setRetriedByHr(true);
+      setPollExpired(false);
+      setPollKey((value) => value + 1);
       if (body.review) setReview(body.review);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Retry failed.");
+    } catch {
+      setActionError(RETRY_REQUEST_FAILED);
     } finally {
       setRetrying(false);
     }
@@ -150,7 +164,8 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
   const ratingsByQuestion = new Map((assessment?.questionRatings || []).map((item) => [item.questionIndex, item]));
   const questionReview = new Map((analysis?.questionReviews || []).map((item) => [item.questionIndex, item]));
   const refs = (turnRefs: number[]) => turnRefs.length > 0 && <button type="button" className="live-review-ref" onClick={() => jumpTo(turnRefs[0])}>View in transcript (turn {turnRefs.join(", ")})</button>;
-  const failed = review.status === "FAILED";
+  const failed = review.analysisState === "failed" && !processing;
+  const analysisLabel = processing && retriedByHr ? "Retrying analysis…" : ANALYSIS_STATE_LABELS[review.analysisState];
   const integrity = review.integrityEvents.filter((event) => event.type !== "tab_visible" && event.type !== "network_online");
 
   return <div className="live-review">
@@ -163,7 +178,8 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
         <div className="applicant-detail-field"><span>Position Applied For</span><strong>{review.roleTitle || "—"}</strong></div>
         <div className="applicant-detail-field"><span>Interview Date</span><strong>{formatDate(review.interviewDate)}</strong></div>
         <div className="applicant-detail-field"><span>Interview Duration</span><strong>{formatDuration(review.durationSeconds)}</strong></div>
-        <div className="applicant-detail-field"><span>Interview Status</span><strong>{LIVE_INTERVIEW_STATUS_LABELS[review.status] || review.status}</strong></div>
+        <div className="applicant-detail-field"><span>Interview Status</span><strong>{INTERVIEW_STATE_LABELS[review.interviewState]}</strong></div>
+        <div className="applicant-detail-field"><span>AI Analysis Status</span><strong>{review.interviewState === "completed" ? analysisLabel : "Not started"}</strong></div>
         <div className="applicant-detail-field"><span>Consent Status</span><strong>{review.consent.given ? `Given ${formatDate(review.consent.at)} · notice ${review.consent.version}` : "Not given"}</strong></div>
         <div className="applicant-detail-field"><span>Recording</span><strong>{recordingLabel(review)}</strong></div>
         <div className="applicant-detail-field"><span>Transcript Source</span><strong>{review.transcriptSource === "provider" ? "LiveAvatar (HeyGen) session transcript" : review.transcriptSource === "client_capture" ? "Browser capture (provider transcript unavailable)" : review.transcriptSource === "none" ? "Could not be retrieved" : "Not yet available"}</strong></div>
@@ -171,10 +187,10 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
     </div>
 
     {(processing || failed) && <div className={`live-review-status ${failed ? "is-failed" : ""}`} role="status">
-      {processing && !pollExpired && <span className="live-review-loading">{LIVE_INTERVIEW_STATUS_LABELS[review.status]} — this updates automatically.</span>}
-      {processing && pollExpired && <span>Processing is taking longer than expected{review.lastError ? ` (last error: ${review.lastError})` : ""}.</span>}
-      {failed && <span>Automatic {review.failureStage || "processing"} failed after {review.processingAttempts} attempt{review.processingAttempts === 1 ? "" : "s"}: {review.lastError || "unknown error"}. The interview and any transcript are preserved.</span>}
-      {canRetry && (failed || pollExpired) && <button type="button" className="btn btn-secondary" onClick={() => void retry()} disabled={retrying}>{retrying ? "Retrying…" : "Retry processing"}</button>}
+      {processing && !pollExpired && <span className="live-review-loading">{retriedByHr ? "Retrying analysis…" : review.status === "INTERVIEW_IN_PROGRESS" ? "The interview is in progress." : "The interview is complete and is being analysed"} — this updates automatically.</span>}
+      {processing && pollExpired && <span>Analysis is taking longer than expected. The interview recording and transcript are preserved.</span>}
+      {failed && <span>{processingFailureMessage(review.failureStage || "analysis", retriedByHr)}{review.errorReference ? ` Reference: ${review.errorReference}.` : ""}</span>}
+      {canRetry && (failed || pollExpired) && <button type="button" className="btn btn-secondary" onClick={() => void retry()} disabled={retrying} aria-busy={retrying}>{retrying ? "Retrying analysis…" : "Retry analysis"}</button>}
     </div>}
     {actionError && <p className="error-box" role="alert">{actionError}</p>}
 
@@ -200,7 +216,7 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
           <ul className="live-review-evidence">{RATING_SCALE.map((item) => <li key={item.rating}><strong>{item.rating} — {item.label}</strong><span>{item.description}</span></li>)}</ul>
           <p>Score = average rating across the questions that could be assessed, as a percentage of the maximum. 75+ strong, 55–74 good, 35–54 partial, under 35 limited. Rubric version {RUBRIC_VERSION}.</p>
         </details>
-      </> : <p className="live-review-loading">{processing ? "The assessment is being prepared from the transcript." : "No assessment is available for this interview."}</p>}
+      </> : <p className="live-review-loading">{processing ? "The assessment is being prepared from the transcript." : failed ? "The assessment is unavailable until the analysis is retried." : "No assessment is available for this interview."}</p>}
     </div>
 
     <div className="live-review-block">
@@ -216,7 +232,7 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
           <div><span>Areas HR May Want to Clarify</span>{analysis.areasToClarify.length ? <ul className="live-review-evidence">{analysis.areasToClarify.map((item, index) => <li key={index}><strong>{item.topic}</strong>{item.reason && <span>{item.reason}</span>}{refs(item.turnRefs)}</li>)}</ul> : <p>None identified.</p>}</div>
         </div>
         {analysis.notableResponses.length > 0 && <div className="applicant-copy-block"><span>Notable Responses</span><ul className="live-review-evidence">{analysis.notableResponses.map((item, index) => <li key={index}><strong>{item.title}</strong>{item.quote && <q>{item.quote}</q>}{refs(item.turnRefs)}</li>)}</ul></div>}
-      </> : <p className="live-review-loading">{processing ? "The AI summary is being prepared from the transcript." : "No AI summary is available for this interview."}</p>}
+      </> : <p className="live-review-loading">{processing ? "The AI summary is being prepared from the transcript." : failed ? "The AI summary is unavailable until the analysis is retried." : "No AI summary is available for this interview."}</p>}
     </div>
 
     <div className="live-review-block">
@@ -265,7 +281,7 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
       <h4>Recording</h4>
       {review.recording.available
         ? <video className="live-review-video" controls preload="metadata" src={`${endpoint}/recording`}>Your browser cannot play this recording.</video>
-        : <p className="live-review-loading">{recordingLabel(review)}{review.recording.error ? ` — ${review.recording.error}` : ""}</p>}
+        : <p className="live-review-loading">{recordingLabel(review)}</p>}
     </div>
 
     <div className="live-review-block">

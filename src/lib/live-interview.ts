@@ -44,6 +44,88 @@ export function isLiveInterviewStatus(value: unknown): value is LiveInterviewSta
   return typeof value === "string" && (LIVE_INTERVIEW_STATUSES as readonly string[]).includes(value);
 }
 
+// ---------------------------------------------------------------------------
+// Interview state vs analysis state
+// ---------------------------------------------------------------------------
+//
+// `status` above is the processing pipeline's position. It is not shown to HR
+// as-is: a downstream failure (transcript retrieval, AI analysis) leaves the
+// session at FAILED, but the interview itself was completed. HR sees two
+// independent states derived from the stored record, so existing rows need no
+// migration.
+
+export type InterviewState = "not_started" | "in_progress" | "completed";
+export type AnalysisState = "pending" | "processing" | "completed" | "failed";
+
+export const INTERVIEW_STATE_LABELS: Record<InterviewState, string> = {
+  not_started: "Not started",
+  in_progress: "In progress",
+  completed: "Completed",
+};
+
+export const ANALYSIS_STATE_LABELS: Record<AnalysisState, string> = {
+  pending: "Pending",
+  processing: "Processing",
+  completed: "Completed",
+  failed: "Analysis unavailable — retry available",
+};
+
+export function deriveInterviewState(status: LiveInterviewStatus): InterviewState {
+  if (PRE_INTERVIEW_STATUSES.includes(status)) return "not_started";
+  if (status === "INTERVIEW_IN_PROGRESS") return "in_progress";
+  return "completed";
+}
+
+export function deriveAnalysisState(status: LiveInterviewStatus, hasAnalysis: boolean): AnalysisState {
+  if (hasAnalysis) return "completed";
+  if (status === "FAILED" || status === "REVIEW_READY") return "failed";
+  if (status === "TRANSCRIPTION_PROCESSING" || status === "ANALYSIS_PROCESSING") return "processing";
+  return "pending";
+}
+
+/** HR-facing wording for a failed processing stage. Never includes the technical cause. */
+export function processingFailureMessage(stage: string, retriedByHr: boolean) {
+  if (stage === "transcription") {
+    return retriedByHr
+      ? "The interview transcript is temporarily unavailable. The interview itself has been saved. Please try again later or contact your system administrator."
+      : "The interview transcript could not be retrieved automatically. The interview itself has been saved. Please retry processing.";
+  }
+  return retriedByHr
+    ? "Interview analysis is temporarily unavailable. The interview recording and transcript remain available for review. Please try again later or contact your system administrator."
+    : "Interview analysis could not be completed. The recording and transcript have been safely preserved. Please retry the analysis.";
+}
+
+/**
+ * Review flags are shown to HR. Failure flags are always rendered from fixed
+ * wording by code, which also cleans records written before this rule (they
+ * embedded raw provider errors such as "400 Response input messages…").
+ */
+const SAFE_FLAG_MESSAGES: Record<string, string> = {
+  analysis_failed: "AI interview analysis could not be completed automatically. The recording and transcript are preserved and the analysis can be retried.",
+  transcription_failed: "The interview transcript could not be retrieved automatically.",
+  completion_failed: "The interview could not be linked to the application automatically.",
+  recording_failed: "The interview recording is not available.",
+};
+
+export function safeReviewFlags(flags: unknown): ReviewFlag[] {
+  if (!Array.isArray(flags)) return [];
+  return (flags as ReviewFlag[])
+    .filter((flag) => flag && typeof flag.code === "string")
+    .map((flag) => SAFE_FLAG_MESSAGES[flag.code] ? { code: flag.code, message: SAFE_FLAG_MESSAGES[flag.code] } : { code: flag.code, message: String(flag.message ?? "") });
+}
+
+export function removeReviewFlag(flags: unknown, code: string): ReviewFlag[] {
+  return Array.isArray(flags) ? (flags as ReviewFlag[]).filter((flag) => flag && flag.code !== code) : [];
+}
+
+/**
+ * Exponential backoff before the next automatic analysis attempt after a
+ * transient failure (15 s, 1 min, 4 min, 16 min, capped at 30 min).
+ */
+export function analysisRetryDelayMs(attempt: number) {
+  return Math.min(15_000 * 4 ** Math.max(0, attempt - 1), 30 * 60 * 1000);
+}
+
 // Bump the version whenever the wording below changes, so every stored consent
 // record identifies exactly which notice the applicant agreed to.
 export const INTERVIEW_CONSENT_VERSION = "2026-09-25.v1";
@@ -257,25 +339,30 @@ export function transcriptPlainText(turns: TranscriptTurn[]) {
 // HR review analysis
 // ---------------------------------------------------------------------------
 
-const shortText = z.string().trim().min(1).max(1200);
-const turnRefs = z.array(z.number().int().positive()).max(12).default([]);
+// Wrong types still fail validation (and the analysis is retried), but
+// over-long text is clamped, extra items are trimmed, and blank items are
+// dropped, so one untidy field never discards an otherwise valid analysis.
+const text = (max: number) => z.string().default("").transform((value) => clamp(value.trim(), max));
+const list = <T extends z.ZodTypeAny>(item: T, max: number, keep: (value: z.infer<T>) => boolean = () => true) =>
+  z.array(item).default([]).transform((items) => items.filter(keep).slice(0, max));
+const turnRefs = z.array(z.number().int()).default([]).transform((refs) => refs.filter((ref) => ref > 0).slice(0, 12));
 
 export const interviewAnalysisSchema = z.object({
-  interviewSummary: z.string().trim().max(2000).default(""),
-  relevantExperience: z.array(z.object({ point: shortText, evidence: z.string().trim().max(1200).default(""), turnRefs })).max(10).default([]),
-  skillsMentioned: z.array(z.object({ skill: z.string().trim().min(1).max(120), evidence: z.string().trim().max(1200).default(""), turnRefs })).max(20).default([]),
-  strengthsEvidenced: z.array(z.object({ strength: shortText, evidence: z.string().trim().max(1200).default(""), turnRefs })).max(10).default([]),
-  areasToClarify: z.array(z.object({ topic: shortText, reason: z.string().trim().max(1200).default(""), turnRefs })).max(10).default([]),
-  notableResponses: z.array(z.object({ title: shortText, quote: z.string().trim().max(1200).default(""), turnRefs })).max(8).default([]),
-  questionReviews: z.array(z.object({
-    questionIndex: z.number().int().positive(),
+  interviewSummary: text(2000),
+  relevantExperience: list(z.object({ point: text(1200), evidence: text(1200), turnRefs }), 10, (item) => item.point.length > 0),
+  skillsMentioned: list(z.object({ skill: text(120), evidence: text(1200), turnRefs }), 20, (item) => item.skill.length > 0),
+  strengthsEvidenced: list(z.object({ strength: text(1200), evidence: text(1200), turnRefs }), 10, (item) => item.strength.length > 0),
+  areasToClarify: list(z.object({ topic: text(1200), reason: text(1200), turnRefs }), 10, (item) => item.topic.length > 0),
+  notableResponses: list(z.object({ title: text(1200), quote: text(1200), turnRefs }), 8, (item) => item.title.length > 0),
+  questionReviews: list(z.object({
+    questionIndex: z.number().int(),
     rating: z.number().int().min(0).max(4).nullable().default(null),
-    analysis: z.string().trim().max(1500).default(""),
-    jobCriteria: z.string().trim().max(300).default(""),
-    evidence: z.string().trim().max(1200).default(""),
-  })).max(40).default([]),
+    analysis: text(1500),
+    jobCriteria: text(300),
+    evidence: text(1200),
+  }), 40),
 });
-export type InterviewAnalysis = z.infer<typeof interviewAnalysisSchema>;
+export type InterviewAnalysis = z.output<typeof interviewAnalysisSchema>;
 
 /**
  * Guardrail: remove any statement that infers from appearance, voice, emotion,

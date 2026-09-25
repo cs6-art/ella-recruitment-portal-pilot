@@ -41,22 +41,37 @@ import {
 } from "@/lib/interview-recording-storage";
 import {
   addReviewFlag,
+  analysisRetryDelayMs,
   buildQuestionPairs,
+  deriveAnalysisState,
+  deriveInterviewState,
   INTERVIEW_CONSENT_VERSION,
   normalizeClientTranscript,
   normalizeProviderTranscript,
   PRE_INTERVIEW_STATUSES,
+  removeReviewFlag,
+  safeReviewFlags,
   sanitizeClientTranscript,
   sanitizeIntegrityEvents,
   transcriptDurationSeconds,
+  type AnalysisState,
   type ClientTranscriptEvent,
   type IntegrityEvent,
   type InterviewAnalysis,
+  type InterviewState,
   type LiveInterviewStatus,
   type ReviewFlag,
   type TranscriptTurn,
 } from "@/lib/live-interview";
-import { analyzeInterviewTranscript, interviewAnalysisApiKey, isInterviewAnalysisConfigured, type AnalysisClient } from "@/lib/live-interview-analysis";
+import {
+  analyzeInterviewTranscript,
+  classifyAnalysisError,
+  interviewAnalysisApiKey,
+  InterviewAnalysisError,
+  isInterviewAnalysisConfigured,
+  type AnalysisClient,
+} from "@/lib/live-interview-analysis";
+import { errorReference, logInternalError } from "@/lib/safe-error";
 import {
   computeAssessment,
   NOT_SCORED_LABEL,
@@ -370,18 +385,41 @@ async function roleContext(session: SessionRow) {
   return { roleTitle: row?.title || "", jobDescription: String(setup.jobDescription || "").trim() };
 }
 
-async function recordFailure(sessionId: string, stage: string, error: unknown, terminal: boolean) {
+/** Same reference for the log line and the HR page, derived from the stored failure time. */
+function failureReference(sessionId: string, at: Date | null) {
+  return at ? errorReference(`${sessionId}:${at.toISOString()}`) : "";
+}
+
+/**
+ * Records a failed processing step. The technical error goes to the server
+ * log (with a reference) and the internal `last_error` column only; HR sees
+ * fixed wording plus the reference. A non-terminal failure may hold the lease
+ * for `retryAfterMs` so the next automatic attempt backs off.
+ */
+async function recordFailure(session: SessionRow, stage: string, error: unknown, terminal: boolean, retryAfterMs = 0) {
   const message = errorText(error);
-  console.error("[Live Interview] Processing step failed:", { sessionId, stage, terminal, error: message });
-  const current = await getSessionById(sessionId);
+  const at = new Date();
+  const reference = failureReference(session.id, at);
+  const classified = error instanceof InterviewAnalysisError ? error : null;
+  logInternalError(stage === "analysis" ? "InterviewAnalysisError" : "LiveInterviewProcessingError", error, {
+    sessionId: session.id,
+    applicationId: session.applicationId,
+    applicantId: session.applicantId,
+    stage,
+    attempt: session.processingAttempts,
+    terminal,
+    ...(classified ? { kind: classified.kind, retryable: classified.retryable, providerStatus: classified.providerStatus, providerRequestId: classified.providerRequestId } : {}),
+    ...(retryAfterMs ? { nextAttemptInMs: retryAfterMs } : {}),
+  }, reference);
+  const current = await getSessionById(session.id);
   await getDb().update(liveInterviewSessions).set({
-    ...(terminal ? { status: "FAILED" as LiveInterviewStatus, needsHrReview: true, reviewFlags: addReviewFlag(current?.reviewFlags, { code: `${stage}_failed`, message: `Automatic ${stage} failed: ${message.slice(0, 200)}` }) } : {}),
+    ...(terminal ? { status: "FAILED" as LiveInterviewStatus, needsHrReview: true, reviewFlags: addReviewFlag(current?.reviewFlags, { code: `${stage}_failed`, message: `Automatic ${stage} could not be completed.` }) } : {}),
     failureStage: stage,
     lastError: message,
-    lastErrorAt: new Date(),
-    processingLeaseUntil: null,
-    updatedAt: new Date(),
-  }).where(eq(liveInterviewSessions.id, sessionId));
+    lastErrorAt: at,
+    processingLeaseUntil: retryAfterMs > 0 && !terminal ? new Date(at.getTime() + retryAfterMs) : null,
+    updatedAt: at,
+  }).where(eq(liveInterviewSessions.id, session.id));
 }
 
 /** Moves the application to HR review and links the voice result (idempotent). */
@@ -411,16 +449,23 @@ function emptyAnalysis(summary: string, clarify: string): InterviewAnalysis {
 
 export type ProcessDeps = { analysisClient?: AnalysisClient; fetchTranscript?: (providerSessionId: string) => Promise<TranscriptTurn[]> };
 
+export type ProcessResult = { claimed: boolean; session: SessionRow | null; retryAfterMs?: number };
+
 /**
  * Runs whatever processing remains for a completed interview. Safe to call
  * concurrently and repeatedly: a lease admits one worker; finished stages are
- * skipped; results are only written once.
+ * skipped; results are only written once. A transient analysis failure
+ * returns `retryAfterMs` (exponential backoff); a permanent one (invalid
+ * request, authentication, exhausted quota) fails the analysis immediately
+ * instead of burning the remaining attempts.
  */
-export async function processLiveInterviewSession(sessionId: string, deps: ProcessDeps = {}) {
+export async function processLiveInterviewSession(sessionId: string, deps: ProcessDeps = {}): Promise<ProcessResult> {
   const now = new Date();
   const [claimed] = await getDb().update(liveInterviewSessions).set({
     processingLeaseUntil: new Date(now.getTime() + PROCESSING_LEASE_MS),
     processingAttempts: sql`${liveInterviewSessions.processingAttempts} + 1`,
+    // Empty while a worker holds the lease; set again if this run fails.
+    failureStage: "",
     updatedAt: now,
   }).where(and(
     eq(liveInterviewSessions.id, sessionId),
@@ -454,7 +499,7 @@ export async function processLiveInterviewSession(sessionId: string, deps: Proce
         source = "client_capture";
         console.warn("[Live Interview] Using browser-captured transcript:", { sessionId, providerError: errorText(providerError) });
       } else if (!terminal) {
-        await recordFailure(session.id, "transcription", providerError || new Error("No transcript available yet."), false);
+        await recordFailure(session, "transcription", providerError || new Error("No transcript available yet."), false);
         return { claimed: true as const, session: await getSessionById(session.id) };
       }
     }
@@ -472,11 +517,11 @@ export async function processLiveInterviewSession(sessionId: string, deps: Proce
   try {
     await ensureApplicationCompleted(session, turns);
   } catch (error) {
-    await recordFailure(session.id, "completion", error, terminal);
+    await recordFailure(session, "completion", error, terminal);
     return { claimed: true as const, session: await getSessionById(session.id) };
   }
   if (turns.length === 0) {
-    await recordFailure(session.id, "transcription", new Error("No transcript could be retrieved from LiveAvatar or the browser capture."), true);
+    await recordFailure(session, "transcription", new Error("No transcript could be retrieved from LiveAvatar or the browser capture."), true);
     return { claimed: true as const, session: await getSessionById(session.id) };
   }
 
@@ -498,12 +543,14 @@ export async function processLiveInterviewSession(sessionId: string, deps: Proce
     model = "none";
   } else {
     if (!deps.analysisClient && !isInterviewAnalysisConfigured()) {
-      await recordFailure(session.id, "analysis", new Error("AI interview analysis is not configured (INTERVIEW_ANALYSIS_OPENAI_API_KEY or OPENAI_API_KEY is missing)."), true);
+      await recordFailure(session, "analysis", new InterviewAnalysisError("AI interview analysis is not configured (INTERVIEW_ANALYSIS_OPENAI_API_KEY or OPENAI_API_KEY is missing).", "not_configured"), true);
       return { claimed: true as const, session: await getSessionById(session.id) };
     }
     try {
       const role = await roleContext(session);
-      const client = deps.analysisClient || (new OpenAI({ apiKey: interviewAnalysisApiKey(), maxRetries: 1 }) as unknown as AnalysisClient);
+      // The SDK retries only transient failures (connection, 408/409/429/5xx)
+      // with its own backoff; a 400 is never retried here.
+      const client = deps.analysisClient || (new OpenAI({ apiKey: interviewAnalysisApiKey(), maxRetries: 2 }) as unknown as AnalysisClient);
       // The model rates a blinded copy (no name/email/phone); the stored and
       // displayed transcript stays unredacted for HR.
       const [application] = await getDb().select({ candidateName: applications.candidateName }).from(applications).where(eq(applications.id, session.applicationId)).limit(1);
@@ -514,12 +561,17 @@ export async function processLiveInterviewSession(sessionId: string, deps: Proce
       assessment = computeAssessment({ pairs: blindPairs, reviews: result.analysis.questionReviews, transcriptSource: session.transcriptSource, interrupted });
       model = result.model;
     } catch (error) {
-      await recordFailure(session.id, "analysis", error, terminal);
-      return { claimed: true as const, session: await getSessionById(session.id) };
+      const classified = classifyAnalysisError(error);
+      const final = terminal || !classified.retryable;
+      const retryAfterMs = final ? 0 : analysisRetryDelayMs(attempt);
+      await recordFailure(session, "analysis", classified, final, retryAfterMs);
+      return { claimed: true as const, session: await getSessionById(session.id), ...(retryAfterMs ? { retryAfterMs } : {}) };
     }
   }
   const stored: StoredInterviewAnalysis = { ...analysis, assessment };
   const unscored = assessment.status !== "scored";
+  // A successful (re)run clears the earlier analysis-failure flag.
+  const flags = removeReviewFlag(session.reviewFlags, "analysis_failed");
   const [written] = await getDb().update(liveInterviewSessions).set({
     analysis: stored,
     analysisModel: model,
@@ -527,7 +579,8 @@ export async function processLiveInterviewSession(sessionId: string, deps: Proce
     status: "REVIEW_READY",
     processingLeaseUntil: null,
     failureStage: "",
-    ...(unscored ? { needsHrReview: true, reviewFlags: addReviewFlag(session.reviewFlags, { code: "not_scored", message: `${NOT_SCORED_LABEL}: ${assessment.notScoredReason}` }) } : {}),
+    reviewFlags: unscored ? addReviewFlag(flags, { code: "not_scored", message: `${NOT_SCORED_LABEL}: ${assessment.notScoredReason}` }) : flags,
+    ...(unscored ? { needsHrReview: true } : {}),
     updatedAt: new Date(),
   }).where(and(eq(liveInterviewSessions.id, session.id), isNull(liveInterviewSessions.analysis))).returning({ id: liveInterviewSessions.id });
   // Keep the shared voice-review fields (score, recommendation, strengths,
@@ -546,20 +599,60 @@ export async function processLiveInterviewSession(sessionId: string, deps: Proce
   return { claimed: true as const, session: await getSessionById(session.id) };
 }
 
-/** HR "retry" after a failure or stall: resets the attempt budget, keeps all data. */
-export async function retryLiveInterviewProcessing(sessionId: string) {
+/**
+ * Runs processing passes within a time budget, waiting out short backoffs
+ * between transient failures. Used after the interview completes and after
+ * an HR retry; anything left over is resumed by the recovery sweep.
+ */
+export async function runLiveInterviewProcessing(sessionId: string, options: { budgetMs?: number; maxPasses?: number } = {}) {
+  // A pass can take ~100 s (transcript fetch + 90 s analysis timeout), so no
+  // new pass starts after this point to stay inside a 300 s function.
+  const deadline = Date.now() + (options.budgetMs ?? 150_000);
+  let result: ProcessResult | null = null;
+  for (let pass = 0; pass < (options.maxPasses ?? 3); pass += 1) {
+    result = await processLiveInterviewSession(sessionId);
+    if (!result.claimed || !PROCESSING_STATUSES.includes((result.session?.status || "") as LiveInterviewStatus)) break;
+    const wait = result.retryAfterMs ?? 0;
+    if (Date.now() + wait + 5_000 > deadline) break;
+    if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+  }
+  return result;
+}
+
+/**
+ * HR "retry analysis" after a failure or stall. Resets only the processing
+ * bookkeeping: the transcript, recording, consent, timestamps, and HR notes
+ * are untouched; the transcript is re-fetched only if none was ever stored.
+ * Refuses (started: false) while a worker holds the lease, so repeated clicks
+ * or a second tab cannot start duplicate processing; the analysis itself is
+ * written at most once (guarded by `analysis IS NULL`).
+ */
+export async function requestLiveInterviewRetry(sessionId: string): Promise<{ started: boolean; session: SessionRow | null }> {
   const session = await getSessionById(sessionId);
-  if (!session) return null;
-  if (!["FAILED", ...PROCESSING_STATUSES].includes(session.status)) return session;
+  if (!session) return { started: false, session: null };
+  if (session.analysis || !["FAILED", ...PROCESSING_STATUSES].includes(session.status)) return { started: false, session };
   const refetchTranscript = !session.transcriptSource || session.transcriptSource === "none";
-  await getDb().update(liveInterviewSessions).set({
+  const now = new Date();
+  const [updated] = await getDb().update(liveInterviewSessions).set({
     status: refetchTranscript ? "TRANSCRIPTION_PROCESSING" : "ANALYSIS_PROCESSING",
     ...(refetchTranscript ? { transcriptSource: "" } : {}),
     processingAttempts: 0,
     processingLeaseUntil: null,
-    updatedAt: new Date(),
-  }).where(eq(liveInterviewSessions.id, session.id));
-  return (await processLiveInterviewSession(session.id)).session;
+    failureStage: "",
+    updatedAt: now,
+  }).where(and(
+    eq(liveInterviewSessions.id, session.id),
+    isNull(liveInterviewSessions.analysis),
+    or(
+      eq(liveInterviewSessions.status, "FAILED"),
+      and(
+        inArray(liveInterviewSessions.status, PROCESSING_STATUSES),
+        // Idle, stalled, or waiting out a backoff — never an active worker.
+        or(isNull(liveInterviewSessions.processingLeaseUntil), lt(liveInterviewSessions.processingLeaseUntil, now), sql`${liveInterviewSessions.failureStage} <> ''`),
+      ),
+    ),
+  )).returning();
+  return { started: Boolean(updated), session: updated ?? (await getSessionById(session.id)) };
 }
 
 /**
@@ -623,7 +716,7 @@ async function finalizeStaleRecordings(options: { limit?: number; sessionId?: st
         recordingError: reason,
         recordingUploadUrl: "",
         needsHrReview: true,
-        reviewFlags: addReviewFlag(session.reviewFlags, { code: "recording_failed", message: `The interview recording is not available: ${reason}` }),
+        reviewFlags: addReviewFlag(session.reviewFlags, { code: "recording_failed", message: "The interview recording is not available." }),
         updatedAt: new Date(),
       }).where(eq(liveInterviewSessions.id, session.id));
     };
@@ -645,7 +738,8 @@ async function finalizeStaleRecordings(options: { limit?: number; sessionId?: st
       }).where(eq(liveInterviewSessions.id, session.id));
       finalized += 1;
     } catch (error) {
-      await markFailed(`The partial recording could not be saved: ${errorText(error).slice(0, 200)}`);
+      logInternalError("LiveInterviewRecordingError", error, { sessionId: session.id, stage: "finalize_partial_recording" });
+      await markFailed("The partial recording could not be saved.");
     }
   }
   return { checked: stale.length, finalized };
@@ -698,14 +792,15 @@ export async function markRecordingFailed(input: { rawToken: string; reason: str
     recordingError: reason,
     recordingUploadUrl: "",
     needsHrReview: true,
-    reviewFlags: addReviewFlag(session.reviewFlags, { code: "recording_failed", message: `The interview recording is not available: ${reason}` }),
+    reviewFlags: addReviewFlag(session.reviewFlags, { code: "recording_failed", message: "The interview recording is not available." }),
     updatedAt: new Date(),
   }).where(eq(liveInterviewSessions.id, session.id));
   return true;
 }
 
 // ---------------------------------------------------------------------------
-// HR review read model (never includes upload URLs, prompts, or credentials)
+// HR review read model (never includes upload URLs, prompts, credentials, or
+// raw provider/database errors — only fixed wording and an error reference)
 // ---------------------------------------------------------------------------
 
 export type LiveInterviewReview = {
@@ -714,17 +809,20 @@ export type LiveInterviewReview = {
   applicantName: string;
   roleTitle: string;
   status: LiveInterviewStatus;
+  interviewState: InterviewState;
+  analysisState: AnalysisState;
   interviewDate: string;
   durationSeconds: number | null;
   consent: { given: boolean; version: string; at: string; recording: boolean; camera: boolean; microphone: boolean };
-  recording: { status: string; available: boolean; error: string };
+  recording: { status: string; available: boolean };
   transcriptSource: string;
   turns: TranscriptTurn[];
   questions: ReturnType<typeof buildQuestionPairs>;
   analysis: StoredInterviewAnalysis | null;
   analysisCompletedAt: string;
   failureStage: string;
-  lastError: string;
+  /** Matches the server log entry for the latest failure; empty when none. */
+  errorReference: string;
   processingAttempts: number;
   maxProcessingAttempts: number;
   needsHrReview: boolean;
@@ -752,12 +850,16 @@ export async function getLiveInterviewReview(applicationExternalId: string, orga
   ]);
   const started = session.interviewStartedAt?.getTime() ?? null;
   const completed = session.interviewCompletedAt?.getTime() ?? null;
+  const status = session.status as LiveInterviewStatus;
+  const analysisState = deriveAnalysisState(status, Boolean(session.analysis));
   return {
     sessionId: session.id,
     applicationId: row.applicationExternalId,
     applicantName: row.candidateName || row.applicantName || "",
     roleTitle: row.roleTitle,
-    status: session.status as LiveInterviewStatus,
+    status,
+    interviewState: deriveInterviewState(status),
+    analysisState,
     interviewDate: (session.interviewStartedAt || session.createdAt).toISOString(),
     durationSeconds: started !== null && completed !== null ? Math.max(0, Math.round((completed - started) / 1000)) : transcriptDurationSeconds(turns),
     consent: {
@@ -768,18 +870,18 @@ export async function getLiveInterviewReview(applicationExternalId: string, orga
       camera: session.cameraConsent,
       microphone: session.microphoneConsent,
     },
-    recording: { status: session.recordingStatus, available: session.recordingStatus === "available" && Boolean(session.recordingStorageRef), error: session.recordingError },
+    recording: { status: session.recordingStatus, available: session.recordingStatus === "available" && Boolean(session.recordingStorageRef) },
     transcriptSource: session.transcriptSource,
     turns,
     questions: buildQuestionPairs(turns),
     analysis: (session.analysis as StoredInterviewAnalysis | null) ?? null,
     analysisCompletedAt: session.analysisCompletedAt?.toISOString() || "",
     failureStage: session.failureStage,
-    lastError: session.lastError,
+    errorReference: analysisState === "failed" || session.failureStage ? failureReference(session.id, session.lastErrorAt) : "",
     processingAttempts: session.processingAttempts,
     maxProcessingAttempts: MAX_PROCESSING_ATTEMPTS,
     needsHrReview: session.needsHrReview,
-    reviewFlags: Array.isArray(session.reviewFlags) ? session.reviewFlags as ReviewFlag[] : [],
+    reviewFlags: safeReviewFlags(session.reviewFlags),
     integrityEvents: events.map((event) => ({ type: event.eventType, at: event.occurredAt.toISOString(), detail: event.detail })),
   };
 }

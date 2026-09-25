@@ -142,14 +142,16 @@ test("analysis sanitizer drops sensitive inference, invalid references, and unkn
   assert.throws(() => sanitizeInterviewAnalysis({ questionReviews: "nope" }, { pairs, maxSeq: 9 }));
 });
 
-test("analysis uses the transcript only, requests JSON, and grounds the model output", async () => {
+test("analysis uses the transcript only, requests schema-constrained JSON, and grounds the model output", async () => {
   const turns = normalizeProviderTranscript(providerTranscript);
   const pairs = buildQuestionPairs(turns);
   let params = null;
   const client = { responses: { create: async (value) => { params = value; return { output_text: JSON.stringify({ interviewSummary: "Discussed customer support.", questionReviews: [{ questionIndex: pairs[0].questionIndex, analysis: "Gave volume figures.", jobCriteria: "Customer service", evidence: "30 per day" }] }) }; } } };
   const { analysis } = await analyzeInterviewTranscript(client, { roleTitle: "Support Agent", jobDescription: "Handle customer inquiries.", turns, pairs });
   assert.equal(analysis.interviewSummary, "Discussed customer support.");
-  assert.deepEqual(params.text, { format: { type: "json_object" } });
+  assert.equal(params.text.format.type, "json_schema", "Structured Outputs, not json_object (which needs 'json' in the input messages)");
+  assert.equal(params.text.format.strict, true);
+  assert.match(params.input[0].content, /json/i, "the input message itself mentions JSON");
   assert.match(params.input[0].content, /\[5\] Applicant: In my previous role/);
   assert.match(INTERVIEW_ANALYSIS_INSTRUCTIONS, /Never comment on or infer: facial expressions, emotions, eye movement/);
   assert.match(INTERVIEW_ANALYSIS_INSTRUCTIONS, /Do not recommend hiring, rejecting, ranking, or scoring/);
@@ -241,7 +243,7 @@ test("completion is saved first and processing is idempotent, leased, retried, a
   assert.match(process, /lt\(liveInterviewSessions\.processingAttempts, MAX_PROCESSING_ATTEMPTS\)/);
   assert.match(process, /isNull\(liveInterviewSessions\.analysis\)/, "an analysis is written at most once");
   assert.ok(process.indexOf("replaceTranscript(") < process.indexOf("ensureApplicationCompleted(") && process.indexOf("ensureApplicationCompleted(") < process.indexOf("analyzeInterviewTranscript("), "transcript, then application, then analysis");
-  assert.match(store, /recordFailure\(session\.id, "analysis", error, terminal\)/);
+  assert.match(store, /recordFailure\(session, "analysis", classified, final, retryAfterMs\)/);
   assert.match(store, /failureStage: stage,\s*lastError: message/);
   assert.match(store, /tx\.delete\(liveInterviewTranscriptTurns\)/, "re-processing replaces rather than duplicates turns");
 

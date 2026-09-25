@@ -1,7 +1,8 @@
 import { after } from "next/server";
 
 import { interviewErrorResponse, interviewJson, readInterviewRequest } from "@/lib/live-interview-http";
-import { completeInterviewSession, processLiveInterviewSession } from "@/lib/live-interview-store";
+import { completeInterviewSession, runLiveInterviewProcessing } from "@/lib/live-interview-store";
+import { logInternalError } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,15 +32,12 @@ export async function POST(request: Request) {
     if (STILL_PROCESSING.has(session.status)) {
       after(async () => {
         // A few passes let a transient transcript miss fall back to the
-        // browser capture within this invocation.
-        for (let pass = 0; pass < 3; pass += 1) {
-          try {
-            const result = await processLiveInterviewSession(session.id);
-            if (!result.claimed || !STILL_PROCESSING.has(result.session?.status || "")) break;
-          } catch (error) {
-            console.error("[API Live Interview Complete] Background processing failed:", { sessionId: session.id, error });
-            break;
-          }
+        // browser capture, and wait out short analysis backoffs, within this
+        // invocation.
+        try {
+          await runLiveInterviewProcessing(session.id);
+        } catch (error) {
+          logInternalError("API Live Interview Complete", error, { sessionId: session.id, stage: "background_processing" });
         }
       });
     }
