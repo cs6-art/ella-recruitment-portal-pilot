@@ -65,6 +65,47 @@ See `.env.example` for the full list and comments:
 Add these in Vercel under Project Settings → Environment Variables for each
 environment (Production / Preview) that should offer the live interview.
 
+## Consent, device check, recording, transcript, and HR review
+
+Candidate flow on `/avatar/[token]`: **Start Interview → consent notice →
+"I Agree & Continue" → camera + microphone permission → preview/equipment
+check → Start Interview → live avatar → saving → Interview completed.**
+
+- Consent (`POST /api/live-avatar/consent`) is stored in
+  `live_interview_sessions` (one row per avatar invitation) with the notice
+  version (`INTERVIEW_CONSENT_VERSION` in `src/lib/live-interview.ts`), the
+  timestamp, recording/camera/microphone flags, and the user agent. Bump the
+  version whenever the wording changes.
+- `POST /api/live-avatar/session` refuses to consume the one-time invitation
+  until consent and a passing device check (`/device-check`) are on record.
+- LiveAvatar has **no recording API and no webhooks**. With consent, the
+  browser records the applicant camera plus both audio sides and uploads
+  2 MiB chunks (`/api/live-avatar/recording`) into a private Google Drive
+  resumable upload (`INTERVIEW_RECORDING_DRIVE_FOLDER_ID`). HR plays it back
+  only through the authenticated `/api/applicants/[id]/live-interview/recording`
+  route. Recording failures are logged, flagged for HR, and never shown as
+  available.
+- Transcript source of truth: `GET /v1/sessions/{id}/transcript`
+  (`role`, `transcript`, `absolute_timestamp`, `relative_timestamp`), stored
+  per turn in `live_interview_transcript_turns`. SDK transcription events
+  captured in the browser are checkpointed every 15 s and used only if the
+  provider transcript is unavailable (flagged for HR).
+- `POST /api/live-avatar/complete` commits the finished interview first, then
+  runs transcript → application completion → AI analysis in `after()`.
+  Processing is lease-guarded, idempotent, retried up to 5 times, and records
+  `failure_stage` / `last_error`. The HR page, a "Retry processing" button, and
+  the daily `/api/cron/live-interview-recovery` sweep resume stalled work and
+  close interviews abandoned in the browser.
+- The HR review (Applicant profile → Voice Interview Review) shows the
+  overview, evidence-based AI summary, question-by-question review, full
+  transcript (search, jump, expand, copy), recording, and objective session
+  indicators. The analysis prompt forbids inference from appearance, voice,
+  emotion, gaze, personality, honesty, or protected characteristics, and a
+  server-side filter removes any such statement. It is an HR aid only.
+
+Apply `drizzle/0026_live_interview_sessions.sql` before deploying this code
+(`npm run db:migrate -- --target=0026_live_interview_sessions.sql`).
+
 ## Limitations / follow-ups
 
 - The live-avatar result is an HR-reviewed screening aid and is not an
