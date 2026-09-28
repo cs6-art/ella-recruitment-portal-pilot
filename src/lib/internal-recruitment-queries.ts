@@ -2115,6 +2115,34 @@ export async function listBookingSlots(kind?: string, roleExternalId?: string, o
   return db.select({ slot: interviewSlots, roleExternalId: roles.externalId }).from(interviewSlots).innerJoin(roles, eq(roles.id, interviewSlots.roleId)).where(and(...conditions, eq(roles.organizationId, organizationId.trim()))).orderBy(asc(interviewSlots.startsAt)).limit(LIMIT);
 }
 
+/** Return only future booked interviews for the dashboard, avoiding the
+ * general bookings list limit hiding the next appointments behind history. */
+export async function listUpcomingBookingSlots(organizationId = DEFAULT_ORGANIZATION_ID, limit = 50) {
+  const db = getDb();
+  return db.select({
+    slot: interviewSlots,
+    roleExternalId: roles.externalId,
+    applicationExternalId: applications.externalId,
+    applicationCandidateName: applications.candidateName,
+    applicationEmail: applications.email,
+    hasLiveAvatarSession: sql<boolean>`EXISTS (
+      SELECT 1 FROM live_interview_sessions avatar_session
+      WHERE avatar_session.application_id = ${interviewSlots.applicationId}
+        AND avatar_session.organization_id = ${organizationId.trim()}
+    )`,
+  }).from(interviewSlots)
+    .innerJoin(roles, eq(roles.id, interviewSlots.roleId))
+    .innerJoin(applications, eq(applications.id, interviewSlots.applicationId))
+    .where(and(
+      eq(roles.organizationId, organizationId.trim()),
+      eq(interviewSlots.status, "booked"),
+      gte(interviewSlots.startsAt, new Date()),
+      eq(applications.withdrawn, false),
+    ))
+    .orderBy(asc(interviewSlots.startsAt))
+    .limit(Math.min(Math.max(limit, 1), 100));
+}
+
 export async function listApplicationSlots(applicationExternalId: string, kind?: string) {
   const db = getDb();
   const conditions = [eq(applications.externalId, applicationExternalId.trim())];

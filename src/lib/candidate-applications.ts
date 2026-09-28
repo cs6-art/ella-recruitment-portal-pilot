@@ -161,6 +161,9 @@ export type InterviewBooking = {
   applicationId: string;
   candidateName: string;
   candidateEmail: string;
+  interviewerName?: string;
+  interviewerEmail?: string;
+  interviewMode?: "avatar" | "voice";
   bookedAt: string;
   lastUpdated: string;
   calendarEventId: string;
@@ -673,6 +676,9 @@ export async function getInterviewBookings(): Promise<InterviewBooking[]> {
     applicationId: field(record, "Application_ID", "Application ID"),
     candidateName: field(record, "Candidate_Name", "Candidate Name"),
     candidateEmail: field(record, "Candidate_Email", "Candidate Email"),
+    interviewerName: field(record, "Interviewer_Name", "Interviewer Name"),
+    interviewerEmail: field(record, "Interviewer_Email", "Interviewer Email"),
+    interviewMode: (/live\s*avatar|avatar/i.test(field(record, "Interview_Type", "Interview Type")) ? "avatar" : "voice") as "avatar" | "voice",
     bookedAt: field(record, "Booked_At", "Booked At"),
     lastUpdated: field(record, "Last_Updated", "Last Updated"),
     calendarEventId: field(record, "Google_Calendar_Event_ID"),

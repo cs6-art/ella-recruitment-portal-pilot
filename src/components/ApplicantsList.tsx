@@ -42,12 +42,25 @@ const DASHBOARD_STAGE_LABELS = [
   "Rejected",
 ] as const;
 
+const DASHBOARD_STAGE_GROUPS: Record<string, string[]> = {
+  "Avatar Interview": ["Resume Approved", "Avatar Interview Booking Pending", "Avatar Interview Scheduled"],
+  "Face-to-Face Interview": ["Approved for Face-to-Face Interview", "Face-to-Face Interview Scheduled"],
+  Completed: ["Passed Final Interview", "Rejected"],
+};
+
+const DASHBOARD_STAGE_FILTERS = new Set([...DASHBOARD_STAGE_LABELS, ...Object.keys(DASHBOARD_STAGE_GROUPS)]);
+
 /**
  * Map operational status wording onto the reconciled stage names used by the
  * dashboard. This keeps the Applicants filter useful without changing the
  * labels shown on individual records or the underlying sheet values.
  */
 function dashboardStageLabel(stage: string, mode: ApplicantSummary["interviewMode"] = "avatar") {
+  const normalizedStage = stage.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const rawStage = stage.trim().toLowerCase();
+  if (["voice_review_pending", "voice_hr_review"].includes(normalizedStage) || rawStage.includes("voice interview completed") || rawStage.includes("voice hr review") || rawStage.includes("awaiting hr review")) {
+    return "Avatar Interview Review";
+  }
   const friendlyLabel = applicantStageLabel(stage, mode);
   if (friendlyLabel !== stage.trim()) return friendlyLabel;
   const value = stage.trim().toLowerCase();
@@ -68,6 +81,13 @@ function dashboardStageLabel(stage: string, mode: ApplicantSummary["interviewMod
 
 function stageClass(stage: string) {
   return `applicant-stage applicant-stage-${stage.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
+
+function matchesDashboardStageFilter(applicant: ApplicantSummary, filter: string) {
+  if (filter === "All Stages") return true;
+  const stageLabel = dashboardStageLabel(applicant.currentStage, applicant.interviewMode);
+  const group = DASHBOARD_STAGE_GROUPS[filter];
+  return group ? group.includes(stageLabel) : stageLabel === filter || applicant.currentStage === filter;
 }
 
 function formatDate(value: string) {
@@ -116,6 +136,10 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
   // Applicants arriving after that timestamp remain highlighted during this visit.
   const [seenWatermark, setSeenWatermark] = useState<number | null>(null);
   useEffect(() => {
+    const requestedStage = new URLSearchParams(window.location.search).get("stage") || "";
+    if (DASHBOARD_STAGE_FILTERS.has(requestedStage)) setStageFilter(requestedStage);
+  }, []);
+  useEffect(() => {
     const seenAt = Date.now();
     writeApplicantsLastSeen(userEmail, seenAt);
     setSeenWatermark(seenAt);
@@ -162,6 +186,7 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
   const stages = useMemo(() => [...new Set([
     ...dashboardStages,
     ...applicants.map((applicant) => dashboardStageLabel(applicant.currentStage, applicant.interviewMode)).filter(Boolean),
+    ...Object.keys(DASHBOARD_STAGE_GROUPS),
   ])].sort(), [applicants, dashboardStages]);
 
   const visibleApplicants = useMemo(() => {
@@ -181,7 +206,7 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
         // an internal audit view and should not hide a successfully processed
         // applicant merely because the role metadata is behind it.
         (roleFilter === "All Roles" || applicant.roleId === selectedRole?.roleId || applicantRole === roleFilter || applicant.selectedRole === selectedRole?.label) &&
-        (stageFilter === "All Stages" || dashboardStageLabel(applicant.currentStage, applicant.interviewMode) === stageFilter || applicant.currentStage === stageFilter);
+        matchesDashboardStageFilter(applicant, stageFilter);
     }).sort((left, right) => {
       const dateDifference = applicantSortTimestamp(right) - applicantSortTimestamp(left);
       if (dateDifference !== 0) return dateDifference;

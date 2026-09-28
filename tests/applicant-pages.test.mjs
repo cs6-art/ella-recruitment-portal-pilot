@@ -51,16 +51,27 @@ test("every generated applicant shown in demo mode has a viewable profile", () =
   assert.match(source, /Historical demonstration record/);
 });
 
-test("dashboard includes candidate pipeline metrics without exposing them to creator-only users", () => {
+test("dashboard prioritizes work and shows candidate stages only to users who can view them", () => {
   const api = read("src/app/api/dashboard/metrics/route.ts");
   const dashboard = read("src/components/DashboardMetrics.tsx");
   const applicantMetrics = read("src/lib/candidate-applications.ts");
   const stageLabels = read("src/lib/applicant-stage-labels.ts");
   assert.match(api, /getApplicantMetrics/);
   assert.match(api, /canReviewRole === true \|\| user\.canApproveRole === true/);
-  assert.match(dashboard, /Pipeline Progress/);
-  assert.match(dashboard, /Decision Snapshot/);
-  assert.match(dashboard, /Each applicant appears once/);
+  assert.match(api, /!user\.canReviewDepartmentRole/);
+  assert.match(api, /targetRoleSummaries\(\)/);
+  assert.match(api, /targetUpcomingBookings\(50\)/);
+  assert.match(api, /listDashboardRecordingFailures/);
+  assert.ok(api.indexOf("/final|face.to.face/i.test(booking.interviewType)") < api.indexOf("booking.interviewMode === \"avatar\""));
+  assert.match(api, /Cache-Control": "private, no-store/);
+  assert.match(dashboard, /What needs your attention/);
+  assert.match(dashboard, /Recruitment overview/);
+  assert.match(dashboard, /Upcoming interviews/);
+  assert.match(dashboard, /Actionable alerts/);
+  assert.match(dashboard, /Recent activity/);
+  assert.match(dashboard, /30_000/);
+  assert.match(dashboard, /Avatar Interview Review/);
+  assert.match(api, /Live Avatar Interview/);
   assert.match(dashboard, /stageCounts/);
   assert.match(stageLabels, /resume_review: "Resume Review"/);
   assert.match(stageLabels, /voice_review_pending: AVATAR_INTERVIEW_REVIEW_LABEL/);
@@ -68,10 +79,9 @@ test("dashboard includes candidate pipeline metrics without exposing them to cre
   assert.match(stageLabels, /rejected: "Rejected"/);
   assert.doesNotMatch(applicantMetrics, /label: "Submitted"/);
   assert.match(applicantMetrics, /currentApplicantStage/);
-  assert.match(dashboard, /Role Request Actions/);
-  assert.match(dashboard, /Pending HR Review/);
-  assert.match(dashboard, /Approved Roles/);
-  // The Management-approval step was removed — no "Pending Approval" card.
+  assert.doesNotMatch(dashboard, /Decision Snapshot/);
+  assert.doesNotMatch(dashboard, /User Access Summary/);
+  // The old detailed Management-approval card was removed.
   assert.doesNotMatch(dashboard, /Pending%20Management%20Approval/);
 });
 
@@ -93,7 +103,10 @@ test("applicant stage labels are presentation-only and used consistently", () =>
   assert.match(detail, /applicantDecisionLabel\(applicant\.resumeStatus\)/);
   assert.match(detail, /applicantStageLabel\(voiceCallStatus\).*applicantStageLabel\(applicant\.voiceStatus\)/s);
   // Canonical keys remain the values used for filters and database/API work.
-  assert.match(list, /applicant\.currentStage === stageFilter/);
+  assert.match(list, /matchesDashboardStageFilter\(applicant, stageFilter\)/);
+  assert.match(list, /DASHBOARD_STAGE_GROUPS/);
+  assert.match(list, /voice_review_pending[\s\S]*?Avatar Interview Review/);
+  assert.match(list, /new URLSearchParams\(window\.location\.search\)/);
   assert.match(labels, /must continue to\r?\n\s*\* send and persist the canonical status key/);
 });
 

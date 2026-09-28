@@ -22,6 +22,7 @@ import {
   listRecentApplications,
   listBulkQueueForPortal,
   listBookingSlots,
+  listUpcomingBookingSlots,
   listRoleStatusHistory,
   renameRoleExternalId,
   markBookingTokenUsed,
@@ -1296,5 +1297,37 @@ export async function targetBookings() {
     const startsAt = slotDateTime(slot.startsAt, timezone);
     const endsAt = slotDateTime(slot.endsAt, timezone);
     return { slotId: text(slot.id), interviewType: text(slot.interviewType), roleId: text((row as { roleExternalId?: string }).roleExternalId), date: startsAt.date, startTime: startsAt.time, endTime: endsAt.time, timezone, status: label(slot.status), applicationId: text(slot.applicationId), candidateName: text(slot.candidateName), candidateEmail: text(slot.candidateEmail), bookedAt: text(slot.bookedAt), lastUpdated: text(slot.updatedAt), calendarEventId: text(slot.calendarEventId), calendarEventLink: text(slot.calendarEventLink), calendarEventStatus: text(slot.calendarEventStatus), calendarEventError: text(slot.calendarEventError) };
+  });
+}
+
+export async function targetUpcomingBookings(limit = 50) {
+  const organizationId = await targetOrganizationId();
+  const rows = await listUpcomingBookingSlots(organizationId, limit);
+  return rows.map(({ slot, roleExternalId, applicationExternalId, applicationCandidateName, applicationEmail, hasLiveAvatarSession }) => {
+    const timezone = text(slot.timezone) || "Asia/Singapore";
+    const startsAt = slotDateTime(slot.startsAt, timezone);
+    const endsAt = slotDateTime(slot.endsAt, timezone);
+    return {
+      slotId: text(slot.id),
+      interviewType: slot.interviewType === "final" ? "Face-to-Face Interview" : hasLiveAvatarSession ? "Live Avatar Interview" : "AI Voice Interview",
+      interviewMode: (hasLiveAvatarSession ? "avatar" : "voice") as "avatar" | "voice",
+      roleId: text(roleExternalId),
+      date: startsAt.date,
+      startTime: startsAt.time,
+      endTime: endsAt.time,
+      timezone,
+      status: label(slot.status),
+      applicationId: text(applicationExternalId),
+      candidateName: text(slot.candidateName) || text(applicationCandidateName),
+      candidateEmail: text(slot.candidateEmail) || text(applicationEmail),
+      bookedAt: text(slot.bookedAt),
+      lastUpdated: text(slot.updatedAt),
+      interviewerName: text(slot.interviewerName),
+      interviewerEmail: text(slot.interviewerEmail),
+      calendarEventId: text(slot.calendarEventId),
+      calendarEventLink: text(slot.calendarEventLink),
+      calendarEventStatus: text(slot.calendarEventStatus),
+      calendarEventError: text(slot.calendarEventError),
+    };
   });
 }

@@ -836,6 +836,24 @@ export type LiveInterviewReview = {
   integrityEvents: { type: string; at: string; detail: string }[];
 };
 
+/** Fixed, user-safe fields for unresolved Drive recording uploads on HR's dashboard. */
+export async function listDashboardRecordingFailures(organizationId: string, limit = 6) {
+  const rows = await getDb().select({
+    applicationId: applications.externalId,
+    candidateName: applications.candidateName,
+    updatedAt: liveInterviewSessions.updatedAt,
+  }).from(liveInterviewSessions)
+    .innerJoin(applications, eq(applications.id, liveInterviewSessions.applicationId))
+    .where(and(
+      eq(liveInterviewSessions.organizationId, organizationId.trim()),
+      eq(liveInterviewSessions.recordingStatus, "failed"),
+      eq(applications.withdrawn, false),
+    ))
+    .orderBy(desc(liveInterviewSessions.updatedAt))
+    .limit(Math.min(Math.max(limit, 1), 20));
+  return rows.map((row) => ({ applicationId: row.applicationId, candidateName: row.candidateName, updatedAt: row.updatedAt?.toISOString() || "" }));
+}
+
 /** Loads the latest live interview for an application in the caller's organization. */
 export async function getLiveInterviewReview(applicationExternalId: string, organizationId: string): Promise<LiveInterviewReview | null> {
   const db = getDb();
