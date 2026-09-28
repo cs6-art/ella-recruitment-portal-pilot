@@ -78,6 +78,7 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
       licenseRequirementStatus: role.licenseRequirementStatus || "",
       hodInterviewRequired: role.hodInterviewRequired || "",
       finalInterviewVenue: role.finalInterviewVenue || "",
+      aiSystemPrompt: role.aiSystemPrompt || "",
     },
   };
   const recruitmentSetup = {

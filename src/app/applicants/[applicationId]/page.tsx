@@ -24,6 +24,7 @@ import { formatPortalClock, formatPortalDateTime } from "@/lib/portal-time";
 import { applicantDecisionLabel, applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { parseTextList } from "@/lib/formatters";
 import { getLiveInterviewReview, type LiveInterviewReview as LiveReview } from "@/lib/live-interview-store";
+import { INTERVIEW_STATE_LABELS } from "@/lib/live-interview";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 
 export const dynamic = "force-dynamic";
@@ -219,20 +220,35 @@ function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }
         <div className="applicant-evidence-subsection-heading"><UiIcon name="microphone" size={16} /><h3>Voice Interview Review</h3></div>
         {liveReview && <LiveInterviewReview applicationId={applicant.applicationId} initialReview={liveReview} canRetry={canRetryLiveReview} />}
         <div className="applicant-detail-inline-fields">
-          <DetailField label="Status" value={applicantStageLabel(voiceCallStatus) || applicantStageLabel(applicant.voiceStatus) || "Not Started"} />
-          <DetailField label="Booking Status" value={applicant.voiceBookingStatus || "Not Booked"} />
-          <DetailField label="Invitation status" value={bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "completed"].includes(voiceCallStatus.toLowerCase()) })} />
-          <DetailField label="Interview time" value={scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />
-          <DetailField label="Timezone" value={recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || applicant.voiceTimezone || "Not provided"} />
+          {/* Booking Status, Invitation status, Interview time and Timezone are
+              Vapi phone-call booking concepts (a slot + a booking token). A
+              Live Avatar interview uses a one-time invitation link instead --
+              there is no slot to book, so these fields are always blank/"Not
+              Booked" for it even though the interview happened. Live Avatar's
+              own date/duration/status already show in the panel above. */}
+          <DetailField label="Status" value={liveReview ? INTERVIEW_STATE_LABELS[liveReview.interviewState] : applicantStageLabel(voiceCallStatus) || applicantStageLabel(applicant.voiceStatus) || "Not Started"} />
+          {!liveReview && <DetailField label="Booking Status" value={applicant.voiceBookingStatus || "Not Booked"} />}
+          {!liveReview && <DetailField label="Invitation status" value={bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "completed"].includes(voiceCallStatus.toLowerCase()) })} />}
+          {!liveReview && <DetailField label="Interview time" value={scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />}
+          {!liveReview && <DetailField label="Timezone" value={recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || applicant.voiceTimezone || "Not provided"} />}
           <DetailField label="Voice AI Score" value={liveFields ? liveFields.score : applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : voiceScorePending} />
           <DetailField label="AI Recommendation" value={liveFields ? liveFields.recommendation : applicant.voiceRecommendation || voiceRecommendationPending} />
         </div>
-        {voiceBookingLink && <div className="applicant-copy-block"><span>Candidate booking page</span><p><Link href={voiceBookingLink} target="_blank" rel="noreferrer">Open the candidate booking page</Link></p></div>}
-        <div className="applicant-copy-block"><span>AI Summary</span><p>{applicant.voiceSummary || (voiceSystemFailure ? "The call did not go through due to a system or dispatch error — the candidate was never reached, so there is no AI summary. Check the voice call logs, or ask a developer to, for the failure reason and consider re-sending the booking link." : voiceNotConducted ? "No interview took place, so there is no AI summary." : voiceCompletedNoScore ? "The call ended before the candidate answered enough questions to evaluate, so there is no AI summary." : "No AI summary is available.")}</p></div>
-        <div className="applicant-copy-columns"><div><span>Strengths</span><ReadableList value={applicant.voiceStrengths} empty="No strengths recorded." /></div><div><span>Concerns</span><ReadableList value={applicant.voiceConcerns} empty="No concerns recorded." /></div></div>
-        <div className="applicant-copy-columns"><div><span>Communication Quality</span><p>{applicant.voiceCommunicationQuality || "Not provided."}</p></div><div><span>Answer Completeness</span><p>{applicant.voiceAnswerCompleteness || "Not provided."}</p></div></div>
-        {applicant.voiceEvaluationFields.length > 0 && <div className="applicant-copy-columns">{applicant.voiceEvaluationFields.map((evaluation) => <div key={evaluation.key}><span>{evaluation.label}</span><p>{evaluation.value}</p></div>)}</div>}
-        <div className="applicant-copy-block"><span>Recommended Follow-up Questions</span><ReadableList value={applicant.voiceFollowUpQuestions} empty="No follow-up questions were recommended." /></div>
+        {!liveReview && voiceBookingLink && <div className="applicant-copy-block"><span>Candidate booking page</span><p><Link href={voiceBookingLink} target="_blank" rel="noreferrer">Open the candidate booking page</Link></p></div>}
+        {/* AI Summary, Strengths, Concerns, Communication Quality, Answer
+            Completeness and Recommended Follow-up Questions below are all
+            sourced from the legacy Vapi phone-call evaluation (voiceResult /
+            voiceLog). A Live Avatar interview's own summary, strengths, and
+            areas to clarify already render inside LiveInterviewReview above,
+            with supporting quotes and transcript links the fields below
+            don't have -- showing both duplicates (once analysis completes)
+            or contradicts it (while analysis is still pending, since these
+            plain-text fields have no "processing" state of their own). */}
+        {!liveReview && <div className="applicant-copy-block"><span>AI Summary</span><p>{applicant.voiceSummary || (voiceSystemFailure ? "The call did not go through due to a system or dispatch error — the candidate was never reached, so there is no AI summary. Check the voice call logs, or ask a developer to, for the failure reason and consider re-sending the booking link." : voiceNotConducted ? "No interview took place, so there is no AI summary." : voiceCompletedNoScore ? "The call ended before the candidate answered enough questions to evaluate, so there is no AI summary." : "No AI summary is available.")}</p></div>}
+        {!liveReview && <div className="applicant-copy-columns"><div><span>Strengths</span><ReadableList value={applicant.voiceStrengths} empty="No strengths recorded." /></div><div><span>Concerns</span><ReadableList value={applicant.voiceConcerns} empty="No concerns recorded." /></div></div>}
+        {!liveReview && <div className="applicant-copy-columns"><div><span>Communication Quality</span><p>{applicant.voiceCommunicationQuality || "Not provided."}</p></div><div><span>Answer Completeness</span><p>{applicant.voiceAnswerCompleteness || "Not provided."}</p></div></div>}
+        {!liveReview && applicant.voiceEvaluationFields.length > 0 && <div className="applicant-copy-columns">{applicant.voiceEvaluationFields.map((evaluation) => <div key={evaluation.key}><span>{evaluation.label}</span><p>{evaluation.value}</p></div>)}</div>}
+        {!liveReview && <div className="applicant-copy-block"><span>Recommended Follow-up Questions</span><ReadableList value={applicant.voiceFollowUpQuestions} empty="No follow-up questions were recommended." /></div>}
         {liveReview ? null : applicant.voiceTranscript ? <details className="applicant-transcript"><summary>View full transcript</summary><pre>{applicant.voiceTranscript}</pre></details> : <div className="applicant-copy-block"><span>Transcript</span><p>No transcript is available.</p></div>}
       </div>
     </div>
@@ -281,7 +297,7 @@ export default async function ApplicantDetailsPage({ params }: { params: Promise
       <CandidateHistoryTimeline history={history} />
     </div><aside className="applicant-detail-side">
       {applicant.voiceDecision.toLowerCase() === "approve" && <FinalInterviewCard applicant={applicant} role={role} />}
-      <section className="card applicant-detail-card"><DetailCardHeader icon="clock" title="Status Tracking" description="Current progress through the candidate workflow." /><div className="applicant-timeline"><div><strong>1. AI CV Analysis</strong><span>{applicantDecisionLabel(applicant.resumeStatus) || "Not Started"}</span></div><div><strong>2. Voice Interview</strong><span>{applicantStageLabel(applicant.voiceCallStatus || applicant.voiceStatus) || "Not Started"}</span></div><div><strong>3. Voice HR Review</strong><span>{applicantDecisionLabel(applicant.voiceDecision) || "Pending"}</span></div><div><strong>4. Face-to-Face Interview</strong><span>{applicantStageLabel(applicant.finalInterviewStatus) || "Not Started"}</span></div><div><strong>Last Updated</strong><span>{dateValue(applicant.lastUpdated)}</span></div></div></section>
+      <section className="card applicant-detail-card"><DetailCardHeader icon="clock" title="Status Tracking" description="Current progress through the candidate workflow." /><div className="applicant-timeline"><div><strong>1. AI CV Analysis</strong><span>{applicantDecisionLabel(applicant.resumeStatus) || "Not Started"}</span></div><div><strong>2. Voice Interview</strong><span>{liveReview ? INTERVIEW_STATE_LABELS[liveReview.interviewState] : applicantStageLabel(applicant.voiceCallStatus || applicant.voiceStatus) || "Not Started"}</span></div><div><strong>3. Voice HR Review</strong><span>{applicantDecisionLabel(applicant.voiceDecision) || "Pending"}</span></div><div><strong>4. Face-to-Face Interview</strong><span>{applicantStageLabel(applicant.finalInterviewStatus) || "Not Started"}</span></div><div><strong>Last Updated</strong><span>{dateValue(applicant.lastUpdated)}</span></div></div></section>
     </aside></div>
   </main></AppShell>;
 }

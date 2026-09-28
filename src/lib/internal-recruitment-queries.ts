@@ -2485,6 +2485,11 @@ export async function notificationQueue(stage?: string) {
     departmentSnapshot: roles.departmentSnapshot,
     requesterName: roles.requesterName,
     requesterEmail: roles.requesterEmail,
+    // A "job posted" notification goes to the org's first registered
+    // account, not the requester -- many people can submit a role request,
+    // but only the org's original registrant is the confirmed owner/admin.
+    recipientEmail: sql<string>`COALESCE((SELECT u.email FROM users u WHERE u.organization_id = ${roleStatusHistory.organizationId} ORDER BY u.created_at ASC LIMIT 1), '')`,
+    recipientName: sql<string>`COALESCE((SELECT u.full_name FROM users u WHERE u.organization_id = ${roleStatusHistory.organizationId} ORDER BY u.created_at ASC LIMIT 1), '')`,
   }).from(roleStatusHistory)
     .innerJoin(roles, eq(roles.id, roleStatusHistory.roleId))
     .where(inArray(roleStatusHistory.id, roleIds))

@@ -196,3 +196,18 @@ test("face-to-face metric excludes resume and voice-only activity", () => {
   assert.match(metrics, /row\.finalInterviewStatus\.trim\(\)\.toLowerCase\(\)/);
   assert.doesNotMatch(metrics, /hrActivity: summaries\.filter\(\(row\) => Boolean\(row\.cvRecommendation \|\| row\.voiceStatus \|\| row\.finalInterviewStatus\)\)/);
 });
+
+test("a job-posted notification is addressed to the org's first registered account, not the requester", () => {
+  const source = read("src/lib/internal-recruitment-queries.ts");
+  const roleRowsStart = source.indexOf("const roleRows = roleIds.length");
+  const roleRowsBlock = source.slice(roleRowsStart, source.indexOf(";", source.indexOf(": []", roleRowsStart)) + 1);
+  assert.match(roleRowsBlock, /recipientEmail:\s*sql<string>`COALESCE\(\(SELECT u\.email FROM users u WHERE u\.organization_id = \$\{roleStatusHistory\.organizationId\} ORDER BY u\.created_at ASC LIMIT 1\), ''\)`/);
+  assert.match(roleRowsBlock, /recipientName:\s*sql<string>`COALESCE\(\(SELECT u\.full_name FROM users u WHERE u\.organization_id = \$\{roleStatusHistory\.organizationId\} ORDER BY u\.created_at ASC LIMIT 1\), ''\)`/);
+  // requesterEmail/requesterName (the role submitter) stay available too, but
+  // are not the notification recipient.
+  assert.match(roleRowsBlock, /requesterName: roles\.requesterName/);
+  assert.match(roleRowsBlock, /requesterEmail: roles\.requesterEmail/);
+  // job_posted is already queued with notificationStatus "pending" when a
+  // role is published (the gap was never here -- see targetUpdateRoleFields).
+  assert.match(source, /notificationStatus: normalizedStatus === "job_posted" \? "pending" : ""/);
+});

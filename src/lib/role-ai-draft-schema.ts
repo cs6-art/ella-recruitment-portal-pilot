@@ -24,6 +24,10 @@ export const roleAiRecruitmentSetupDraftSchema = z.object({
   licenseRequirementStatus: text(30),
   hodInterviewRequired: text(30),
   finalInterviewVenue: text(2000),
+  // The raw Smile (VAPI) system prompt template, editable at role-request
+  // time. Empty means "use the standard template" -- the AI description
+  // parser never produces this field, so it always defaults to "" here.
+  aiSystemPrompt: text(50000),
 });
 
 export const roleAiDraftSchema = z.object({

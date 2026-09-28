@@ -112,6 +112,10 @@ const initial: FormState = {
     licenseRequirementStatus: "",
     hodInterviewRequired: "",
     finalInterviewVenue: "",
+    // Prefilled with the standard template so it's visible and editable from
+    // the start; left as-is it renders through renderRecruitmentSystemPrompt
+    // exactly like before this field existed.
+    aiSystemPrompt: STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE,
   },
 };
 
@@ -357,7 +361,11 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
       ...EVALUATION_FIELD_CATALOG.filter((field) => (values.evaluationFieldToggles || []).includes(field.key)),
       ...(values.customEvaluationFields || []),
     ];
-    const resolvedAiSystemPrompt = renderRecruitmentSystemPrompt(STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE, {
+    // Editable on this form (see the "Smile system prompt" field below); an
+    // empty draft (e.g. right after applying an AI-generated draft, which
+    // never fills this field) falls back to the standard template.
+    const rawAiSystemPrompt = String(values.aiSystemPrompt || "").trim() || STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE;
+    const resolvedAiSystemPrompt = renderRecruitmentSystemPrompt(rawAiSystemPrompt, {
       roleTitle: form.jobTitle,
       jobDescription: form.jobDescription,
       screeningCriteria: values.screeningCriteria,
@@ -373,7 +381,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
     });
     return {
       ...values,
-      aiSystemPrompt: STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE,
+      aiSystemPrompt: rawAiSystemPrompt,
       resolvedAiSystemPrompt,
       initialInterviewBookingLink: "",
       hodInterviewBookingLink: "",
@@ -704,6 +712,11 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
                     </div>
                   );
                 })}
+                <div className="field">
+                  <label htmlFor="setup_aiSystemPrompt">Smile system prompt <span className="field-optional">(advanced, optional)</span></label>
+                  <small className="field-help">The full script Smile follows on the call, built from your answers above. Edit it directly only if you need something the fields above can't express — keep the marker that says system_prompt exactly where it is; that's where your answers get inserted automatically. HR can also fine-tune this later in Recruitment Setup.</small>
+                  <textarea id="setup_aiSystemPrompt" className="vapi-full-prompt" value={setupDraft.aiSystemPrompt || STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE} onChange={(event) => updateSetup("aiSystemPrompt", event.target.value)} />
+                </div>
               </div>
             </section>
 
