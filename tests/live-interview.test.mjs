@@ -303,11 +303,11 @@ test("schema, deletion, and pilot reset include the new interview tables", () =>
   assert.match(read("src/db/schema-recruitment.ts"), /export const liveInterviewTranscriptTurns = pgTable/);
 });
 
-test("the HR page shows the live interview review under Voice Interview Review with the human-review disclaimer", () => {
+test("the HR page shows the live interview review under Live Avatar Review with the human-review disclaimer", () => {
   const page = read("src/app/applicants/[applicationId]/page.tsx");
-  assert.match(page, /<h3>Voice Interview Review<\/h3><\/div>\s*\{liveReview && <LiveInterviewReview/);
+  assert.match(page, /<h3>\{interviewReviewTitle\}<\/h3><\/div>\s*\{liveReview && <LiveInterviewReview/);
   const review = read("src/components/LiveInterviewReview.tsx");
-  for (const heading of ["Interview Overview", "AI Interview Summary", "Relevant Experience", "Skills Mentioned", "Key Strengths Evidenced in Answers", "Areas HR May Want to Clarify", "Notable Responses", "Question-by-Question Review", "Full Interview Transcript", "Recording", "Search transcript", "Jump to question", "Copy transcript"]) {
+  for (const heading of ["Interview Overview", "Live Avatar Summary", "Relevant Experience", "Skills Mentioned", "Key Strengths Evidenced in Answers", "Areas HR May Want to Clarify", "Notable Responses", "Question-by-Question Review", "Full Interview Transcript", "Live Avatar Recording", "Search transcript", "Jump to question", "Copy transcript"]) {
     assert.ok(review.includes(heading), heading);
   }
   assert.match(review, /HR_REVIEW_DISCLAIMER/);
@@ -421,7 +421,7 @@ test("assessment is wired into processing, the shared voice fields, and the HR v
   assert.match(store, /code: "not_scored"/, "unscored interviews are flagged for HR");
   assert.doesNotMatch(store, /evaluateLiveAvatarTranscript/, "the keyword heuristic no longer produces the avatar score");
   const review = readFileSync(new URL("../src/components/LiveInterviewReview.tsx", import.meta.url), "utf8");
-  for (const text of ["AI Interview Assessment", "How this is scored", "Evidence Rating", "Suggested next step"]) assert.ok(review.includes(text), text);
+  for (const text of ["Live Avatar Assessment", "How this is scored", "Evidence Rating", "Suggested next step"]) assert.ok(review.includes(text), text);
   const page = readFileSync(new URL("../src/app/applicants/[applicationId]/page.tsx", import.meta.url), "utf8");
   assert.match(page, /liveAssessmentFields\(liveReview\)/);
 });

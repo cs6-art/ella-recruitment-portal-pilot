@@ -5,17 +5,17 @@ import { useMemo, useState } from "react";
 import Pagination from "@/components/Pagination";
 import UiIcon from "@/components/UiIcon";
 import type { CandidateStatusHistoryEntry } from "@/lib/candidate-applications";
-import { applicantDecisionLabel, applicantStageLabel, historySourceLabel, historyStageLabel } from "@/lib/applicant-stage-labels";
+import { applicantDecisionLabel, applicantStageLabel, historySourceLabel, historyStageLabel, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
 const PAGE_SIZE = 5;
 
-function entryTitle(entry: CandidateStatusHistoryEntry) {
-  if (entry.previousStatus) return `${applicantStageLabel(entry.previousStatus)} → ${applicantStageLabel(entry.newStatus)}`;
-  return applicantStageLabel(entry.newStatus) || applicantDecisionLabel(entry.action) || entry.action;
+function entryTitle(entry: CandidateStatusHistoryEntry, interviewMode: ApplicantInterviewMode) {
+  if (entry.previousStatus) return `${applicantStageLabel(entry.previousStatus, interviewMode)} → ${applicantStageLabel(entry.newStatus, interviewMode)}`;
+  return applicantStageLabel(entry.newStatus, interviewMode) || applicantDecisionLabel(entry.action) || entry.action;
 }
 
-export default function CandidateHistoryTimeline({ history }: { history: CandidateStatusHistoryEntry[] }) {
+export default function CandidateHistoryTimeline({ history, interviewMode = "avatar" }: { history: CandidateStatusHistoryEntry[]; interviewMode?: ApplicantInterviewMode }) {
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(history.length / PAGE_SIZE));
   const visible = useMemo(() => history.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [history, page]);
@@ -33,15 +33,15 @@ export default function CandidateHistoryTimeline({ history }: { history: Candida
         : <>
           <div className="history-timeline">
             {visible.map((entry, index) => {
-              const source = historySourceLabel(entry.actionSource);
+              const source = historySourceLabel(entry.actionSource, interviewMode);
               return (
                 <article className="timeline-entry" key={`${entry.historyId || entry.changedAt}-${index}`}>
                   <span className="timeline-marker" aria-hidden="true" />
                   <div className="timeline-content">
                     <div className="timeline-top">
                       <div>
-                        <h3>{entryTitle(entry)}</h3>
-                        <span className="timeline-action">{historyStageLabel(entry.stage)} · {applicantDecisionLabel(entry.action) || entry.action}</span>
+                        <h3>{entryTitle(entry, interviewMode)}</h3>
+                        <span className="timeline-action">{historyStageLabel(entry.stage, interviewMode)} · {applicantDecisionLabel(entry.action) || entry.action}</span>
                       </div>
                       <time dateTime={entry.changedAt}>{formatPortalDateTime(entry.changedAt, true)}</time>
                     </div>

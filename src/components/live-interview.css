@@ -25,7 +25,7 @@
 .live-interview-recording-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #e5484d; }
 @media (max-width: 600px) { .live-interview-device-status { grid-template-columns: 1fr; } }
 
-/* HR: Applicant's Voice Interview Review — live avatar interview */
+/* HR: Applicant's Live Avatar Review */
 .live-review { display: grid; gap: 18px; margin-top: 6px; }
 .live-review-disclaimer { margin: 0; padding: 11px 14px; border-left: 3px solid var(--blue); border-radius: 8px; background: #eef6fc; color: #405b70; font-size: 13px; line-height: 1.5; }
 .live-review-block { display: grid; gap: 10px; }

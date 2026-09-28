@@ -384,12 +384,12 @@ candidate should contact the recruitment team for a new invitation.
 
 ---
 
-## How HR reviews voice interview results
+## How HR reviews Avatar interview results
 
-When the AI voice interview result is ready, the candidate's stage becomes
-**Voice HR Review**. HR opens the applicant record and reviews the voice interview
-evidence — the transcript and the structured result — alongside the resume and
-screening result.
+When the Live Avatar interview result is ready, the candidate's stage becomes
+**Avatar Interview Review**. HR opens the applicant record and reviews the Live
+Avatar evidence — the transcript, recording, and structured result — alongside
+the resume and screening result.
 
 HR then records an explicit decision. Approval moves the candidate to
 **Approved for Face-to-Face Interview** and generates the HR interview booking
@@ -426,12 +426,13 @@ manages Settings to check or reconnect the shared HR calendar.
 
 ## What the applicant stages mean
 
-- **Resume HR Review** — the resume has been received and needs a human review.
-- **Resume Approved** — the candidate can move to the phone interview step.
-- **Voice Booking Pending** — the candidate needs to choose a phone interview
-  time.
-- **Voice Interview Scheduled** — a phone interview time has been booked.
-- **Voice HR Review** — the phone interview result is ready for HR to review.
+- **Resume Review** — the resume has been received and needs a human review.
+- **Resume Approved** — the candidate can move to the Live Avatar interview step.
+- **Avatar Interview Booking Pending** — the secure one-time Live Avatar link is
+  being prepared or sent.
+- **Avatar Interview Scheduled** — the secure one-time Live Avatar link is ready
+  for the candidate; no calendar slot is required.
+- **Avatar Interview Review** — the Live Avatar result is ready for HR to review.
 - **Approved for Face-to-Face Interview** — the candidate can choose a
   face-to-face interview time.
 - **Face-to-Face Interview Scheduled** — a face-to-face interview time has been

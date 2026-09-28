@@ -32,6 +32,10 @@ export class InterviewRecorder {
   private destination: MediaStreamAudioDestinationNode | null = null;
   status: RecorderStatus = "idle";
 
+  static canRecord() {
+    return Boolean(pickMimeType());
+  }
+
   constructor(private readonly avatarToken: string, private readonly onStatus?: (status: RecorderStatus, message?: string) => void) {}
 
   /** Starts recording the camera plus the applicant microphone. */
@@ -53,8 +57,10 @@ export class InterviewRecorder {
       this.recorder.onerror = () => void this.fail("The browser stopped the interview recording unexpectedly.");
       this.recorder.start(TIMESLICE_MS);
       this.setStatus("recording");
+      return true;
     } catch (error) {
       void this.fail(error instanceof Error ? error.message : "The interview recording could not start.");
+      return false;
     }
   }
 

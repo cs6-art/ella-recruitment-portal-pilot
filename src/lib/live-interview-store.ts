@@ -299,7 +299,9 @@ export async function completeInterviewSession(input: { rawToken: string; provid
   return { session: updated, alreadyCompleted: false };
 }
 
-async function stopProviderSession(providerSessionId: string) {
+// Startup rollback and normal completion both use the same provider cleanup
+// path so a failed recording setup cannot leave an unused Avatar room running.
+export async function stopProviderSession(providerSessionId: string) {
   const apiKey = process.env.LIVEAVATAR_API_KEY?.trim();
   if (!apiKey || !providerSessionId) return;
   try {
@@ -774,6 +776,10 @@ export async function receiveRecordingChunk(input: { rawToken: string; offset: n
   }
   const result = await uploadRecordingChunk(session.recordingUploadUrl, input.chunk, input.offset, input.final);
   if (result.complete) {
+    if (result.receivedBytes <= 0) {
+      await markRecordingFailed({ rawToken: input.rawToken, reason: "No recording data was received from the applicant's browser." });
+      throw new LiveInterviewError("No recording data was received from the applicant's browser.", 502, "recording_empty");
+    }
     await db.update(liveInterviewSessions).set({ recordingStatus: "available", recordingStorageRef: result.fileId, recordingBytes: result.receivedBytes, recordingUploadUrl: "", recordingError: "", updatedAt: new Date() }).where(eq(liveInterviewSessions.id, session.id));
   } else {
     await db.update(liveInterviewSessions).set({ recordingBytes: result.receivedBytes, updatedAt: new Date() }).where(eq(liveInterviewSessions.id, session.id));

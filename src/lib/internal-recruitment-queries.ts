@@ -88,6 +88,13 @@ const VOICE_UNANSWERED_MINUTES = Number.isFinite(configuredVoiceUnansweredMinute
   : 10;
 const STAGES = ["resume_review", "resume_approved", "voice_booking_pending", "voice_scheduled", "voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final", "rejected", "withdrawn"] as const;
 const DECISIONS = ["", "approve", "reject", "manual_review", "pending"] as const;
+
+// A Live Avatar interview is identifiable as soon as its one-time invitation
+// is issued. The session branch covers candidates who have already consented
+// and started; the token branch keeps pending Avatar interviews labelled too.
+function hasAvatarInterviewSql() {
+  return sql<boolean>`exists (select 1 from ${liveInterviewSessions} where ${liveInterviewSessions.applicationId} = ${applications.id}) or exists (select 1 from ${bookingTokens} where ${bookingTokens.applicationId} = ${applications.id} and ${bookingTokens.kind} = 'avatar')`;
+}
 const STAGE_TRANSITIONS: Record<string, readonly string[]> = {
   resume_review: ["resume_approved", "rejected", "withdrawn"],
   resume_approved: ["voice_booking_pending", "rejected", "withdrawn"],
@@ -526,7 +533,7 @@ export async function listApplications(stage?: string, roleExternalId?: string, 
   const conditions = [eq(roles.organizationId, organizationId.trim())];
   if (stage) conditions.push(eq(applications.currentStage, stage));
   if (roleExternalId) conditions.push(eq(roles.externalId, roleExternalId.trim()));
-  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles })
+  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql() })
     .from(applications)
     .innerJoin(roles, eq(roles.id, applications.roleId))
     .innerJoin(applicants, eq(applicants.id, applications.applicantId))
@@ -573,7 +580,7 @@ export async function reconcileMissingTargetScreeningQueue(organizationId: strin
 /** Return only the newest target applicants needed by the notification bell. */
 export async function listRecentApplications(department?: string, limit = 50, organizationId = DEFAULT_ORGANIZATION_ID) {
   const db = getDb();
-  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles })
+  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql() })
     .from(applications)
     .innerJoin(roles, eq(roles.id, applications.roleId))
     .innerJoin(applicants, eq(applicants.id, applications.applicantId))
@@ -692,7 +699,7 @@ export async function copyScreeningResult(input: { sourceApplicationId: string; 
 
 export async function getApplication(externalId: string) {
   const db = getDb();
-  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, roleTargetHiringDate: roles.targetHiringDate, roleHrCalendarEmail: roles.hrCalendarEmail, roleSetup: roles.setup, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
+  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, roleTargetHiringDate: roles.targetHiringDate, roleHrCalendarEmail: roles.hrCalendarEmail, roleSetup: roles.setup, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql() }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
   return row ?? null;
 }
 

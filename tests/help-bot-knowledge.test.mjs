@@ -114,7 +114,7 @@ test("user prompt embeds the knowledge and the question", () => {
   const prompt = buildUserPrompt(context, "what do the applicant stages mean");
   assert.match(prompt, /KNOWLEDGE/);
   assert.match(prompt, /USER QUESTION: what do the applicant stages mean/);
-  assert.match(prompt, /Resume HR Review/);
+  assert.match(prompt, /Resume Review/);
 });
 
 test("user prompt includes only safe account context for account questions", () => {

@@ -63,7 +63,7 @@ test("dashboard includes candidate pipeline metrics without exposing them to cre
   assert.match(dashboard, /Each applicant appears once/);
   assert.match(dashboard, /stageCounts/);
   assert.match(stageLabels, /resume_review: "Resume Review"/);
-  assert.match(stageLabels, /voice_review_pending: "Voice Interview Review"/);
+  assert.match(stageLabels, /voice_review_pending: AVATAR_INTERVIEW_REVIEW_LABEL/);
   assert.match(stageLabels, /passed_final: "Passed Final Interview"/);
   assert.match(stageLabels, /rejected: "Rejected"/);
   assert.doesNotMatch(applicantMetrics, /label: "Submitted"/);
@@ -81,17 +81,17 @@ test("applicant stage labels are presentation-only and used consistently", () =>
   const detail = read("src/app/applicants/[applicationId]/page.tsx");
   assert.match(labels, /resume_review: "Resume Review"/);
   assert.match(labels, /resume_approved: "Resume Approved"/);
-  assert.match(labels, /voice_review_pending: "Voice Interview Review"/);
+  assert.match(labels, /voice_review_pending: AVATAR_INTERVIEW_REVIEW_LABEL/);
   assert.match(labels, /passed_final: "Passed Final Interview"/);
   assert.match(labels, /if \(key === "approve" \|\| key === "approved"\) return "Approve"/);
   assert.match(labels, /if \(key === "reject" \|\| key === "rejected"\) return "Reject"/);
   assert.match(labels, /replace\(\/\[\\s-\]\+\/g, "_"\)/);
   const historyTimeline = read("src/components/CandidateHistoryTimeline.tsx");
-  assert.match(list, /applicantStageLabel\(applicant\.currentStage\)/);
-  assert.match(detail, /applicantStageLabel\(applicant\.currentStage\)/);
-  assert.match(historyTimeline, /applicantStageLabel\(entry\.newStatus\)/);
+  assert.match(list, /applicantStageLabel\(applicant\.currentStage, applicant\.interviewMode\)/);
+  assert.match(detail, /applicantStageLabel\(applicant\.currentStage, interviewMode\)/);
+  assert.match(historyTimeline, /applicantStageLabel\(entry\.newStatus, interviewMode\)/);
   assert.match(detail, /applicantDecisionLabel\(applicant\.resumeStatus\)/);
-  assert.match(detail, /applicantStageLabel\(applicant\.voiceCallStatus \|\| applicant\.voiceStatus\)/);
+  assert.match(detail, /applicantStageLabel\(voiceCallStatus\).*applicantStageLabel\(applicant\.voiceStatus\)/s);
   // Canonical keys remain the values used for filters and database/API work.
   assert.match(list, /applicant\.currentStage === stageFilter/);
   assert.match(labels, /must continue to\r?\n\s*\* send and persist the canonical status key/);

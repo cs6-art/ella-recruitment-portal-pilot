@@ -52,7 +52,7 @@ export function notificationEventLabel(eventType: string | null | undefined) {
   return EVENT_LABELS[key] || (key ? titleCase(key) : "Recruitment update");
 }
 
-/** Email-ready name for the applicant's workflow stage, e.g. "Voice Interview Review". */
+/** Email-ready name for the applicant's workflow stage, e.g. "Avatar Interview Review". */
 export function notificationStatusLabel(stage: string | null | undefined) {
   return applicantStageLabel(stage) || "";
 }

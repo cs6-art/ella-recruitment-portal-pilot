@@ -5,12 +5,17 @@
  * Callers may use this helper when rendering a stage, but must continue to
  * send and persist the canonical status key.
  */
+export type ApplicantInterviewMode = "avatar" | "voice";
+
+export const LIVE_AVATAR_REVIEW_LABEL = "Live Avatar Review";
+export const AVATAR_INTERVIEW_REVIEW_LABEL = "Avatar Interview Review";
+
 const APPLICANT_STAGE_LABELS: Record<string, string> = {
   resume_review: "Resume Review",
   resume_approved: "Resume Approved",
-  voice_booking_pending: "Voice Booking Pending",
-  voice_scheduled: "Voice Interview Scheduled",
-  voice_review_pending: "Voice Interview Review",
+  voice_booking_pending: "Avatar Interview Booking Pending",
+  voice_scheduled: "Avatar Interview Scheduled",
+  voice_review_pending: AVATAR_INTERVIEW_REVIEW_LABEL,
   approved_for_final: "Approved for Face-to-Face Interview",
   final_scheduled: "Face-to-Face Interview Scheduled",
   final_decision_pending: "Face-to-Face Decision Pending",
@@ -19,17 +24,20 @@ const APPLICANT_STAGE_LABELS: Record<string, string> = {
   withdrawn: "Withdrawn",
   // Normalize older display wording without changing the stored value.
   resume_hr_review: "Resume Review",
-  voice_hr_review: "Voice Interview Review",
+  voice_hr_review: AVATAR_INTERVIEW_REVIEW_LABEL,
   passed_face_to_face_interview: "Passed Final Interview",
 };
 
-export function applicantStageLabel(value: string | null | undefined) {
+export function applicantStageLabel(value: string | null | undefined, mode: ApplicantInterviewMode = "avatar") {
   const text = String(value || "").trim();
   if (!text) return "";
   const key = text.toLowerCase().replace(/[\s-]+/g, "_");
-  return APPLICANT_STAGE_LABELS[key] || (text.includes("_")
+  const label = APPLICANT_STAGE_LABELS[key] || (text.includes("_")
     ? text.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase())
     : text);
+  return mode === "voice"
+    ? label.replace(/\bAvatar Interview\b/g, "Voice Interview").replace(/\bAvatar\b/g, "Voice")
+    : label;
 }
 
 /**
@@ -56,14 +64,15 @@ export function applicantDecisionLabel(value: string | null | undefined) {
  */
 const HISTORY_STAGE_LABELS: Record<string, string> = {
   resume: "Resume Screening",
-  voice: "Voice Interview",
+  voice: "Avatar Interview",
   final: "Face-to-Face Interview",
 };
 
-export function historyStageLabel(value: string | null | undefined) {
+export function historyStageLabel(value: string | null | undefined, mode: ApplicantInterviewMode = "avatar") {
   const text = String(value || "").trim();
   if (!text) return "";
-  return HISTORY_STAGE_LABELS[text.toLowerCase()] || applicantStageLabel(text);
+  const label = HISTORY_STAGE_LABELS[text.toLowerCase()] || applicantStageLabel(text, mode);
+  return mode === "voice" && label === "Avatar Interview" ? "Voice Interview" : label;
 }
 
 /**
@@ -78,7 +87,7 @@ const HISTORY_SOURCE_LABELS: Record<string, string> = {
   "internal_api": "System update",
   "internal_api:booking": "Interview booked",
   "internal_api:voice_booking_invitation": "Booking invitation queued",
-  "internal_api:voice_result": "Voice interview result recorded",
+  "internal_api:voice_result": "Avatar interview result recorded",
   "internal_api:hr_decision": "Decision recorded by HR",
   "portal_postgres_target": "System update",
   "public-booking": "Candidate booked their own interview",
@@ -86,13 +95,16 @@ const HISTORY_SOURCE_LABELS: Record<string, string> = {
   "hr interview status action": "Updated by HR",
   "automatic interview status monitor": "Automatic status update",
   "applicant review portal": "Updated in the applicant portal",
+  "live_avatar": "Live Avatar interview completed",
 };
 
-export function historySourceLabel(value: string | null | undefined) {
+export function historySourceLabel(value: string | null | undefined, mode: ApplicantInterviewMode = "avatar") {
   const text = String(value || "").trim();
   if (!text) return "";
   const known = HISTORY_SOURCE_LABELS[text.toLowerCase()];
-  if (known) return known;
+  if (known) return mode === "voice" && text.toLowerCase() === "internal_api:voice_result"
+    ? "Voice interview result recorded"
+    : known;
   // Unrecognized value — still strip the technical punctuation instead of
   // showing a raw "internal_api:something" style token.
   return text.replace(/[_:-]+/g, " ").trim().replace(/\b\w/g, (character) => character.toUpperCase());

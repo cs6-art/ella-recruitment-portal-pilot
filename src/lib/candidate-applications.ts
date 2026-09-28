@@ -9,7 +9,7 @@ import { getRoleRequestById, type RoleRequestDetails } from "@/lib/google-sheets
 import { evaluationFieldsForSetup, type EvaluationField } from "@/lib/recruitment-setup-schema";
 import { buildNumberedInterviewQuestions, normalizeInterviewQuestionCount } from "@/lib/interview-question-count";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { applicantStageLabel } from "@/lib/applicant-stage-labels";
+import { applicantStageLabel, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 import { targetActiveBookingLinkRoleIds, targetApplicantDetails, targetApplicantMetrics, targetApplicantSummaries, targetBookings, targetBulkResumeQueue, targetAppendBulkResumeQueue } from "@/lib/recruitment-target-portal";
 
 export {
@@ -58,6 +58,8 @@ export type ApplicantSummary = {
   finalStatus: string;
   currentStage: string;
   nextAction: string;
+  /** Presentation channel for interview wording; workflow keys remain voice_* for compatibility. */
+  interviewMode: ApplicantInterviewMode;
   /** Generated demo history is viewable only through an explicit stage filter. */
   isHistoricalDemo?: boolean;
 };
@@ -470,6 +472,7 @@ function mapApplicant(record: SheetRow, isHistoricalDemo = false): ApplicantSumm
     finalStatus: displayFaceToFaceInterviewText(displayInterviewStageText(finalStatus)),
     currentStage: displayFaceToFaceInterviewText(displayInterviewStageText(stageFor(record))),
     nextAction: displayFaceToFaceInterviewText(displayInterviewStageText(nextActionFor(record))),
+    interviewMode: "voice",
     isHistoricalDemo,
   };
 }

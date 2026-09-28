@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import ValidationSummary from "@/components/ValidationSummary";
-import { applicantDecisionLabel } from "@/lib/applicant-stage-labels";
+import { applicantDecisionLabel, LIVE_AVATAR_REVIEW_LABEL, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 
 type Stage = "resume" | "voice" | "final";
 type SavedDecision = { decision: string; comments: string };
@@ -24,6 +24,7 @@ type Props = {
   voiceBookingLink: string;
   voiceRetryEligible: boolean;
   canReview: boolean;
+  interviewMode: ApplicantInterviewMode;
 };
 
 function isDecided(current: string) {
@@ -139,6 +140,7 @@ export default function ApplicantDecisionPanel(props: Props) {
   const [message, setMessage] = useState("");
   const [savedDecisions, setSavedDecisions] = useState<Partial<Record<Stage, SavedDecision>>>({});
   const stage = reviewStage(props);
+  const interviewReviewTitle = props.interviewMode === "avatar" ? LIVE_AVATAR_REVIEW_LABEL : "Voice Interview Review";
   const saveDecision = (nextMessage: string, decision: string, comments: string) => {
     setMessage(nextMessage);
     setSavedDecisions((current) => ({ ...current, [stage]: { decision, comments } }));
@@ -150,8 +152,8 @@ export default function ApplicantDecisionPanel(props: Props) {
   const finalDecision = savedDecisions.final?.decision || props.finalInterviewStatus;
   const finalComments = savedDecisions.final?.comments || props.finalComments;
   return <section className="card applicant-decision-card"><div className="card-header"><div><h2>HR Decisions</h2><p>Review the applicant&apos;s current workflow stage. Comments are required for every decision.</p></div></div>{message && <ActionFeedback kind="success" className="applicant-decision-success">{message}</ActionFeedback>}<div className="applicant-decision-list">
-    {stage === "resume" && (isDecided(resumeDecision) ? <CompletedDecision title="AI CV Analysis" decision={resumeDecision} comments={resumeComments} /> : <DecisionRow stage="resume" title="AI CV Analysis" description="Review Smile&apos;s CV analysis recommendation before moving the applicant to the voice interview." current={resumeDecision} applicationId={props.applicationId} canReview={props.canReview} onSaved={saveDecision} />)}
-    {stage === "voice" && <><CompletedDecision title="AI CV Analysis" decision={resumeDecision} comments={resumeComments} />{isDecided(voiceDecision) ? <CompletedDecision title="Voice Interview Review" decision={voiceDecision} comments={voiceComments} link={props.finalBookingLink} /> : <DecisionRow stage="voice" title="Voice Interview Review" description="Review the combined screening evidence below before approving the applicant for the next stage." current={voiceDecision} link={props.voiceBookingLink} retryEligible={props.voiceRetryEligible} applicationId={props.applicationId} canReview={props.canReview} onSaved={saveDecision} />}</>}
-    {stage === "final" && <><CompletedDecision title="Voice Interview Review" decision={voiceDecision} comments={voiceComments} />{isDecided(props.finalStatus) || isDecided(finalDecision) ? <CompletedDecision title="Face-to-Face Interview Decision" decision={props.finalStatus || finalDecision} comments={finalComments} /> : <DecisionRow stage="final" title="Face-to-Face Interview Decision" description="Record the Face-to-Face interview outcome after the interviewer has completed the meeting." current={finalDecision === "Interview Completed" ? "" : finalDecision} enabled applicationId={props.applicationId} canReview={props.canReview} onSaved={saveDecision} />}</>}
+    {stage === "resume" && (isDecided(resumeDecision) ? <CompletedDecision title="AI CV Analysis" decision={resumeDecision} comments={resumeComments} /> : <DecisionRow stage="resume" title="AI CV Analysis" description={`Review Smile's CV analysis recommendation before moving the applicant to the ${props.interviewMode === "avatar" ? "Live Avatar" : "voice"} interview.`} current={resumeDecision} applicationId={props.applicationId} canReview={props.canReview} onSaved={saveDecision} />)}
+    {stage === "voice" && <><CompletedDecision title="AI CV Analysis" decision={resumeDecision} comments={resumeComments} />{isDecided(voiceDecision) ? <CompletedDecision title={interviewReviewTitle} decision={voiceDecision} comments={voiceComments} link={props.finalBookingLink} /> : <DecisionRow stage="voice" title={interviewReviewTitle} description={`Review the ${props.interviewMode === "avatar" ? "Live Avatar" : "voice interview"} evidence below before approving the applicant for the next stage.`} current={voiceDecision} link={props.voiceBookingLink} retryEligible={props.voiceRetryEligible} applicationId={props.applicationId} canReview={props.canReview} onSaved={saveDecision} />}</>}
+    {stage === "final" && <><CompletedDecision title={interviewReviewTitle} decision={voiceDecision} comments={voiceComments} />{isDecided(props.finalStatus) || isDecided(finalDecision) ? <CompletedDecision title="Face-to-Face Interview Decision" decision={props.finalStatus || finalDecision} comments={finalComments} /> : <DecisionRow stage="final" title="Face-to-Face Interview Decision" description="Record the Face-to-Face interview outcome after the interviewer has completed the meeting." current={finalDecision === "Interview Completed" ? "" : finalDecision} enabled applicationId={props.applicationId} canReview={props.canReview} onSaved={saveDecision} />}</>}
   </div></section>;
 }

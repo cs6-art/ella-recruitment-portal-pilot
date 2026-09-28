@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { createLiveAvatarSession, isLiveAvatarConfigured } from "@/lib/live-avatar";
+import { isRecordingStorageConfigured } from "@/lib/interview-recording-storage";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { finalizeAvatarInterviewStart, releaseAvatarInterviewStart, startAvatarInterview } from "@/lib/internal-recruitment-queries";
-import { assertReadyToStart, LiveInterviewError, markInterviewStarted } from "@/lib/live-interview-store";
+import { assertReadyToStart, LiveInterviewError, markInterviewStarted, stopProviderSession } from "@/lib/live-interview-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +48,11 @@ export async function POST(request: NextRequest) {
         if (gateError instanceof LiveInterviewError) return NextResponse.json({ success: false, error: gateError.message, code: gateError.code }, { status: gateError.status });
         throw gateError;
       }
+      // Do not consume the invitation or open a provider room unless the
+      // private Drive recording path is ready for this interview.
+      if (!isRecordingStorageConfigured()) {
+        return NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable because private recording storage is not configured. Please contact the recruitment team.", code: "recording_storage_unavailable" }, { status: 503 });
+      }
       const context = await startAvatarInterview(avatarToken);
       if (!context) return NextResponse.json({ success: false, error: "This avatar interview link has already been used, expired, or is no longer available." }, { status: 410 });
       const session = await createLiveAvatarSession({ roleTitle: context.roleTitle, jobDescription: context.roleDescription, candidateName: context.candidateName, resumeSummary: context.resumeSummary, screeningQuestion: context.screeningQuestion });
@@ -60,9 +66,16 @@ export async function POST(request: NextRequest) {
       try {
         const interview = await markInterviewStarted({ rawToken: avatarToken, providerSessionId: session.sessionId });
         recordingEnabled = interview?.recordingStatus === "pending";
+        if (!recordingEnabled) {
+          await stopProviderSession(session.sessionId);
+          await releaseAvatarInterviewStart(avatarToken);
+          return NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable because recording could not be prepared. Please try again or contact the recruitment team.", code: "recording_not_ready" }, { status: 503 });
+        }
       } catch (trackError) {
-        // The avatar session exists; completion re-links it by token.
         console.error("[API Live Avatar Candidate Session] Failed to record interview start:", trackError);
+        await stopProviderSession(session.sessionId).catch((stopError) => console.error("[API Live Avatar Candidate Session] Failed to stop untracked provider session:", stopError));
+        await releaseAvatarInterviewStart(avatarToken).catch((releaseError) => console.error("[API Live Avatar Candidate Session] Failed to release invitation after tracking failure:", releaseError));
+        return NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable because the interview could not be prepared for recording. Please try again.", code: "recording_not_ready" }, { status: 503 });
       }
       return NextResponse.json({ success: true, ...session, recordingEnabled }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {

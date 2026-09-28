@@ -226,8 +226,8 @@ test("I: a completed interview whose analysis failed is still Completed", () => 
   for (const status of ["NOT_STARTED", "CONSENTED", "DEVICE_CHECK"]) assert.equal(deriveInterviewState(status), "not_started");
   for (const status of LIVE_INTERVIEW_STATUSES) assert.ok(INTERVIEW_STATE_LABELS[deriveInterviewState(status)]);
   const component = read("src/components/LiveInterviewReview.tsx");
-  assert.match(component, /<span>Interview Status<\/span><strong>\{INTERVIEW_STATE_LABELS\[review\.interviewState\]\}/);
-  assert.match(component, /<span>AI Analysis Status<\/span>/);
+  assert.match(component, /<span>Live Avatar Interview Status<\/span><strong>\{INTERVIEW_STATE_LABELS\[review\.interviewState\] \|\|/);
+  assert.match(component, /<span>AI Review Status<\/span>/);
 });
 
 test("J: an analysis failure never deletes or overwrites the transcript, recording, or consent", () => {

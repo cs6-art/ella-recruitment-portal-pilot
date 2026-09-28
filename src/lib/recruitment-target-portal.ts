@@ -48,7 +48,7 @@ import { applicantVoiceTimezone } from "@/lib/applicant-timezone";
 import { extractStoredResumeText, type ResumeFileKind, type ResumeFileRecord } from "@/lib/resume-files";
 import { scheduledInstant } from "@/lib/interview-time";
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
-import { applicantStageLabel } from "@/lib/applicant-stage-labels";
+import { applicantStageLabel, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 import { generateRoleId } from "@/lib/role-id";
 import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows } from "@/lib/google-calendar";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isFinalInterviewSlotDuration, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
@@ -1010,6 +1010,8 @@ type TargetApplicationRow = Awaited<ReturnType<typeof listApplications>>[number]
 function targetApplicantSummary(row: TargetApplicationRow) {
     const application = row.application as unknown as Record<string, unknown>;
     const screening = row.screeningResult as unknown as Record<string, unknown> | null;
+    const interviewMode: ApplicantInterviewMode = row.hasLiveAvatarInterview ? "avatar" : "voice";
+    const stageLabel = applicantStageLabel(application.currentStage as string, interviewMode) || label(application.currentStage);
     return {
       applicationId: text(application.externalId),
       candidateName: text(application.candidateName),
@@ -1020,16 +1022,17 @@ function targetApplicantSummary(row: TargetApplicationRow) {
       department: text(row.departmentSnapshot),
       appliedAt: text(application.appliedAt),
       matchScore: screening?.matchScore == null ? "" : String(screening.matchScore),
-      recommendation: label(application.currentStage),
+      recommendation: stageLabel,
       // HR decisions are a separate workflow step. They must never make an
       // application appear AI-screened when no screening result exists.
       cvRecommendation: text(screening?.recommendation),
       resumeStatus: screening ? "Processed" : "",
       voiceStatus: text(application.voiceHrDecision),
       finalInterviewStatus: text(application.finalHrDecision),
-      finalStatus: label(application.currentStage),
+      finalStatus: stageLabel,
       currentStage: text(application.currentStage),
-      nextAction: label(application.currentStage),
+      nextAction: stageLabel,
+      interviewMode,
       isHistoricalDemo: false,
     };
 }

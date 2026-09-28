@@ -325,6 +325,11 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
     setTypedResponse("");
     setSessionIssued(false);
     endingRef.current = false;
+    if (accessToken && !InterviewRecorder.canRecord()) {
+      setError("This browser cannot record the Live Avatar interview. Please use the latest Chrome, Edge, Safari, or Firefox.");
+      setState("error");
+      return;
+    }
     setState("starting");
     try {
       // Resolve the actual input device while this direct click still carries
@@ -351,7 +356,9 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
         // Consented recording of the applicant camera + both audio sides.
         const recorder = new InterviewRecorder(accessToken, (status) => setRecordingStatus(status));
         recorderRef.current = recorder;
-        recorder.start(devicesRef.current.camera, devicesRef.current.microphone);
+        if (!recorder.start(devicesRef.current.camera, devicesRef.current.microphone)) {
+          throw new Error("Your browser could not start the interview recording. Please try again in a supported browser.");
+        }
       }
 
       const { LiveAvatarSession, SessionEvent, AgentEventsEnum } = await import("@heygen/liveavatar-web-sdk");
@@ -431,6 +438,7 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
       setState("error");
       sessionRef.current = null;
       if (recorderRef.current) void recorderRef.current.finish(5_000);
+      if (accessToken && sessionIdRef.current) void postInterview("/api/live-avatar/complete", { sessionId: sessionIdRef.current, interrupted: true }, true).catch(() => {});
     }
   }
 
@@ -508,15 +516,15 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
     <section className="card live-avatar-card" aria-labelledby="live-avatar-title">
       <div className="card-header">
         <div>
-          <span className="form-eyebrow">STEP 2 · LIVE SCREENING</span>
-          <h2 id="live-avatar-title">Meet Smile for one focused question</h2>
+          <span className="form-eyebrow">STEP 2 · LIVE AVATAR INTERVIEW</span>
+          <h2 id="live-avatar-title">Complete your Live Avatar interview</h2>
         </div>
         {state === "live" && <span className="live-avatar-live-pill">Live</span>}
       </div>
       <div className="live-avatar-body">
         {state === "idle" && (
           accessToken ? <>
-            <p className="live-avatar-disclosure">Before the interview begins you will review a recording and consent notice, then check your camera and microphone. Nothing is recorded until you agree.</p>
+            <p className="live-avatar-disclosure">Before the Live Avatar interview begins you will review a recording and consent notice, then check your camera and microphone. Nothing is recorded until you agree.</p>
             <button type="button" className="btn btn-primary" onClick={() => setState("precheck")}>Start Interview</button>
           </> : <>
             <p className="live-avatar-disclosure">This is an AI interview aid. The candidate's response will be transcribed and summarized for the recruitment team. You can stop at any time.</p>
@@ -562,8 +570,8 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
 
         {state === "results" && accessToken && (
           <div className="live-avatar-results" aria-live="polite">
-            <div><strong>Interview completed</strong><p>{submitNotice}</p></div>
-            <p>Thank you for taking the time to speak with Smile. The recruitment team will review your interview and contact you about the next steps. You can now close this page.</p>
+            <div><strong>Live Avatar interview completed</strong><p>{submitNotice}</p></div>
+            <p>Thank you for completing your Live Avatar interview with Smile. The recruitment team will review your interview and contact you about the next steps. You can now close this page.</p>
             <p className="live-avatar-disclosure">Your interview is reviewed by people. It is not an automated hiring decision.</p>
           </div>
         )}

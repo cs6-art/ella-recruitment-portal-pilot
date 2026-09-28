@@ -47,17 +47,17 @@ function turnTime(turn: TranscriptTurn) {
 }
 
 function speakerLabel(turn: TranscriptTurn) {
-  return turn.speaker === "ai_interviewer" ? "AI Interviewer" : "Applicant";
+  return turn.speaker === "ai_interviewer" ? "Smile (Live Avatar)" : "Applicant";
 }
 
 function recordingLabel(review: Review) {
   switch (review.recording.status) {
-    case "available": return "Available";
-    case "not_consented": return "Not recorded (no recording consent)";
-    case "not_configured": return "Not recorded (storage not configured)";
-    case "pending": case "uploading": return "Upload in progress";
-    case "failed": return "Failed — not available";
-    default: return "Not recorded";
+    case "available": return "Saved to private Google Drive — available for HR playback";
+    case "not_consented": return "Not recorded — the applicant did not consent to recording";
+    case "not_configured": return "Not recorded — Google Drive storage is not configured";
+    case "pending": case "uploading": return "Upload in progress — keep the interview page open";
+    case "failed": return "Upload failed — recording is not available";
+    default: return "Recording status not available";
   }
 }
 
@@ -178,11 +178,11 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
         <div className="applicant-detail-field"><span>Position Applied For</span><strong>{review.roleTitle || "—"}</strong></div>
         <div className="applicant-detail-field"><span>Interview Date</span><strong>{formatDate(review.interviewDate)}</strong></div>
         <div className="applicant-detail-field"><span>Interview Duration</span><strong>{formatDuration(review.durationSeconds)}</strong></div>
-        <div className="applicant-detail-field"><span>Interview Status</span><strong>{INTERVIEW_STATE_LABELS[review.interviewState]}</strong></div>
-        <div className="applicant-detail-field"><span>AI Analysis Status</span><strong>{review.interviewState === "completed" ? analysisLabel : "Not started"}</strong></div>
+        <div className="applicant-detail-field"><span>Live Avatar Interview Status</span><strong>{INTERVIEW_STATE_LABELS[review.interviewState] || "Status not available"}</strong></div>
+        <div className="applicant-detail-field"><span>AI Review Status</span><strong>{review.interviewState === "completed" ? analysisLabel : "Not started"}</strong></div>
         <div className="applicant-detail-field"><span>Consent Status</span><strong>{review.consent.given ? `Given ${formatDate(review.consent.at)} · notice ${review.consent.version}` : "Not given"}</strong></div>
-        <div className="applicant-detail-field"><span>Recording</span><strong>{recordingLabel(review)}</strong></div>
-        <div className="applicant-detail-field"><span>Transcript Source</span><strong>{review.transcriptSource === "provider" ? "LiveAvatar (HeyGen) session transcript" : review.transcriptSource === "client_capture" ? "Browser capture (provider transcript unavailable)" : review.transcriptSource === "none" ? "Could not be retrieved" : "Not yet available"}</strong></div>
+        <div className="applicant-detail-field"><span>Recording Storage</span><strong>{recordingLabel(review)}</strong></div>
+        <div className="applicant-detail-field"><span>Transcript Source</span><strong>{review.transcriptSource === "provider" ? "Live Avatar (HeyGen) session transcript" : review.transcriptSource === "client_capture" ? "Browser capture — provider transcript unavailable" : review.transcriptSource === "none" ? "Could not be retrieved" : "Not yet available"}</strong></div>
       </div>
     </div>
 
@@ -200,7 +200,7 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
     </div>}
 
     <div className="live-review-block">
-      <h4>AI Interview Assessment</h4>
+      <h4>Live Avatar Assessment</h4>
       {assessment ? <>
         <div className={`live-review-assessment ${assessment.status === "scored" ? `is-${assessment.band}` : "is-unscored"}`}>
           <div className="live-review-score"><span>Score</span><strong>{assessment.status === "scored" ? `${assessment.score}%` : "—"}</strong></div>
@@ -220,7 +220,7 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
     </div>
 
     <div className="live-review-block">
-      <h4>AI Interview Summary</h4>
+      <h4>Live Avatar Summary</h4>
       {analysis ? <>
         <div className="applicant-copy-block"><span>Interview Summary</span><p>{analysis.interviewSummary || "No summary was produced."}</p></div>
         <div className="applicant-copy-columns">
@@ -278,7 +278,7 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
     </div>
 
     <div className="live-review-block">
-      <h4>Recording</h4>
+      <h4>Live Avatar Recording</h4>
       {review.recording.available
         ? <video className="live-review-video" controls preload="metadata" src={`${endpoint}/recording`}>Your browser cannot play this recording.</video>
         : <p className="live-review-loading">{recordingLabel(review)}</p>}

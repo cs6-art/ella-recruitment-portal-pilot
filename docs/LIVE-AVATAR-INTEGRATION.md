@@ -96,7 +96,7 @@ check → Start Interview → live avatar → saving → Interview completed.**
   `failure_stage` / `last_error`. The HR page, a "Retry processing" button, and
   the daily `/api/cron/live-interview-recovery` sweep resume stalled work and
   close interviews abandoned in the browser.
-- The HR review (Applicant profile → Voice Interview Review) shows the
+- The HR review (Applicant profile → Live Avatar Review) shows the
   overview, evidence-based AI summary, question-by-question review, full
   transcript (search, jump, expand, copy), recording, and objective session
   indicators. The analysis prompt forbids inference from appearance, voice,
