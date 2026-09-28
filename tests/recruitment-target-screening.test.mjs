@@ -7,10 +7,13 @@ import { fileURLToPath } from "node:url";
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFileSync(path.join(root, file), "utf8");
 
-test("target bulk import queues work without charging before screening", () => {
+test("target bulk import pre-checks credit but never charges before screening", () => {
   const source = read("src/lib/recruitment-target-bulk.ts");
   assert.doesNotMatch(source, /recordDeduction/);
-  assert.doesNotMatch(source, /assertCreditsAvailable/);
+  // A balance pre-check (read-only) is expected up front so an under-funded
+  // batch is refused before any file is stored or queued; the actual charge
+  // still happens only in finalizeBulkScreening, atomically with the result.
+  assert.match(source, /assertCreditsAvailable/);
   assert.match(source, /status: "queued"/);
 });
 

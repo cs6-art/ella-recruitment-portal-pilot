@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 
+import { assertCreditsAvailable } from "@/lib/ella-credits";
 import { extractResumeContactDetails } from "@/lib/resume-contact-extraction";
 import { bulkResumeEnvironment, bulkResumeIsUatMarked, productionUatBatchId } from "@/lib/bulk-resume-config";
 import { deleteResumeFile, MAX_RESUME_FILE_BYTES, storeResumeFile } from "@/lib/resume-files";
@@ -57,25 +58,59 @@ export async function intakeTargetResumeBatch(input: {
   // between the hash and the Set mutation), so it can't race across workers.
   const claimedShaInBatch = new Set<string>();
 
-  async function processSource(source: IntakeSource): Promise<Record<string, unknown>> {
+  // Hash every source up front, once, so (a) a source that can only be read
+  // once (a Drive/OneDrive download) is never re-read, and (b) the credit
+  // pre-check below can count real, non-duplicate files before any storage,
+  // extraction, or queue write happens. A source that fails to download is
+  // recorded as a per-file failure here and excluded from the credit count,
+  // matching how it would have failed downstream before this change.
+  const hashed = await Promise.all(input.sources.map(async (source, index) => {
+    try {
+      const bytes = await source.getBytes();
+      const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+      return { source, bytes, sha256, index, downloadError: null as string | null };
+    } catch (error) {
+      return { source, bytes: null as Buffer | null, sha256: "", index, downloadError: error instanceof Error ? error.message : "Unable to download the resume." };
+    }
+  }));
+  const toProcess: typeof hashed = [];
+  for (const item of hashed) {
+    if (item.downloadError) {
+      results[item.index] = { fileName: item.source.name, status: "Failed", stage: "source_download", error: item.downloadError };
+      continue;
+    }
+    if (claimedShaInBatch.has(item.sha256)) {
+      results[item.index] = { fileName: item.source.name, status: "Skipped", skipped: true, message: "Duplicate file selected in this same upload." };
+      continue;
+    }
+    claimedShaInBatch.add(item.sha256);
+    toProcess.push(item);
+  }
+
+  // Each resume that reaches the screening workflow costs 1 Smile Credit.
+  // Pre-check the whole batch so an under-funded intake is refused before any
+  // file is stored, extracted, or queued -- mirroring the Sheets-backend
+  // intake path (bulk-resume-intake.ts), which this Postgres target path was
+  // missing: zero-credit batches used to be queued in full and only fail,
+  // one file at a time, once each was claimed for screening.
+  if (toProcess.length > 0) {
+    await assertCreditsAvailable(toProcess.length, "cv_analysis", { organizationId: input.organizationId, ownerEmail: input.actorEmail });
+  }
+
+  async function processSource(item: (typeof hashed)[number]): Promise<Record<string, unknown>> {
+    const { source, bytes, sha256: sourceSha256 } = item;
     let stored: Awaited<ReturnType<typeof storeResumeFile>> | null = null;
     let queueKey = "";
     let durableQueue = false;
-    let stage = "source_download";
+    let stage = "destination_storage";
     try {
-      const bytes = await source.getBytes();
+      if (!bytes) throw new Error("Unable to download the resume.");
       if (bytes.length > MAX_RESUME_FILE_BYTES) throw new Error("Resume files must be 10 MB or smaller.");
-      const sourceSha256 = crypto.createHash("sha256").update(bytes).digest("hex");
-      if (claimedShaInBatch.has(sourceSha256)) {
-        return { fileName: source.name, status: "Skipped", skipped: true, message: "Duplicate file selected in this same upload." };
-      }
-      claimedShaInBatch.add(sourceSha256);
       const existingQueue = await findBulkQueueByRoleAndSha(input.roleId, sourceSha256, input.organizationId);
       if (existingQueue) {
         return { fileName: source.name, status: "Skipped", skipped: true, message: "This resume is already queued or processed for this role." };
       }
       const file = new File([new Uint8Array(bytes)], source.name || "resume", { type: source.mimeType || "application/octet-stream" });
-      stage = "destination_storage";
       stored = await storeResumeFile(file, { environment, organizationId: input.organizationId });
       stage = "contact_extraction";
       const queueId = queueIdForHash(input.roleId, stored.record.sha256);
@@ -150,12 +185,12 @@ export async function intakeTargetResumeBatch(input: {
 
   let cursor = 0;
   async function worker() {
-    while (cursor < input.sources.length) {
-      const index = cursor++;
-      results[index] = await processSource(input.sources[index]);
+    while (cursor < toProcess.length) {
+      const item = toProcess[cursor++];
+      results[item.index] = await processSource(item);
     }
   }
-  await Promise.all(Array.from({ length: Math.min(INTAKE_CONCURRENCY, input.sources.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(INTAKE_CONCURRENCY, toProcess.length) }, worker));
 
   return { results, batchId, environment, isUat, notificationStatus: "disabled", concurrency: INTAKE_CONCURRENCY, submitted, creditsCharged };
 }

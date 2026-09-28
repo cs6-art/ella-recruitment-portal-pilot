@@ -45,3 +45,17 @@ test("target manual intake does not leave an unqueueable application after hando
   assert.match(portal, /if \(result\.created\) await deleteApplication\(result\.application\.externalId\)/);
   assert.match(applicants, /targetRoleDetails\(roleId, user\.organizationId\)/);
 });
+
+test("target bulk intake refuses an under-funded batch before any file is stored or queued", () => {
+  const source = read("src/lib/recruitment-target-bulk.ts");
+  const preCheckIndex = source.indexOf("assertCreditsAvailable(toProcess.length");
+  assert.ok(preCheckIndex > -1, "expected an upfront assertCreditsAvailable call sized to the batch");
+  const storeIndex = source.indexOf("storeResumeFile(file");
+  const enqueueIndex = source.indexOf("enqueueBulkScreening({");
+  assert.ok(preCheckIndex < storeIndex, "credit pre-check must run before any resume is stored");
+  assert.ok(preCheckIndex < enqueueIndex, "credit pre-check must run before any resume is queued");
+  // Same-batch duplicates and files that fail to download must not inflate
+  // the credit count -- only sources actually about to be queued are charged.
+  assert.match(source, /toProcess\.push\(item\)/);
+  assert.match(source, /claimedShaInBatch\.has\(item\.sha256\)/);
+});

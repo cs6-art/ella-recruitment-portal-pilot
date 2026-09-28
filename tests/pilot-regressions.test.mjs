@@ -55,7 +55,10 @@ test("bulk screening charges only after result persistence and remains idempoten
 test("failed or invalid bulk screening has no credit boundary", () => {
   const intake = read("src/lib/recruitment-target-bulk.ts");
   const executor = read("src/lib/recruitment-target-screening.ts");
-  assert.doesNotMatch(intake, /recordDeduction|recordVoiceInterviewDeduction|assertCreditsAvailable/);
+  // Intake performs a read-only balance pre-check (assertCreditsAvailable) so
+  // an under-funded batch is refused up front, but it never deducts: the only
+  // actual charge boundary is the atomic write in finalizeBulkScreening.
+  assert.doesNotMatch(intake, /recordDeduction|recordVoiceInterviewDeduction/);
   assert.match(executor, /status: "failed"/);
   assert.match(executor, /updateBulkQueueStatus/);
   assert.match(executor, /finalizeBulkScreening/);
