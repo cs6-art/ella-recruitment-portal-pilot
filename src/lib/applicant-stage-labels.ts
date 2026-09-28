@@ -9,15 +9,15 @@ export type ApplicantInterviewMode = "avatar" | "voice" | "pending";
 
 export const LIVE_AVATAR_REVIEW_LABEL = "Live Avatar Review";
 export const VOICE_INTERVIEW_REVIEW_LABEL = "Voice Interview Review";
+export const AVATAR_INTERVIEW_REVIEW_STATUS_LABEL = "Avatar Interview Review";
 export const INTERVIEW_CHOICE_PENDING_LABEL = "Interview Choice Pending";
-// Keep the historical export name for existing callers; its client-facing
-// wording now explicitly identifies the Live Avatar review route.
-export const AVATAR_INTERVIEW_REVIEW_LABEL = LIVE_AVATAR_REVIEW_LABEL;
+// Keep the historical export name for callers that need the workflow status.
+export const AVATAR_INTERVIEW_REVIEW_LABEL = AVATAR_INTERVIEW_REVIEW_STATUS_LABEL;
 
 const APPLICANT_STAGE_LABELS: Record<string, string> = {
   resume_review: "Resume Review",
   resume_approved: "Resume Approved",
-  voice_booking_pending: "Live Avatar Interview In Progress",
+  voice_booking_pending: "Live Avatar Interview Pending",
   voice_scheduled: "Live Avatar Interview Scheduled",
   voice_review_pending: AVATAR_INTERVIEW_REVIEW_LABEL,
   approved_for_final: "Approved for Face-to-Face Interview",
@@ -30,9 +30,9 @@ const APPLICANT_STAGE_LABELS: Record<string, string> = {
   resume_hr_review: "Resume Review",
   voice_hr_review: AVATAR_INTERVIEW_REVIEW_LABEL,
   voice_interview_review: VOICE_INTERVIEW_REVIEW_LABEL,
-  avatar_interview_review: LIVE_AVATAR_REVIEW_LABEL,
-  live_avatar_review: LIVE_AVATAR_REVIEW_LABEL,
-  avatar_interview_booking_pending: "Live Avatar Interview In Progress",
+  avatar_interview_review: AVATAR_INTERVIEW_REVIEW_STATUS_LABEL,
+  live_avatar_review: AVATAR_INTERVIEW_REVIEW_STATUS_LABEL,
+  avatar_interview_booking_pending: "Live Avatar Interview Pending",
   avatar_interview_scheduled: "Live Avatar Interview Scheduled",
   passed_face_to_face_interview: "Passed Final Interview",
 };
@@ -41,6 +41,12 @@ export function applicantStageLabel(value: string | null | undefined, mode: Appl
   const text = String(value || "").trim();
   if (!text) return "";
   const key = text.toLowerCase().replace(/[\s-]+/g, "_");
+  const raw = text.toLowerCase();
+  const avatarReview = /(?:live\s+)?avatar\s+interview/.test(raw) && /review|completed|awaiting/.test(raw);
+  const voiceReview = /voice\s+interview/.test(raw) && /review|completed|awaiting/.test(raw);
+  if (avatarReview) return mode === "pending" ? "Interview Review" : AVATAR_INTERVIEW_REVIEW_STATUS_LABEL;
+  if (voiceReview) return mode === "pending" ? "Interview Review" : VOICE_INTERVIEW_REVIEW_LABEL;
+  if (/live\s+avatar\s+interview\s+in\s+progress/.test(raw)) return "Live Avatar Interview Pending";
   if (mode === "pending" && ["voice_booking_pending", "avatar_interview_booking_pending"].includes(key)) {
     return INTERVIEW_CHOICE_PENDING_LABEL;
   }
@@ -48,17 +54,18 @@ export function applicantStageLabel(value: string | null | undefined, mode: Appl
     return "Interview Review";
   }
   if (["voice_review_pending", "voice_hr_review", "voice_interview_review", "avatar_interview_review", "live_avatar_review"].includes(key)) {
-    return mode === "voice" ? VOICE_INTERVIEW_REVIEW_LABEL : LIVE_AVATAR_REVIEW_LABEL;
+    return mode === "voice" ? VOICE_INTERVIEW_REVIEW_LABEL : AVATAR_INTERVIEW_REVIEW_STATUS_LABEL;
   }
   if (["voice_booking_pending", "avatar_interview_booking_pending"].includes(key)) {
-    return mode === "voice" ? "Voice Interview Booking Pending" : "Live Avatar Interview In Progress";
+    return mode === "voice" ? "Voice Interview Booking Pending" : "Live Avatar Interview Pending";
   }
   if (["voice_scheduled", "avatar_interview_scheduled"].includes(key)) {
     return mode === "voice" ? "Voice Interview Scheduled" : "Live Avatar Interview Scheduled";
   }
-  const label = APPLICANT_STAGE_LABELS[key] || (text.includes("_")
-    ? text.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase())
-    : text);
+  // Always title-case the fallback, not just underscored keys -- a raw
+  // single-word status like "scheduled" or "calling" must not reach the UI
+  // in lowercase just because it has no underscore to split on.
+  const label = APPLICANT_STAGE_LABELS[key] || text.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
   return mode === "voice"
     ? label.replace(/\bLive Avatar Interview\b/g, "Voice Interview").replace(/\bAvatar Interview\b/g, "Voice Interview").replace(/\bLive Avatar\b/g, "Voice").replace(/\bAvatar\b/g, "Voice")
     : label;
@@ -75,7 +82,7 @@ export function applicantDecisionLabel(value: string | null | undefined) {
   const key = text.toLowerCase().replace(/[\s-]+/g, "_");
   if (key === "approve" || key === "approved") return "Approve";
   if (key === "reject" || key === "rejected") return "Reject";
-  if (key === "manual_review" || key === "return_for_review" || key === "to_review") return "Return for review";
+  if (key === "manual_review" || key === "return_for_review" || key === "to_review") return "Return for Review";
   if (key === "no_show") return "No Show";
   if (key === "pending") return "Pending";
   return text;
@@ -109,18 +116,18 @@ export function historyStageLabel(value: string | null | undefined, mode: Applic
  * title-cased reading of anything unrecognized (new sources included).
  */
 const HISTORY_SOURCE_LABELS: Record<string, string> = {
-  "internal_api": "System update",
-  "internal_api:booking": "Interview booked",
-  "internal_api:voice_booking_invitation": "Booking invitation queued",
-  "internal_api:voice_result": "Live Avatar interview result recorded",
-  "internal_api:hr_decision": "Decision recorded by HR",
-  "portal_postgres_target": "System update",
-  "public-booking": "Candidate booked their own interview",
-  "target:application": "Application submitted",
+  "internal_api": "System Update",
+  "internal_api:booking": "Interview Booked",
+  "internal_api:voice_booking_invitation": "Booking Invitation Queued",
+  "internal_api:voice_result": "Live Avatar Interview Result Recorded",
+  "internal_api:hr_decision": "Decision Recorded by HR",
+  "portal_postgres_target": "System Update",
+  "public-booking": "Candidate Booked Their Own Interview",
+  "target:application": "Application Submitted",
   "hr interview status action": "Updated by HR",
-  "automatic interview status monitor": "Automatic status update",
-  "applicant review portal": "Updated in the applicant portal",
-  "live_avatar": "Live Avatar interview completed",
+  "automatic interview status monitor": "Automatic Status Update",
+  "applicant review portal": "Updated in the Applicant Portal",
+  "live_avatar": "Live Avatar Interview Completed",
 };
 
 export function historySourceLabel(value: string | null | undefined, mode: ApplicantInterviewMode = "avatar") {
@@ -129,8 +136,8 @@ export function historySourceLabel(value: string | null | undefined, mode: Appli
   const known = HISTORY_SOURCE_LABELS[text.toLowerCase()];
   if (known) {
     if (text.toLowerCase() === "internal_api:voice_result") {
-      if (mode === "pending") return "Interview result recorded";
-      if (mode === "voice") return "Voice interview result recorded";
+      if (mode === "pending") return "Interview Result Recorded";
+      if (mode === "voice") return "Voice Interview Result Recorded";
     }
     return known;
   }

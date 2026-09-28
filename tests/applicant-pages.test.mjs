@@ -10,6 +10,22 @@ test("portal timestamps use the shared Singapore/Manila timezone", () => {
   assert.match(time, /timeZone: PORTAL_TIME_ZONE/);
 });
 
+test("match-score sorting normalizes fraction, whole-number, and percentage values", async () => {
+  const { numericMatchScore } = await import("../src/lib/score-format.ts");
+  assert.equal(numericMatchScore("0.85"), 85);
+  assert.equal(numericMatchScore("85"), 85);
+  assert.equal(numericMatchScore("85%"), 85);
+  assert.equal(numericMatchScore(""), null);
+  assert.equal(numericMatchScore("not scored"), null);
+});
+
+test("applicant date filters use Singapore-local day boundaries on every server", async () => {
+  const { portalDateBoundary } = await import("../src/lib/portal-time.ts");
+  assert.equal(portalDateBoundary("2026-09-28")?.toISOString(), "2026-09-27T16:00:00.000Z");
+  assert.equal(portalDateBoundary("2026-09-28", true)?.toISOString(), "2026-09-28T16:00:00.000Z");
+  assert.equal(portalDateBoundary("2026-02-30"), null);
+});
+
 test("country-code catalog supports global and shared calling prefixes", async () => {
   const { countryOptions, countryForPhone, hasSupportedCallingCode } = await import("../src/lib/country-codes.ts");
   assert.equal(countryOptions.length, 248);
@@ -71,7 +87,7 @@ test("dashboard prioritizes work and shows candidate stages only to users who ca
   assert.match(dashboard, /Recent activity/);
   assert.match(dashboard, /30_000/);
   assert.match(dashboard, /Voice Interview Review/);
-  assert.match(dashboard, /Live Avatar Review/);
+  assert.match(dashboard, /Avatar Interview Review/);
   assert.match(api, /Live Avatar Interview/);
   assert.match(dashboard, /stageCounts/);
   assert.match(stageLabels, /resume_review: "Resume Review"/);
@@ -108,31 +124,55 @@ test("applicant stage labels are presentation-only and used consistently", () =>
   assert.match(list, /matchesDashboardStageFilter\(applicant, stageFilter\)/);
   assert.match(list, /DASHBOARD_STAGE_GROUPS/);
   assert.match(list, /"Voice Interview Review"/);
-  assert.match(list, /"Live Avatar Review"/);
+  assert.match(list, /"Avatar Interview Review"/);
   assert.match(list, /new URLSearchParams\(window\.location\.search\)/);
   assert.match(labels, /must continue to\r?\n\s*\* send and persist the canonical status key/);
 });
 
+test("applicant stage filters only offer statuses the server knows how to filter", () => {
+  const list = read("src/components/ApplicantsList.tsx");
+  assert.match(list, /const stages = useMemo\(\(\) => \[\.\.\.new Set\(\[/);
+  assert.doesNotMatch(list, /applicants\.map\(\(applicant\) => dashboardStageLabel\(applicant\.currentStage/);
+  assert.match(list, /\.\.\.DASHBOARD_STAGE_LABELS/);
+  assert.match(list, /\.\.\.Object\.keys\(DASHBOARD_STAGE_GROUPS\)/);
+});
+
+test("legacy screened labels stay in the Screened applicant filter", () => {
+  const list = read("src/components/ApplicantsList.tsx");
+  assert.match(list, /\["screened", "processed", "for hr review", "pending hr review"\]\.includes\(normalizedResumeStatus\)/);
+});
+
 test("interview status wording follows the applicant's selected interview mode", async () => {
   const { applicantStageLabel, historyStageLabel } = await import("../src/lib/applicant-stage-labels.ts");
+  const queries = read("src/lib/internal-recruitment-queries.ts");
   assert.equal(applicantStageLabel("voice_review_pending", "voice"), "Voice Interview Review");
-  assert.equal(applicantStageLabel("voice_review_pending", "avatar"), "Live Avatar Review");
+  assert.equal(applicantStageLabel("voice_review_pending", "avatar"), "Avatar Interview Review");
   assert.equal(applicantStageLabel("voice_scheduled", "voice"), "Voice Interview Scheduled");
   assert.equal(applicantStageLabel("voice_scheduled", "avatar"), "Live Avatar Interview Scheduled");
   assert.equal(applicantStageLabel("voice_booking_pending", "pending"), "Interview Choice Pending");
-  assert.equal(applicantStageLabel("voice_booking_pending", "avatar"), "Live Avatar Interview In Progress");
+  assert.equal(applicantStageLabel("voice_booking_pending", "avatar"), "Live Avatar Interview Pending");
   assert.equal(historyStageLabel("voice", "pending"), "Interview");
+  assert.match(queries, /voiceCallAttempts\.status\} = 'in_progress'/);
+  assert.match(queries, /liveInterviewSessions\.status\} = 'INTERVIEW_IN_PROGRESS'/);
+  assert.match(queries, /if \(filters\.interviewStatus === "not_started"\) conditions\.push\(not\(interviewInProgress\)\)/);
+  assert.match(queries, /reviewedRejection = sql<boolean>`lower\(trim\(\$\{applications\.voiceHrDecision\}\)\) in \('approve', 'reject'\)/);
+  assert.match(queries, /inArray\(applications\.currentStage, \["approved_for_final", "passed_final"\]\)/);
+  assert.match(queries, /PORTAL_TIME_ZONE/);
+  assert.match(queries, /date_trunc\('day', now\(\) at time zone \$\{portalTimeZone\}\) at time zone \$\{portalTimeZone\}/);
 });
 
 test("opening Applicants clears row highlights immediately and counts only persisted screenings", () => {
   const list = read("src/components/ApplicantsList.tsx");
   const target = read("src/lib/recruitment-target-portal.ts");
+  const candidateData = read("src/lib/candidate-applications.ts");
   assert.match(list, /const seenAt = Date\.now\(\);\s*writeApplicantsLastSeen\(userEmail, seenAt\);\s*setSeenWatermark\(seenAt\)/);
   assert.doesNotMatch(list, /readApplicantsLastSeen\(userEmail\)/);
   assert.match(list, /applicant\.resumeStatus\.trim\(\)\.toLowerCase\(\) === "processed"/);
   assert.match(target, /cvRecommendation: text\(screening\?\.recommendation\)/);
   assert.match(target, /resumeStatus: screening \? "Processed" : ""/);
-  assert.match(target, /screened: summaries\.filter\(\(row\) => row\.resumeStatus === "Processed"\)\.length/);
+  assert.match(candidateData, /if \(finalStatus\.includes\("withdrawn"\)\) return "withdrawn"/);
+  assert.match(target, /aggregateApplicationsByStage\(await targetOrganizationId\(\), filters\)/);
+  assert.match(target, /screened: sum\("screened"\)/);
 });
 
 test("stored list values render as readable HR text, not raw JSON arrays", async () => {
@@ -348,7 +388,7 @@ test("candidate intake forms and decisions expose the required fields", () => {
   const downloadRoute = read("src/app/api/uploads/resumes/[fileId]/route.ts");
   const scoreFormat = read("src/lib/score-format.ts");
 
-  assert.match(screening, /title="CV Analysis"/);
+  assert.match(screening, /title="Screen one resume"/);
   assert.match(form, /countryCode/);
   assert.match(form, /localContactNumber/);
   assert.match(form, /Contact Number/);

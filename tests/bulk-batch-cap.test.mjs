@@ -63,13 +63,13 @@ test("the bulk panel enforces the cap in the UI, imported from the shared module
   // extra dropped files surface an explanation and the list is truncated at
   // the campaign-sized ceiling; requests are split separately into six-file
   // server-safe chunks when screening starts.
-  assert.match(panel, /merged\.length > MAX_CAMPAIGN_FILES/);
-  assert.match(panel, /return merged\.slice\(0, MAX_CAMPAIGN_FILES\)/);
+  assert.match(panel, /availableSlots = Math\.max\(0, MAX_CAMPAIGN_FILES - files\.length\)/);
+  assert.match(panel, /incoming\.slice\(0, availableSlots\)/);
   assert.match(panel, /files\.length > MAX_FILES_PER_SUBMISSION \? runBulkQueue\(files\) : uploadResumes\(files\)/);
   assert.match(panel, /function retryFailedFiles\(failedFileList: File\[\]\)/);
   assert.match(panel, /failedFileList\.length > MAX_FILES_PER_SUBMISSION/);
   assert.match(panel, /void runBulkQueue\(failedFileList\)/);
-  assert.match(panel, /Up to \{MAX_CAMPAIGN_FILES\} PDF, DOC, or DOCX files at once/);
+  assert.match(panel, /Up to \{MAX_CAMPAIGN_FILES\} files per selection/);
 });
 
 // These routes await intake to completion before responding. The live

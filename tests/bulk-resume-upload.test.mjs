@@ -108,6 +108,22 @@ test("an accepted asynchronous intake request cannot be presented as completed",
   assert.doesNotMatch(route, /String\(workflowResult\.status \|\| "Screened"\)/);
 });
 
+test("all saved bulk screening states remain visible and unknown states are not mislabeled", () => {
+  const portal = read("src/lib/recruitment-target-portal.ts");
+  const queries = read("src/lib/internal-recruitment-queries.ts");
+  const sheetsFallback = read("src/lib/candidate-applications.ts");
+  const panel = read("src/components/BulkResumeScreeningPanel.tsx");
+  assert.match(portal, /\["screened", "processed", "completed"\]\.includes\(status\)/);
+  assert.match(portal, /return status \? "Other" : "Queued"/);
+  assert.match(queries, /COMMON_BULK_QUEUE_STATUSES = \["queued", "processing", "screened", "processed", "completed", "failed", "skipped"\]/);
+  assert.match(queries, /pagination\.status === "Other"/);
+  assert.match(queries, /filters\.status === "Other"/);
+  assert.match(sheetsFallback, /\["screened", "processed", "completed"\]\.includes\(status\)/);
+  assert.match(sheetsFallback, /return status \? "Other" : "Queued"/);
+  assert.match(panel, /const statusOrder = \["Queued", "Processing", "Screened", "Failed", "Skipped", "Other"\]/);
+  assert.match(panel, /return \{ label: "Other", result: "Status needs review" \}/);
+});
+
 test("each per-file screening webhook is time-bounded so one stuck n8n call cannot hang the batch", () => {
   const route = read("src/lib/bulk-resume-intake.ts");
   assert.match(route, /N8N_BULK_RESUME_TIMEOUT_MS/);
@@ -177,17 +193,22 @@ test("Google Drive folder screening uses the same stable queue contract for ever
   assert.match(drive, /Candidate Foundation handoff failed before a response was received/);
 });
 
-test("live bulk status reads are fresh and expose the downstream queue as the source of truth", () => {
+test("bulk status returns a server-paginated queue page with fresh screening evidence", () => {
   const queue = read("src/lib/candidate-applications.ts");
   const cache = read("src/lib/sheets-cache.ts");
   const route = read("src/app/api/resume-screening/bulk/route.ts");
-  assert.match(queue, /getBulkResumeQueue\(roleId = "", options: \{ fresh\?: boolean \} = \{\}\)/);
-  assert.match(queue, /freshSheetsRead/);
+  assert.match(queue, /getBulkResumeQueuePage\(input: \{/);
+  assert.match(queue, /targetBulkResumeQueuePage\(\{ \.\.\.input, roleExternalId: input\.roleId \}\)/);
+  assert.match(queue, /items: filtered\.slice\(\(page - 1\) \* pageSize, page \* pageSize\)/);
   assert.match(queue, /getBulkResumeScreeningEvidence/);
-  assert.match(queue, /Bulk_Resume_Queue", "U"/);
   assert.match(cache, /export async function freshSheetsRead/);
+  assert.match(route, /getBulkResumeQueuePage\(/);
+  assert.match(route, /pageSize,\s*search: params\.get\("search"\)/);
+  assert.match(route, /params\.get\("source"\)/);
+  assert.match(route, /params\.get\("status"\)/);
   assert.match(route, /saved applicant screening result/);
-  assert.match(route, /getBulkResumeQueue\(roleId, \{ fresh: true \}\)/);
+  assert.match(route, /total: queuePage\.total/);
+  assert.match(route, /page: queuePage\.page/);
   assert.match(route, /productionUatActive/);
   assert.match(route, /configuredProductionUatBatchId/);
 });
@@ -252,7 +273,10 @@ test("the bulk panel supports drag-and-drop, live auto-refresh, and retrying onl
   assert.doesNotMatch(panel, /setInterval/);
   assert.match(panel, /Retry failed/);
   assert.match(panel, /failedFiles/);
-  assert.match(panel, /Bulk Resume Processing/);
+  assert.match(panel, /Screening records/);
+  assert.match(panel, /Filter by source/);
+  assert.match(panel, /Filter by status/);
+  assert.match(panel, /<Pagination/);
   assert.match(panel, /Bulk screening completed/);
   assert.match(panel, /View Processed Applicants/);
   assert.match(panel, /Retry \{retryableFailureCount\} Failed/);
@@ -261,20 +285,20 @@ test("the bulk panel supports drag-and-drop, live auto-refresh, and retrying onl
   assert.match(panel, /refreshInFlight/);
   assert.match(panel, /AbortController/);
   assert.match(panel, /successful completion must come from the queue-backed status API/);
-  assert.match(panel, /current batch updates automatically/);
-  assert.match(panel, /backs off when unchanged/);
+  assert.match(panel, /Poll automatically only for a batch submitted in this tab/);
+  assert.match(panel, /POLL_INTERVALS_MS = \[30_000, 60_000, 120_000\]/);
 });
 
 test("the bulk panel shows auto-dismissing feedback and portal-timezone timestamps", () => {
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
   // success / warning / error notices go through the shared auto-dismiss component
   assert.match(panel, /import ActionFeedback from "@\/components\/ActionFeedback"/);
-  assert.match(panel, /<ActionFeedback kind="success"[^>]*>\{uploadMessage\}<\/ActionFeedback>/);
+  assert.match(panel, /uploading \|\| driveImporting \? <LoadingLabel>\{uploadMessage\}<\/LoadingLabel> : uploadMessage/);
   assert.match(panel, /<ActionFeedback kind="warning"[^>]*>\{warning\}<\/ActionFeedback>/);
   assert.match(panel, /<ActionFeedback kind="error"[^>]*>\{error\}<\/ActionFeedback>/);
   assert.doesNotMatch(panel, /<div className="success-box">\{uploadMessage\}<\/div>/);
   // the over-cap notice is a transient warning, not a sticky error
-  assert.match(panel, /setWarning\(`You can queue up to \$\{MAX_CAMPAIGN_FILES\}/);
+  assert.match(panel, /You can add up to \$\{MAX_CAMPAIGN_FILES\} resumes at a time/);
   // the queue table renders Asia/Singapore local time, never a raw UTC ISO string
   assert.match(panel, /import \{ formatPortalDateTime \} from "@\/lib\/portal-time"/);
   assert.match(panel, /formatPortalDateTime\(ts\)/);

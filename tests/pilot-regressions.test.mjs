@@ -187,14 +187,14 @@ test("stale provider dispatches become audited failures without entering billing
 
 test("face-to-face metric excludes resume and voice-only activity", () => {
   const source = read("src/lib/recruitment-target-portal.ts");
+  const queries = read("src/lib/internal-recruitment-queries.ts");
   const metrics = source.slice(source.indexOf("export async function targetApplicantMetrics"), source.indexOf("export async function targetApplicantDetails"));
-  assert.match(metrics, /voiceActivityStages = new Set/);
-  assert.match(metrics, /voice_booking_pending/);
-  assert.match(metrics, /voiceActivity: summaries\.filter\(\(row\) => voiceActivityStages\.has\(row\.currentStage\) \|\| Boolean\(row\.voiceStatus\)\)/);
-  assert.match(metrics, /finalInterviewStages = new Set/);
-  assert.match(metrics, /finalInterviewStages\.has\(row\.currentStage\)/);
-  assert.match(metrics, /row\.finalInterviewStatus\.trim\(\)\.toLowerCase\(\)/);
-  assert.doesNotMatch(metrics, /hrActivity: summaries\.filter\(\(row\) => Boolean\(row\.cvRecommendation \|\| row\.voiceStatus \|\| row\.finalInterviewStatus\)\)/);
+  const aggregate = queries.slice(queries.indexOf("export async function aggregateApplicationsByStage"), queries.indexOf("export async function" , queries.indexOf("export async function aggregateApplicationsByStage") + 1));
+  assert.match(metrics, /aggregateApplicationsByStage\(await targetOrganizationId\(\), filters\)/);
+  assert.match(metrics, /voiceActivity: sum\("interviewActivity"\)/);
+  assert.match(aggregate, /interviewActivity: sql<number>`count\(\*\) filter/);
+  assert.match(aggregate, /hrActivity: sql<number>`count\(\*\) filter/);
+  assert.doesNotMatch(metrics, /targetApplicantSummaries\(\)/);
 });
 
 test("a job-posted notification is addressed to the org's first registered account, not the requester", () => {

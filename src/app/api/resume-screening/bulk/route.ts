@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { canManagePipeline } from "@/lib/access-control";
-import { getBulkResumeQueue, getBulkResumeQueueTotals, getBulkResumeScreeningEvidence } from "@/lib/candidate-applications";
+import { getBulkResumeQueuePage, getBulkResumeQueueTotals, getBulkResumeScreeningEvidence } from "@/lib/candidate-applications";
 import { bulkResumeEnvironment, bulkResumeIsUatMarked, productionUatBatchId, STALE_PROCESSING_MS } from "@/lib/bulk-resume-config";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
@@ -42,22 +42,29 @@ export async function GET(request: Request) {
     // screening for the entire 20-second Sheets cache TTL. This endpoint is
     // polled while work is active; read the queue fresh so the UI never turns
     // a stale snapshot into a misleading completion state.
-    const queueItems = (await measureServerOperation(timings, "queue", () => getBulkResumeQueue(roleId, { fresh: true }))).filter((item) => publishedRoleIds.has(item.roleId.toLowerCase()));
-    queueCount = queueItems.length;
+    const params = new URL(request.url).searchParams;
+    const requestedPage = Number(params.get("page"));
+    const page = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.trunc(requestedPage) : 1;
+    const pageSize = [10, 25, 50, 100].includes(Number(params.get("pageSize"))) ? Number(params.get("pageSize")) : 10;
+    const queuePage = await measureServerOperation(timings, "queue", () => getBulkResumeQueuePage({
+      roleId,
+      page,
+      pageSize,
+      search: params.get("search") || undefined,
+      status: params.get("status") || undefined,
+      source: params.get("source") || undefined,
+    }));
+    const queueItems = queuePage.items.filter((item) => publishedRoleIds.has(item.roleId.toLowerCase()));
+    queueCount = Object.values(queuePage.counts).reduce((sum, count) => sum + count, 0);
     // Keep the table on the latest state per resume, but count every saved
     // queue event separately so retries and repeated failed batches are not
     // silently collapsed into one historical total.
     const historicalTotals = isPostgresRecruitmentTarget()
-      ? queueItems.reduce<Record<string, number>>((result, item) => {
-        const status = ["Screened", "Failed", "Skipped", "Processing", "Queued"].includes(item.status) ? item.status : "Queued";
-        result[status] = (result[status] || 0) + 1;
-        return result;
-      }, {})
+      ? queuePage.counts
       : await measureServerOperation(timings, "historicalTotals", () => getBulkResumeQueueTotals(roleId, { fresh: true }));
-    // Reconcile every current queue item, including historical rows that were
-    // written before jobId existed. The evidence matcher falls back through
-    // application ID, SHA, Drive file ID, role-scoped filename, and unique
-    // candidate identifiers without allowing cross-role matches.
+    // Reconcile the requested page, including older rows without a job ID.
+    // Matching is scoped by role and may use application ID, SHA, Drive file
+    // ID, filename, and unique candidate identifiers.
     const screeningEvidence = await measureServerOperation(timings, "screeningEvidence", () => getBulkResumeScreeningEvidence(queueItems));
     evidenceCount = screeningEvidence.size;
     const now = Date.now();
@@ -104,11 +111,7 @@ export async function GET(request: Request) {
       }
       return item;
     });
-    const counts = items.reduce<Record<string, number>>((result, item) => {
-      const status = item.status || "Queued";
-      result[status] = (result[status] || 0) + 1;
-      return result;
-    }, {});
+    const counts = queuePage.counts;
 
     logServerTiming(new URL(request.url).pathname, startedAt, timings, { dbOperations: isPostgresRecruitmentTarget() ? 3 : 0, roleCount, queueCount, evidenceCount });
     return NextResponse.json({
@@ -129,7 +132,10 @@ export async function GET(request: Request) {
       // from disagreeing with the live batch bar.
       roleTotals: counts,
       historicalTotals,
-      items: items.slice(0, 50),
+      items,
+      total: queuePage.total,
+      page: queuePage.page,
+      pageSize: queuePage.pageSize,
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {

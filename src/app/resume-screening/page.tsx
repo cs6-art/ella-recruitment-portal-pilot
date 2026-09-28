@@ -36,9 +36,8 @@ export default async function ResumeScreeningPage() {
       <main className="container page resume-screening-page">
         <header className="hero-row resume-screening-header">
           <div>
-            <span className="eyebrow-dark">CANDIDATE INTAKE</span>
             <h1>Resume Screening</h1>
-            <p>Start an automated CV analysis for a candidate applying to a published role.</p>
+            <p>Select a role, add resumes, and review the screening results. Upload files from your computer or import them from cloud storage.</p>
           </div>
         </header>
         {isBulkResumeUatMode() ? <div className="uat-mode-banner">UAT MODE · Bulk resume data is routed to the configured UAT destinations.</div> : null}
@@ -46,9 +45,9 @@ export default async function ResumeScreeningPage() {
         <ResumeScreeningInviteGenerator roleOptions={roleOptions} />
         <CandidateApplicationForm
           submitUrl="/api/applicants"
-          title="CV Analysis"
-          description="Upload a single candidate resume to begin the automated screening process."
-          submitLabel="Start CV Analysis"
+          title="Screen one resume"
+          description="Use this option when you want to enter one candidate’s details and submit a single resume."
+          submitLabel="Screen resume"
           requireConsent={false}
           showRoleSelect
           roleOptions={roleOptions}

@@ -59,13 +59,13 @@ function externalUrl(value: string) {
 }
 
 function bookingInvitationStatus(input: { tokenLink: string; notificationStatus: string; isScheduled: boolean }) {
-  if (input.isScheduled) return "Invitation completed";
+  if (input.isScheduled) return "Invitation Completed";
   switch (input.notificationStatus.trim().toLowerCase()) {
-    case "sent": return "Invitation sent";
-    case "pending": return "Invitation queued";
-    case "failed": return "Invitation failed — retry available";
-    case "not_configured": return "Invitation email not configured";
-    default: return input.tokenLink ? "Invitation not sent" : "Invitation not created";
+    case "sent": return "Invitation Sent";
+    case "pending": return "Invitation Queued";
+    case "failed": return "Invitation Failed — Retry Available";
+    case "not_configured": return "Invitation Email Not Configured";
+    default: return input.tokenLink ? "Invitation Not Sent" : "Invitation Not Created";
   }
 }
 
@@ -89,8 +89,7 @@ function ReadableList({ value, empty }: { value: string; empty: string }) {
 }
 
 function DetailField({ label, value, className = "" }: { label: string; value?: string; className?: string }) {
-  if (!value) return null;
-  return <div className={`applicant-detail-field ${className}`.trim()}><span>{label}</span><strong>{value}</strong></div>;
+  return <div className={`applicant-detail-field ${className}`.trim()}><span>{label}</span><strong>{value?.trim() || "Not provided"}</strong></div>;
 }
 
 function DetailCardHeader({ icon, title, description }: { icon: UiIconName; title: string; description?: string }) {
@@ -168,11 +167,11 @@ function liveAssessmentFields(liveReview: LiveReview | null) {
   const assessment = liveReview.analysis?.assessment;
   if (assessment) {
     return {
-      score: assessment.status === "scored" && assessment.score !== null ? formatMatchScore(String(assessment.score)) : "Not scored — manual HR review",
+      score: assessment.status === "scored" && assessment.score !== null ? formatMatchScore(String(assessment.score)) : "Not Scored — Manual HR Review",
       recommendation: assessment.bandLabel,
     };
   }
-  const pending = liveReview.analysisState === "failed" ? "AI review unavailable — retry available" : "Awaiting AI review";
+  const pending = liveReview.analysisState === "failed" ? "AI Review Unavailable — Retry Available" : "Awaiting AI Review";
   return { score: pending, recommendation: pending };
 }
 
@@ -196,15 +195,15 @@ function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }
   // evaluation is still coming.
   const voiceCompletedNoScore = voiceCallStatus.trim().toLowerCase() === "completed" && !applicant.voiceScore.trim() && !voiceNotConducted && !voiceSystemFailure;
   const voiceScorePending = voiceNotConducted || voiceSystemFailure
-    ? "Not evaluated — no completed interview"
+    ? "Not Evaluated — No Completed Interview"
     : voiceCompletedNoScore
-      ? "0 — call too short to evaluate"
-      : "Awaiting AI evaluation";
+      ? "0 — Call Too Short to Evaluate"
+      : "Awaiting AI Evaluation";
   const voiceRecommendationPending = voiceNotConducted || voiceSystemFailure
-    ? "Not evaluated — no completed interview"
+    ? "Not Evaluated — No Completed Interview"
     : voiceCompletedNoScore
-      ? "No recommendation — not enough interview content to evaluate"
-      : "Awaiting AI evaluation";
+      ? "No Recommendation — Not Enough Interview Content to Evaluate"
+      : "Awaiting AI Evaluation";
   return <section className="card applicant-detail-card applicant-screening-evidence-card">
     <DetailCardHeader icon="document" title="AI Screening Evidence" description={`CV analysis and ${isInterviewChoicePending ? "interview" : isAvatarInterview ? "Live Avatar" : "voice interview"} evidence to support a consistent review.`} />
     <div className="applicant-detail-content">
@@ -270,12 +269,19 @@ function InterviewQuestions({ value }: { value: string }) {
   return <ol className="applicant-question-list">{items.map((question, index) => <li key={`${question}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span><p>{question}</p></li>)}</ol>;
 }
 
-export default async function ApplicantDetailsPage({ params }: { params: Promise<{ applicationId: string }> }) {
+export default async function ApplicantDetailsPage({ params, searchParams }: { params: Promise<{ applicationId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
   if (user.canReviewRole !== true && user.canApproveRole !== true && user.canReviewDepartmentRole !== true) redirect("/dashboard");
 
   const applicationId = decodeURIComponent((await params).applicationId);
+  const query = await searchParams;
+  const requestedReturnTo = Array.isArray(query.returnTo) ? query.returnTo[0] : query.returnTo;
+  const isApplicantsListPath = typeof requestedReturnTo === "string" && /^\/applicants(?:\?[^#]*)?$/.test(requestedReturnTo);
+  const isRoleApplicantsListPath = typeof requestedReturnTo === "string" && /^\/roles\/[^/?#]+\/applicants(?:\?[^#]*)?$/.test(requestedReturnTo);
+  const returnTo = typeof requestedReturnTo === "string" && !requestedReturnTo.startsWith("//") && (isApplicantsListPath || isRoleApplicantsListPath)
+    ? requestedReturnTo
+    : "/applicants";
   const [applicant, history] = await Promise.all([getApplicantById(applicationId), getCandidateStatusHistory(applicationId)]);
   // A department-scoped (HOD-tier) account outside this applicant's
   // department gets the same "not found" response as a missing record,
@@ -290,8 +296,8 @@ export default async function ApplicantDetailsPage({ params }: { params: Promise
 
   return <AppShell user={user}><main className="container page applicant-details-page">
     <ApplicantLiveRefresh enabled={!TERMINAL_APPLICANT_STAGES.has(applicant.currentStage.trim().toLowerCase())} intervalMs={applicant.currentStage.trim().toLowerCase() === "voice_scheduled" ? 30_000 : undefined} />
-    <header className="applicant-detail-header"><Link href="/applicants" className="portal-back-link applicant-back-link"><UiIcon name="arrow-left" size={15} />Back to Applicants</Link><div className="applicant-detail-title-row"><div><span className="eyebrow-dark">APPLICANT PROFILE</span><h1>{applicant.candidateName || "Unnamed Candidate"}</h1><p>{applicant.applicationId} · {applicant.email || "No Email Provided"}</p></div><span className={applicantStageClass(applicant.currentStage)}>{applicantStageLabel(applicant.currentStage, interviewMode)}</span></div><div className="applicant-detail-actions"><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}`}><UiIcon name="briefcase" size={15} />View Role</Link><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}/applicants`}><UiIcon name="applicants" size={15} />Role Applicants</Link><ApplicantDetailActions applicationId={applicant.applicationId} candidateName={applicant.candidateName} canManage={canEditApplicant(user)} /></div></header>
-    <div className="applicant-detail-summary"><DetailField label="Selected Role" value={applicant.selectedRole} /><DetailField label="Department" value={applicant.department} /><DetailField label="Applied" value={dateValue(applicant.appliedAt)} /><DetailField label="Match Score" value={formatMatchScore(applicant.matchScore)} /><DetailField label="Recommendation" value={applicant.recommendation} /><DetailField label="Next Action" value={applicant.nextAction} /></div>
+    <header className="applicant-detail-header"><Link href={returnTo} className="portal-back-link applicant-back-link"><UiIcon name="arrow-left" size={15} />Back to Applicants</Link><div className="applicant-detail-title-row"><div><h1>{applicant.candidateName || "Unnamed Candidate"}</h1><p>Application reference: {applicant.applicationId} · {applicant.email || "Email not provided"}</p></div><span className={applicantStageClass(applicant.currentStage)}>{applicantStageLabel(applicant.currentStage, interviewMode) || "Status not available"}</span></div><div className="applicant-detail-actions"><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}`}><UiIcon name="briefcase" size={15} />View Role</Link><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}/applicants`}><UiIcon name="applicants" size={15} />Role Applicants</Link><ApplicantDetailActions applicationId={applicant.applicationId} candidateName={applicant.candidateName} canManage={canEditApplicant(user)} /></div></header>
+    <div className="applicant-detail-summary"><DetailField label="Selected Role" value={applicant.selectedRole} /><DetailField label="Department" value={applicant.department} /><DetailField label="Applied" value={dateValue(applicant.appliedAt)} /><DetailField label="Interview type" value={interviewMode === "pending" ? "Not selected" : interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"} /><DetailField label="Match Score" value={formatMatchScore(applicant.matchScore)} /><DetailField label="Recommendation" value={applicant.recommendation} /><DetailField label="Next Action" value={applicant.nextAction} /></div>
     <div className="applicant-detail-grid"><div className="applicant-detail-main">
       <CombinedScreeningEvidence applicant={applicant} liveReview={liveReview} canRetryLiveReview={canDecideApplicant(user)} />
       <ApplicantDecisionPanel applicationId={applicant.applicationId} currentStage={applicant.currentStage} resumeDecision={applicant.resumeDecision} resumeComments={resumeComments} voiceDecision={applicant.voiceDecision} voiceComments={voiceComments} voiceStatus={applicant.voiceCallStatus || applicant.voiceStatus} finalInterviewStatus={applicant.finalInterviewStatus} finalStatus={applicant.finalStatus} finalComments={finalComments} finalBookingLink={applicant.finalBookingLink} voiceBookingLink={externalUrl(applicant.voiceBookingLink)} voiceRetryEligible={!/(?:^|[^a-z])failed(?:[^a-z]|$)|blocked|system[_ -]?failure|provider[_ -]?failure|technical[_ -]?failure|dispatch[_ -]?fail/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus}`) && /no[_ -]?answer|no[_ -]?show|incomplete|not connected|voicemail|busy|declined|cancell?ed/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus} ${applicant.voiceBookingStatus}`)} canReview={canDecideApplicant(user)} interviewMode={interviewMode} />

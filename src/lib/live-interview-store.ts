@@ -432,7 +432,7 @@ async function ensureApplicationCompleted(session: SessionRow, turns: Transcript
   const providerTurns = turns.map((turn) => ({ role: turn.speaker === "applicant" ? "user" : "avatar", transcript: turn.text }));
   // No score yet: the rubric-based assessment replaces this placeholder once
   // the analysis finishes. The old keyword heuristic is deliberately unused.
-  const evaluation = { score: null, answered: turns.some((turn) => turn.speaker === "applicant"), answer: "", summary: "", strengths: [] as string[], focusAreas: [] as string[], recommendation: "Awaiting AI review" };
+  const evaluation = { score: null, answered: turns.some((turn) => turn.speaker === "applicant"), answer: "", summary: "", strengths: [] as string[], focusAreas: [] as string[], recommendation: "Awaiting AI Review" };
   const completed = await completeAvatarInterviewByHash({ tokenHash: token.tokenHash, sessionId: session.providerSessionId, evaluation, transcript: providerTurns });
   let voiceResultId = completed.completed ? completed.voiceResultId : "";
   if (!voiceResultId) {

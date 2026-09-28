@@ -203,3 +203,45 @@ export function notificationEmail(eventType: string | null | undefined, context:
       };
   }
 }
+
+export type RoleNotificationEmailContext = {
+  recipientName?: string | null;
+  roleTitle?: string | null;
+  roleExternalId?: string | null;
+  departmentSnapshot?: string | null;
+  requesterName?: string | null;
+  requesterEmail?: string | null;
+  roleLink?: string | null;
+};
+
+/**
+ * Internal-staff-facing email copy for a role-domain notification (recipient
+ * is the org's first registered account, not a candidate). Only job_posted is
+ * ever queued for email today (see notificationQueue's role-side allowlist),
+ * but this stays keyed by status so a future role event can add a case here
+ * without touching the sender.
+ */
+export function roleNotificationEmail(newStatus: string | null | undefined, context: RoleNotificationEmailContext = {}): NotificationEmailCopy | null {
+  if (!pilotOutboundEmailEnabled()) return null;
+  const key = normalize(newStatus);
+  if (key !== "job_posted") return null;
+
+  const recipientName = String(context.recipientName || "").trim() || "there";
+  const roleTitle = String(context.roleTitle || "").trim() || "A role";
+  const roleExternalId = String(context.roleExternalId || "").trim();
+  const department = String(context.departmentSnapshot || "").trim();
+  const requester = String(context.requesterName || "").trim() || String(context.requesterEmail || "").trim();
+  const link = String(context.roleLink || "").trim();
+
+  return {
+    subject: `A new role has been posted | McLink Group`,
+    heading: "New role posted",
+    message: `Hi ${recipientName},\n\n"${roleTitle}"${roleExternalId ? ` (${roleExternalId})` : ""}${department ? ` in ${department}` : ""} has just been published and is now open for applications.${requester ? `\n\nRequested by: ${requester}` : ""}\n\nYou can review the role and its applicants in the recruitment portal.`,
+    cta: link ? "View role" : "",
+    ctaLink: link,
+    secondaryCta: "",
+    secondaryCtaLink: "",
+    includeRawBookingLink: false,
+    signoff: SIGNOFF,
+  };
+}

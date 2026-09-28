@@ -2,6 +2,18 @@
 // Singapore and Manila are both UTC+8; keeping one canonical IANA zone avoids
 // browser/server timezone differences in applicant and audit views.
 export const PORTAL_TIME_ZONE = "Asia/Singapore";
+const PORTAL_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+/** Convert a date-picker value into a portal-local midnight UTC instant. */
+export function portalDateBoundary(value: string, endExclusive = false) {
+  const raw = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const parsed = new Date(`${raw}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== raw) return null;
+  const dayOffset = endExclusive ? 1 : 0;
+  // The portal's canonical operating timezone is Asia/Singapore (UTC+8).
+  return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate() + dayOffset) - PORTAL_UTC_OFFSET_MS);
+}
 
 function parsePortalDate(value: string, dateOnly = false) {
   const raw = String(value || "").trim();

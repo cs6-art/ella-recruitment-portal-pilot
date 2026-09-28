@@ -45,6 +45,7 @@
 // further only after a live empirical measurement of this path (the same
 // method docs/BATCH-CAPACITY-VALIDATION.md used for the legacy path).
 export const MAX_FILES_PER_SUBMISSION = 20;
+export const MAX_RESUME_FILE_BYTES = 10 * 1024 * 1024;
 
 // Total files a reviewer may queue up in one sitting via the "let it sit and
 // process" flow. The UI auto-splits this into MAX_FILES_PER_SUBMISSION-sized

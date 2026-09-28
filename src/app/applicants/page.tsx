@@ -4,8 +4,8 @@ import { redirect } from "next/navigation";
 
 import AppShell from "@/components/AppShell";
 import ApplicantsList from "@/components/ApplicantsList";
-import { filterVisibleApplicants } from "@/lib/access-control";
-import { getApplicantMetrics, getApplicants } from "@/lib/candidate-applications";
+import { filterVisibleApplicants, isDepartmentReviewer } from "@/lib/access-control";
+import { getApplicantMetrics, getApplicantsPage } from "@/lib/candidate-applications";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { COOKIE_NAME, verifySessionToken, type SessionUser } from "@/lib/session";
 
@@ -27,8 +27,12 @@ function ApplicantsLoading() {
 }
 
 async function ApplicantsData({ user }: { user: SessionUser }) {
-  const [allApplicants, metrics, roles] = await Promise.all([getApplicants(), getApplicantMetrics(), getRoleRequests({ liveOnly: true })]);
-  const applicants = filterVisibleApplicants(allApplicants, user);
+  const [applicantPage, metrics, roles] = await Promise.all([
+    getApplicantsPage({ page: 1, pageSize: 25, filters: isDepartmentReviewer(user) ? { department: user.department } : undefined }),
+    getApplicantMetrics(isDepartmentReviewer(user) ? { department: user.department } : {}),
+    getRoleRequests({ liveOnly: true }),
+  ]);
+  const applicants = filterVisibleApplicants(applicantPage.applicants, user);
   const publishedRoles = roles
     .filter(isPublishedRoleForIntake)
     .map((role) => ({
@@ -37,8 +41,10 @@ async function ApplicantsData({ user }: { user: SessionUser }) {
     }));
   return <ApplicantsList
     applicants={applicants}
+    initialTotal={applicantPage.total}
     userEmail={user.email}
     historyMetrics={metrics}
+    lastUpdatedAt={new Date().toISOString()}
     publishedRoles={publishedRoles}
     canManageApplicants={user.canReviewRole === true}
     description={user.canReviewDepartmentRole === true && user.canReviewRole !== true && user.canApproveRole !== true

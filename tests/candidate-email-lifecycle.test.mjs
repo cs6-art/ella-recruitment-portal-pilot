@@ -179,9 +179,9 @@ test("HR booking cards expose invitation delivery separately from booking state"
   const target = read("src/lib/recruitment-target-portal.ts");
   const query = read("src/lib/internal-recruitment-queries.ts");
   assert.match(page, /Invitation status/);
-  assert.match(page, /Invitation sent/);
-  assert.match(page, /Invitation queued/);
-  assert.match(page, /Invitation failed/);
+  assert.match(page, /Invitation Sent/);
+  assert.match(page, /Invitation Queued/);
+  assert.match(page, /Invitation Failed/);
   assert.match(target, /getApplicationBookingNotification\(externalId, "final"\)/);
   assert.match(query, /final_booking_invitation/);
   assert.match(query, /notificationSentAt/);

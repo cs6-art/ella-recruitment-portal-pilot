@@ -12,6 +12,8 @@ type EllaCreditsMeterProps = {
   variant?: Variant;
   /** Sidebar only: hide the label/value when the rail is collapsed. */
   collapsed?: boolean;
+  /** Show a configured CV-screening estimate for the selected file count. */
+  estimateFor?: number;
 };
 
 type CreditPricing = {
@@ -46,7 +48,7 @@ function formatCredits(value: number) {
   return new Intl.NumberFormat("en-US").format(Math.max(0, Math.round(value)));
 }
 
-export default function EllaCreditsMeter({ variant = "inline", collapsed = false }: EllaCreditsMeterProps) {
+export default function EllaCreditsMeter({ variant = "inline", collapsed = false, estimateFor }: EllaCreditsMeterProps) {
   const { data, refresh } = useSharedPoll<MeterData>(POLL_KEY, fetchMeterData, POLL_INTERVAL_MS);
   const [optimistic, setOptimistic] = useState(0);
   const [flash, setFlash] = useState(false);
@@ -92,10 +94,11 @@ export default function EllaCreditsMeter({ variant = "inline", collapsed = false
   const variantClass = variant === "sidebar"
     ? `${styles.sidebar} ${collapsed ? styles.sidebarCollapsed : ""}`
     : variant === "mobile" ? styles.mobile : "";
+  const estimateClass = typeof estimateFor === "number" && estimateFor > 0 ? styles.withEstimate : "";
 
   return (
     <div
-      className={`${styles.meter} ${variantClass} ${tone} ${flash ? styles.changed : ""} ${balance === null ? styles.loading : ""}`}
+      className={`${styles.meter} ${variantClass} ${estimateClass} ${tone} ${flash ? styles.changed : ""} ${balance === null ? styles.loading : ""}`}
       title={pricing ? `Credits — ${formatCredits(pricing.cvAnalysis)} per AI CV analysis, AI voice interview: ${formatCredits(pricing.phoneInterview)} complete, ${formatCredits(pricing.phoneInterviewIncomplete)} incomplete, ${formatCredits(pricing.phoneInterviewNoAnswer)} no answer` : "Credits"}
       aria-live="polite"
       aria-label={`Credits remaining: ${balance === null ? "loading" : formatCredits(shown)}`}
@@ -109,6 +112,9 @@ export default function EllaCreditsMeter({ variant = "inline", collapsed = false
       {variant === "sidebar"
         ? <span className={styles.sidebarValueWrap}><span className={styles.value}>{balance === null ? "—" : formatCredits(shown)}</span><span className={styles.label}>credits</span></span>
         : <><span className={styles.value}>{balance === null ? "—" : formatCredits(shown)}</span><span className={styles.label}>Credits</span></>}
+      {typeof estimateFor === "number" && estimateFor > 0 && <span className={styles.estimate}>
+        {pricing ? `Estimated up to ${formatCredits(estimateFor * pricing.cvAnalysis)} credits for ${estimateFor} resumes. Duplicates may be skipped.` : "Screening estimate loading…"}
+      </span>}
     </div>
   );
 }

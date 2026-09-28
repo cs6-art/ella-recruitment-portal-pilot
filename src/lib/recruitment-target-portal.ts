@@ -18,6 +18,11 @@ import {
   listApplicationSlots,
   listApplicationBookingTokens,
   listApplications,
+  countApplications,
+  aggregateApplicationsByStage,
+  countBulkQueueForPortal,
+  countBulkQueueByStatus,
+  type ApplicationListFilters,
   reconcileMissingTargetScreeningQueue,
   listRecentApplications,
   listBulkQueueForPortal,
@@ -164,6 +169,13 @@ function label(value: unknown) {
     .replace(/\bHr\b/g, "HR")
     .replace(/\bAi\b/g, "AI")
     .replace(/\bHod\b/g, "HOD");
+}
+
+function bulkQueueStatusLabel(value: unknown) {
+  const status = text(value).toLowerCase();
+  if (["screened", "processed", "completed"].includes(status)) return "Screened";
+  if (["queued", "processing", "failed", "skipped"].includes(status)) return label(status);
+  return status ? "Other" : "Queued";
 }
 
 function roleSummary(role: Record<string, unknown>): RoleRequestSummary {
@@ -1012,7 +1024,7 @@ function targetApplicantSummary(row: TargetApplicationRow) {
     const application = row.application as unknown as Record<string, unknown>;
     const screening = row.screeningResult as unknown as Record<string, unknown> | null;
     const currentStage = text(application.currentStage);
-    const modeNotSelectedYet = ["resume_approved", "voice_booking_pending"].includes(currentStage);
+    const modeNotSelectedYet = ["resume_review", "resume_approved", "voice_booking_pending"].includes(currentStage);
     const interviewMode: ApplicantInterviewMode = row.hasLiveAvatarInterview
       ? "avatar"
       : row.hasVoiceInterviewChoice
@@ -1044,6 +1056,32 @@ function targetApplicantSummary(row: TargetApplicationRow) {
     };
 }
 
+/** Read only the requested page of applicant summaries for the HR list. */
+export async function targetApplicantPage(input: {
+  page: number;
+  pageSize: number;
+  filters?: ApplicationListFilters;
+}) {
+  const organizationId = await targetOrganizationId();
+  const page = Number.isFinite(input.page) && input.page > 0 ? Math.trunc(input.page) : 1;
+  const pageSize = Math.min(100, Math.max(10, Math.trunc(input.pageSize)));
+  const filters = input.filters || {};
+  const [rows, total] = await Promise.all([
+    listApplications(undefined, undefined, organizationId, {
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+      filters,
+    }),
+    countApplications(organizationId, filters),
+  ]);
+  return {
+    applicants: rows.map(targetApplicantSummary),
+    total,
+    page,
+    pageSize,
+  };
+}
+
 export async function targetApplicantSummaries() {
   const organizationId = await targetOrganizationId();
   // Repair legacy/partial intake rows before reading the portal pipeline so a
@@ -1054,7 +1092,16 @@ export async function targetApplicantSummaries() {
   } catch (error) {
     console.error(`[Applicants] reconcileMissingTargetScreeningQueue failed for org ${organizationId}:`, error);
   }
-  const rows = await listApplications(undefined, undefined, organizationId);
+  // Keep the portal's user-visible history complete. The query helper pages
+  // results in bounded chunks, so we do not silently stop at its per-query
+  // safety limit when an organization grows beyond one page.
+  const rows: TargetApplicationRow[] = [];
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await listApplications(undefined, undefined, organizationId, { limit: pageSize, offset });
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
   return rows.map(targetApplicantSummary);
 }
 
@@ -1085,56 +1132,35 @@ export async function targetMarkInterviewNoShow(slotId: string, actor: { email: 
   return markTargetInterviewNoShow(slotId, actor.email, actor.name);
 }
 
-export async function targetApplicantMetrics(rows?: Awaited<ReturnType<typeof targetApplicantSummaries>>) {
-  const summaries = rows || await targetApplicantSummaries();
-  const stageCounts = new Map<string, number>();
-  for (const row of summaries) stageCounts.set(row.currentStage, (stageCounts.get(row.currentStage) || 0) + 1);
-  const stage = (key: string) => stageCounts.get(key) || 0;
-  // The database keeps a shared `voice_*` workflow key for both interview
-  // routes. Split the presentation counts by each applicant's persisted
-  // interview invitation/session so voice calls and Live Avatar reviews never
-  // get merged under one misleading label.
-  const modeStage = (key: string, mode: ApplicantInterviewMode) => summaries.filter(
-    (row) => row.currentStage === key && row.interviewMode === mode,
-  ).length;
-  // The workflow stage is the source of truth for activity. Decision fields
-  // remain blank while an interview is queued, scheduled, or awaiting review,
-  // so using them alone makes active interview counts appear as zero. A
-  // cancelled booking is moved back to voice_booking_pending and therefore
-  // remains visible as voice workflow activity without being counted as a
-  // booked/active slot.
-  const voiceActivityStages = new Set([
-    "voice_booking_pending",
-    "voice_scheduled",
-    "voice_review_pending",
-    "approved_for_final",
-    "final_scheduled",
-    "final_decision_pending",
-    "passed_final",
-  ]);
-  const finalInterviewStages = new Set(["approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"]);
+export async function targetApplicantMetrics(filters: ApplicationListFilters = {}) {
+  const aggregates = await aggregateApplicationsByStage(await targetOrganizationId(), filters);
+  const stage = (key: string) => aggregates.filter((row) => row.stage === key).reduce((sum, row) => sum + Number(row.count || 0), 0);
+  const modeStage = (key: string, mode: ApplicantInterviewMode) => aggregates
+    .filter((row) => row.stage === key && row.mode === mode)
+    .reduce((sum, row) => sum + Number(row.count || 0), 0);
+  const sum = (key: "count" | "screened" | "today" | "interviewed" | "interviewActivity" | "hrActivity", mode?: ApplicantInterviewMode) => aggregates
+    .filter((row) => !mode || row.mode === mode)
+    .reduce((total, row) => total + Number(row[key] || 0), 0);
   return {
-    total: summaries.length,
-    today: summaries.filter((row) => text(row.appliedAt).slice(0, 10) === new Date().toISOString().slice(0, 10)).length,
-    screened: summaries.filter((row) => row.resumeStatus === "Processed").length,
-    interviewed: summaries.filter((row) => ["voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"].includes(row.currentStage)).length,
-    voiceActivity: summaries.filter((row) => voiceActivityStages.has(row.currentStage) || Boolean(row.voiceStatus)).length,
+    total: sum("count"),
+    today: sum("today"),
+    screened: sum("screened"),
+    interviewed: sum("interviewed"),
+    voiceActivity: sum("interviewActivity"),
+    voiceInterviews: sum("interviewActivity", "voice"),
+    liveAvatarInterviews: sum("interviewActivity", "avatar"),
     // Face-to-face activity begins only after the voice stage. A CV
     // recommendation or voice decision must not make every screened applicant
     // appear as a face-to-face applicant. Include final decisions as well as
     // the current final-stage pipeline so rejected/completed final interviews
     // remain represented after their stage changes.
-    hrActivity: summaries.filter((row) => {
-      const finalStatus = row.finalInterviewStatus.trim().toLowerCase();
-      return finalInterviewStages.has(row.currentStage)
-        || (finalStatus !== "" && !["pending", "not started"].includes(finalStatus));
-    }).length,
+    hrActivity: sum("hrActivity"),
     resumeApproved: stage("resume_approved"),
     voiceBookingPending: modeStage("voice_booking_pending", "voice"),
     voiceScheduled: modeStage("voice_scheduled", "voice"),
     voiceReviewPending: modeStage("voice_review_pending", "voice"),
     interviewChoicePending: modeStage("voice_booking_pending", "pending"),
-    liveAvatarInProgress: modeStage("voice_booking_pending", "avatar"),
+    liveAvatarPending: modeStage("voice_booking_pending", "avatar"),
     liveAvatarReviewPending: modeStage("voice_review_pending", "avatar"),
     approvedForFinal: stage("approved_for_final"),
     finalScheduled: stage("final_scheduled"),
@@ -1156,7 +1182,8 @@ export async function targetApplicantMetrics(rows?: Awaited<ReturnType<typeof ta
       ["final_decision_pending", applicantStageLabel("final_decision_pending"), "orange", stage("final_decision_pending")],
       ["passed_final", applicantStageLabel("passed_final"), "green", stage("passed_final")],
       ["rejected", applicantStageLabel("rejected"), "red", stage("rejected")],
-    ].map(([key, label, tone, value]) => ({ key, label, tone, value })),
+      ["withdrawn", applicantStageLabel("withdrawn"), "gray", stage("withdrawn")],
+    ].map(([key, label, tone, value]) => ({ key: String(key), label: String(label), tone: String(tone) as "blue" | "purple" | "green" | "teal" | "orange" | "red" | "gray", value: Number(value) })),
   };
 }
 
@@ -1296,14 +1323,71 @@ export async function targetActiveBookingLinkRoleIds() {
 
 export async function targetBulkResumeQueue(roleExternalId = "") {
   const organizationId = await targetOrganizationId();
-  const rows = await listBulkQueueForPortal(undefined, roleExternalId || undefined, organizationId);
+  const pageSize = 500;
+  const rows: Awaited<ReturnType<typeof listBulkQueueForPortal>> = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await listBulkQueueForPortal(undefined, roleExternalId || undefined, organizationId, { limit: pageSize, offset });
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
   return rows.map(({ item, roleExternalId: roleId, applicationExternalId }) => ({
     dedupeKey: text(item.dedupeKey) || text(item.driveFileId),
     driveFileId: text(item.driveFileId), driveFileName: text(item.filename), driveFileUrl: text(item.fileUrl), roleId: text(roleId),
-    candidateName: text(item.candidateName), candidateEmail: text(item.candidateEmail), status: label(item.status), applicationId: text(applicationExternalId),
+    candidateName: text(item.candidateName), candidateEmail: text(item.candidateEmail), status: bulkQueueStatusLabel(item.status), source: text(item.source), applicationId: text(applicationExternalId),
     errorMessage: text(item.errorMessage), discoveredAt: text(item.discoveredAt), processingStartedAt: text(item.processingStartedAt), processedAt: text(item.processedAt),
     attemptCount: String(item.attemptCount ?? 0), lastUpdated: text(item.updatedAt), environment: text(item.environment), isUat: Boolean(item.isUat), batchId: text(item.batchId), jobId: text(item.jobId),
   }));
+}
+
+export async function targetBulkResumeQueuePage(input: {
+  roleExternalId: string;
+  page: number;
+  pageSize: number;
+  search?: string;
+  status?: string;
+  source?: string;
+}) {
+  const organizationId = await targetOrganizationId();
+  const page = Number.isFinite(input.page) && input.page > 0 ? Math.trunc(input.page) : 1;
+  const pageSize = Math.min(100, Math.max(10, Math.trunc(input.pageSize)));
+  const selectedStatus = input.status && input.status !== "All statuses" ? input.status : "";
+  const statuses = selectedStatus
+    ? selectedStatus === "Screened" ? ["screened", "processed", "completed"]
+      : selectedStatus === "Other" ? undefined
+        : [selectedStatus.toLowerCase()]
+    : undefined;
+  const filters = {
+    search: input.search?.trim() || undefined,
+    status: selectedStatus === "Other" ? "Other" : undefined,
+    source: input.source && input.source !== "All sources" ? ({
+      "Computer upload": "upload",
+      "Google Drive": "drive",
+      OneDrive: "onedrive",
+      "Recovered record": "reconciled",
+    } as Record<string, string>)[input.source] : undefined,
+  };
+  const [rows, total, counts] = await Promise.all([
+    listBulkQueueForPortal(statuses, input.roleExternalId || undefined, organizationId, { limit: pageSize, offset: (page - 1) * pageSize, ...filters }),
+    countBulkQueueForPortal(statuses, input.roleExternalId || undefined, organizationId, filters),
+    countBulkQueueByStatus(input.roleExternalId, organizationId),
+  ]);
+  return {
+    items: rows.map(({ item, roleExternalId: roleId, applicationExternalId }) => ({
+      dedupeKey: text(item.dedupeKey) || text(item.driveFileId),
+      driveFileId: text(item.driveFileId), driveFileName: text(item.filename), driveFileUrl: text(item.fileUrl), roleId: text(roleId),
+      candidateName: text(item.candidateName), candidateEmail: text(item.candidateEmail), status: bulkQueueStatusLabel(item.status), source: text(item.source), applicationId: text(applicationExternalId),
+      errorMessage: text(item.errorMessage), discoveredAt: text(item.discoveredAt), processingStartedAt: text(item.processingStartedAt), processedAt: text(item.processedAt),
+      attemptCount: String(item.attemptCount ?? 0), lastUpdated: text(item.updatedAt), environment: text(item.environment), isUat: Boolean(item.isUat), batchId: text(item.batchId), jobId: text(item.jobId),
+    })),
+    total,
+    page,
+    pageSize,
+    counts: Object.entries(counts).reduce<Record<string, number>>((result, [status, count]) => {
+      const key = bulkQueueStatusLabel(status);
+      result[key] = (result[key] || 0) + Number(count);
+      return result;
+    }, {}),
+  };
 }
 
 export async function targetAppendBulkResumeQueue(event: { driveFileId: string; roleId: string; status: string; driveFileName?: string; driveFileUrl?: string; driveFileMimeType?: string; candidateName?: string; candidateEmail?: string; applicationId?: string; errorMessage?: string; discoveredAt?: string; processingStartedAt?: string; processedAt?: string; attemptCount?: string; lastUpdated?: string; environment?: string; isUat?: boolean; batchId?: string; jobId?: string; resumeSha256?: string }) {

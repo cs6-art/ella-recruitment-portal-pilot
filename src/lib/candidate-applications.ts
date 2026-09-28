@@ -10,7 +10,10 @@ import { evaluationFieldsForSetup, type EvaluationField } from "@/lib/recruitmen
 import { buildNumberedInterviewQuestions, normalizeInterviewQuestionCount } from "@/lib/interview-question-count";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { applicantStageLabel, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
-import { targetActiveBookingLinkRoleIds, targetApplicantDetails, targetApplicantMetrics, targetApplicantSummaries, targetBookings, targetBulkResumeQueue, targetAppendBulkResumeQueue } from "@/lib/recruitment-target-portal";
+import { numericMatchScore } from "@/lib/score-format";
+import { PORTAL_TIME_ZONE } from "@/lib/portal-time";
+import { targetActiveBookingLinkRoleIds, targetApplicantDetails, targetApplicantMetrics, targetApplicantSummaries, targetApplicantPage, targetBookings, targetBulkResumeQueue, targetBulkResumeQueuePage, targetAppendBulkResumeQueue } from "@/lib/recruitment-target-portal";
+import type { ApplicationListFilters } from "@/lib/internal-recruitment-queries";
 
 export {
   getCandidateStatusHistory,
@@ -128,13 +131,15 @@ export type ApplicantMetrics = {
   screened: number;
   interviewed: number;
   voiceActivity: number;
+  voiceInterviews: number;
+  liveAvatarInterviews: number;
   hrActivity: number;
   resumeApproved: number;
   voiceBookingPending: number;
   voiceScheduled: number;
   voiceReviewPending: number;
   interviewChoicePending: number;
-  liveAvatarInProgress: number;
+  liveAvatarPending: number;
   liveAvatarReviewPending: number;
   approvedForFinal: number;
   finalScheduled: number;
@@ -184,6 +189,7 @@ export type BulkResumeQueueItem = {
   candidateName: string;
   candidateEmail: string;
   status: string;
+  source?: string;
   applicationId: string;
   errorMessage: string;
   discoveredAt: string;
@@ -390,6 +396,7 @@ const applicantStageDefinitions: Omit<ApplicantStageCount, "value">[] = [
   { key: "final_decision_pending", label: applicantStageLabel("final_decision_pending", "voice"), tone: "orange" },
   { key: "passed_final", label: applicantStageLabel("passed_final", "voice"), tone: "green" },
   { key: "rejected", label: applicantStageLabel("rejected", "voice"), tone: "red" },
+  { key: "withdrawn", label: applicantStageLabel("withdrawn", "voice"), tone: "gray" },
 ];
 
 function currentApplicantStage(record: SheetRow) {
@@ -403,6 +410,7 @@ function currentApplicantStage(record: SheetRow) {
   // Resolve the latest workflow stage first so stale earlier decisions cannot
   // make one applicant appear in multiple terminal buckets.
   if (finalStatus.includes("passed final") || finalStatus.includes("hired") || finalInterviewStatus.includes("passed final") || finalInterviewStatus === "passed") return "passed_final";
+  if (finalStatus.includes("withdrawn")) return "withdrawn";
   // A few legacy rows used the short `Rejected` value instead of a
   // stage-qualified status. Check this after a passed outcome so a stale
   // rejection cannot override the later HR decision.
@@ -478,12 +486,39 @@ function mapApplicant(record: SheetRow, isHistoricalDemo = false): ApplicantSumm
     finalStatus: displayFaceToFaceInterviewText(displayInterviewStageText(finalStatus)),
     currentStage: displayFaceToFaceInterviewText(displayInterviewStageText(stageFor(record))),
     nextAction: displayFaceToFaceInterviewText(displayInterviewStageText(nextActionFor(record))),
-    interviewMode: "voice",
+    interviewMode: interviewModeFor(record),
     isHistoricalDemo,
   };
 }
 
-function clampFutureApplicationDate(value: string, timeZone = process.env.PORTAL_TIMEZONE || "Asia/Singapore") {
+function interviewModeFor(record: SheetRow): ApplicantInterviewMode {
+  const explicitMode = field(
+    record,
+    "Interview_Mode",
+    "Interview Mode",
+    "Interview_Type",
+    "Interview Type",
+    "Selected_Interview_Type",
+    "Selected Interview Type",
+    "Interview_Method",
+    "Interview Method",
+  ).toLowerCase();
+  if (/avatar/.test(explicitMode)) return "avatar";
+  if (/voice|call|phone/.test(explicitMode)) return "voice";
+  const workflowEvidence = [
+    field(record, "Final_Status", "Final Status"),
+    field(record, "Status 2 (Voice Interview)", "Voice Interview Status"),
+    field(record, "Status 3 (Final Interview)", "Final Interview Status"),
+    field(record, "Recommendation"),
+  ].join(" ").toLowerCase();
+  if (/\b(?:live\s+)?avatar\b/.test(workflowEvidence)) return "avatar";
+  if (/\bvoice\b|ai voice|\bcall interview\b|\bphone interview\b/.test(workflowEvidence)) return "voice";
+  const stage = currentApplicantStage(record);
+  if (["resume_review", "resume_approved", "voice_booking_pending"].includes(stage)) return "pending";
+  return "voice";
+}
+
+function clampFutureApplicationDate(value: string, timeZone = PORTAL_TIME_ZONE) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   const formatDate = (date: Date) => new Intl.DateTimeFormat("en-CA", {
@@ -503,7 +538,7 @@ function calendarDate(value: string, timeZone: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
-export function calculateApplicantMetrics(rows: SheetRow[], now = new Date(), timeZone = process.env.PORTAL_TIMEZONE || "Asia/Singapore"): ApplicantMetrics {
+export function calculateApplicantMetrics(rows: SheetRow[], now = new Date(), timeZone = PORTAL_TIME_ZONE): ApplicantMetrics {
   const today = calendarDate(now.toISOString(), timeZone);
   const stageCounts = applicantStageDefinitions.map((stage) => ({ ...stage, value: 0 }));
   const voiceActivityStages = new Set([
@@ -520,6 +555,8 @@ export function calculateApplicantMetrics(rows: SheetRow[], now = new Date(), ti
     const resumeStatus = field(record, "Status (Resume Processing)").toLowerCase();
     const voiceStatus = field(record, "Status 2 (Voice Interview)").toLowerCase();
     const stage = currentApplicantStage(record);
+    const interviewMode = interviewModeFor(record);
+    const hasInterviewActivity = voiceActivityStages.has(stage) || (voiceStatus !== "" && !["pending", "not started"].includes(voiceStatus));
 
     result.total += 1;
     if (calendarDate(field(record, "Date_of_Application", "Date of Application"), timeZone) === today) result.today += 1;
@@ -527,7 +564,11 @@ export function calculateApplicantMetrics(rows: SheetRow[], now = new Date(), ti
     // normalized HR-review label used by the bulk and public workflows.
     if (["processed", "for hr review", "pending hr review"].includes(resumeStatus)) result.screened += 1;
     if (voiceStatus === "interviewed" || voiceStatus === "completed") result.interviewed += 1;
-    if (voiceActivityStages.has(stage) || (voiceStatus !== "" && !["pending", "not started"].includes(voiceStatus))) result.voiceActivity += 1;
+    if (hasInterviewActivity) {
+      result.voiceActivity += 1;
+      if (interviewMode === "voice") result.voiceInterviews += 1;
+      if (interviewMode === "avatar") result.liveAvatarInterviews += 1;
+    }
     const finalInterviewStatus = field(record, "Status 3 (Final Interview)").toLowerCase();
     if (finalInterviewStages.has(stage) || (finalInterviewStatus !== "" && !["pending", "not started"].includes(finalInterviewStatus))) result.hrActivity += 1;
     const stageCount = result.stageCounts.find((entry) => entry.key === stage);
@@ -542,7 +583,7 @@ export function calculateApplicantMetrics(rows: SheetRow[], now = new Date(), ti
     if (stage === "rejected") result.rejected += 1;
     if (stage === "passed_final") result.passedFinalInterview += 1;
     return result;
-  }, { total: 0, today: 0, screened: 0, interviewed: 0, voiceActivity: 0, hrActivity: 0, resumeApproved: 0, voiceBookingPending: 0, voiceScheduled: 0, voiceReviewPending: 0, interviewChoicePending: 0, liveAvatarInProgress: 0, liveAvatarReviewPending: 0, approvedForFinal: 0, finalScheduled: 0, finalDecisionPending: 0, rejected: 0, passedFinalInterview: 0, stageCounts });
+  }, { total: 0, today: 0, screened: 0, interviewed: 0, voiceActivity: 0, voiceInterviews: 0, liveAvatarInterviews: 0, hrActivity: 0, resumeApproved: 0, voiceBookingPending: 0, voiceScheduled: 0, voiceReviewPending: 0, interviewChoicePending: 0, liveAvatarPending: 0, liveAvatarReviewPending: 0, approvedForFinal: 0, finalScheduled: 0, finalDecisionPending: 0, rejected: 0, passedFinalInterview: 0, stageCounts });
 }
 
 /**
@@ -653,8 +694,130 @@ export async function getApplicants(): Promise<ApplicantSummary[]> {
     .sort((left, right) => Date.parse(right.appliedAt) - Date.parse(left.appliedAt));
 }
 
-export async function getApplicantMetrics(): Promise<ApplicantMetrics> {
-  if (isPostgresRecruitmentTarget()) return targetApplicantMetrics(await cachedTargetApplicantSummaries()) as Promise<ApplicantMetrics>;
+function applicantSummaryStageKey(applicant: ApplicantSummary) {
+  const raw = applicant.currentStage.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (["resume_review", "resume_approved", "voice_booking_pending", "voice_scheduled", "voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final", "rejected", "withdrawn"].includes(raw)) return raw;
+  const label = applicantStageLabel(applicant.currentStage, applicant.interviewMode).toLowerCase();
+  if (label.includes("resume review") || label.includes("pending hr review")) return "resume_review";
+  if (label === "resume approved") return "resume_approved";
+  if (label.includes("interview choice pending") || label.includes("booking pending") || label.includes("interview pending") || label.includes("interview in progress")) return "voice_booking_pending";
+  if (label.includes("interview scheduled")) return label.includes("face-to-face") ? "final_scheduled" : "voice_scheduled";
+  if (label.includes("interview review")) return "voice_review_pending";
+  if (label.includes("approved for face-to-face")) return "approved_for_final";
+  if (label.includes("face-to-face decision")) return "final_decision_pending";
+  if (label.includes("passed final")) return "passed_final";
+  if (label === "rejected") return "rejected";
+  if (label === "withdrawn") return "withdrawn";
+  return "resume_review";
+}
+
+function applicantMatchesListFilters(applicant: ApplicantSummary, filters: ApplicationListFilters) {
+  const searchable = `${applicant.applicationId} ${applicant.candidateName} ${applicant.email} ${applicant.roleId} ${applicant.selectedRole} ${applicant.department}`.toLowerCase();
+  const stage = applicantSummaryStageKey(applicant);
+  const appliedAt = Date.parse(applicant.appliedAt);
+  const statusStages: Record<NonNullable<ApplicationListFilters["interviewStatus"]>, string[]> = {
+    not_started: ["resume_review", "resume_approved", "voice_booking_pending"],
+    scheduled: ["voice_scheduled", "final_scheduled"],
+    in_progress: [],
+    awaiting_review: ["voice_review_pending", "final_decision_pending"],
+    review_complete: ["approved_for_final", "passed_final"],
+  };
+  const interviewCurrentlyInProgress = /in progress/i.test(`${applicant.currentStage} ${applicant.voiceStatus} ${applicant.nextAction}`);
+  const interviewDecisionRecorded = /approve|reject|completed|interviewed|passed/i.test(`${applicant.voiceStatus} ${applicant.finalInterviewStatus}`);
+  const screened = ["processed", "screened", "for hr review", "pending hr review"].includes(applicant.resumeStatus.trim().toLowerCase());
+  return (!filters.query || searchable.includes(filters.query.trim().toLowerCase())) &&
+    (!filters.roleExternalId || applicant.roleId.toLowerCase() === filters.roleExternalId.toLowerCase()) &&
+    (!filters.department || applicant.department.trim().toLowerCase() === filters.department.trim().toLowerCase()) &&
+    (!filters.stage?.length || filters.stage.includes(stage)) &&
+    (!filters.resumeStatus || (filters.resumeStatus === "screened" ? screened : !screened)) &&
+    (!filters.interviewMode || applicant.interviewMode === filters.interviewMode) &&
+    (!filters.interviewStatus || (filters.interviewStatus === "in_progress"
+      ? interviewCurrentlyInProgress
+      : filters.interviewStatus === "review_complete"
+        ? statusStages.review_complete.includes(stage) || (stage === "rejected" && interviewDecisionRecorded)
+        : statusStages[filters.interviewStatus].includes(stage))) &&
+    (!filters.dateFrom || (Number.isFinite(appliedAt) && appliedAt >= filters.dateFrom.getTime())) &&
+    (!filters.dateToExclusive || (Number.isFinite(appliedAt) && appliedAt < filters.dateToExclusive.getTime()));
+}
+
+function applicantSummaryMetrics(summaries: ApplicantSummary[], now = new Date(), timeZone = PORTAL_TIME_ZONE): ApplicantMetrics {
+  const stageCounts = applicantStageDefinitions.map((stage) => ({ ...stage, value: 0 }));
+  const result: ApplicantMetrics = {
+    total: summaries.length, today: 0, screened: 0, interviewed: 0, voiceActivity: 0, voiceInterviews: 0, liveAvatarInterviews: 0, hrActivity: 0,
+    resumeApproved: 0, voiceBookingPending: 0, voiceScheduled: 0, voiceReviewPending: 0, interviewChoicePending: 0, liveAvatarPending: 0, liveAvatarReviewPending: 0,
+    approvedForFinal: 0, finalScheduled: 0, finalDecisionPending: 0, rejected: 0, passedFinalInterview: 0, stageCounts,
+  };
+  const today = calendarDate(now.toISOString(), timeZone);
+  const activeStages = new Set(["voice_booking_pending", "voice_scheduled", "voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"]);
+  const finalStages = new Set(["approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"]);
+  for (const applicant of summaries) {
+    const stage = applicantSummaryStageKey(applicant);
+    const voiceStatus = applicant.voiceStatus.trim().toLowerCase();
+    const interviewActive = activeStages.has(stage) || (voiceStatus !== "" && !["pending", "not started"].includes(voiceStatus));
+    if (calendarDate(applicant.appliedAt, timeZone) === today) result.today += 1;
+    if (["processed", "screened", "for hr review", "pending hr review"].includes(applicant.resumeStatus.trim().toLowerCase())) result.screened += 1;
+    if (voiceStatus.includes("interviewed") || voiceStatus.includes("completed") || ["voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"].includes(stage)) result.interviewed += 1;
+    if (interviewActive) {
+      result.voiceActivity += 1;
+      if (applicant.interviewMode === "voice") result.voiceInterviews += 1;
+      if (applicant.interviewMode === "avatar") result.liveAvatarInterviews += 1;
+    }
+    const finalStatus = applicant.finalInterviewStatus.trim().toLowerCase();
+    if (finalStages.has(stage) || (finalStatus !== "" && !["pending", "not started"].includes(finalStatus))) result.hrActivity += 1;
+    const count = stageCounts.find((item) => item.key === stage);
+    if (count) count.value += 1;
+    if (stage === "resume_approved") result.resumeApproved += 1;
+    if (stage === "voice_booking_pending") {
+      if (applicant.interviewMode === "pending") result.interviewChoicePending += 1;
+      else if (applicant.interviewMode === "avatar") result.liveAvatarPending += 1;
+      else result.voiceBookingPending += 1;
+    }
+    if (stage === "voice_scheduled") result.voiceScheduled += 1;
+    if (stage === "voice_review_pending") {
+      if (applicant.interviewMode === "avatar") result.liveAvatarReviewPending += 1;
+      else result.voiceReviewPending += 1;
+    }
+    if (stage === "approved_for_final") result.approvedForFinal += 1;
+    if (stage === "final_scheduled") result.finalScheduled += 1;
+    if (stage === "final_decision_pending") result.finalDecisionPending += 1;
+    if (stage === "rejected") result.rejected += 1;
+    if (stage === "passed_final") result.passedFinalInterview += 1;
+  }
+  return result;
+}
+
+export async function getApplicantsPage(input: {
+  page: number;
+  pageSize: number;
+  filters?: ApplicationListFilters;
+}): Promise<{ applicants: ApplicantSummary[]; total: number; page: number; pageSize: number }> {
+  if (isPostgresRecruitmentTarget()) return targetApplicantPage(input);
+
+  // Google Sheets does not support the indexed filtering available in Postgres.
+  // Keep the existing sheet-backed fallback on the server, but return only the
+  // requested slice to the browser so large histories are not hydrated at once.
+  const filters = input.filters || {};
+  const matching = (await getApplicants()).filter((applicant) => applicantMatchesListFilters(applicant, filters)).sort((left, right) => {
+    if (filters.sort === "oldest") return Date.parse(left.appliedAt) - Date.parse(right.appliedAt);
+    if (filters.sort === "match") return (numericMatchScore(right.matchScore) ?? -1) - (numericMatchScore(left.matchScore) ?? -1) || Date.parse(right.appliedAt) - Date.parse(left.appliedAt);
+    return Date.parse(right.appliedAt) - Date.parse(left.appliedAt);
+  });
+  const page = Math.max(1, Math.trunc(input.page));
+  const pageSize = Math.min(100, Math.max(10, Math.trunc(input.pageSize)));
+  return {
+    applicants: matching.slice((page - 1) * pageSize, page * pageSize),
+    total: matching.length,
+    page,
+    pageSize,
+  };
+}
+
+export async function getApplicantMetrics(filters: ApplicationListFilters = {}): Promise<ApplicantMetrics> {
+  if (isPostgresRecruitmentTarget()) return targetApplicantMetrics(filters);
+  if (Object.values(filters).some((value) => value !== undefined && value !== "")) {
+    const summaries = (await getApplicants()).filter((applicant) => applicantMatchesListFilters(applicant, filters));
+    return applicantSummaryMetrics(summaries);
+  }
   // The scheduled interview maintenance handles past no-show updates. Keep
   // dashboard metrics read-only so the dashboard does not wait on that work.
   const rows = withDemoHistory((await readTab("High_Match_Profile", "CZ")).rows);
@@ -764,6 +927,7 @@ export async function getBulkResumeQueue(roleId = "", options: { fresh?: boolean
       candidateName: field(record, "Candidate_Name", "Candidate Name", "candidateName"),
       candidateEmail: field(record, "Candidate_Email", "Candidate Email", "candidateEmail"),
       status: field(record, "Status"),
+      source: field(record, "Source"),
       applicationId: field(record, "Application_ID", "Application ID", "applicationId"),
       errorMessage: field(record, "Error_Message", "Error Message", "errorMessage"),
       discoveredAt: field(record, "Discovered_At", "Discovered At", "discoveredAt"),
@@ -790,6 +954,41 @@ export async function getBulkResumeQueue(roleId = "", options: { fresh?: boolean
       }
     });
   return [...latestByFile.values()].sort((left, right) => eventTimestamp(right) - eventTimestamp(left));
+}
+
+export async function getBulkResumeQueuePage(input: {
+  roleId: string;
+  page: number;
+  pageSize: number;
+  search?: string;
+  status?: string;
+  source?: string;
+}): Promise<{ items: BulkResumeQueueItem[]; total: number; counts: Record<string, number>; page: number; pageSize: number }> {
+  if (isPostgresRecruitmentTarget()) return targetBulkResumeQueuePage({ ...input, roleExternalId: input.roleId });
+  const items = await getBulkResumeQueue(input.roleId, { fresh: true });
+  const queueStatusLabel = (rawStatus: string) => {
+    const status = rawStatus.trim().toLowerCase();
+    if (["screened", "processed", "completed"].includes(status)) return "Screened";
+    if (["queued", "processing", "failed", "skipped"].includes(status)) return `${status[0].toUpperCase()}${status.slice(1)}`;
+    return status ? "Other" : "Queued";
+  };
+  const counts = items.reduce<Record<string, number>>((result, item) => {
+    const label = queueStatusLabel(item.status);
+    result[label] = (result[label] || 0) + 1;
+    return result;
+  }, {});
+  const query = input.search?.trim().toLowerCase() || "";
+  const sourceLabels: Record<string, string> = { upload: "Computer upload", drive: "Google Drive", onedrive: "OneDrive", reconciled: "Recovered record" };
+  const filtered = items.filter((item) => {
+    const label = queueStatusLabel(item.status);
+    const source = sourceLabels[item.source?.toLowerCase() || "upload"] || "Computer upload";
+    const searchable = `${item.driveFileName} ${item.candidateName} ${item.candidateEmail} ${item.applicationId}`.toLowerCase();
+    return (!input.status || input.status === "All statuses" || label === input.status) &&
+      (!input.source || input.source === "All sources" || source === input.source) && (!query || searchable.includes(query));
+  });
+  const page = Math.max(1, Math.trunc(input.page));
+  const pageSize = Math.min(100, Math.max(10, Math.trunc(input.pageSize)));
+  return { items: filtered.slice((page - 1) * pageSize, page * pageSize), total: filtered.length, counts, page, pageSize };
 }
 
 /**

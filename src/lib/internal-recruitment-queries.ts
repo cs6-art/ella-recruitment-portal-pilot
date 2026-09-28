@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, not, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lt, lte, not, or, sql } from "drizzle-orm";
 
 import { getTenantDb as getDb } from "@/db/client";
 import { appendPostgresLedgerEntryOnExecutor } from "@/lib/ella-credits-postgres";
@@ -10,8 +10,9 @@ import { appendAccountLedgerEntryOnExecutor, organizationCreditsEnabled } from "
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
-import { notificationEmail, notificationEventLabel, notificationStatusLabel, notificationSummary } from "@/lib/notification-labels";
+import { notificationEmail, notificationEventLabel, notificationStatusLabel, notificationSummary, roleNotificationEmail } from "@/lib/notification-labels";
 import type { ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
+import { PORTAL_TIME_ZONE } from "@/lib/portal-time";
 import { pilotOutboundEmailEnabled } from "@/lib/pilot-email-policy";
 import { avatarInterviewLink } from "@/lib/public-url";
 import type { LiveAvatarEvaluation, LiveAvatarTranscriptTurn } from "@/lib/live-avatar-screening";
@@ -533,19 +534,147 @@ export async function upsertApplicant(input: { email: string; fullName?: string;
   return applicant;
 }
 
-export async function listApplications(stage?: string, roleExternalId?: string, organizationId = DEFAULT_ORGANIZATION_ID) {
-  const db = getDb();
+export type ApplicationListFilters = {
+  query?: string;
+  stage?: string[];
+  roleExternalId?: string;
+  department?: string;
+  resumeStatus?: "screened" | "awaiting";
+  interviewMode?: "voice" | "avatar" | "pending";
+  interviewStatus?: "not_started" | "scheduled" | "in_progress" | "awaiting_review" | "review_complete";
+  dateFrom?: Date;
+  dateToExclusive?: Date;
+  sort?: "oldest" | "match";
+};
+
+function applicationListConditions(organizationId: string, filters: ApplicationListFilters = {}) {
   const conditions = [eq(roles.organizationId, organizationId.trim())];
-  if (stage) conditions.push(eq(applications.currentStage, stage));
-  if (roleExternalId) conditions.push(eq(roles.externalId, roleExternalId.trim()));
+  if (filters.stage?.length) conditions.push(inArray(applications.currentStage, filters.stage));
+  if (filters.roleExternalId) conditions.push(eq(roles.externalId, filters.roleExternalId.trim()));
+  if (filters.department) conditions.push(sql`lower(trim(${roles.departmentSnapshot})) = lower(trim(${filters.department.trim()}))`);
+  if (filters.query?.trim()) {
+    const pattern = `%${filters.query.trim()}%`;
+    conditions.push(or(
+      ilike(applications.externalId, pattern),
+      ilike(applications.candidateName, pattern),
+      ilike(applications.email, pattern),
+      ilike(roles.externalId, pattern),
+      ilike(roles.title, pattern),
+      ilike(roles.departmentSnapshot, pattern),
+    )!);
+  }
+  if (filters.resumeStatus === "screened") conditions.push(isNotNull(screeningResults.id));
+  if (filters.resumeStatus === "awaiting") conditions.push(isNull(screeningResults.id));
+  const avatarSelected = hasAvatarInterviewSql();
+  const voiceSelected = hasVoiceInterviewChoiceSql();
+  if (filters.interviewMode === "avatar") conditions.push(avatarSelected);
+  if (filters.interviewMode === "voice") conditions.push(and(not(avatarSelected), or(voiceSelected, not(inArray(applications.currentStage, ["resume_review", "resume_approved", "voice_booking_pending"]))))!);
+  if (filters.interviewMode === "pending") conditions.push(and(not(avatarSelected), not(voiceSelected), inArray(applications.currentStage, ["resume_review", "resume_approved", "voice_booking_pending"]))!);
+  if (filters.interviewStatus) {
+    const interviewInProgress = sql<boolean>`exists (
+      select 1 from ${voiceCallAttempts}
+      where ${voiceCallAttempts.applicationId} = ${applications.id}
+        and ${voiceCallAttempts.status} = 'in_progress'
+    ) or exists (
+      select 1 from ${liveInterviewSessions}
+      where ${liveInterviewSessions.applicationId} = ${applications.id}
+        and ${liveInterviewSessions.status} = 'INTERVIEW_IN_PROGRESS'
+    )`;
+    const statusStages: Record<Exclude<NonNullable<ApplicationListFilters["interviewStatus"]>, "review_complete">, string[]> = {
+      not_started: ["resume_review", "resume_approved", "voice_booking_pending"],
+      scheduled: ["voice_scheduled", "final_scheduled"],
+      in_progress: [],
+      awaiting_review: ["voice_review_pending", "final_decision_pending"],
+    };
+    if (filters.interviewStatus === "in_progress") {
+      conditions.push(interviewInProgress);
+    } else if (filters.interviewStatus === "review_complete") {
+      // Rejection is a shared terminal stage; only count it as interview
+      // review complete when the voice or final-stage decision was recorded.
+      const reviewedRejection = sql<boolean>`lower(trim(${applications.voiceHrDecision})) in ('approve', 'reject')
+        or lower(trim(${applications.finalHrDecision})) in ('approve', 'reject')`;
+      conditions.push(or(
+        inArray(applications.currentStage, ["approved_for_final", "passed_final"]),
+        and(eq(applications.currentStage, "rejected"), reviewedRejection),
+      )!);
+    } else {
+      conditions.push(inArray(applications.currentStage, statusStages[filters.interviewStatus]));
+      if (filters.interviewStatus === "not_started") conditions.push(not(interviewInProgress));
+    }
+  }
+  if (filters.dateFrom) conditions.push(gte(applications.appliedAt, filters.dateFrom));
+  if (filters.dateToExclusive) conditions.push(lt(applications.appliedAt, filters.dateToExclusive));
+  return conditions;
+}
+
+export async function listApplications(
+  stage?: string,
+  roleExternalId?: string,
+  organizationId = DEFAULT_ORGANIZATION_ID,
+  pagination: { limit?: number; offset?: number; filters?: ApplicationListFilters } = {},
+) {
+  const db = getDb();
+  const filters = { ...pagination.filters };
+  if (stage) filters.stage = [stage];
+  if (roleExternalId) filters.roleExternalId = roleExternalId;
+  const conditions = applicationListConditions(organizationId, filters);
+  const limit = Math.min(Math.max(Math.trunc(pagination.limit ?? LIMIT), 1), 500);
+  const offset = Math.max(Math.trunc(pagination.offset ?? 0), 0);
   const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql(), hasVoiceInterviewChoice: hasVoiceInterviewChoiceSql() })
     .from(applications)
     .innerJoin(roles, eq(roles.id, applications.roleId))
     .innerJoin(applicants, eq(applicants.id, applications.applicantId))
     .leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id))
     .leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId));
-  return query.where(and(...conditions))
-    .orderBy(desc(applications.updatedAt)).limit(LIMIT);
+  const orderBy = filters.sort === "oldest"
+    ? [asc(applications.appliedAt), asc(applications.externalId)]
+    : filters.sort === "match"
+      ? [sql`${screeningResults.matchScore} desc nulls last`, desc(applications.appliedAt), desc(applications.externalId)]
+      : [desc(applications.appliedAt), desc(applications.externalId)];
+  return query.where(and(...conditions)).orderBy(...orderBy).limit(limit).offset(offset);
+}
+
+export async function countApplications(organizationId = DEFAULT_ORGANIZATION_ID, filters: ApplicationListFilters = {}) {
+  const db = getDb();
+  const [result] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(applications)
+    .innerJoin(roles, eq(roles.id, applications.roleId))
+    .innerJoin(applicants, eq(applicants.id, applications.applicantId))
+    .leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id))
+    .where(and(...applicationListConditions(organizationId, filters)));
+  return Number(result?.count || 0);
+}
+
+/** Small grouped result for dashboard cards; avoid loading every applicant row. */
+export async function aggregateApplicationsByStage(organizationId = DEFAULT_ORGANIZATION_ID, filters: ApplicationListFilters = {}) {
+  const db = getDb();
+  const portalTimeZone = PORTAL_TIME_ZONE;
+  const portalDayStart = sql`date_trunc('day', now() at time zone ${portalTimeZone}) at time zone ${portalTimeZone}`;
+  const avatarSelected = hasAvatarInterviewSql();
+  const voiceSelected = hasVoiceInterviewChoiceSql();
+  const mode = sql<string>`case
+    when ${avatarSelected} then 'avatar'
+    when ${voiceSelected} then 'voice'
+    when ${applications.currentStage} in ('resume_review', 'resume_approved', 'voice_booking_pending') then 'pending'
+    else 'voice'
+  end`;
+  const activeInterview = sql`(${applications.currentStage} in ('voice_booking_pending', 'voice_scheduled', 'voice_review_pending', 'approved_for_final', 'final_scheduled', 'final_decision_pending', 'passed_final') or trim(${applications.voiceHrDecision}) <> '')`;
+  const finalActivity = sql`(${applications.currentStage} in ('approved_for_final', 'final_scheduled', 'final_decision_pending', 'passed_final') or (trim(${applications.finalHrDecision}) <> '' and lower(trim(${applications.finalHrDecision})) not in ('pending', 'not started')))`;
+  return db.select({
+    stage: applications.currentStage,
+    mode,
+    count: sql<number>`count(*)::int`,
+    screened: sql<number>`count(*) filter (where ${screeningResults.id} is not null)::int`,
+    today: sql<number>`count(*) filter (where ${applications.appliedAt} >= ${portalDayStart})::int`,
+    interviewed: sql<number>`count(*) filter (where ${applications.currentStage} in ('voice_review_pending', 'approved_for_final', 'final_scheduled', 'final_decision_pending', 'passed_final'))::int`,
+    interviewActivity: sql<number>`count(*) filter (where ${activeInterview})::int`,
+    hrActivity: sql<number>`count(*) filter (where ${finalActivity})::int`,
+  }).from(applications)
+    .innerJoin(roles, eq(roles.id, applications.roleId))
+    .innerJoin(applicants, eq(applicants.id, applications.applicantId))
+    .leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id))
+    .where(and(...applicationListConditions(organizationId, filters)))
+    .groupBy(applications.currentStage, mode);
 }
 
 /**
@@ -1780,17 +1909,70 @@ export async function voiceAttemptStatusSummary(organizationId: string): Promise
   return Object.fromEntries(rows.map((row) => [row.status, row.count]));
 }
 
-export async function listBulkQueueForPortal(statuses: string[] = ["queued", "processing", "screened", "failed", "skipped"], roleExternalId?: string, organizationId = DEFAULT_ORGANIZATION_ID) {
+const COMMON_BULK_QUEUE_STATUSES = ["queued", "processing", "screened", "processed", "completed", "failed", "skipped"];
+
+export async function listBulkQueueForPortal(
+  statuses: string[] | undefined = undefined,
+  roleExternalId?: string,
+  organizationId = DEFAULT_ORGANIZATION_ID,
+  pagination: { limit?: number; offset?: number; search?: string; source?: string; status?: string } = {},
+) {
   const db = getDb();
-  const conditions = [inArray(bulkScreeningQueueItems.status, statuses), eq(roles.organizationId, organizationId.trim())];
+  const conditions = [eq(roles.organizationId, organizationId.trim())];
+  if (pagination.status === "Other") conditions.push(not(inArray(bulkScreeningQueueItems.status, COMMON_BULK_QUEUE_STATUSES)));
+  else if (statuses?.length) conditions.push(inArray(bulkScreeningQueueItems.status, statuses));
   if (roleExternalId) conditions.push(eq(roles.externalId, roleExternalId.trim()));
+  if (pagination.source) conditions.push(eq(bulkScreeningQueueItems.source, pagination.source));
+  if (pagination.search?.trim()) {
+    const pattern = `%${pagination.search.trim()}%`;
+    conditions.push(or(ilike(bulkScreeningQueueItems.filename, pattern), ilike(bulkScreeningQueueItems.candidateName, pattern), ilike(bulkScreeningQueueItems.candidateEmail, pattern), ilike(roles.externalId, pattern), ilike(applications.externalId, pattern))!);
+  }
+  const limit = Math.min(Math.max(Math.trunc(pagination.limit ?? LIMIT), 1), 500);
+  const offset = Math.max(Math.trunc(pagination.offset ?? 0), 0);
   return db.select({ item: bulkScreeningQueueItems, roleExternalId: roles.externalId, applicationExternalId: applications.externalId })
     .from(bulkScreeningQueueItems)
     .innerJoin(roles, eq(roles.id, bulkScreeningQueueItems.roleId))
     .leftJoin(applications, eq(applications.id, bulkScreeningQueueItems.applicationId))
     .where(and(...conditions))
     .orderBy(desc(bulkScreeningQueueItems.updatedAt))
-    .limit(LIMIT);
+    .limit(limit)
+    .offset(offset);
+}
+
+export async function countBulkQueueForPortal(
+  statuses: string[] | undefined = undefined,
+  roleExternalId?: string,
+  organizationId = DEFAULT_ORGANIZATION_ID,
+  filters: { search?: string; source?: string; status?: string } = {},
+) {
+  const db = getDb();
+  const conditions = [eq(roles.organizationId, organizationId.trim())];
+  if (filters.status === "Other") conditions.push(not(inArray(bulkScreeningQueueItems.status, COMMON_BULK_QUEUE_STATUSES)));
+  else if (statuses?.length) conditions.push(inArray(bulkScreeningQueueItems.status, statuses));
+  if (roleExternalId) conditions.push(eq(roles.externalId, roleExternalId.trim()));
+  if (filters.source) conditions.push(eq(bulkScreeningQueueItems.source, filters.source));
+  if (filters.search?.trim()) {
+    const pattern = `%${filters.search.trim()}%`;
+    conditions.push(or(ilike(bulkScreeningQueueItems.filename, pattern), ilike(bulkScreeningQueueItems.candidateName, pattern), ilike(bulkScreeningQueueItems.candidateEmail, pattern), ilike(roles.externalId, pattern), ilike(applications.externalId, pattern))!);
+  }
+  const [result] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(bulkScreeningQueueItems)
+    .innerJoin(roles, eq(roles.id, bulkScreeningQueueItems.roleId))
+    .leftJoin(applications, eq(applications.id, bulkScreeningQueueItems.applicationId))
+    .where(and(...conditions));
+  return Number(result?.count || 0);
+}
+
+export async function countBulkQueueByStatus(roleExternalId = "", organizationId = DEFAULT_ORGANIZATION_ID) {
+  const db = getDb();
+  const conditions = [eq(roles.organizationId, organizationId.trim())];
+  if (roleExternalId) conditions.push(eq(roles.externalId, roleExternalId.trim()));
+  const rows = await db.select({ status: bulkScreeningQueueItems.status, count: sql<number>`count(*)::int` })
+    .from(bulkScreeningQueueItems)
+    .innerJoin(roles, eq(roles.id, bulkScreeningQueueItems.roleId))
+    .where(and(...conditions))
+    .groupBy(bulkScreeningQueueItems.status);
+  return Object.fromEntries(rows.map((row) => [row.status, row.count]));
 }
 
 /** Fast target duplicate check used before resume parsing/upload work. */
@@ -2618,7 +2800,24 @@ export async function notificationQueue(stage?: string) {
   });
   return [
     ...applicationItems.map((item) => ({ ...item, notificationDomain: "application" })),
-    ...roleRows.map(({ history, ...context }) => ({ ...history, ...context, eventType: history.action === "role_created" ? "role_request_created" : "role_status_transition", notificationDomain: "role" })),
+    ...roleRows.map(({ history, ...context }) => {
+      const portalOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.APP_URL?.trim() || (process.env.VERCEL_URL?.trim() ? `https://${process.env.VERCEL_URL.trim()}` : "https://smile.mclinkgroup.com");
+      return {
+        ...history,
+        ...context,
+        eventType: history.action === "role_created" ? "role_request_created" : "role_status_transition",
+        notificationDomain: "role",
+        email: roleNotificationEmail(history.newStatus, {
+          recipientName: context.recipientName,
+          roleTitle: context.roleTitle,
+          roleExternalId: context.roleExternalId,
+          departmentSnapshot: context.departmentSnapshot,
+          requesterName: context.requesterName,
+          requesterEmail: context.requesterEmail,
+          roleLink: context.roleExternalId ? `${portalOrigin.replace(/\/$/, "")}/roles/${encodeURIComponent(context.roleExternalId)}` : "",
+        }),
+      };
+    }),
   ].sort((left, right) => new Date(left.changedAt).valueOf() - new Date(right.changedAt).valueOf()).slice(0, LIMIT);
 }
 

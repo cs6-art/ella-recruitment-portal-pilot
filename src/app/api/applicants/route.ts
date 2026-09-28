@@ -20,12 +20,92 @@ import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { invalidateSheetsCache } from "@/lib/sheets-cache";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetCreateApplication, targetRoleDetails } from "@/lib/recruitment-target-portal";
+import { getApplicantMetrics, getApplicantsPage } from "@/lib/candidate-applications";
+import { canViewRole, isDepartmentReviewer } from "@/lib/access-control";
+import type { ApplicationListFilters } from "@/lib/internal-recruitment-queries";
+import { portalDateBoundary } from "@/lib/portal-time";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function responseError(error: string, status: number, extra: Record<string, unknown> = {}) {
   return NextResponse.json({ success: false, error, ...extra }, { status });
+}
+
+const stageFilters: Record<string, { stage: string[]; interviewMode?: "voice" | "avatar" | "pending" }> = {
+  "Resume Review": { stage: ["resume_review"] },
+  "Resume Approved": { stage: ["resume_approved"] },
+  "Interview Choice Pending": { stage: ["voice_booking_pending"], interviewMode: "pending" },
+  "Voice Interview Booking Pending": { stage: ["voice_booking_pending"], interviewMode: "voice" },
+  "Live Avatar Interview Pending": { stage: ["voice_booking_pending"], interviewMode: "avatar" },
+  "Voice Interview Scheduled": { stage: ["voice_scheduled"], interviewMode: "voice" },
+  "Live Avatar Interview Scheduled": { stage: ["voice_scheduled"], interviewMode: "avatar" },
+  "Voice Interview Review": { stage: ["voice_review_pending"], interviewMode: "voice" },
+  "Avatar Interview Review": { stage: ["voice_review_pending"], interviewMode: "avatar" },
+  "Approved for Face-to-Face Interview": { stage: ["approved_for_final"] },
+  "Face-to-Face Interview Scheduled": { stage: ["final_scheduled"] },
+  "Face-to-Face Decision Pending": { stage: ["final_decision_pending"] },
+  "Passed Final Interview": { stage: ["passed_final"] },
+  Rejected: { stage: ["rejected"] },
+  Withdrawn: { stage: ["withdrawn"] },
+  "Voice Interview": { stage: ["voice_booking_pending", "voice_scheduled", "voice_review_pending"], interviewMode: "voice" },
+  "Live Avatar Interview": { stage: ["voice_booking_pending", "voice_scheduled", "voice_review_pending"], interviewMode: "avatar" },
+  "Face-to-Face Interview": { stage: ["approved_for_final", "final_scheduled", "final_decision_pending", "passed_final"] },
+  Completed: { stage: ["passed_final", "rejected"] },
+};
+
+function parsedDate(value: string | null, inclusiveEnd = false) {
+  return value ? portalDateBoundary(value, inclusiveEnd) || undefined : undefined;
+}
+
+/** Authenticated, tenant-scoped list endpoint; page data and count use identical filters. */
+export async function GET(request: Request) {
+  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  if (!user) return responseError("Authentication required.", 401);
+  if (user.canReviewRole !== true && user.canApproveRole !== true && user.canReviewDepartmentRole !== true) {
+    return responseError("Not authorized.", 403);
+  }
+
+  const params = new URL(request.url).searchParams;
+  const scopeRoleId = params.get("scopeRole")?.trim() || "";
+  if (scopeRoleId) {
+    const scopedRole = isPostgresRecruitmentTarget()
+      ? await targetRoleDetails(scopeRoleId, user.organizationId)
+      : await getRoleRequestById(scopeRoleId);
+    if (!scopedRole || !canViewRole(user, scopedRole)) return responseError("You do not have access to these applicants.", 403);
+  }
+  const requestedPage = Number(params.get("page"));
+  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.trunc(requestedPage) : 1;
+  const pageSize = [10, 25, 50, 100].includes(Number(params.get("pageSize"))) ? Number(params.get("pageSize")) : 25;
+  const stageLabel = params.get("stage") || "";
+  const stage = stageFilters[stageLabel];
+  const interview = params.get("interview");
+  const interviewMode = stage?.interviewMode || (interview === "Voice Interview" ? "voice" : interview === "Live Avatar Interview" ? "avatar" : interview === "Not selected" ? "pending" : undefined);
+  const resume = params.get("resume");
+  const interviewStatus = params.get("interviewStatus");
+  const sort = params.get("sort");
+  const dateFrom = parsedDate(params.get("from"));
+  const dateToExclusive = parsedDate(params.get("to"), true);
+  const filters: ApplicationListFilters = {
+    query: params.get("search") || undefined,
+    stage: stage?.stage,
+    roleExternalId: scopeRoleId || (params.get("role") && params.get("role") !== "All Roles" ? params.get("role") || undefined : undefined),
+    department: isDepartmentReviewer(user) ? user.department : undefined,
+    resumeStatus: resume === "Screened" ? "screened" as const : resume === "Awaiting screening" ? "awaiting" as const : undefined,
+    interviewMode,
+    interviewStatus: ["not_started", "scheduled", "in_progress", "awaiting_review", "review_complete"].includes(interviewStatus || "") ? interviewStatus as "not_started" | "scheduled" | "in_progress" | "awaiting_review" | "review_complete" : undefined,
+    dateFrom,
+    dateToExclusive,
+    sort: sort === "oldest" || sort === "match" ? sort : undefined,
+  };
+
+  try {
+    const [result, metrics] = await Promise.all([getApplicantsPage({ page, pageSize, filters }), getApplicantMetrics(filters)]);
+    return NextResponse.json({ success: true, ...result, metrics, lastUpdatedAt: new Date().toISOString() }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    console.error("[API Applicants] list failed:", error);
+    return responseError("Applicants could not be refreshed. Please try again.", 500);
+  }
 }
 
 export async function POST(request: Request) {

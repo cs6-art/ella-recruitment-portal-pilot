@@ -29,7 +29,7 @@ const clock = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-dig
 
 function formatDate(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : `${dateTime.format(date)} (SGT)`;
+  return Number.isNaN(date.getTime()) ? "Not available" : `${dateTime.format(date)} (SGT)`;
 }
 
 function formatDuration(seconds: number | null) {
@@ -52,11 +52,12 @@ function speakerLabel(turn: TranscriptTurn) {
 
 function recordingLabel(review: Review) {
   switch (review.recording.status) {
-    case "available": return "Saved to private Google Drive — available for HR playback";
+    case "available": return "Recording saved to the secure Google Drive folder and available for HR playback";
     case "not_consented": return "Not recorded — the applicant did not consent to recording";
     case "not_configured": return "Not recorded — Google Drive storage is not configured";
-    case "pending": case "uploading": return "Upload in progress — keep the interview page open";
-    case "failed": return "Upload failed — recording is not available";
+    case "pending": return "The recording is being prepared";
+    case "uploading": return "The recording is being uploaded to secure Google Drive storage";
+    case "failed": return "The recording could not be saved and is not available";
     default: return "Recording status not available";
   }
 }
@@ -93,14 +94,17 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
   const transcriptRef = useRef<HTMLDivElement>(null);
   const endpoint = `/api/applicants/${encodeURIComponent(applicationId)}/live-interview`;
   const processing = PROCESSING.has(review.status);
+  const recordingWaiting = review.recording.status === "pending" || review.recording.status === "uploading";
 
   useEffect(() => {
-    if (!processing) return;
+    if (!processing && !recordingWaiting) return;
     const startedAt = Date.now();
     let cancelled = false;
-    const timer = window.setInterval(async () => {
+    let timer: number | null = null;
+    const poll = async () => {
+      if (cancelled || document.visibilityState !== "visible") return;
       if (Date.now() - startedAt > POLL_LIMIT_MS) {
-        window.clearInterval(timer);
+        if (timer) window.clearTimeout(timer);
         if (!cancelled) setPollExpired(true);
         return;
       }
@@ -111,9 +115,25 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
       } catch {
         // Keep the last known state; the next tick retries.
       }
-    }, POLL_MS);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [processing, endpoint, pollKey]);
+      if (!cancelled && document.visibilityState === "visible") timer = window.setTimeout(poll, POLL_MS);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        if (timer) window.clearTimeout(timer);
+        timer = null;
+      } else {
+        if (timer) window.clearTimeout(timer);
+        void poll();
+      }
+    };
+    timer = window.setTimeout(poll, POLL_MS);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [processing, recordingWaiting, endpoint, pollKey]);
 
   async function retry() {
     if (retrying) return;
@@ -174,8 +194,8 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
     <div className="live-review-block">
       <h4>Interview Overview</h4>
       <div className="applicant-detail-inline-fields">
-        <div className="applicant-detail-field"><span>Applicant Name</span><strong>{review.applicantName || "—"}</strong></div>
-        <div className="applicant-detail-field"><span>Position Applied For</span><strong>{review.roleTitle || "—"}</strong></div>
+        <div className="applicant-detail-field"><span>Applicant Name</span><strong>{review.applicantName || "Not provided"}</strong></div>
+        <div className="applicant-detail-field"><span>Position Applied For</span><strong>{review.roleTitle || "Not provided"}</strong></div>
         <div className="applicant-detail-field"><span>Interview Date</span><strong>{formatDate(review.interviewDate)}</strong></div>
         <div className="applicant-detail-field"><span>Interview Duration</span><strong>{formatDuration(review.durationSeconds)}</strong></div>
         <div className="applicant-detail-field"><span>Live Avatar Interview Status</span><strong>{INTERVIEW_STATE_LABELS[review.interviewState] || "Status not available"}</strong></div>
@@ -277,11 +297,11 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
       </>}
     </div>
 
-    <div className="live-review-block">
+    <div className="live-review-block" aria-busy={review.recording.status === "pending" || review.recording.status === "uploading"}>
       <h4>Live Avatar Recording</h4>
       {review.recording.available
         ? <video className="live-review-video" controls preload="metadata" src={`${endpoint}/recording`}>Your browser cannot play this recording.</video>
-        : <p className="live-review-loading">{recordingLabel(review)}</p>}
+        : <p className="live-review-loading" role="status" aria-live="polite">{recordingLabel(review)}</p>}
     </div>
 
     <div className="live-review-block">

@@ -34,7 +34,7 @@ test("sessions and login resolve an organization before tenant-scoped requests",
   assert.match(session, /!user\.organizationId/);
   assert.match(auth, /credential\.organizationId/);
   assert.match(auth, /organizationId: credential\.organizationId/);
-  assert.match(target, /listApplications\(undefined, undefined, organizationId\)/);
+  assert.match(target, /listApplications\(undefined, undefined, organizationId, \{/);
   assert.match(target, /targetPublicRoleDetails/);
 });
 

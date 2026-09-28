@@ -14,6 +14,9 @@
   transition: background .25s ease, border-color .25s ease, color .25s ease;
 }
 
+.withEstimate { flex-wrap: wrap; white-space: normal; row-gap: 5px; }
+.estimate { flex-basis: 100%; margin-left: 26px; color: #46596b; font-size: 11px; font-weight: 600; line-height: 1.35; }
+
 .icon {
   display: grid;
   place-items: center;

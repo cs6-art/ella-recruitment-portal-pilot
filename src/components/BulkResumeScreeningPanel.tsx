@@ -6,10 +6,11 @@ import ActionFeedback from "@/components/ActionFeedback";
 import DriveFilePicker from "@/components/DriveFilePicker";
 import EllaCreditsMeter from "@/components/EllaCreditsMeter";
 import GoogleDriveIcon from "@/components/GoogleDriveIcon";
+import Pagination from "@/components/Pagination";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 import { buildCloudImportRequest, selectedCloudFiles, type CloudImportSelection } from "@/lib/cloud-import-request";
 import { formatPortalDateTime } from "@/lib/portal-time";
-import { MAX_CAMPAIGN_FILES, MAX_FILES_PER_SUBMISSION } from "@/lib/bulk-resume-limits";
+import { MAX_CAMPAIGN_FILES, MAX_FILES_PER_SUBMISSION, MAX_RESUME_FILE_BYTES } from "@/lib/bulk-resume-limits";
 import { clientErrorMessage } from "@/lib/client-error";
 
 type RoleOption = { roleId: string; label: string };
@@ -22,6 +23,7 @@ type QueueItem = {
   candidateName: string;
   candidateEmail: string;
   status: string;
+  source?: string;
   applicationId: string;
   errorMessage: string;
   discoveredAt: string;
@@ -32,7 +34,7 @@ type QueueItem = {
   jobId: string;
 };
 
-const statusOrder = ["Queued", "Processing", "Completed", "Failed", "Skipped"];
+const statusOrder = ["Queued", "Processing", "Screened", "Failed", "Skipped", "Other"];
 // The status endpoint performs fresh queue and screening-evidence reads. Keep
 // feedback responsive for a newly submitted batch, then back off when the
 // queue is unchanged so a stuck historical row cannot create endless load.
@@ -58,11 +60,21 @@ function statusClass(status: string) {
 // about, distinct from the raw sheet status string used for logic.
 function displayStatus(status: string) {
   const normalized = status.toLowerCase();
-  if (normalized === "screened" || normalized === "processed") return { label: "Completed", result: "Screening completed" };
+  if (normalized === "screened" || normalized === "processed" || normalized === "completed") return { label: "Screened", result: "Screening completed" };
   if (normalized === "processing") return { label: "Processing", result: "AI analysis running" };
   if (normalized === "failed") return { label: "Failed", result: "Retry" };
   if (normalized === "skipped") return { label: "Skipped", result: "Already screened or queued" };
-  return { label: "Queued", result: "Waiting" };
+  if (normalized === "queued" || !normalized) return { label: "Queued", result: "Waiting" };
+  return { label: "Other", result: "Status needs review" };
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function LoadingLabel({ children }: { children: string }) {
+  return <><span className="bulk-screening-spinner" aria-hidden="true" />{children}</>;
 }
 
 async function fileQueueId(roleId: string, file: File) {
@@ -77,12 +89,20 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   const [roleId, setRoleId] = useState("");
   const [items, setItems] = useState<QueueItem[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queueStatus, setQueueStatus] = useState("All statuses");
+  const [queueSource, setQueueSource] = useState("All sources");
+  const [queuePage, setQueuePage] = useState(1);
+  const [queuePageSize, setQueuePageSize] = useState(10);
+  const [queueTotal, setQueueTotal] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState("");
   const [retrySupported, setRetrySupported] = useState(false);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<"preparing" | "uploading">("preparing");
   const [uploadMessage, setUploadMessage] = useState("");
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
@@ -120,7 +140,9 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     refreshAbort.current = controller;
     setLoading(true);
     try {
-      const response = await fetch(`/api/resume-screening/bulk?roleId=${encodeURIComponent(roleId)}`, { cache: "no-store", signal: controller.signal });
+      const params = new URLSearchParams({ roleId, page: String(queuePage), pageSize: String(queuePageSize), status: queueStatus, source: queueSource });
+      if (queueSearch.trim()) params.set("search", queueSearch.trim());
+      const response = await fetch(`/api/resume-screening/bulk?${params}`, { cache: "no-store", signal: controller.signal });
       const result = await response.json();
       if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to load bulk screening status.");
       // Ignore a response that belongs to an older role/request. This keeps a
@@ -135,12 +157,14 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       const changed = Boolean(statusSignature.current) && statusSignature.current !== nextSignature;
       statusSignature.current = nextSignature;
       setItems(nextItems);
+      setQueueTotal(Number(result.total) || 0);
       setRetrySupported(result.retrySupported === true);
       // Use the reconciled latest-state counts. Historical retry-event totals
       // are useful for diagnostics but must not make this summary disagree
       // with the live batch bar above it.
       setCounts(nextCounts);
       setConfigured(result.configured !== false);
+      setLastUpdated(typeof result.updatedAt === "string" ? result.updatedAt : new Date().toISOString());
       if (result.error) setError(result.error);
       return changed;
     } catch (caught) {
@@ -153,7 +177,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
         if (requestId === statusRequestId.current) setLoading(false);
       }
     }
-  }, [roleId]);
+  }, [queuePage, queuePageSize, queueSearch, queueSource, queueStatus, roleId]);
 
   function selectRole(nextRoleId: string) {
     if (queueRunning) return;
@@ -167,6 +191,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     setRoleId(nextRoleId);
     setItems([]);
     setCounts({});
+    setQueueTotal(0);
     setRetrySupported(false);
     setActiveBatch(new Map());
     setBatchResultStatuses(new Map());
@@ -181,8 +206,19 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   useEffect(() => {
     pollDelayIndex.current = 0;
     statusSignature.current = "";
-    void refreshStatus();
-  }, [refreshStatus]);
+  }, [roleId]);
+
+  useEffect(() => {
+    if (!roleId) return;
+    const timer = window.setTimeout(() => void refreshStatus(), queueSearch.trim() ? 300 : 0);
+    return () => {
+      window.clearTimeout(timer);
+      statusRequestId.current += 1;
+      refreshAbort.current?.abort();
+      refreshAbort.current = null;
+      refreshInFlight.current = false;
+    };
+  }, [queuePage, queuePageSize, queueSearch, queueSource, queueStatus, refreshStatus, roleId]);
 
   const loadDriveStatus = useCallback(async () => {
     try {
@@ -288,24 +324,31 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   }, [roleId, pendingInBatch, refreshStatus]);
 
   function addFiles(nextFiles: FileList | File[]) {
-    const incoming = Array.from(nextFiles).filter((file) => /\.(pdf|docx?|doc)$/i.test(file.name));
-    setFiles((current) => {
-      const seen = new Set(current.map((file) => `${file.name}:${file.size}`));
-      const merged = [...current];
-      for (const file of incoming) {
-        const key = `${file.name}:${file.size}`;
-        if (!seen.has(key)) { merged.push(file); seen.add(key); }
-      }
-      // The server still caps a single request at MAX_FILES_PER_SUBMISSION;
-      // selecting more than that is fine here -- "Start screening" below
-      // auto-splits a larger selection into that many requests fired one at a
-      // time. MAX_CAMPAIGN_FILES is just a sane ceiling on one sitting.
-      if (merged.length > MAX_CAMPAIGN_FILES) {
-        setWarning(`You can queue up to ${MAX_CAMPAIGN_FILES} resumes in one sitting. Extra files were not added — run another batch after this one finishes.`);
-        return merged.slice(0, MAX_CAMPAIGN_FILES);
-      }
-      return merged;
-    });
+    const candidates = Array.from(nextFiles);
+    const unsupported = candidates.filter((file) => !/\.(pdf|docx?)$/i.test(file.name)).length;
+    const empty = candidates.filter((file) => file.size === 0).length;
+    const oversized = candidates.filter((file) => file.size > MAX_RESUME_FILE_BYTES).length;
+    const valid = candidates.filter((file) => /\.(pdf|docx?)$/i.test(file.name) && file.size > 0 && file.size <= MAX_RESUME_FILE_BYTES);
+    const seen = new Set(files.map((file) => `${file.name.toLowerCase()}:${file.size}`));
+    const incoming: File[] = [];
+    let duplicates = 0;
+    for (const file of valid) {
+      const key = `${file.name.toLowerCase()}:${file.size}`;
+      if (seen.has(key)) duplicates += 1;
+      else { incoming.push(file); seen.add(key); }
+    }
+    const availableSlots = Math.max(0, MAX_CAMPAIGN_FILES - files.length);
+    const limited = incoming.length > availableSlots;
+    setFiles([...files, ...incoming.slice(0, availableSlots)]);
+    const messages = [
+      unsupported ? `${unsupported} file${unsupported === 1 ? "" : "s"} not added: use PDF, DOC, or DOCX.` : "",
+      empty ? `${empty} empty file${empty === 1 ? "" : "s"} not added.` : "",
+      oversized ? `${oversized} file${oversized === 1 ? "" : "s"} over 10 MB not added.` : "",
+      duplicates ? `${duplicates} duplicate selection${duplicates === 1 ? "" : "s"} skipped.` : "",
+      limited ? `You can add up to ${MAX_CAMPAIGN_FILES} resumes at a time. Extra files were not added.` : "",
+    ].filter(Boolean);
+    setError("");
+    setWarning(messages.join(" "));
   }
 
   function removeFile(target: File) {
@@ -332,6 +375,8 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     }));
     batchFiles.current = new Map([...batchFiles.current, ...fileMap]);
     setActiveBatch((current) => new Map([...current, ...batch]));
+    setUploadPhase("uploading");
+    setUploadMessage(`Uploading ${fileList.length} resume${fileList.length === 1 ? "" : "s"}…`);
 
     const formData = new FormData();
     formData.set("roleId", roleId);
@@ -372,9 +417,10 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   async function uploadResumes(fileList: File[]) {
     if (!roleId || fileList.length === 0 || uploading || queueRunning) return;
     setUploading(true);
+    setUploadPhase("preparing");
     setError("");
     setWarning("");
-    setUploadMessage("");
+    setUploadMessage("Preparing files for secure upload…");
     batchFiles.current = new Map();
     setActiveBatch(new Map());
     setBatchResultStatuses(new Map());
@@ -404,6 +450,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   async function runBulkQueue(allFiles: File[]) {
     if (!roleId || allFiles.length === 0 || uploading || queueRunning) return;
     setQueueRunning(true);
+    setUploadPhase("preparing");
     queueCancelRef.current = false;
     setError("");
     setWarning("");
@@ -609,30 +656,51 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     return normalized;
   }, [counts]);
 
+  const queueTotalPages = Math.max(1, Math.ceil(queueTotal / queuePageSize));
+  const pageItems = items;
+
+  useEffect(() => {
+    setQueuePage(1);
+  }, [queueSearch, queueSource, queueStatus, roleId]);
+
+  useEffect(() => {
+    if (queuePage > queueTotalPages) setQueuePage(queueTotalPages);
+  }, [queuePage, queueTotalPages]);
+
   return (
     <section className="bulk-screening-panel" aria-labelledby="bulk-screening-title">
       <div className="bulk-screening-header">
         <div>
-          <span className="form-eyebrow">BULK RESUME SCREENING</span>
-          <h2 id="bulk-screening-title">Bulk upload resumes</h2>
-          <p>Select a published role and upload multiple PDF, DOC, or DOCX resumes directly from this page. Smile processes each file once and records its screening status here.</p>
+          <h2 id="bulk-screening-title">Add resumes for screening</h2>
+          <p>Choose the role, add resumes from your computer or cloud storage, then follow each screening result below.</p>
         </div>
-        <span className="bulk-screening-badge">One-time screening</span>
+        <span className="bulk-screening-badge">PDF, DOC, or DOCX · up to 10 MB each</span>
       </div>
+
+      <ol className="resume-screening-steps" aria-label="Resume screening steps">
+        <li className={roleId ? "is-complete" : "is-current"}><span>1</span><strong>Choose a role</strong></li>
+        <li className={files.length ? "is-current" : roleId ? "is-next" : "is-next"}><span>2</span><strong>Add resumes</strong></li>
+        <li className={items.length || batchTotal ? "is-current" : "is-next"}><span>3</span><strong>Review progress</strong></li>
+      </ol>
 
       <div className="bulk-screening-body">
         <div className="bulk-screening-controls">
           <label className="field">
-            <span>Published role *</span>
-            <select value={roleId} onChange={(event) => selectRole(event.target.value)}>
-              <option value="">Select a published role</option>
+            <span>Select the role these resumes are for *</span>
+            <select value={roleId} disabled={roleOptions.length === 0} onChange={(event) => selectRole(event.target.value)}>
+              <option value="">Choose a published role</option>
               {roleOptions.map((role) => <option key={role.roleId} value={role.roleId}>{role.label}</option>)}
             </select>
+            <small>Screening results are compared with this role&apos;s requirements.</small>
+            {selectedRole && <small>Selected role: {selectedRole.label} · Role reference: {selectedRole.roleId}</small>}
+            {roleOptions.length === 0 && <small className="bulk-screening-role-empty">There are no published roles available. Publish a role before adding resumes.</small>}
           </label>
           <div className="bulk-screening-action">
+            <div className="bulk-screening-source-option">
+              <small>{driveStatus === null ? "Checking Google Drive connection…" : driveStatus.connected ? `Google Drive connected${driveStatus.accountEmail ? ` as ${driveStatus.accountEmail}` : ""}` : "Google Drive is not connected"}</small>
             {driveStatus?.connected
               ? <button type="button" className="btn btn-secondary btn-with-icon" disabled={!roleId || uploading || driveImporting} onClick={() => setCloudPicker("google")}><GoogleDriveIcon />Choose from Google Drive</button>
-              : <a className="btn btn-secondary btn-with-icon" href="/api/auth/google-drive/connect"><GoogleDriveIcon />Connect Google Drive</a>}
+              : roleId ? <a className="btn btn-secondary btn-with-icon" href="/api/auth/google-drive/connect"><GoogleDriveIcon />Connect Google Drive</a> : <button type="button" className="btn btn-secondary btn-with-icon" disabled><GoogleDriveIcon />Choose a role first</button>}
             {driveStatus?.connected && (
               <button
                 type="button"
@@ -645,9 +713,12 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
                 Disconnect {driveStatus.accountEmail}
               </button>
             )}
+            </div>
+            <div className="bulk-screening-source-option">
+            {msDriveStatus?.configured && <small>{msDriveStatus.connected ? `OneDrive connected${msDriveStatus.accountEmail ? ` as ${msDriveStatus.accountEmail}` : ""}` : "OneDrive is not connected"}</small>}
             {msDriveStatus?.configured && (msDriveStatus.connected
               ? <button type="button" className="btn btn-secondary" disabled={!roleId || uploading || driveImporting} onClick={() => setCloudPicker("microsoft")}>Choose from OneDrive</button>
-              : <a className="btn btn-secondary" href="/api/auth/microsoft-drive/connect">Connect OneDrive</a>)}
+              : roleId ? <a className="btn btn-secondary" href="/api/auth/microsoft-drive/connect">Connect OneDrive</a> : <button type="button" className="btn btn-secondary" disabled>Choose a role first</button>)}
             {msDriveStatus?.configured && msDriveStatus.connected && (
               <button
                 type="button"
@@ -660,6 +731,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
                 Disconnect {msDriveStatus.accountEmail}
               </button>
             )}
+            </div>
           </div>
         </div>
 
@@ -674,29 +746,29 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
           }}
         >
           {/* Match the browser picker with the server PDF/DOC/DOCX allowlist. */}
-          <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple disabled={!roleId || uploading || queueRunning} onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = ""; }} />
+          <input aria-label="Browse resume files" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple disabled={!roleId || uploading || queueRunning} onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = ""; }} />
           <div className="bulk-screening-dropzone-copy">
-            <strong>Drag and drop resumes here, or click to choose files</strong>
-            <span>Up to {MAX_CAMPAIGN_FILES} PDF, DOC, or DOCX files at once, 10 MB each — selections over {MAX_FILES_PER_SUBMISSION} are queued and processed automatically in batches. {files.length > 0 ? `${files.length} file${files.length === 1 ? "" : "s"} selected.` : "No files selected yet."}</span>
+            <strong>{roleId ? "Drop resumes here or browse files" : "Choose a role to add resumes"}</strong>
+            <span>Up to {MAX_CAMPAIGN_FILES} files per selection. We automatically process more than {MAX_FILES_PER_SUBMISSION} in batches. {files.length > 0 ? `${files.length} selected.` : "PDF, DOC, or DOCX files up to 10 MB each."}</span>
+            {roleId && <span className="bulk-screening-browse-hint" aria-hidden="true">Browse files</span>}
           </div>
         </label>
 
         {files.length > 0 && (
           <div className="bulk-screening-file-list">
-            {files.map((file) => (
-              <span key={`${file.name}-${file.size}-${file.lastModified}`} className="bulk-screening-file-chip">
-                {file.name}
-                <button type="button" aria-label={`Remove ${file.name}`} disabled={uploading || queueRunning} onClick={() => removeFile(file)}>×</button>
-              </span>
-            ))}
+            <p className="bulk-screening-file-list-heading">{files.length} resume{files.length === 1 ? "" : "s"} ready</p>
+            {files.map((file) => <div key={`${file.name}-${file.size}-${file.lastModified}`} className="bulk-screening-file-row">
+              <span className="bulk-screening-file-name"><strong>{file.name}</strong><small>From your computer · {formatFileSize(file.size)} · Ready to screen</small></span>
+              <button type="button" aria-label={`Remove ${file.name}`} disabled={uploading || queueRunning} onClick={() => removeFile(file)}>Remove</button>
+            </div>)}
           </div>
         )}
 
         <div className="bulk-screening-upload-box">
           <div className="bulk-screening-count">
-            <span>{files.length} file{files.length === 1 ? "" : "s"} ready to submit</span>
-            <EllaCreditsMeter variant="inline" />
-            <span className="bulk-screening-count-hint">Current CV screening cost is shown on the Credits page.</span>
+            <span>{files.length} resume{files.length === 1 ? "" : "s"} ready to screen</span>
+            <EllaCreditsMeter variant="inline" estimateFor={files.length} />
+            <span className="bulk-screening-count-hint">Your credit balance and current screening rate are shown above. See the <a href="/credits">Credits page</a> for details.</span>
           </div>
           {queueRunning ? (
             <button type="button" className="btn btn-secondary" onClick={() => { queueCancelRef.current = true; }}>Stop after current batch</button>
@@ -707,18 +779,20 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
               disabled={!roleId || files.length === 0 || uploading || retryingSavedFailures}
               onClick={() => void (files.length > MAX_FILES_PER_SUBMISSION ? runBulkQueue(files) : uploadResumes(files))}
             >
-              {uploading ? "Uploading and screening..." : `Start screening${files.length ? ` (${files.length})` : ""}`}
+              {uploading ? <LoadingLabel>{uploadPhase === "preparing" ? "Preparing files…" : "Uploading and screening…"}</LoadingLabel> : `Screen ${files.length || "selected"} resume${files.length === 1 ? "" : "s"}`}
             </button>
           )}
         </div>
+        {files.length > MAX_FILES_PER_SUBMISSION && <p className="bulk-screening-batch-explanation" role="status">You selected {files.length} resumes. We&apos;ll process them automatically in {Math.ceil(files.length / MAX_FILES_PER_SUBMISSION)} batches.</p>}
 
         {queueProgress && (queueRunning || queueProgress.done < queueProgress.total) && (
-          <ActionFeedback kind="success" className="bulk-screening-action-feedback">
-            Batch {Math.min(queueProgress.done + (queueRunning ? 1 : 0), queueProgress.total)} of {queueProgress.total} — keep this tab open; the rest will queue on their own.
+          <ActionFeedback kind="success" className="bulk-screening-action-feedback" ariaLive="polite">
+            Submitting batch {Math.min(queueProgress.done + (queueRunning ? 1 : 0), queueProgress.total)} of {queueProgress.total}. Keep this page open while the remaining batches are submitted.
           </ActionFeedback>
         )}
-        {uploadMessage && <ActionFeedback kind="success" className="bulk-screening-action-feedback">{uploadMessage}</ActionFeedback>}
+        {uploadMessage && <ActionFeedback kind="success" className="bulk-screening-action-feedback" ariaLive="polite">{uploading || driveImporting ? <LoadingLabel>{uploadMessage}</LoadingLabel> : uploadMessage}</ActionFeedback>}
         {warning && <ActionFeedback kind="warning" className="bulk-screening-action-feedback">{warning}</ActionFeedback>}
+        {retryingSavedFailures && <ActionFeedback kind="success" className="bulk-screening-action-feedback" ariaLive="polite"><LoadingLabel>Retrying failed resumes…</LoadingLabel></ActionFeedback>}
         {retryableFailureCount > 0 && !uploading && !queueRunning && !retryingSavedFailures && !batchFinished && (
           <div className="warning-box bulk-screening-retry-box">
             <span>{retryableFailureCount} saved resume{retryableFailureCount === 1 ? "" : "s"} failed to process.</span>
@@ -727,19 +801,18 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
         )}
 
         <div className="bulk-screening-instructions">
-          <strong>{selectedRole ? `Upload resumes for ${selectedRole.label}` : "How bulk screening works"}</strong>
+          <strong>{selectedRole ? `Add resumes for ${selectedRole.label}` : "How resume screening works"}</strong>
           <ol>
-            <li>Choose a published role.</li>
-            <li>Drag in (or select) multiple PDF, DOC, or DOCX files and start screening.</li>
-            <li>Up to {MAX_FILES_PER_SUBMISSION} files submit immediately; a larger selection queues automatically in batches of {MAX_FILES_PER_SUBMISSION} a few seconds apart — leave the tab open and it runs unattended.</li>
-            <li>Smile extracts the candidate details, submits each resume to the screening workflow, and updates the queue below in real time.</li>
-            <li>Files marked Completed are identified by role and file hash and are never analyzed again for that role. Failed files can be retried without re-uploading the whole batch.</li>
+            <li>Choose the role you are hiring for.</li>
+            <li>Add resumes from your computer, Google Drive, or OneDrive.</li>
+            <li>Selections larger than {MAX_FILES_PER_SUBMISSION} files are submitted automatically in smaller batches. Keep this page open until all batches have been sent.</li>
+            <li>Review each resume&apos;s status below. Previously screened duplicates are skipped, and failed resumes can be retried without selecting the whole batch again.</li>
           </ol>
         </div>
 
         {batchTotal > 0 && (
-          <div className="bulk-screening-progress" aria-live="polite">
-            <div className="bulk-screening-progress-header"><strong>Bulk Resume Processing</strong><span>{batchProcessed} / {batchTotal} resumes processed</span></div>
+          <div className="bulk-screening-progress" aria-live="polite" aria-busy={uploading || queueRunning}>
+            <div className="bulk-screening-progress-header"><strong>Screening progress</strong><span>{batchProcessed} of {batchTotal} resumes processed</span></div>
             <div className="bulk-screening-progress-track"><div className="bulk-screening-progress-fill" style={{ width: `${batchPercent}%` }} /></div>
             <div className="bulk-screening-progress-legend">
               <span>{batchPercent}% complete</span>
@@ -753,7 +826,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
         )}
 
         {batchFinished && !uploading && (
-          <div className="success-box bulk-screening-finished" aria-live="polite">
+          <div className="success-box bulk-screening-finished" role="status" aria-live="polite">
             <div>
               <strong>Bulk screening completed</strong>
               <span>{batchTerminal.completed} successfully processed{batchTerminal.failed ? ` · ${batchTerminal.failed} failed` : ""}{batchTerminal.skipped ? ` · ${batchTerminal.skipped} skipped` : ""}</span>
@@ -766,8 +839,8 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
         )}
 
         <div className="bulk-screening-status-header">
-          <div><strong>Role Total</strong><small>{roleId ? `All saved screening records for ${roleId}${pendingInBatch ? " · current batch updates automatically, then backs off when unchanged" : ""}` : "Select a role to view its records"}</small></div>
-          <button type="button" className="btn btn-secondary" onClick={() => void refreshStatus()} disabled={loading}>{loading ? "Refreshing..." : "Refresh status"}</button>
+          <div><strong>Screening records</strong><small>{roleId ? `All saved screening records for ${selectedRole?.label || roleId}` : "Choose a role to view its records"}{lastUpdated ? ` · Updated ${formatPortalDateTime(lastUpdated)}` : ""}</small></div>
+            <button type="button" className="btn btn-secondary" onClick={() => void refreshStatus()} disabled={loading} aria-busy={loading}>{loading ? <LoadingLabel>Refreshing status…</LoadingLabel> : "Refresh status"}</button>
         </div>
 
         {!configured && <div className="warning-box">{error || "Create the Bulk_Resume_Queue tab to view processing status."}</div>}
@@ -777,25 +850,34 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
           {statusOrder.map((status) => <div key={status} className="bulk-count-card"><span>{status}</span><strong>{visibleCounts[status] || 0}</strong></div>)}
         </div>
 
-        {roleId && items.length > 0 ? (
+        <div className="bulk-screening-record-filters">
+          <label className="field"><span>Search records</span><input value={queueSearch} onChange={(event) => setQueueSearch(event.target.value)} placeholder="Candidate, file, email, or application" /></label>
+          <label className="field"><span>Filter by source</span><select value={queueSource} onChange={(event) => setQueueSource(event.target.value)}><option>All sources</option><option>Computer upload</option><option>Google Drive</option><option>OneDrive</option><option>Recovered record</option></select></label>
+          <label className="field"><span>Filter by status</span><select value={queueStatus} onChange={(event) => setQueueStatus(event.target.value)}><option>All statuses</option>{statusOrder.map((status) => <option key={status}>{status}</option>)}</select></label>
+        </div>
+        <p className="bulk-screening-status-help">Queued means waiting to be screened. Processing means screening is underway. Screened means a result is saved. Failed items can be retried; skipped items were already submitted or screened. Other covers older or unrecognized records so they remain visible for review.</p>
+
+        {roleId && pageItems.length > 0 ? (
           <div className="bulk-screening-table-wrap">
             <table className="bulk-screening-table">
-              <thead><tr><th>Resume</th><th>Candidate</th><th>Status</th><th>Result</th><th>Updated</th></tr></thead>
+              <thead><tr><th>Resume</th><th>Candidate</th><th>Source</th><th>Status</th><th>Result</th><th>Updated</th></tr></thead>
               <tbody>
-                {items.map((item) => {
+                {pageItems.map((item) => {
                   const { label, result } = displayStatus(item.status || "Queued");
                   return <tr key={item.driveFileId}>
-                    <td>{item.driveFileUrl ? <a href={item.driveFileUrl} target="_blank" rel="noreferrer">{item.driveFileName || item.driveFileId}</a> : item.driveFileName || item.driveFileId}</td>
-                    <td>{item.candidateName || item.candidateEmail || "Pending extraction"}</td>
+                    <td>{item.driveFileUrl ? <a href={item.driveFileUrl} target="_blank" rel="noreferrer">{item.driveFileName || "Open resume"}</a> : item.driveFileName || "Resume name not available"}</td>
+                    <td>{item.candidateName || item.candidateEmail || "Candidate details being prepared"}</td>
+                    <td>{item.source === "drive" ? "Google Drive" : item.source === "onedrive" ? "OneDrive" : item.source === "reconciled" ? "Recovered record" : "Computer upload"}</td>
                     <td><span className={statusClass(label)}>{label}</span></td>
                     <td>{item.errorMessage || result}</td>
-                    <td>{(() => { const ts = item.lastUpdated || item.processedAt || item.discoveredAt; return ts ? formatPortalDateTime(ts) : "—"; })()}</td>
+                    <td>{(() => { const ts = item.lastUpdated || item.processedAt || item.discoveredAt; return ts ? formatPortalDateTime(ts) : "Not available"; })()}</td>
                   </tr>;
                 })}
               </tbody>
             </table>
+            <Pagination page={queuePage} totalPages={queueTotalPages} totalItems={queueTotal} pageSize={queuePageSize} pageSizeOptions={[10, 25, 50, 100]} onPageChange={setQueuePage} onPageSizeChange={(nextSize) => { setQueuePageSize(nextSize); setQueuePage(1); }} />
           </div>
-        ) : <p className="bulk-screening-empty">{roleId ? "No bulk resumes have been detected for this role yet." : "Choose a published role to see its bulk screening status."}</p>}
+        ) : <p className="bulk-screening-empty">{!roleId ? "Choose a published role to see its screening records." : queueTotal === 0 && queueSearch === "" && queueStatus === "All statuses" && queueSource === "All sources" ? "No resumes have been added for this role yet." : "No screening records match your search or filters."}</p>}
       </div>
 
       <DriveFilePicker

@@ -388,9 +388,10 @@ candidate should contact the recruitment team for a new invitation.
 
 Candidates can choose **Schedule a Call** for a voice interview or choose the
 **Live Avatar Interview** link. When an interview result is ready, the applicant
-record shows **Voice Interview Review** for a call or **Live Avatar Review** for
-a Live Avatar interview. HR opens the applicant record and reviews the matching
-interview evidence alongside the resume and screening result.
+record shows **Voice Interview Review** for a call or **Avatar Interview
+Review** for a Live Avatar interview. HR opens the applicant record and reviews
+the matching interview evidence alongside the resume and screening result; the
+Live Avatar evidence section is titled **Live Avatar Review**.
 
 HR then records an explicit decision. Approval moves the candidate to
 **Approved for Face-to-Face Interview** and generates the HR interview booking
@@ -436,8 +437,8 @@ manages Settings to check or reconnect the shared HR calendar.
   choose a time for a call.
 - **Voice Interview Scheduled** — the call interview has a confirmed time.
 - **Voice Interview Review** — the call result is ready for HR to review.
-- **Live Avatar Interview In Progress** — the candidate has chosen and started
-  the Live Avatar interview; no calendar slot is required.
+- **Live Avatar Interview Pending** — the candidate chose the Live Avatar
+  option and is waiting to begin; no calendar slot is required.
 - **Live Avatar Review** — the Live Avatar result is ready for HR to review.
 - **Approved for Face-to-Face Interview** — the candidate can choose a
   face-to-face interview time.

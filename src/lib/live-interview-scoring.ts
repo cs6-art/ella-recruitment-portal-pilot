@@ -23,8 +23,8 @@ export const RUBRIC_VERSION = "2026-09-25.v1";
 export const MIN_ASSESSABLE_ANSWERS = 2;
 
 export const RATING_SCALE = [
-  { rating: 0, label: "Not addressed", description: "The answer did not address the question." },
-  { rating: 1, label: "Very limited", description: "A general statement with no specific example or detail." },
+  { rating: 0, label: "Not Addressed", description: "The answer did not address the question." },
+  { rating: 1, label: "Very Limited", description: "A general statement with no specific example or detail." },
   { rating: 2, label: "Partial", description: "Relevant, but missing specifics such as what was done, how, or the result." },
   { rating: 3, label: "Good", description: "A specific, relevant example describing the applicant's own actions." },
   { rating: 4, label: "Strong", description: "A specific, relevant example with the applicant's actions and an outcome or result." },
@@ -33,10 +33,10 @@ export const RATING_SCALE = [
 export type AssessmentBand = "strong" | "good" | "partial" | "limited";
 
 export const BAND_LABELS: Record<AssessmentBand, string> = {
-  strong: "Strong job-related evidence",
-  good: "Good job-related evidence",
-  partial: "Partial evidence — clarification recommended",
-  limited: "Limited evidence in answers",
+  strong: "Strong Job-Related Evidence",
+  good: "Good Job-Related Evidence",
+  partial: "Partial Evidence — Clarification Recommended",
+  limited: "Limited Evidence in Answers",
 };
 
 export const BAND_NEXT_STEPS: Record<AssessmentBand, string> = {
@@ -46,7 +46,7 @@ export const BAND_NEXT_STEPS: Record<AssessmentBand, string> = {
   limited: "HR to review the full interview before deciding",
 };
 
-export const NOT_SCORED_LABEL = "Not scored — manual HR review";
+export const NOT_SCORED_LABEL = "Not Scored — Manual HR Review";
 export const NOT_SCORED_NEXT_STEP = "Manual HR review — no score was produced";
 
 export const ASSESSMENT_BASIS = "Scores reflect only how much specific, job-related evidence the applicant's own words contain, rated against a fixed 0–4 scale for each question. Fluency, grammar, accent, vocabulary, speaking speed, tone, answer length, appearance, and video or audio behaviour are not assessed. The score is guidance for HR, not a hiring decision.";

@@ -14,7 +14,9 @@ test("workflow pages refresh visible database data without wasteful polling", ()
   assert.match(refresh, /if \(!enabled\) return/);
   assert.match(refresh, /document\.visibilityState !== "visible"/);
   assert.match(refresh, /lastRefreshAt/);
-  assert.match(list, /enabled intervalMs=\{30_000\} throttleMs=\{30_000\}/);
+  assert.match(list, /Refresh applicants/);
+  assert.doesNotMatch(list, /ApplicantLiveRefresh enabled intervalMs=\{30_000\}/);
+  assert.match(list, /if \(page !== 1\) return/);
   assert.match(bookings, /LiveDataRefresh enabled intervalMs=\{30_000\} throttleMs=\{30_000\}/);
   assert.match(bookings, /APPOINTMENT_STATUS_FILTERS/);
   assert.doesNotMatch(bookings, /APPOINTMENT_RECORD_LIMIT/);
@@ -33,8 +35,12 @@ test("target applicant detail does not reload the full applicant list", () => {
 
 test("applicant list and metrics share target Postgres query work per render", () => {
   const source = read("src/lib/candidate-applications.ts");
+  const target = read("src/lib/recruitment-target-portal.ts");
   assert.match(source, /cache\(targetApplicantSummaries\)/);
-  assert.match(source, /targetApplicantMetrics\(await cachedTargetApplicantSummaries\(\)\)/);
+  assert.match(source, /targetApplicantMetrics\(filters\)/);
+  assert.match(source, /targetApplicantPage\(input\)/);
+  assert.match(target, /listApplications\(undefined, undefined, organizationId, \{[\s\S]*?limit: pageSize,[\s\S]*?offset: \(page - 1\) \* pageSize/);
+  assert.match(target, /countApplications\(organizationId, filters\)/);
 });
 
 test("public role pages use short revalidation while booking remains live", () => {
