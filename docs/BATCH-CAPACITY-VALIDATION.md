@@ -1,9 +1,28 @@
 # Phase 5 — Hosting & batch-capacity validation
 
-Status: **COMPLETE WITH CURRENT PILOT LIMIT** — code-derived analysis + live
-empirical measurement. The current Vercel Hobby deployment enforces a maximum
-of **6 files per submission** for local, Google Drive, and OneDrive intake.
-Earlier 8-file measurements below are historical evidence, not the current limit.
+## Third correction — Vercel Pro + intake concurrency (see [[batch-timeout-risk]] memory)
+
+The project has since moved off Vercel Hobby onto **Pro** (300s Node function
+ceiling, up from Hobby's 60s), and `intakeTargetResumeBatch` gained a bounded
+4-worker concurrent pool (`INTAKE_CONCURRENCY`, added in `recruitment-target-bulk.ts`)
+that was not yet in place when the 6-file cap below was calculated — that cap
+assumed one file processed at a time.
+
+Both changes are accounted for going forward: `maxDuration` on all three bulk
+intake routes is now **300**, and `MAX_FILES_PER_SUBMISSION` is now **20**
+(worst case `ceil(20/4)*7s = 35s`, typical case `ceil(20/4)*3s = 15s` — real
+margin under 300s), still below the 25-file `MAX_FILES_PER_BATCH` architecture
+limit. The per-file cost estimates and worst-case methodology below remain the
+reference; only the ceiling and the file-count math against it changed. Raise
+further only after a live empirical measurement of this path, same method as
+below.
+
+Status (historical, superseded by the correction above): **COMPLETE WITH
+CURRENT PILOT LIMIT** — code-derived analysis + live empirical measurement.
+The Vercel Hobby deployment at the time enforced a maximum of **6 files per
+submission** for local, Google Drive, and OneDrive intake. Earlier 8-file
+measurements below are historical evidence, not the limit that applied then
+either.
 
 ## Second correction (2026-09-14, same day) — the cap below was calculated for the wrong code path
 

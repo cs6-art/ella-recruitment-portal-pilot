@@ -336,13 +336,33 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     const formData = new FormData();
     formData.set("roleId", roleId);
     fileList.forEach((file) => formData.append("resumes", file));
-    const response = await fetch("/api/resume-screening/bulk/upload", { method: "POST", body: formData });
+
+    // A lost connection or a hard function timeout throws here (a plain
+    // TypeError, no response at all) rather than resolving with a status.
+    // Files this batch had already finished storing and queuing before the
+    // connection died stay durably queued server-side (each file is written
+    // to Postgres as it completes, not batched at the end) -- only the
+    // confirmation was lost, not the work. Return a structured outcome that
+    // says so instead of letting this throw and leave the caller (in
+    // particular runBulkQueue's loop) with no message and a stuck spinner.
+    const timeoutOutcome = { ok: false as const, retryable: false as const, error: "Lost connection or timed out partway through this batch. Any resumes that finished uploading are already queued for screening -- check the list below before re-submitting; duplicates are detected automatically and skipped." };
+    let response: Response;
+    try {
+      response = await fetch("/api/resume-screening/bulk/upload", { method: "POST", body: formData });
+    } catch {
+      return timeoutOutcome;
+    }
     if (response.status === 429) {
       const retryAfterSeconds = Number(response.headers.get("Retry-After")) || 30;
       return { ok: false as const, retryable: true as const, retryAfterSeconds, error: "Too many bulk uploads. Waiting before retrying this batch." };
     }
     const result = await response.json().catch(() => ({}) as Record<string, unknown>);
     if (!response.ok || result.success !== true) {
+      // A 502/503/504 with no parsed `error` is the platform (not the app)
+      // rejecting the request -- most likely the same lost-connection/timeout
+      // case as the catch above, just surfaced as a response instead of a
+      // throw. Same accurate message applies.
+      if (!result.error && [502, 503, 504].includes(response.status)) return timeoutOutcome;
       return { ok: false as const, retryable: false as const, error: String(result.error || "Unable to submit the bulk resumes.") };
     }
     const failedFileSet = applyBatchResult(result, fileMap);

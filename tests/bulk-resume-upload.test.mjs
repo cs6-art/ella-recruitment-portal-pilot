@@ -222,6 +222,27 @@ test("uploaded resumes keep a traceable Drive link back to the candidate/applica
   assert.match(route, /drive\.google\.com\/file\/d\//);
 });
 
+test("a lost connection or platform timeout during bulk submit never throws and always tells the user their work may already be saved", () => {
+  const panel = read("src/components/BulkResumeScreeningPanel.tsx");
+  const submitBatchStart = panel.indexOf("async function submitBatch(");
+  const submitBatchBody = panel.slice(submitBatchStart, panel.indexOf("\n  }", submitBatchStart));
+  // the fetch that can throw on a dropped connection/hard timeout is wrapped,
+  // not left to bubble up into runBulkQueue's un-try/catch'd loop
+  assert.match(submitBatchBody, /try \{\s*\n\s*response = await fetch\("\/api\/resume-screening\/bulk\/upload"/);
+  assert.match(submitBatchBody, /catch \{\s*\n\s*return timeoutOutcome;/);
+  // a 502/503/504 with no parsed app error is treated the same way
+  assert.match(submitBatchBody, /\[502, 503, 504\]\.includes\(response\.status\)/);
+  // the message tells the user work already done is safe, not lost
+  assert.match(submitBatchBody, /already queued for screening/);
+  assert.match(submitBatchBody, /duplicates are detected automatically and skipped/);
+  // runBulkQueue's loop relies on submitBatch never throwing here -- it has
+  // no try/catch of its own around these calls
+  const queueStart = panel.indexOf("async function runBulkQueue(");
+  const queueBody = panel.slice(queueStart, panel.indexOf("\n  }", queueStart));
+  assert.match(queueBody, /let outcome = await submitBatch\(chunk\);/);
+  assert.match(queueBody, /outcome = await submitBatch\(chunk\);/g);
+});
+
 test("the bulk panel supports drag-and-drop, live auto-refresh, and retrying only failed files", () => {
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
   assert.match(panel, /onDrop=/);

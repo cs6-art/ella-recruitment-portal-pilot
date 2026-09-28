@@ -11,10 +11,9 @@
 
 // Temporary operator-facing hard cap on files per submission, enforced at both
 // the UI and server validation layers for the local upload and the Google
-// Drive import. It exists only because the intake pipeline currently runs the
-// staggered worker pool inline in the request (~(N-2)x10s plus the last file's
-// own full-screening wait), so a larger batch risks a client-visible function
-// timeout.
+// Drive import. It exists only because the intake pipeline is awaited to
+// completion inside the request, so a larger batch risks a client-visible
+// function timeout.
 //
 // 2026-09-14: RECRUITMENT_BACKEND=postgres has been live on this deployment
 // the whole time, so the code path that actually runs is intakeTargetResumeBatch
@@ -23,22 +22,29 @@
 // stagger this function runs when Postgres-target is off) and was needlessly
 // conservative for what's actually live.
 //
-// Per-file cost of the real (Postgres-target) path, sequential, no
-// concurrency: pdf-parse text extraction (~0.2-1s) + 3 sequential Google
-// Drive API calls in storeResumeFile -- verify folder, dedupe check, upload
-// (~0.5-2s combined) + 5 sequential Postgres round trips -- find-dup,
+// Per-file cost of the real (Postgres-target) path: pdf-parse text extraction
+// (~0.2-1s) + 3 Google Drive API calls in storeResumeFile -- verify folder,
+// dedupe check, upload (~0.5-2s combined) + 5 Postgres round trips -- find-dup,
 // register file, create application, enqueue, update status (~0.5-1s
 // combined). Typical ~1.2-3.5s/file; worst case (slow network, larger file,
 // cold connections) ~5-7s/file.
 //
-// 6 files: worst case 6*7s = 42s (30% margin under Hobby's 60s hard ceiling);
-// typical case 6*3s = 18s. 8 files at worst case (~56s) was too close to the
-// edge to call safe, so 6 is the conservative number -- a real increase from
-// 4 (justified by the correct code path), not an unfounded leap.
-// Raise this back toward MAX_FILES_PER_BATCH only after a live empirical
-// measurement of this path (the same method docs/BATCH-CAPACITY-VALIDATION.md
-// used for the legacy path), or once off Hobby (Pro's 300s ceiling removes it).
-export const MAX_FILES_PER_SUBMISSION = 6;
+// 2026-09-23: intakeTargetResumeBatch runs a bounded 4-worker concurrent pool
+// (INTAKE_CONCURRENCY, see recruitment-target-bulk.ts) instead of one file at
+// a time, so N files cost ceil(N/4) rounds, not N. The 6-file cap above was
+// calculated before that change and against the Hobby 60s ceiling; both are
+// now stale.
+//
+// 2026-09-2x: the project moved to Vercel Pro. maxDuration on all three bulk
+// intake routes (bulk/upload, drive/import, onedrive/import) is now 300s.
+// 20 files: worst case ceil(20/4)*7s = 35s (real margin under 300s even
+// before the concurrency saving is counted); typical case ceil(20/4)*3s =
+// 15s. Kept below MAX_FILES_PER_BATCH (25, the internal architecture limit --
+// do not raise this constant past it) so the operator cap and the
+// architecture cap stay distinct. Raise this back toward MAX_FILES_PER_BATCH
+// further only after a live empirical measurement of this path (the same
+// method docs/BATCH-CAPACITY-VALIDATION.md used for the legacy path).
+export const MAX_FILES_PER_SUBMISSION = 20;
 
 // Total files a reviewer may queue up in one sitting via the "let it sit and
 // process" flow. The UI auto-splits this into MAX_FILES_PER_SUBMISSION-sized

@@ -14,14 +14,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 // This handler awaits intakeResumeBatch to completion before returning.
 // With RECRUITMENT_BACKEND=postgres (live on this deployment), that runs
-// intakeTargetResumeBatch: a sequential per-file loop (no concurrency) that
-// costs ~1.2-3.5s/file typical, ~5-7s/file worst case (see the cost breakdown
-// on MAX_FILES_PER_SUBMISSION in bulk-resume-intake.ts). There was no
-// maxDuration configured anywhere (no vercel.json either), so the platform
-// default governed and could cut the request short mid-batch. 60 is the
-// Vercel Hobby ceiling for Node functions (Pro/Enterprise allow more) --
-// raise this once the project is on a paid plan. See batch-timeout-risk.
-export const maxDuration = 60;
+// intakeTargetResumeBatch: a bounded 4-worker concurrent pool that costs
+// ~1.2-3.5s/file typical, ~5-7s/file worst case, so N files cost roughly
+// ceil(N/4) rounds (see the cost breakdown on MAX_FILES_PER_SUBMISSION in
+// bulk-resume-limits.ts). 300 is the Vercel Pro ceiling for Node functions,
+// now that the project is off Hobby. See batch-timeout-risk.
+export const maxDuration = 300;
 
 function responseError(error: string, status: number, extra: Record<string, unknown> = {}) {
   return NextResponse.json({ success: false, error, ...extra }, { status });

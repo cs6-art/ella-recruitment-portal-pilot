@@ -14,9 +14,9 @@ import { publicErrorMessage } from "@/lib/safe-error";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 // See src/app/api/resume-screening/bulk/upload/route.ts for the real per-file
-// cost breakdown of the live (Postgres-target) intake path. 60 is the Vercel
-// Hobby ceiling; raise once on a paid plan.
-export const maxDuration = 60;
+// cost breakdown of the live (Postgres-target) intake path. 300 is the Vercel
+// Pro ceiling, now that the project is off Hobby.
+export const maxDuration = 300;
 
 const RESUME_EXT = /\.(pdf|docx?|doc)$/i;
 
