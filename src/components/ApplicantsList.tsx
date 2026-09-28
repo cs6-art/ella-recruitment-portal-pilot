@@ -32,9 +32,13 @@ type RoleOption = { value: string; label: string; roleId?: string };
 const DASHBOARD_STAGE_LABELS = [
   "Resume Review",
   "Resume Approved",
-  "Avatar Interview Booking Pending",
-  "Avatar Interview Scheduled",
-  "Avatar Interview Review",
+  "Interview Choice Pending",
+  "Voice Interview Booking Pending",
+  "Voice Interview Scheduled",
+  "Voice Interview Review",
+  "Live Avatar Interview In Progress",
+  "Live Avatar Interview Scheduled",
+  "Live Avatar Review",
   "Approved for Face-to-Face Interview",
   "Face-to-Face Interview Scheduled",
   "Face-to-Face Decision Pending",
@@ -43,7 +47,8 @@ const DASHBOARD_STAGE_LABELS = [
 ] as const;
 
 const DASHBOARD_STAGE_GROUPS: Record<string, string[]> = {
-  "Avatar Interview": ["Resume Approved", "Avatar Interview Booking Pending", "Avatar Interview Scheduled"],
+  "Voice Interview": ["Voice Interview Booking Pending", "Voice Interview Scheduled"],
+  "Live Avatar Interview": ["Live Avatar Interview In Progress", "Live Avatar Interview Scheduled"],
   "Face-to-Face Interview": ["Approved for Face-to-Face Interview", "Face-to-Face Interview Scheduled"],
   Completed: ["Passed Final Interview", "Rejected"],
 };
@@ -51,28 +56,27 @@ const DASHBOARD_STAGE_GROUPS: Record<string, string[]> = {
 const DASHBOARD_STAGE_FILTERS = new Set([...DASHBOARD_STAGE_LABELS, ...Object.keys(DASHBOARD_STAGE_GROUPS)]);
 
 /**
- * Map operational status wording onto the reconciled stage names used by the
- * dashboard. This keeps the Applicants filter useful without changing the
- * labels shown on individual records or the underlying sheet values.
+ * Map stored workflow keys and legacy sheet wording onto readable, mode-aware
+ * stages. The canonical status remains unchanged in the database.
  */
 function dashboardStageLabel(stage: string, mode: ApplicantSummary["interviewMode"] = "avatar") {
   const normalizedStage = stage.trim().toLowerCase().replace(/[\s-]+/g, "_");
   const rawStage = stage.trim().toLowerCase();
   if (["voice_review_pending", "voice_hr_review"].includes(normalizedStage) || rawStage.includes("voice interview completed") || rawStage.includes("voice hr review") || rawStage.includes("awaiting hr review")) {
-    return "Avatar Interview Review";
+    return applicantStageLabel("voice_review_pending", mode);
   }
   const friendlyLabel = applicantStageLabel(stage, mode);
   if (friendlyLabel !== stage.trim()) return friendlyLabel;
   const value = stage.trim().toLowerCase();
-  const interviewLabel = mode === "avatar" ? "Avatar Interview" : "Voice Interview";
+  const interviewLabel = mode === "avatar" ? "Live Avatar Interview" : "Voice Interview";
   if (value.includes("reject")) return "Rejected";
   if (value.includes("passed hr") || value.includes("passed final") || value === "hired") return "Passed Final Interview";
   if (value.includes("hr decision") || value.includes("final interview completed") || value.includes("hr interview completed")) return "Face-to-Face Decision Pending";
   if (value.includes("hr interview scheduled") || value.includes("final interview scheduled")) return "Face-to-Face Interview Scheduled";
   if (value.includes("approved for hr") || value.includes("approved for final")) return "Approved for Face-to-Face Interview";
-  if (value.includes("voice interview completed") || value.includes("voice hr review") || value.includes("awaiting hr review")) return `${interviewLabel} Review`;
+  if (value.includes("voice interview completed") || value.includes("voice hr review") || value.includes("awaiting hr review")) return applicantStageLabel("voice_review_pending", mode);
   if (value.includes("voice interview scheduled") || value.includes("ai voice interview scheduled")) return `${interviewLabel} Scheduled`;
-  if (value.includes("voice interview in progress") || value.includes("voice interview no show") || value.includes("voice interview busy")) return "Resume Approved";
+  if (value.includes("voice interview in progress") || value.includes("voice interview no show") || value.includes("voice interview busy")) return interviewLabel;
   if (value.includes("approved for ai voice") || value.includes("awaiting ai voice") || value.includes("voice booking pending")) return `${interviewLabel} Booking Pending`;
   if (value.includes("resume approved")) return "Resume Approved";
   if (value.includes("pending hr review") || value.includes("resume hr review") || value === "processed") return "Resume Review";
@@ -348,7 +352,7 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
       <div className="applicant-stat-grid">
         <div className="applicant-stat"><span>Applications</span><strong>{summaryTotal}</strong><small>All history and live records</small></div>
         <div className="applicant-stat"><span>Resume Screened</span><strong>{summaryScreened}</strong><small>Processed applications</small></div>
-        <div className="applicant-stat"><span>Avatar Interview</span><strong>{summaryVoice}</strong><small>With interview workflow activity</small></div>
+        <div className="applicant-stat"><span>Interview Activity</span><strong>{summaryVoice}</strong><small>Voice calls and Live Avatar interviews</small></div>
         <div className="applicant-stat"><span>Face-to-Face Interview</span><strong>{summaryHr}</strong><small>Moved beyond interview screening</small></div>
       </div>
 

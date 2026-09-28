@@ -11,6 +11,7 @@ import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
 import { notificationEmail, notificationEventLabel, notificationStatusLabel, notificationSummary } from "@/lib/notification-labels";
+import type { ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 import { pilotOutboundEmailEnabled } from "@/lib/pilot-email-policy";
 import { avatarInterviewLink } from "@/lib/public-url";
 import type { LiveAvatarEvaluation, LiveAvatarTranscriptTurn } from "@/lib/live-avatar-screening";
@@ -89,11 +90,15 @@ const VOICE_UNANSWERED_MINUTES = Number.isFinite(configuredVoiceUnansweredMinute
 const STAGES = ["resume_review", "resume_approved", "voice_booking_pending", "voice_scheduled", "voice_review_pending", "approved_for_final", "final_scheduled", "final_decision_pending", "passed_final", "rejected", "withdrawn"] as const;
 const DECISIONS = ["", "approve", "reject", "manual_review", "pending"] as const;
 
-// A Live Avatar interview is identifiable as soon as its one-time invitation
-// is issued. The session branch covers candidates who have already consented
-// and started; the token branch keeps pending Avatar interviews labelled too.
+// Both call and Live Avatar links are offered in the same invitation. Only a
+// used route (or a saved session/appointment) proves which option the
+// candidate chose; an unused Live Avatar link must not relabel every applicant.
 function hasAvatarInterviewSql() {
-  return sql<boolean>`exists (select 1 from ${liveInterviewSessions} where ${liveInterviewSessions.applicationId} = ${applications.id}) or exists (select 1 from ${bookingTokens} where ${bookingTokens.applicationId} = ${applications.id} and ${bookingTokens.kind} = 'avatar')`;
+  return sql<boolean>`exists (select 1 from ${liveInterviewSessions} where ${liveInterviewSessions.applicationId} = ${applications.id}) or exists (select 1 from ${bookingTokens} where ${bookingTokens.applicationId} = ${applications.id} and ${bookingTokens.kind} = 'avatar' and ${bookingTokens.status} in ('booked', 'used'))`;
+}
+
+function hasVoiceInterviewChoiceSql() {
+  return sql<boolean>`exists (select 1 from ${interviewSlots} where ${interviewSlots.applicationId} = ${applications.id} and ${interviewSlots.interviewType} = 'voice') or exists (select 1 from ${bookingTokens} where ${bookingTokens.applicationId} = ${applications.id} and ${bookingTokens.kind} = 'voice' and ${bookingTokens.status} = 'used')`;
 }
 const STAGE_TRANSITIONS: Record<string, readonly string[]> = {
   resume_review: ["resume_approved", "rejected", "withdrawn"],
@@ -533,7 +538,7 @@ export async function listApplications(stage?: string, roleExternalId?: string, 
   const conditions = [eq(roles.organizationId, organizationId.trim())];
   if (stage) conditions.push(eq(applications.currentStage, stage));
   if (roleExternalId) conditions.push(eq(roles.externalId, roleExternalId.trim()));
-  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql() })
+  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql(), hasVoiceInterviewChoice: hasVoiceInterviewChoiceSql() })
     .from(applications)
     .innerJoin(roles, eq(roles.id, applications.roleId))
     .innerJoin(applicants, eq(applicants.id, applications.applicantId))
@@ -580,7 +585,7 @@ export async function reconcileMissingTargetScreeningQueue(organizationId: strin
 /** Return only the newest target applicants needed by the notification bell. */
 export async function listRecentApplications(department?: string, limit = 50, organizationId = DEFAULT_ORGANIZATION_ID) {
   const db = getDb();
-  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql() })
+  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql(), hasVoiceInterviewChoice: hasVoiceInterviewChoiceSql() })
     .from(applications)
     .innerJoin(roles, eq(roles.id, applications.roleId))
     .innerJoin(applicants, eq(applicants.id, applications.applicantId))
@@ -699,7 +704,7 @@ export async function copyScreeningResult(input: { sourceApplicationId: string; 
 
 export async function getApplication(externalId: string) {
   const db = getDb();
-  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, roleTargetHiringDate: roles.targetHiringDate, roleHrCalendarEmail: roles.hrCalendarEmail, roleSetup: roles.setup, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql() }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
+  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, roleTargetHiringDate: roles.targetHiringDate, roleHrCalendarEmail: roles.hrCalendarEmail, roleSetup: roles.setup, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql(), hasVoiceInterviewChoice: hasVoiceInterviewChoiceSql() }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
   return row ?? null;
 }
 
@@ -2540,6 +2545,8 @@ export async function notificationQueue(stage?: string) {
     applicationExternalId: applications.externalId,
     candidateName: applications.candidateName,
     candidateEmail: applications.email,
+    hasLiveAvatarInterview: hasAvatarInterviewSql(),
+    hasVoiceInterviewChoice: hasVoiceInterviewChoiceSql(),
     notificationLink: sql<string>`COALESCE((SELECT bt.link FROM booking_tokens bt WHERE bt.application_id = ${applications.id} AND bt.kind = CASE WHEN ${applicationStatusHistory.notificationEventType} = 'voice_booking_invitation' THEN 'voice' WHEN ${applicationStatusHistory.notificationEventType} = 'final_booking_invitation' THEN 'final' ELSE '' END ORDER BY bt.created_at DESC LIMIT 1), '')`,
     avatarLink: sql<string>`COALESCE((SELECT bt.link FROM booking_tokens bt WHERE bt.application_id = ${applications.id} AND bt.kind = 'avatar' AND bt.status IN ('pending', 'booked') ORDER BY bt.created_at DESC LIMIT 1), '')`,
     bookedSlotStartsAt: sql<string>`COALESCE((SELECT to_char(s.starts_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM interview_slots s WHERE s.application_id = ${applications.id} AND s.interview_type = CASE WHEN ${applicationStatusHistory.notificationEventType} = 'voice_booking_confirmation' THEN 'voice' WHEN ${applicationStatusHistory.notificationEventType} = 'final_booking_confirmation' THEN 'final' ELSE '' END AND s.status IN ('booked', 'completed') ORDER BY s.booked_at DESC NULLS LAST LIMIT 1), '')`,
@@ -2586,14 +2593,19 @@ export async function notificationQueue(stage?: string) {
     }).formatToParts(parsed).filter(({ type }) => type !== "literal").map(({ type, value }) => [type, value]));
     return `${dateParts.year}-${dateParts.month}-${dateParts.day} ${timeParts.hour}:${timeParts.minute} ${tz}`;
   };
-  const applicationItems = (() => {
-    return rows.map(({ history, ...context }) => ({
+  const applicationItems = rows.map(({ history, ...context }) => {
+    const mode: ApplicantInterviewMode = context.hasLiveAvatarInterview
+      ? "avatar"
+      : context.hasVoiceInterviewChoice
+        ? "voice"
+        : history.newStage === "voice_booking_pending" ? "pending" : "voice";
+    return {
       ...history,
       ...context,
       // Email-ready copy so the notifier never renders raw workflow keys.
       eventLabel: notificationEventLabel(history.notificationEventType),
-      statusLabel: notificationStatusLabel(history.newStage),
-      previousStatusLabel: notificationStatusLabel(history.previousStage),
+      statusLabel: notificationStatusLabel(history.newStage, mode),
+      previousStatusLabel: notificationStatusLabel(history.previousStage, mode),
       summary: notificationSummary(history.notificationEventType, history.comments),
       email: notificationEmail(history.notificationEventType, {
         candidateName: context.candidateName,
@@ -2602,8 +2614,8 @@ export async function notificationQueue(stage?: string) {
         avatarLink: context.avatarLink,
         scheduledLabel: scheduledLabel(context.bookedSlotStartsAt, context.bookedSlotTimezone),
       }),
-    }));
-  })();
+    };
+  });
   return [
     ...applicationItems.map((item) => ({ ...item, notificationDomain: "application" })),
     ...roleRows.map(({ history, ...context }) => ({ ...history, ...context, eventType: history.action === "role_created" ? "role_request_created" : "role_status_transition", notificationDomain: "role" })),

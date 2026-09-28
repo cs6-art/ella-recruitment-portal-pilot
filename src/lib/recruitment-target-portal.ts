@@ -1011,7 +1011,13 @@ type TargetApplicationRow = Awaited<ReturnType<typeof listApplications>>[number]
 function targetApplicantSummary(row: TargetApplicationRow) {
     const application = row.application as unknown as Record<string, unknown>;
     const screening = row.screeningResult as unknown as Record<string, unknown> | null;
-    const interviewMode: ApplicantInterviewMode = row.hasLiveAvatarInterview ? "avatar" : "voice";
+    const currentStage = text(application.currentStage);
+    const modeNotSelectedYet = ["resume_approved", "voice_booking_pending"].includes(currentStage);
+    const interviewMode: ApplicantInterviewMode = row.hasLiveAvatarInterview
+      ? "avatar"
+      : row.hasVoiceInterviewChoice
+        ? "voice"
+        : modeNotSelectedYet ? "pending" : "voice";
     const stageLabel = applicantStageLabel(application.currentStage as string, interviewMode) || label(application.currentStage);
     return {
       applicationId: text(application.externalId),
@@ -1084,6 +1090,13 @@ export async function targetApplicantMetrics(rows?: Awaited<ReturnType<typeof ta
   const stageCounts = new Map<string, number>();
   for (const row of summaries) stageCounts.set(row.currentStage, (stageCounts.get(row.currentStage) || 0) + 1);
   const stage = (key: string) => stageCounts.get(key) || 0;
+  // The database keeps a shared `voice_*` workflow key for both interview
+  // routes. Split the presentation counts by each applicant's persisted
+  // interview invitation/session so voice calls and Live Avatar reviews never
+  // get merged under one misleading label.
+  const modeStage = (key: string, mode: ApplicantInterviewMode) => summaries.filter(
+    (row) => row.currentStage === key && row.interviewMode === mode,
+  ).length;
   // The workflow stage is the source of truth for activity. Decision fields
   // remain blank while an interview is queued, scheduled, or awaiting review,
   // so using them alone makes active interview counts appear as zero. A
@@ -1117,21 +1130,33 @@ export async function targetApplicantMetrics(rows?: Awaited<ReturnType<typeof ta
         || (finalStatus !== "" && !["pending", "not started"].includes(finalStatus));
     }).length,
     resumeApproved: stage("resume_approved"),
-    voiceBookingPending: stage("voice_booking_pending"),
-    voiceScheduled: stage("voice_scheduled"),
-    voiceReviewPending: stage("voice_review_pending"),
+    voiceBookingPending: modeStage("voice_booking_pending", "voice"),
+    voiceScheduled: modeStage("voice_scheduled", "voice"),
+    voiceReviewPending: modeStage("voice_review_pending", "voice"),
+    interviewChoicePending: modeStage("voice_booking_pending", "pending"),
+    liveAvatarInProgress: modeStage("voice_booking_pending", "avatar"),
+    liveAvatarReviewPending: modeStage("voice_review_pending", "avatar"),
     approvedForFinal: stage("approved_for_final"),
     finalScheduled: stage("final_scheduled"),
     finalDecisionPending: stage("final_decision_pending"),
     rejected: stage("rejected"),
     passedFinalInterview: stage("passed_final"),
     stageCounts: [
-      ["resume_review", applicantStageLabel("resume_review"), "blue"], ["resume_approved", applicantStageLabel("resume_approved"), "purple"],
-      ["voice_booking_pending", applicantStageLabel("voice_booking_pending"), "purple"], ["voice_scheduled", applicantStageLabel("voice_scheduled"), "teal"],
-      ["voice_review_pending", applicantStageLabel("voice_review_pending"), "orange"], ["approved_for_final", applicantStageLabel("approved_for_final"), "green"],
-      ["final_scheduled", applicantStageLabel("final_scheduled"), "teal"], ["final_decision_pending", applicantStageLabel("final_decision_pending"), "orange"],
-      ["passed_final", applicantStageLabel("passed_final"), "green"], ["rejected", applicantStageLabel("rejected"), "red"],
-    ].map(([key, label, tone]) => ({ key, label, tone, value: stage(key) })),
+      ["resume_review", applicantStageLabel("resume_review"), "blue", stage("resume_review")],
+      ["resume_approved", applicantStageLabel("resume_approved"), "purple", stage("resume_approved")],
+      ["voice_booking_pending", applicantStageLabel("voice_booking_pending", "voice"), "purple", modeStage("voice_booking_pending", "voice")],
+      ["interview_choice_pending", applicantStageLabel("voice_booking_pending", "pending"), "purple", modeStage("voice_booking_pending", "pending")],
+      ["live_avatar_in_progress", applicantStageLabel("voice_booking_pending", "avatar"), "purple", modeStage("voice_booking_pending", "avatar")],
+      ["voice_scheduled", applicantStageLabel("voice_scheduled", "voice"), "teal", modeStage("voice_scheduled", "voice")],
+      ["avatar_scheduled", applicantStageLabel("voice_scheduled", "avatar"), "teal", modeStage("voice_scheduled", "avatar")],
+      ["voice_review_pending", applicantStageLabel("voice_review_pending", "voice"), "orange", modeStage("voice_review_pending", "voice")],
+      ["avatar_review_pending", applicantStageLabel("voice_review_pending", "avatar"), "orange", modeStage("voice_review_pending", "avatar")],
+      ["approved_for_final", applicantStageLabel("approved_for_final"), "green", stage("approved_for_final")],
+      ["final_scheduled", applicantStageLabel("final_scheduled"), "teal", stage("final_scheduled")],
+      ["final_decision_pending", applicantStageLabel("final_decision_pending"), "orange", stage("final_decision_pending")],
+      ["passed_final", applicantStageLabel("passed_final"), "green", stage("passed_final")],
+      ["rejected", applicantStageLabel("rejected"), "red", stage("rejected")],
+    ].map(([key, label, tone, value]) => ({ key, label, tone, value })),
   };
 }
 

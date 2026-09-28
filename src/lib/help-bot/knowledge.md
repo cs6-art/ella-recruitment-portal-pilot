@@ -384,12 +384,13 @@ candidate should contact the recruitment team for a new invitation.
 
 ---
 
-## How HR reviews Avatar interview results
+## How HR reviews voice and Live Avatar interview results
 
-When the Live Avatar interview result is ready, the candidate's stage becomes
-**Avatar Interview Review**. HR opens the applicant record and reviews the Live
-Avatar evidence — the transcript, recording, and structured result — alongside
-the resume and screening result.
+Candidates can choose **Schedule a Call** for a voice interview or choose the
+**Live Avatar Interview** link. When an interview result is ready, the applicant
+record shows **Voice Interview Review** for a call or **Live Avatar Review** for
+a Live Avatar interview. HR opens the applicant record and reviews the matching
+interview evidence alongside the resume and screening result.
 
 HR then records an explicit decision. Approval moves the candidate to
 **Approved for Face-to-Face Interview** and generates the HR interview booking
@@ -427,12 +428,17 @@ manages Settings to check or reconnect the shared HR calendar.
 ## What the applicant stages mean
 
 - **Resume Review** — the resume has been received and needs a human review.
-- **Resume Approved** — the candidate can move to the Live Avatar interview step.
-- **Avatar Interview Booking Pending** — the secure one-time Live Avatar link is
-  being prepared or sent.
-- **Avatar Interview Scheduled** — the secure one-time Live Avatar link is ready
-  for the candidate; no calendar slot is required.
-- **Avatar Interview Review** — the Live Avatar result is ready for HR to review.
+- **Resume Approved** — the candidate can choose **Schedule a Call** or a
+  **Live Avatar Interview**.
+- **Interview Choice Pending** — the invitation is ready, but the candidate
+  has not chosen between a call and a Live Avatar interview yet.
+- **Voice Interview Booking Pending** — the candidate has the secure link to
+  choose a time for a call.
+- **Voice Interview Scheduled** — the call interview has a confirmed time.
+- **Voice Interview Review** — the call result is ready for HR to review.
+- **Live Avatar Interview In Progress** — the candidate has chosen and started
+  the Live Avatar interview; no calendar slot is required.
+- **Live Avatar Review** — the Live Avatar result is ready for HR to review.
 - **Approved for Face-to-Face Interview** — the candidate can choose a
   face-to-face interview time.
 - **Face-to-Face Interview Scheduled** — a face-to-face interview time has been

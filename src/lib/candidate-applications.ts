@@ -133,6 +133,9 @@ export type ApplicantMetrics = {
   voiceBookingPending: number;
   voiceScheduled: number;
   voiceReviewPending: number;
+  interviewChoicePending: number;
+  liveAvatarInProgress: number;
+  liveAvatarReviewPending: number;
   approvedForFinal: number;
   finalScheduled: number;
   finalDecisionPending: number;
@@ -377,16 +380,16 @@ function hasFinalInterviewOutcome(record: SheetRow) {
 }
 
 const applicantStageDefinitions: Omit<ApplicantStageCount, "value">[] = [
-  { key: "resume_review", label: applicantStageLabel("resume_review"), tone: "blue" },
-  { key: "resume_approved", label: applicantStageLabel("resume_approved"), tone: "blue" },
-  { key: "voice_booking_pending", label: applicantStageLabel("voice_booking_pending"), tone: "purple" },
-  { key: "voice_scheduled", label: applicantStageLabel("voice_scheduled"), tone: "purple" },
-  { key: "voice_review_pending", label: applicantStageLabel("voice_review_pending"), tone: "green" },
-  { key: "approved_for_final", label: applicantStageLabel("approved_for_final"), tone: "teal" },
-  { key: "final_scheduled", label: applicantStageLabel("final_scheduled"), tone: "orange" },
-  { key: "final_decision_pending", label: applicantStageLabel("final_decision_pending"), tone: "orange" },
-  { key: "passed_final", label: applicantStageLabel("passed_final"), tone: "green" },
-  { key: "rejected", label: applicantStageLabel("rejected"), tone: "red" },
+  { key: "resume_review", label: applicantStageLabel("resume_review", "voice"), tone: "blue" },
+  { key: "resume_approved", label: applicantStageLabel("resume_approved", "voice"), tone: "blue" },
+  { key: "voice_booking_pending", label: applicantStageLabel("voice_booking_pending", "voice"), tone: "purple" },
+  { key: "voice_scheduled", label: applicantStageLabel("voice_scheduled", "voice"), tone: "purple" },
+  { key: "voice_review_pending", label: applicantStageLabel("voice_review_pending", "voice"), tone: "green" },
+  { key: "approved_for_final", label: applicantStageLabel("approved_for_final", "voice"), tone: "teal" },
+  { key: "final_scheduled", label: applicantStageLabel("final_scheduled", "voice"), tone: "orange" },
+  { key: "final_decision_pending", label: applicantStageLabel("final_decision_pending", "voice"), tone: "orange" },
+  { key: "passed_final", label: applicantStageLabel("passed_final", "voice"), tone: "green" },
+  { key: "rejected", label: applicantStageLabel("rejected", "voice"), tone: "red" },
 ];
 
 function currentApplicantStage(record: SheetRow) {
@@ -539,7 +542,7 @@ export function calculateApplicantMetrics(rows: SheetRow[], now = new Date(), ti
     if (stage === "rejected") result.rejected += 1;
     if (stage === "passed_final") result.passedFinalInterview += 1;
     return result;
-  }, { total: 0, today: 0, screened: 0, interviewed: 0, voiceActivity: 0, hrActivity: 0, resumeApproved: 0, voiceBookingPending: 0, voiceScheduled: 0, voiceReviewPending: 0, approvedForFinal: 0, finalScheduled: 0, finalDecisionPending: 0, rejected: 0, passedFinalInterview: 0, stageCounts });
+  }, { total: 0, today: 0, screened: 0, interviewed: 0, voiceActivity: 0, hrActivity: 0, resumeApproved: 0, voiceBookingPending: 0, voiceScheduled: 0, voiceReviewPending: 0, interviewChoicePending: 0, liveAvatarInProgress: 0, liveAvatarReviewPending: 0, approvedForFinal: 0, finalScheduled: 0, finalDecisionPending: 0, rejected: 0, passedFinalInterview: 0, stageCounts });
 }
 
 /**

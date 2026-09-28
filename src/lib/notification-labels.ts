@@ -1,4 +1,4 @@
-import { applicantStageLabel } from "@/lib/applicant-stage-labels";
+import { applicantStageLabel, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 import { pilotOutboundEmailEnabled } from "@/lib/pilot-email-policy";
 
 /**
@@ -52,9 +52,9 @@ export function notificationEventLabel(eventType: string | null | undefined) {
   return EVENT_LABELS[key] || (key ? titleCase(key) : "Recruitment update");
 }
 
-/** Email-ready name for the applicant's workflow stage, e.g. "Avatar Interview Review". */
-export function notificationStatusLabel(stage: string | null | undefined) {
-  return applicantStageLabel(stage) || "";
+/** Email-ready stage wording follows the interview route on that application. */
+export function notificationStatusLabel(stage: string | null | undefined, mode: ApplicantInterviewMode) {
+  return applicantStageLabel(stage, mode) || "";
 }
 
 /** A sentence describing the update. Falls back to the reviewer's comment, then a generic line. */

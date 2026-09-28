@@ -16,6 +16,9 @@ type ApplicantMetrics = {
   voiceBookingPending: number;
   voiceScheduled: number;
   voiceReviewPending: number;
+  interviewChoicePending: number;
+  liveAvatarInProgress: number;
+  liveAvatarReviewPending: number;
   approvedForFinal: number;
   finalScheduled: number;
   finalDecisionPending: number;
@@ -192,16 +195,21 @@ export default function DashboardMetrics({
 
   if (canReviewRole) task("role-review", metrics.pendingHrDiscussion || 0, "role request needs review", "role requests need review", "A hiring request is waiting for an HR decision.", "Review requests", "/roles?status=Pending%20HR%20Discussion");
   if (canReviewRole && applicantMetrics) task("resume-review", countFor(applicantMetrics, "resume_review"), "candidate needs resume review", "candidates need resume review", "Review the application and decide whether it should move forward.", "Review candidates", "/applicants?stage=Resume%20Review");
-  if (canReviewRole && applicantMetrics) task("avatar-review", applicantMetrics.voiceReviewPending, "Avatar Interview Review is waiting", "Avatar Interview Reviews are waiting", "A completed interview is ready for HR review.", "Review avatar interviews", "/applicants?stage=Avatar%20Interview%20Review");
-  if (canReviewRole && applicantMetrics) task("avatar-scheduling", applicantMetrics.voiceBookingPending, "Avatar interview needs scheduling", "Avatar interviews need scheduling", "These candidates are ready for the next interview step.", "Manage interview schedule", "/applicants?stage=Avatar%20Interview%20Booking%20Pending");
+  if (canReviewRole && applicantMetrics) task("voice-review", applicantMetrics.voiceReviewPending, "Voice Interview Review is waiting", "Voice Interview Reviews are waiting", "A completed call interview is ready for HR review.", "Review voice interviews", "/applicants?stage=Voice%20Interview%20Review");
+  if (canReviewRole && applicantMetrics) task("live-avatar-review", applicantMetrics.liveAvatarReviewPending, "Live Avatar Review is waiting", "Live Avatar Reviews are waiting", "A completed Live Avatar interview is ready for HR review.", "Review Live Avatar interviews", "/applicants?stage=Live%20Avatar%20Review");
+  if (canReviewRole && applicantMetrics) task("voice-scheduling", applicantMetrics.voiceBookingPending, "Voice Interview needs scheduling", "Voice Interviews need scheduling", "These candidates are ready to choose a time for their call.", "Manage call schedule", "/applicants?stage=Voice%20Interview%20Booking%20Pending");
   if (canReviewRole && applicantMetrics) task("face-to-face-scheduling", applicantMetrics.approvedForFinal, "face-to-face interview needs scheduling", "face-to-face interviews need scheduling", "These candidates are ready for a face-to-face interview.", "Review candidates", "/applicants?stage=Approved%20for%20Face-to-Face%20Interview");
   if ((canReviewRole || canApproveRole) && applicantMetrics) task("final-decision", applicantMetrics.finalDecisionPending, "hiring decision needs review", "hiring decisions need review", "A face-to-face interview is complete and needs a decision.", "Review decisions", "/applicants?stage=Face-to-Face%20Decision%20Pending");
 
   const pipeline = applicantMetrics ? [
     { label: "Applications received", value: applicantMetrics.total, filter: "" },
     { label: "Resume review", value: countFor(applicantMetrics, "resume_review"), filter: "Resume Review" },
-    { label: "Avatar interview", value: applicantMetrics.resumeApproved + applicantMetrics.voiceBookingPending + applicantMetrics.voiceScheduled, filter: "Avatar Interview" },
-    { label: "Avatar Interview Review", value: applicantMetrics.voiceReviewPending, filter: "Avatar Interview Review" },
+    { label: "Resume approved", value: applicantMetrics.resumeApproved, filter: "Resume Approved" },
+    { label: "Interview choice pending", value: applicantMetrics.interviewChoicePending, filter: "Interview Choice Pending" },
+    { label: "Voice Interview", value: applicantMetrics.voiceBookingPending + applicantMetrics.voiceScheduled, filter: "Voice Interview" },
+    { label: "Live Avatar Interview", value: applicantMetrics.liveAvatarInProgress + countFor(applicantMetrics, "avatar_scheduled"), filter: "Live Avatar Interview" },
+    { label: "Voice Interview Review", value: applicantMetrics.voiceReviewPending, filter: "Voice Interview Review" },
+    { label: "Live Avatar Review", value: applicantMetrics.liveAvatarReviewPending, filter: "Live Avatar Review" },
     { label: "Face-to-face interview", value: applicantMetrics.approvedForFinal + applicantMetrics.finalScheduled, filter: "Face-to-Face Interview" },
     { label: "Final decision", value: applicantMetrics.finalDecisionPending, filter: "Face-to-Face Decision Pending" },
     { label: "Completed", value: applicantMetrics.passedFinalInterview + applicantMetrics.rejected, filter: "Completed" },
@@ -219,7 +227,7 @@ export default function DashboardMetrics({
         <div className="dashboard-update-note"><span>Updates every 30 seconds</span><span aria-hidden="true">·</span><span>Last updated at {lastUpdated}</span></div>
       </div>
       <div className="dashboard-header-actions">
-        {canCreateRole && <Link className="btn btn-primary" href="/roles/new"><UiIcon name="plus" size={17} />Create hiring request</Link>}
+        {canCreateRole && <Link className="btn btn-primary" href="/roles/new"><UiIcon name="plus" size={17} />Create Role Request</Link>}
         <button type="button" className="btn btn-secondary dashboard-refresh-button" onClick={() => void refresh(true)} disabled={refreshing}>
           <UiIcon name="refresh" size={17} className={refreshing ? "dashboard-refresh-icon is-spinning" : "dashboard-refresh-icon"} />
           {refreshing ? "Refreshing…" : "Refresh"}

@@ -70,7 +70,8 @@ test("dashboard prioritizes work and shows candidate stages only to users who ca
   assert.match(dashboard, /Actionable alerts/);
   assert.match(dashboard, /Recent activity/);
   assert.match(dashboard, /30_000/);
-  assert.match(dashboard, /Avatar Interview Review/);
+  assert.match(dashboard, /Voice Interview Review/);
+  assert.match(dashboard, /Live Avatar Review/);
   assert.match(api, /Live Avatar Interview/);
   assert.match(dashboard, /stageCounts/);
   assert.match(stageLabels, /resume_review: "Resume Review"/);
@@ -92,6 +93,7 @@ test("applicant stage labels are presentation-only and used consistently", () =>
   assert.match(labels, /resume_review: "Resume Review"/);
   assert.match(labels, /resume_approved: "Resume Approved"/);
   assert.match(labels, /voice_review_pending: AVATAR_INTERVIEW_REVIEW_LABEL/);
+  assert.match(labels, /export const VOICE_INTERVIEW_REVIEW_LABEL = "Voice Interview Review"/);
   assert.match(labels, /passed_final: "Passed Final Interview"/);
   assert.match(labels, /if \(key === "approve" \|\| key === "approved"\) return "Approve"/);
   assert.match(labels, /if \(key === "reject" \|\| key === "rejected"\) return "Reject"/);
@@ -105,9 +107,21 @@ test("applicant stage labels are presentation-only and used consistently", () =>
   // Canonical keys remain the values used for filters and database/API work.
   assert.match(list, /matchesDashboardStageFilter\(applicant, stageFilter\)/);
   assert.match(list, /DASHBOARD_STAGE_GROUPS/);
-  assert.match(list, /voice_review_pending[\s\S]*?Avatar Interview Review/);
+  assert.match(list, /"Voice Interview Review"/);
+  assert.match(list, /"Live Avatar Review"/);
   assert.match(list, /new URLSearchParams\(window\.location\.search\)/);
   assert.match(labels, /must continue to\r?\n\s*\* send and persist the canonical status key/);
+});
+
+test("interview status wording follows the applicant's selected interview mode", async () => {
+  const { applicantStageLabel, historyStageLabel } = await import("../src/lib/applicant-stage-labels.ts");
+  assert.equal(applicantStageLabel("voice_review_pending", "voice"), "Voice Interview Review");
+  assert.equal(applicantStageLabel("voice_review_pending", "avatar"), "Live Avatar Review");
+  assert.equal(applicantStageLabel("voice_scheduled", "voice"), "Voice Interview Scheduled");
+  assert.equal(applicantStageLabel("voice_scheduled", "avatar"), "Live Avatar Interview Scheduled");
+  assert.equal(applicantStageLabel("voice_booking_pending", "pending"), "Interview Choice Pending");
+  assert.equal(applicantStageLabel("voice_booking_pending", "avatar"), "Live Avatar Interview In Progress");
+  assert.equal(historyStageLabel("voice", "pending"), "Interview");
 });
 
 test("opening Applicants clears row highlights immediately and counts only persisted screenings", () => {

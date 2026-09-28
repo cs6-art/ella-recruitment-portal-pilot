@@ -74,10 +74,20 @@ test("notification queue exposes email-ready wording, not raw workflow keys", ()
   const query = read("src/lib/internal-recruitment-queries.ts");
   const labels = read("src/lib/notification-labels.ts");
   assert.match(query, /eventLabel: notificationEventLabel\(history\.notificationEventType\)/);
-  assert.match(query, /statusLabel: notificationStatusLabel\(history\.newStage\)/);
+  assert.match(query, /hasLiveAvatarInterview: hasAvatarInterviewSql\(\)/);
+  assert.match(query, /hasVoiceInterviewChoice: hasVoiceInterviewChoiceSql\(\)/);
+  assert.match(query, /\$\{bookingTokens\.kind\} = 'avatar' and \$\{bookingTokens\.status\} in \('booked', 'used'\)/);
+  assert.match(query, /\$\{interviewSlots\.interviewType\} = 'voice'/);
+  assert.match(query, /const mode: ApplicantInterviewMode = context\.hasLiveAvatarInterview[\s\S]*?history\.newStage === "voice_booking_pending" \? "pending" : "voice"/);
+  assert.match(query, /statusLabel: notificationStatusLabel\(history\.newStage, mode\)/);
   assert.match(query, /summary: notificationSummary\(history\.notificationEventType, history\.comments\)/);
   assert.match(labels, /voice_result_next_step: "Voice interview complete — review required"/);
   assert.match(labels, /A recruitment workflow update requires your attention\./);
+});
+
+test("notification status wording follows the selected interview mode", () => {
+  const labels = read("src/lib/notification-labels.ts");
+  assert.match(labels, /export function notificationStatusLabel\(stage: string \| null \| undefined, mode: ApplicantInterviewMode\)\s*\{\s*return applicantStageLabel\(stage, mode\)/);
 });
 
 test("notification queue carries ready-to-send candidate email copy per booking event", () => {
