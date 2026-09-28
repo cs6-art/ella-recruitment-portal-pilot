@@ -25,8 +25,12 @@ const auth = new google.auth.JWT({
 const sheets = google.sheets({ version: "v4", auth });
 
 const TAB = "Resume_Screening_Invitations";
-const LEGACY_PILOT_ORIGIN = "https://ella-recruitment.mclinkgroup.com";
-const CANONICAL_PILOT_ORIGIN = "https://ella-recruitment-portal-pilot.vercel.app";
+// Every prior domain the pilot has been hosted at (oldest first). Any of
+// these may still be present in the Settings sheet, a saved bookmark, or an
+// old email, so new invite links are always redirected to the current
+// canonical domain below rather than being generated for a retired one.
+const LEGACY_PILOT_ORIGINS = ["https://ella-recruitment.mclinkgroup.com", "https://ella-recruitment-portal-pilot.vercel.app"];
+const CANONICAL_PILOT_ORIGIN = "https://smile.mclinkgroup.com";
 const HEADERS = [
   "Invitation_ID",
   "Role_ID",
@@ -68,13 +72,13 @@ export function applicationInviteLink(baseUrl: string, token: string, apiBaseUrl
     if (currentPortal.protocol === "http:" || currentPortal.protocol === "https:") apiOrigin = currentPortal.origin;
   }
 
-  // The pilot's legacy custom domain is a separate, stale static deployment.
-  // It can still be present in the Settings sheet, and the HR portal itself
-  // may also be opened through that hostname. In both cases, keep new invite
-  // links on the canonical deployment so the candidate receives the current
-  // page and the token is checked against the same live API/database.
-  if (url.origin === LEGACY_PILOT_ORIGIN) {
-    url = new URL(apiOrigin && apiOrigin !== LEGACY_PILOT_ORIGIN ? apiOrigin : CANONICAL_PILOT_ORIGIN);
+  // A prior pilot domain is a separate, stale deployment. It can still be
+  // present in the Settings sheet, and the HR portal itself may also be
+  // opened through that hostname. In both cases, keep new invite links on
+  // the canonical deployment so the candidate receives the current page and
+  // the token is checked against the same live API/database.
+  if (LEGACY_PILOT_ORIGINS.includes(url.origin)) {
+    url = new URL(apiOrigin && !LEGACY_PILOT_ORIGINS.includes(apiOrigin) ? apiOrigin : CANONICAL_PILOT_ORIGIN);
     apiOrigin = url.origin;
   }
   if (!url.pathname || url.pathname === "/") url.pathname = "/index.html";

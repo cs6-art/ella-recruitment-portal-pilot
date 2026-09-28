@@ -25,7 +25,7 @@ deployed pilot. Ordered by what unblocks Code Freeze → production.
 
 ## 2. Google Drive live import evidence  ·  ~10 min
 
-On `ella-recruitment-portal-pilot.vercel.app`, signed in as an HR user:
+On `smile.mclinkgroup.com`, signed in as an HR user:
 
 1. Resume Screening → pick a published role → **Choose from Google Drive** →
    select **2** PDFs → Import.
@@ -92,7 +92,7 @@ Mark PASS only with an attached artefact.
 
 ## §D2 — canonical URL configuration  ·  DECIDED 2026-08-31
 
-**Canonical pilot URL: `https://ella-recruitment-portal-pilot.vercel.app`**
+**Canonical pilot URL: `https://smile.mclinkgroup.com`**
 (the `.vercel.app` URL already runs current code; `ella-recruitment.mclinkgroup.com`
 serves a build predating the Ella Credits meter + Phases 1–3 and is not used).
 
@@ -100,26 +100,26 @@ serves a build predating the Ella Credits meter + Phases 1–3 and is not used).
 
 | Var | Value |
 | --- | --- |
-| `NEXT_PUBLIC_APP_URL` | `https://ella-recruitment-portal-pilot.vercel.app` |
+| `NEXT_PUBLIC_APP_URL` | `https://smile.mclinkgroup.com` |
 | `GOOGLE_OAUTH_REDIRECT_URI` | `…vercel.app/api/auth/google-calendar/callback` |
 | `GOOGLE_DRIVE_OAUTH_REDIRECT_URI` | `…vercel.app/api/auth/google-drive/callback` |
-| `RESUME_SCREENING_INVITE_BASE_URL` | `https://ella-recruitment-portal-pilot.vercel.app` (or the public candidate site if separate) |
-| `N8N_BULK_RESUME_PORTAL_BASE_URL` | `https://ella-recruitment-portal-pilot.vercel.app` |
+| `RESUME_SCREENING_INVITE_BASE_URL` | `https://smile.mclinkgroup.com` (or the public candidate site if separate) |
+| `N8N_BULK_RESUME_PORTAL_BASE_URL` | `https://smile.mclinkgroup.com` |
 
 Leave `MS_*` unset (OneDrive deferred).
 
-**Settings sheet:** `App_URL` = `https://ella-recruitment-portal-pilot.vercel.app`
+**Settings sheet:** `App_URL` = `https://smile.mclinkgroup.com`
 (or blank to inherit the env value).
 
 **Google Cloud Console → OAuth 2.0 Web client:**
 - Authorized redirect URIs — add:
-  `https://ella-recruitment-portal-pilot.vercel.app/api/auth/google-calendar/callback`
+  `https://smile.mclinkgroup.com/api/auth/google-calendar/callback`
   and `…/api/auth/google-drive/callback` (keep the `localhost:3000` pair for dev).
 - Authorized JavaScript origins — add
-  `https://ella-recruitment-portal-pilot.vercel.app` (GIS login needs it).
+  `https://smile.mclinkgroup.com` (GIS login needs it).
 
 **n8n (pilot workflows only):** any workflow that emails a portal link or calls
-the portal back uses `https://ella-recruitment-portal-pilot.vercel.app`.
+the portal back uses `https://smile.mclinkgroup.com`.
 
 **Vercel Domains:** detach / ignore `ella-recruitment.mclinkgroup.com` from the
 pilot config — do not point anything at it. (If it belongs to a separate live

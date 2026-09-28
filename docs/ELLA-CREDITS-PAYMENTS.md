@@ -20,7 +20,7 @@ only a pack id; the server derives both the quantity and amount.
 The deployed webhook route is:
 
 ```text
-https://ella-recruitment-portal-pilot.vercel.app/api/webhooks/hitpay
+https://smile.mclinkgroup.com/api/webhooks/hitpay
 ```
 
 Register that URL in the HitPay Sandbox Dashboard under Developers → Webhook

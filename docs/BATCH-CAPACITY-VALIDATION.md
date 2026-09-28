@@ -89,7 +89,7 @@ over budget on a strict 60s limit.
 ## Hosting note — URS says "GoDaddy", the pilot runs on Vercel
 
 The URS Phase 5 text refers to *GoDaddy* upload configuration. The pilot is
-deployed on **Vercel serverless** (`ella-recruitment-portal-pilot.vercel.app`),
+deployed on **Vercel serverless** (`smile.mclinkgroup.com`),
 not GoDaddy shared/VPS hosting. All limits and measurements below are for the
 Vercel deployment. If a GoDaddy migration is still planned, the request-body
 size limit, PHP/proxy timeouts, and process memory on that host must be

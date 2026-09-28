@@ -316,10 +316,10 @@ test("invite links can use a separate candidate page origin without breaking por
   assert.match(candidatePage, /api\/public\/resume-screening-invite/);
   assert.match(candidatePage, /api\/public\/applications/);
   assert.match(candidatePage, /const configuredPortalApi =/);
-  assert.match(candidatePage, /ella-recruitment-portal-pilot\.vercel\.app/);
+  assert.match(candidatePage, /smile\.mclinkgroup\.com/);
   assert.match(candidatePage, /inviteQuery\.get\("portalApi"\)/);
   assert.match(inviteStore, /applicationInviteLink\(input\.baseUrl, target\.token, input\.apiBaseUrl\)/);
-  assert.match(inviteStore, /url\.origin === LEGACY_PILOT_ORIGIN/);
+  assert.match(inviteStore, /LEGACY_PILOT_ORIGINS\.includes\(url\.origin\)/);
   assert.match(inviteStore, /CANONICAL_PILOT_ORIGIN/);
   assert.match(inviteStore, /apiOrigin = url\.origin/);
   assert.match(inviteRoute, /apiBaseUrl/);

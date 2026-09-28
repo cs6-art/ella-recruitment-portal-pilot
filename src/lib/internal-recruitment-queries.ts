@@ -2338,7 +2338,7 @@ export async function createBookingToken(input: { applicationExternalId: string;
     const suppliedTokenHash = input.tokenHash?.trim();
     const rawToken = suppliedTokenHash ? "" : crypto.randomBytes(32).toString("hex");
     const tokenHash = suppliedTokenHash || crypto.createHash("sha256").update(rawToken).digest("hex");
-    const portalOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.APP_URL?.trim() || (process.env.VERCEL_URL?.trim() ? `https://${process.env.VERCEL_URL.trim()}` : "https://ella-recruitment-portal-pilot.vercel.app");
+    const portalOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.APP_URL?.trim() || (process.env.VERCEL_URL?.trim() ? `https://${process.env.VERCEL_URL.trim()}` : "https://smile.mclinkgroup.com");
     const link = input.link || (input.kind === "avatar"
       ? avatarInterviewLink(portalOrigin, rawToken || tokenHash)
       : `${portalOrigin.replace(/\/$/, "")}/book/${input.kind}/${rawToken || tokenHash}`);
