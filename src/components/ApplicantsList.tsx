@@ -115,8 +115,6 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
   // Opening Applicants records the current visit as the viewed watermark.
   // Applicants arriving after that timestamp remain highlighted during this visit.
   const [seenWatermark, setSeenWatermark] = useState<number | null>(null);
-  const hasPendingScreening = applicants.some((applicant) => !applicant.isHistoricalDemo && applicant.resumeStatus.trim().toLowerCase() !== "processed");
-
   useEffect(() => {
     const seenAt = Date.now();
     writeApplicantsLastSeen(userEmail, seenAt);
@@ -302,15 +300,16 @@ export default function ApplicantsList({ applicants, title = "Applicants", descr
 
   return (
     <>
-      {/* Screening status is asynchronous; a 30-second refresh keeps the list
-          current without waking the database every five seconds for every
-          reviewer who leaves this page open. */}
-      <ApplicantLiveRefresh enabled={hasPendingScreening} intervalMs={30_000} throttleMs={30_000} />
+      {/* Counts and stages can change after screening, interviewing, or an HR
+          decision. Keep this server-rendered view aligned with the database
+          for as long as the page remains visible. */}
+      <ApplicantLiveRefresh enabled intervalMs={30_000} throttleMs={30_000} />
       <main className="container page applicants-page">
       <div className="hero-row applicants-header">
         <div>
           <h1>{title}</h1>
           <p>{description}</p>
+          <span className="live-data-note">Live database updates every 30 seconds while this page is open.</span>
         </div>
 
         <div className="applicants-header-meta"><strong>{summaryTotal}</strong><span>Total applications</span></div>

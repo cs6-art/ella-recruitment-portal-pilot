@@ -4,16 +4,20 @@ import test from "node:test";
 
 const read = (path) => readFileSync(path, "utf8");
 
-test("applicant live refresh is visible-only, throttled, slower, and terminal-aware", () => {
+test("workflow pages refresh visible database data without wasteful polling", () => {
   const refresh = read("src/components/ApplicantLiveRefresh.tsx");
   const list = read("src/components/ApplicantsList.tsx");
+  const bookings = read("src/components/BookingsList.tsx");
   const page = read("src/app/applicants/[applicationId]/page.tsx");
   assert.match(refresh, /REFRESH_MS = 5 \* 60_000/);
   assert.match(refresh, /EVENT_REFRESH_THROTTLE_MS = 30_000/);
   assert.match(refresh, /if \(!enabled\) return/);
   assert.match(refresh, /document\.visibilityState !== "visible"/);
   assert.match(refresh, /lastRefreshAt/);
-  assert.match(list, /enabled=\{hasPendingScreening\} intervalMs=\{30_000\} throttleMs=\{30_000\}/);
+  assert.match(list, /enabled intervalMs=\{30_000\} throttleMs=\{30_000\}/);
+  assert.match(bookings, /LiveDataRefresh enabled intervalMs=\{30_000\} throttleMs=\{30_000\}/);
+  assert.match(bookings, /APPOINTMENT_RECORD_LIMIT = 100/);
+  assert.match(bookings, /APPOINTMENT_STATUS_FILTERS/);
   assert.match(page, /TERMINAL_APPLICANT_STAGES/);
   assert.match(page, /enabled=\{!TERMINAL_APPLICANT_STAGES\.has/);
 });

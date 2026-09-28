@@ -730,6 +730,7 @@ a { color: inherit; text-decoration: none; }
 .booking-page-message { margin: 18px 0 -4px; padding: 11px 14px; border-radius: 9px; background: #e8f7ee; color: #176b43; font-size: 13px; font-weight: 700; }
 .bookings-header-meta { min-width: 156px; padding: 14px 22px; border: 1px solid #d8e2ed; border-radius: 12px; background: #fff; text-align: center; }
 .bookings-header-meta strong { display: block; }
+.live-data-note { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; }
 .availability-card { display: grid; grid-template-columns: minmax(210px, .7fr) minmax(0, 1.8fr); gap: 28px; margin: 22px 0; padding: 22px; }
 .availability-card h2 { margin: 3px 0 4px; color: var(--navy); font-size: 20px; }
 .availability-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }

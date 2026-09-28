@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 const REFRESH_MS = 5 * 60_000;
 const EVENT_REFRESH_THROTTLE_MS = 30_000;
 
-/** Keep server-rendered applicant status and booking details current. */
+/** Keep server-rendered workflow data current while the page is visible. */
 export default function ApplicantLiveRefresh({ enabled = true, intervalMs = 5 * 60_000, throttleMs = EVENT_REFRESH_THROTTLE_MS }: { enabled?: boolean; intervalMs?: number; throttleMs?: number }) {
   const router = useRouter();
 
