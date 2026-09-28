@@ -41,6 +41,15 @@ const configuredNotificationClaimLeaseMinutes = Number(process.env.NOTIFICATION_
 const NOTIFICATION_CLAIM_LEASE_MINUTES = Number.isFinite(configuredNotificationClaimLeaseMinutes)
   ? Math.min(Math.max(configuredNotificationClaimLeaseMinutes, 1), 60)
   : 10;
+/**
+ * The complete, deliberately short list of application-side notification
+ * emails the pilot is allowed to send. Enforced here, at the single claim
+ * point every sender goes through, so no future stage-filtered worker (or
+ * one with no stage filter at all) can ever claim or send anything outside
+ * this list, regardless of what accumulates in the queue. Role-side
+ * notifications are separately restricted to job_posted only, below.
+ */
+const ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES = ["voice_booking_invitation", "voice_booking_confirmation", "final_booking_invitation"];
 // A worker outage must not turn a yesterday's appointment into an unexpected
 // call when the queue comes back. Keep this configurable for environments
 // with a different polling interval, but bound it to a safe operational range.
@@ -2423,13 +2432,11 @@ export async function notificationQueue(stage?: string) {
     }).from(applicationStatusHistory)
       .where(and(
         inArray(applicationStatusHistory.notificationStatus, ["", "pending", "failed"]),
-        // History rows without an event type are audit-only transitions, not
-        // outbound notifications. Excluding them prevents a stage-filtered
-        // worker from claiming and sending an unrelated email.
-        not(eq(applicationStatusHistory.notificationEventType, "")),
-        // Voice booking confirmations are intentionally disabled. Exclude
-        // older pending rows too, so a deploy cannot send backlog notices.
-        not(eq(applicationStatusHistory.notificationEventType, "voice_booking_confirmation")),
+        // Only the approved, deliberately short list of email types may ever
+        // be claimed -- everything else (application acknowledgments,
+        // screening results, no-shows, retries, rejections, stage updates,
+        // etc.) stays queued but inert, however large the backlog gets.
+        inArray(applicationStatusHistory.notificationEventType, ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES),
         or(isNull(applicationStatusHistory.notificationAttemptedAt), lte(applicationStatusHistory.notificationAttemptedAt, leaseCutoff)),
         cleanStage ? eq(applicationStatusHistory.newStage, cleanStage) : undefined,
       ))
@@ -2442,6 +2449,8 @@ export async function notificationQueue(stage?: string) {
     }).from(roleStatusHistory)
       .where(and(
         inArray(roleStatusHistory.notificationStatus, ["", "pending", "failed"]),
+        // job_posted is the only role-side email the pilot sends.
+        eq(roleStatusHistory.newStatus, "job_posted"),
         or(isNull(roleStatusHistory.notificationAttemptedAt), lte(roleStatusHistory.notificationAttemptedAt, leaseCutoff)),
         cleanStage ? eq(roleStatusHistory.newStatus, cleanStage) : undefined,
       ))

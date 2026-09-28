@@ -100,7 +100,9 @@ test("notification queue carries ready-to-send candidate email copy per booking 
   assert.match(labels, /if \(key === "final_booking_confirmation"\) return null/);
   assert.match(query, /email: notificationEmail\(history\.notificationEventType/);
   assert.match(query, /confirmationIsEmailed \? "pending" : "skipped"/);
-  assert.match(query, /not\(eq\(applicationStatusHistory\.notificationEventType, "voice_booking_confirmation"\)\)/);
+  // voice_booking_confirmation is one of the enabled email types (see the
+  // claim-side allowlist below) -- it is queued, not hard-excluded.
+  assert.match(query, /ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES = \[.*"voice_booking_confirmation".*\]/);
   assert.match(query, /return `\$\{dateParts\.year\}-\$\{dateParts\.month\}-\$\{dateParts\.day\} \$\{timeParts\.hour\}:\$\{timeParts\.minute\} \$\{tz\}`/);
 });
 
@@ -175,6 +177,24 @@ test("HR booking cards expose invitation delivery separately from booking state"
   assert.match(query, /notificationSentAt/);
 });
 
+test("only job posted, voice booking invitation/confirmation, and final booking invitation can ever be claimed and sent", () => {
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  const enabledListMatch = query.match(/ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES = (\[[^\]]*\]);/);
+  assert.ok(enabledListMatch, "expected an ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES constant");
+  const enabled = JSON.parse(enabledListMatch[1].replace(/'/g, '"'));
+  assert.deepEqual(enabled.sort(), ["final_booking_invitation", "voice_booking_confirmation", "voice_booking_invitation"].sort());
+  // Nothing else -- application_acknowledgment, screening_next_step,
+  // voice_result_next_step, voice_no_show, voice_retry, voice_rejection,
+  // final_booking_confirmation, final_decision_pass/reject -- may ever be
+  // claimed, no matter how large the backlog is or what stage a worker asks
+  // for; the allowlist check runs before the stage filter, unconditionally.
+  const notificationQueueBody = query.slice(query.indexOf("export async function notificationQueue"), query.indexOf("export async function", query.indexOf("export async function notificationQueue") + 1));
+  assert.match(notificationQueueBody, /inArray\(applicationStatusHistory\.notificationEventType, ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES\)/);
+  // Role-side: only job_posted, unconditionally (not just when a caller
+  // happens to filter by that stage).
+  assert.match(notificationQueueBody, /eq\(roleStatusHistory\.newStatus, "job_posted"\)/);
+});
+
 test("notification queue claims rows atomically to prevent overlapping duplicate sends", () => {
   const query = read("src/lib/internal-recruitment-queries.ts");
   const route = read("src/app/api/internal/recruitment/notifications/route.ts");
@@ -183,7 +203,9 @@ test("notification queue claims rows atomically to prevent overlapping duplicate
   assert.match(query, /notificationAttemptedAt/);
   assert.match(query, /leaseCutoff/);
   assert.match(query, /NOTIFICATION_CLAIM_LEASE_MINUTES/);
-  assert.match(query, /not\(eq\(applicationStatusHistory\.notificationEventType, ""\)\)/);
+  // History rows without an event type (or one outside the enabled list) are
+  // excluded from claiming by the same allowlist, not a separate check.
+  assert.match(query, /inArray\(applicationStatusHistory\.notificationEventType, ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES\)/);
   assert.match(route, /isPostgresRecruitmentTarget\(\)/);
   assert.match(route, /recruitment_target_not_enabled/);
 });
