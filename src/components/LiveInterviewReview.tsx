@@ -195,7 +195,7 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
     {actionError && <p className="error-box" role="alert">{actionError}</p>}
 
     {review.reviewFlags.length > 0 && <div className="live-review-block">
-      <h4>Items flagged for HR attention</h4>
+      <h4>Items Flagged for HR Attention</h4>
       <ul className="live-review-flags">{review.reviewFlags.map((flag) => <li key={flag.code}>{flag.message}</li>)}</ul>
     </div>}
 

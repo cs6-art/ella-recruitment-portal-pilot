@@ -36,7 +36,7 @@ export default async function ProfilePage() {
 
         <section className="card role-section">
           <div className="card-header">
-            <h2>Account details</h2>
+            <h2>Account Details</h2>
           </div>
 
           <div className="details-grid">

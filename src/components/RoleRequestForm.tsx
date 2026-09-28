@@ -694,7 +694,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
             <section className="section">
               <div className="section-title">
                 <span className="section-number">2</span>
-                <h2>Screening and interview</h2>
+                <h2>Screening and Interview</h2>
               </div>
               <p className="section-intro">Smile screens every resume against these criteria and asks the questions below exactly as written, in order. They are prefilled from the job description, so just review and adjust.</p>
               <div className="form-stack">

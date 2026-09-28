@@ -78,7 +78,7 @@ test("the single role form fills the setup and publishes in one pass", () => {
   assert.match(newPage, /unified=\{user\.canReviewRole === true && user\.canApproveRole === true\}/);
   assert.match(editPage, /role\.status === "Draft"/);
   // Sections run top to bottom: role, screening and interview, publishing.
-  assert.ok(form.indexOf("Screening and interview") < form.indexOf("<h2>Publishing</h2>"));
+  assert.ok(form.indexOf("Screening and Interview") < form.indexOf("<h2>Publishing</h2>"));
 });
 
 test("shared portal settings are platform-administrator only and show what is in effect", () => {

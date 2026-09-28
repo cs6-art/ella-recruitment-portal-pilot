@@ -45,7 +45,7 @@ export default function OrganizationBrandingEditor() {
 
   return <main className="container page settings-page">
     <section className="card settings-section" aria-labelledby="organization-branding-title">
-    <div className="settings-section-header"><div><h2 id="organization-branding-title">Organization branding</h2><p>Choose the name and subtitle shown to signed-in users in this organization. This does not change internal tenant IDs or permissions.</p></div><span>2 settings</span></div>
+    <div className="settings-section-header"><div><h2 id="organization-branding-title">Organization Branding</h2><p>Choose the name and subtitle shown to signed-in users in this organization. This does not change internal tenant IDs or permissions.</p></div><span>2 settings</span></div>
     {loading && <div className="empty">Loading branding...</div>}
     {error && <ActionFeedback kind="error">{error}</ActionFeedback>}
     {message && <ActionFeedback kind="success">{message}</ActionFeedback>}

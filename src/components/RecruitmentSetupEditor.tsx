@@ -706,7 +706,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
         </div>
         <div className="vapi-template-library">
           <div className="vapi-section-heading">
-            <div><span className="vapi-kicker">TEMPLATE LIBRARY</span><h3>Saved interview setups</h3><p>Loading a template replaces the current fields locally. Review the changes and save the role when ready.</p></div>
+            <div><span className="vapi-kicker">TEMPLATE LIBRARY</span><h3>Saved Interview Setups</h3><p>Loading a template replaces the current fields locally. Review the changes and save the role when ready.</p></div>
             <span className="vapi-readonly-badge">{templateLoading ? "Loading..." : `${savedTemplates.length} saved`}</span>
           </div>
           {templateError && <ActionFeedback kind="error" className="vapi-message">{templateError}</ActionFeedback>}
@@ -746,7 +746,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
 
       <div className="vapi-builder">
         <div className="vapi-section-heading">
-          <div><span className="vapi-kicker">HR EDITS THESE SECTIONS</span><h3>Screening instructions</h3><p>Add only the guidance that is specific to this role.</p></div>
+          <div><span className="vapi-kicker">HR EDITS THESE SECTIONS</span><h3>Screening Instructions</h3><p>Add only the guidance that is specific to this role.</p></div>
         </div>
         <div className="form-grid vapi-form-grid vapi-form-grid-single-column">
         <Field id="vapi-screeningCriteria" label="What should Smile listen for?" value={values.screeningCriteria} onChange={(value) => update("screeningCriteria", value)} disabled={!editable || saving} multiline required placeholder="What evidence should HR and Smile look for in each candidate?" hint="Smile will use this as extra guidance during the call, alongside the fields below." />
@@ -770,7 +770,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
           </div>
         </div>
         <fieldset className="vapi-channel-fieldset">
-          <legend>Optional fields</legend>
+          <legend>Optional Fields</legend>
           <div className="vapi-channel-options">
             {EVALUATION_FIELD_CATALOG.map((field) => (
               <label key={field.key} className="vapi-channel-option" title={field.description}>
@@ -818,7 +818,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
         {suggestedQuestions.length > 0 && (
           <div className="vapi-suggested-questions">
             <div className="vapi-section-heading">
-              <div><span className="vapi-kicker">AI SUGGESTIONS</span><h4>Suggested interview questions</h4><p>Review these ideas with HR and enter the final wording in the question fields below.</p></div>
+              <div><span className="vapi-kicker">AI SUGGESTIONS</span><h4>Suggested Interview Questions</h4><p>Review these ideas with HR and enter the final wording in the question fields below.</p></div>
               <span className="vapi-readonly-badge">For review</span>
             </div>
             <ol>

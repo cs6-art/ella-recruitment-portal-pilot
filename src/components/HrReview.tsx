@@ -179,7 +179,7 @@ export default function HrReview({
       {status === "On Hold" && hold && (
         <section className="card role-section">
           <div className="card-header">
-            <h2>On hold details</h2>
+            <h2>On Hold Details</h2>
           </div>
           <div className="section">
             <p className="status-context">
@@ -195,7 +195,7 @@ export default function HrReview({
       {actions.length > 0 && (
         <section className="card role-section">
           <div className="card-header">
-            <h2>Approve or reject this request</h2>
+            <h2>Approve or Reject This Request</h2>
           </div>
 
           <div className="section">

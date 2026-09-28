@@ -31,5 +31,5 @@ export default function ApplicantDetailActions({ applicationId, candidateName, c
   }
 
   if (!canManage) return null;
-  return <div className="applicant-record-actions"><Link className="btn btn-secondary" href={`/applicants/${encodeURIComponent(applicationId)}/edit`}><UiIcon name="edit" size={15} />Edit applicant</Link><button className="btn btn-danger-outline" type="button" disabled={deleting} onClick={() => void deleteRecord()}><UiIcon name="trash" size={15} />{deleting ? "Deleting..." : "Delete applicant"}</button>{error && <ActionFeedback kind="error" className="applicant-record-action-error">{error}</ActionFeedback>}</div>;
+  return <div className="applicant-record-actions"><Link className="btn btn-secondary" href={`/applicants/${encodeURIComponent(applicationId)}/edit`}><UiIcon name="edit" size={15} />Edit Applicant</Link><button className="btn btn-danger-outline" type="button" disabled={deleting} onClick={() => void deleteRecord()}><UiIcon name="trash" size={15} />{deleting ? "Deleting..." : "Delete Applicant"}</button>{error && <ActionFeedback kind="error" className="applicant-record-action-error">{error}</ActionFeedback>}</div>;
 }

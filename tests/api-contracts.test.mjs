@@ -162,7 +162,7 @@ test("saved recruitment templates stay isolated from role request rows", () => {
   assert.match(templateRoute, /Recruitment_Templates/);
   assert.doesNotMatch(templateRoute, /Role_Requests/);
   assert.match(editor, /Load standard script/);
-  assert.match(editor, /Saved interview setups/);
+  assert.match(editor, /Saved Interview Setups/);
   assert.match(editor, /window\.confirm\(`Load/);
   assert.match(editor, /Unsaved changes/);
   assert.match(editor, /Reset changes/);

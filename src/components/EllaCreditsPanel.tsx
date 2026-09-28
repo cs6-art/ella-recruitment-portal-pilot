@@ -166,7 +166,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
     <section className={`card ${styles.panel}`}>
       <div className={styles.header}>
         <div>
-          <h2>Credit balance</h2>
+          <h2>Credit Balance</h2>
           <p>All signed-in users in this organization share one Smile Credits balance — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer.` : "pricing is loaded from the active credit settings"}. AI actions are blocked when the balance runs out.</p>
         </div>
         {data && (
@@ -208,7 +208,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
 
         <div className={styles.activity}>
           <div className={styles.activityTitle}>
-            <h3>Organization credit history</h3>
+            <h3>Organization Credit History</h3>
             <span>{filteredEntries.length} matching entr{filteredEntries.length === 1 ? "y" : "ies"}</span>
           </div>
           <div className={styles.filters}>

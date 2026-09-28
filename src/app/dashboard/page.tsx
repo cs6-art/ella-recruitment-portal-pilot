@@ -13,7 +13,7 @@ import {
 export const dynamic = "force-dynamic";
 
 function LimitedAccessCard({ user }: { user: { accessRole?: string; department?: string; canEditSettings?: boolean } }) {
-  return <section className="limited-access-card" aria-labelledby="limited-access-title"><div className="limited-access-icon" aria-hidden="true"><UiIcon name="info" size={20} /></div><div><h2 id="limited-access-title">Limited access</h2><p>Your portal account is active, but recruitment access has not been assigned.</p><small>Contact HR or the portal administrator if you need permission to submit or review role requests.</small><dl className="limited-access-details"><div><dt>Access role</dt><dd>{String(user.accessRole ?? "Portal User")}</dd></div><div><dt>Department</dt><dd>{String(user.department ?? "Not assigned")}</dd></div>{user.canEditSettings === true && <div><dt>Settings access</dt><dd>Available</dd></div>}</dl>{user.canEditSettings === true && <Link className="btn btn-secondary" href="/settings">Open Settings</Link>}</div></section>;
+  return <section className="limited-access-card" aria-labelledby="limited-access-title"><div className="limited-access-icon" aria-hidden="true"><UiIcon name="info" size={20} /></div><div><h2 id="limited-access-title">Limited Access</h2><p>Your portal account is active, but recruitment access has not been assigned.</p><small>Contact HR or the portal administrator if you need permission to submit or review role requests.</small><dl className="limited-access-details"><div><dt>Access Role</dt><dd>{String(user.accessRole ?? "Portal User")}</dd></div><div><dt>Department</dt><dd>{String(user.department ?? "Not assigned")}</dd></div>{user.canEditSettings === true && <div><dt>Settings Access</dt><dd>Available</dd></div>}</dl>{user.canEditSettings === true && <Link className="btn btn-secondary" href="/settings">Open Settings</Link>}</div></section>;
 }
 
 export default async function DashboardPage() {
@@ -139,7 +139,7 @@ export default async function DashboardPage() {
           {hasRecruitmentAccess && <aside className="dashboard-panel">
             <div className="dashboard-panel-header">
               <div>
-                <h2>User access summary</h2>
+                <h2>User Access Summary</h2>
                 <p>{creatorOnly ? "Your access is focused on creating and tracking your own requests." : "Your access determines which role actions appear in the top navigation."}</p>
               </div>
             </div>

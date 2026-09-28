@@ -61,7 +61,7 @@ export default function ApplicantEditForm({ applicant }: { applicant: ApplicantE
   }
 
   return <section className="card applicant-edit-card">
-    <div className="card-header"><div><Link className="portal-back-link applicant-back-link" href={`/applicants/${encodeURIComponent(applicant.applicationId)}`}>← Back to applicant</Link><h1>Edit applicant</h1><p>Update the candidate&apos;s contact details without changing their workflow history.</p></div></div>
+    <div className="card-header"><div><Link className="portal-back-link applicant-back-link" href={`/applicants/${encodeURIComponent(applicant.applicationId)}`}>← Back to Applicant</Link><h1>Edit Applicant</h1><p>Update the candidate&apos;s contact details without changing their workflow history.</p></div></div>
     {error && <ValidationSummary error={error} title="Save failed" issues={Object.entries(fieldErrors).filter(([, message]) => Boolean(message)).map(([field, message]) => ({ field, label: field === "candidateName" ? "Full name" : field === "localNumber" ? "Preferred mobile number" : "Email address", message, href: field === "candidateName" ? "#applicant-edit-name" : field === "localNumber" ? "#applicant-edit-mobile" : "#applicant-edit-email" }))} />}
     <form className="applicant-edit-form" noValidate onSubmit={(event) => void submit(event)}>
       <div className="applicant-edit-meta"><div><span>Application ID</span><strong>{applicant.applicationId}</strong></div><div><span>Role</span><strong>{applicant.selectedRole || applicant.roleId}</strong><small>{applicant.department}</small></div></div>

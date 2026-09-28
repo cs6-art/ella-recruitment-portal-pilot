@@ -45,7 +45,7 @@ test("every authenticated user can read organization credit history while mutati
   assert.match(route, /export async function POST[\s\S]*?canManageCredits\(user\)/);
   assert.match(panel, /canManage = false/);
   assert.match(panel, /\{canManage && <div className=\{styles\.form\}>/);
-  assert.match(panel, /Organization credit history/);
+  assert.match(panel, /Organization Credit History/);
 });
 
 test("the payment return screen reconciles missed webhooks and offers recovery", () => {
