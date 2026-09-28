@@ -2689,6 +2689,51 @@ html { scroll-behavior: smooth; }
   font-weight: 700;
 }
 
+.roles-refreshing {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.roles-active-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 24px 16px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.roles-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid #c7d9e8;
+  border-radius: 999px;
+  color: var(--navy);
+  background: #f5faff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.roles-filter-chip:hover,
+.roles-filter-chip:focus-visible {
+  border-color: var(--blue);
+  background: #edf6ff;
+  outline: none;
+}
+
+.roles-filter-chip span {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
 .roles-filter-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2791,6 +2836,9 @@ html { scroll-behavior: smooth; }
 }
 
 .roles-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   border-bottom: 1px solid #dfe7ef;
   color: #1b2d43;
   font-size: 13px;
@@ -2800,6 +2848,7 @@ html { scroll-behavior: smooth; }
      column at the current breakpoint. */
   white-space: normal;
   line-height: 1.25;
+  background: #f8fafc;
 }
 
 .roles-table tbody td {
@@ -2887,6 +2936,122 @@ html { scroll-behavior: smooth; }
   background: #edf4f9;
 }
 
+.role-actions-menu {
+  position: relative;
+}
+
+.role-actions-menu summary {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  padding: 7px 11px;
+  border: 1px solid #cfd9e6;
+  border-radius: 8px;
+  color: var(--navy);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+
+.role-actions-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.role-actions-menu[open] summary,
+.role-actions-menu summary:hover,
+.role-actions-menu summary:focus-visible {
+  border-color: var(--blue);
+  background: #f3f9fe;
+  outline: none;
+}
+
+.role-actions-menu > div {
+  position: static;
+  z-index: 4;
+  display: grid;
+  min-width: 120px;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid #d4e0eb;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(24, 55, 83, .14);
+}
+
+.role-actions-menu > div a,
+.role-actions-menu > div .table-danger-action {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  box-sizing: border-box;
+  border: 0;
+  padding: 8px 10px;
+  color: var(--navy);
+  background: transparent;
+  text-align: left;
+}
+
+.role-actions-menu > div a:hover,
+.role-actions-menu > div a:focus-visible,
+.role-actions-menu > div .table-danger-action:hover,
+.role-actions-menu > div .table-danger-action:focus-visible {
+  border: 0;
+  border-radius: 6px;
+  background: #f3f9fe;
+  outline: none;
+  text-decoration: none;
+}
+
+.role-actions-menu > div .table-danger-action {
+  color: #a12b22;
+}
+
+.role-actions-menu summary svg {
+  margin-left: 7px;
+  color: var(--muted);
+}
+
+.role-target-date {
+  display: grid;
+  gap: 3px;
+  min-width: 96px;
+}
+
+.role-target-date strong {
+  color: var(--navy);
+  font-size: 12px;
+}
+
+.role-target-date span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.role-target-date-overdue strong {
+  color: #a12b22;
+}
+
+.role-target-date-soon strong {
+  color: #8a5a00;
+}
+
+.roles-list-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 24px 16px;
+  padding: 12px 14px;
+  border: 1px solid #e3a39c;
+  border-radius: 9px;
+  color: #7d211b;
+  background: #fff8f7;
+  font-size: 13px;
+}
+
 .roles-table-skeleton {
   display: grid;
   gap: 1px;
@@ -2936,6 +3101,111 @@ html { scroll-behavior: smooth; }
 
   .roles-table-skeleton {
     padding: 0 16px 16px;
+  }
+
+  .roles-active-filters {
+    padding: 0 16px 16px;
+  }
+
+  .roles-list-error {
+    align-items: stretch;
+    flex-direction: column;
+    margin-inline: 16px;
+  }
+
+  .roles-page .table-wrap {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .roles-page .roles-table,
+  .roles-page .roles-table tbody,
+  .roles-page .roles-table tr,
+  .roles-page .roles-table td {
+    display: block;
+    width: auto;
+  }
+
+  .roles-page .roles-table {
+    min-width: 0;
+  }
+
+  .roles-page .roles-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .roles-page .roles-table tbody tr {
+    display: grid;
+    gap: 0;
+    margin: 0;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e7edf3;
+  }
+
+  .roles-page .roles-table tbody td {
+    display: grid;
+    grid-template-columns: minmax(104px, 34%) minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    min-height: 38px;
+    padding: 9px 0;
+    border: 0;
+    font-size: 13px;
+  }
+
+  .roles-page .roles-table tbody td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+  }
+
+  .roles-page .roles-table tbody td.selection-column {
+    display: flex;
+    justify-content: flex-end;
+    min-height: 26px;
+    padding: 0 0 4px;
+  }
+
+  .roles-page .roles-table tbody td.selection-column::before {
+    display: none;
+  }
+
+  .roles-page .roles-table tbody td.selection-column input {
+    margin: 0;
+  }
+
+  .roles-page .roles-table .roles-role-link,
+  .roles-page .roles-table .role-table-actions,
+  .roles-page .roles-table .role-target-date {
+    min-width: 0;
+  }
+
+  .roles-page .roles-table .roles-role-link strong,
+  .roles-page .roles-table .roles-role-link span {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .roles-page .roles-table td:last-child {
+    padding-bottom: 2px;
+  }
+
+  .roles-page .role-table-actions {
+    justify-content: flex-start;
+  }
+
+  .roles-page .role-actions-menu > div {
+    right: auto;
+    left: 0;
   }
 }
 

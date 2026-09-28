@@ -179,7 +179,7 @@ export async function GET(request: Request) {
 
     const query = new URL(request.url).searchParams;
     const requestedPage = Math.max(1, Number(query.get("page") || "1") || 1);
-    const pageSize = Math.min(50, Math.max(1, Number(query.get("pageSize") || "25") || 25));
+    const pageSize = Math.min(50, Math.max(1, Number(query.get("pageSize") || "10") || 10));
     const status = query.get("status")?.trim() || "";
     const department = query.get("department")?.trim().toLowerCase() || "";
     const requester = query.get("requester")?.trim().toLowerCase() || "";
@@ -195,10 +195,13 @@ export async function GET(request: Request) {
     roles = [...roles].sort((left, right) => {
       if (sort === "oldest") return Date.parse(left.createdAt) - Date.parse(right.createdAt);
       if (sort === "target") return (left.targetHiringDate || "9999-12-31").localeCompare(right.targetHiringDate || "9999-12-31");
+      if (sort === "target-latest") return (right.targetHiringDate || "0000-00-00").localeCompare(left.targetHiringDate || "0000-00-00");
       return Date.parse(right.createdAt) - Date.parse(left.createdAt);
     });
     const total = roles.length;
-    const start = (requestedPage - 1) * pageSize;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const start = (page - 1) * pageSize;
     roles = roles.slice(start, start + pageSize);
 
     console.log(
@@ -210,7 +213,7 @@ export async function GET(request: Request) {
       {
         success: true,
         roles,
-        pagination: { page: requestedPage, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
+        pagination: { page, pageSize, total, totalPages },
       },
       {
         status: 200,

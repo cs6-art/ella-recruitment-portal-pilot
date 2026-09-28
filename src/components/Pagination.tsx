@@ -7,7 +7,9 @@ type PaginationProps = {
   /** Optional history-backed total shown in the summary while paging live rows. */
   displayTotalItems?: number;
   pageSize: number;
+  pageSizeOptions?: readonly number[];
   onPageChange: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
 };
 
 type PageItem = number | "ellipsis-left" | "ellipsis-right" | "empty";
@@ -22,7 +24,7 @@ function pageItems(page: number, totalPages: number): PageItem[] {
   return [1, "ellipsis-left", page - 1, page, page + 1, "ellipsis-right", totalPages];
 }
 
-export default function Pagination({ page, totalPages, totalItems, displayTotalItems = totalItems, pageSize, onPageChange }: PaginationProps) {
+export default function Pagination({ page, totalPages, totalItems, displayTotalItems = totalItems, pageSize, pageSizeOptions, onPageChange, onPageSizeChange }: PaginationProps) {
   if (totalItems === 0) return null;
 
   const currentPage = Math.min(Math.max(page, 1), Math.max(totalPages, 1));
@@ -32,6 +34,7 @@ export default function Pagination({ page, totalPages, totalItems, displayTotalI
   return (
     <nav className="pagination" aria-label="Pagination">
       <span className="pagination-summary">Showing {firstItem}-{lastItem} of {displayTotalItems}</span>
+      {onPageSizeChange && pageSizeOptions && <label className="pagination-size-control">Rows per page<select aria-label="Rows per page" value={pageSize} onChange={(event) => onPageSizeChange(Number(event.target.value))}>{pageSizeOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>}
       <div className="pagination-controls">
         <button type="button" className="pagination-button pagination-wide-button" disabled={currentPage === 1} onClick={() => onPageChange(1)}>First</button>
         <button type="button" className="pagination-button pagination-wide-button" disabled={currentPage === 1} onClick={() => onPageChange(currentPage - 1)}>Previous</button>

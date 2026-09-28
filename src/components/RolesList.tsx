@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import { useConfirmation } from "@/components/ConfirmationModal";
@@ -12,15 +12,79 @@ import { canEditRoleRequest } from "@/lib/access-control";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
 const statusFilters = [
-  "All",
-  "Draft",
-  "Pending HR Discussion",
-  "Approved",
-  "Rejected",
-  "Recruitment Setup",
-  "Job Posted",
-  "Posted",
+  { value: "All", label: "All statuses" },
+  { value: "Draft", label: "Draft" },
+  { value: "Pending HR Discussion", label: "Pending HR review" },
+  { value: "Approved", label: "Approved" },
+  { value: "Rejected", label: "Rejected" },
+  { value: "Recruitment Setup", label: "Recruitment setup" },
+  { value: "Job Posted", label: "Job posted" },
+  { value: "Posted", label: "Posted" },
 ] as const;
+
+const sortOptions = ["newest", "oldest", "target", "target-latest"] as const;
+const pageSizeOptions = [10, 25, 50] as const;
+const defaultPageSize = 10;
+type StatusFilter = (typeof statusFilters)[number]["value"];
+type SortOption = (typeof sortOptions)[number];
+
+type RoleListQuery = {
+  statusFilter: StatusFilter;
+  department: string;
+  requester: string;
+  search: string;
+  sort: SortOption;
+  page: number;
+  pageSize: number;
+};
+
+type SearchParamReader = {
+  get: (name: string) => string | null;
+  toString: () => string;
+};
+
+function statusFilterValue(value: string | null): StatusFilter {
+  return statusFilters.some((option) => option.value === value)
+    ? value as StatusFilter
+    : "All";
+}
+
+function sortValue(value: string | null): SortOption {
+  return sortOptions.includes(value as SortOption) ? value as SortOption : "newest";
+}
+
+function pageSizeValue(value: string | null) {
+  const parsed = Number(value);
+  return pageSizeOptions.includes(parsed as (typeof pageSizeOptions)[number]) ? parsed : defaultPageSize;
+}
+
+function readListQuery(params: SearchParamReader): RoleListQuery {
+  return {
+    statusFilter: statusFilterValue(params.get("status")),
+    department: params.get("department")?.trim() || "",
+    requester: params.get("requester")?.trim() || "",
+    search: params.get("search")?.trim() || "",
+    sort: sortValue(params.get("sort")),
+    page: Math.max(1, Number(params.get("page") || "1") || 1),
+    pageSize: pageSizeValue(params.get("pageSize")),
+  };
+}
+
+function queryString(query: RoleListQuery) {
+  const params = new URLSearchParams();
+  if (query.statusFilter !== "All") params.set("status", query.statusFilter);
+  if (query.search) params.set("search", query.search);
+  if (query.department) params.set("department", query.department);
+  if (query.requester) params.set("requester", query.requester);
+  if (query.sort !== "newest") params.set("sort", query.sort);
+  if (query.page > 1) params.set("page", String(query.page));
+  if (query.pageSize !== defaultPageSize) params.set("pageSize", String(query.pageSize));
+  return params.toString();
+}
+
+function optionLabel(options: readonly { value: string; label: string }[], value: string) {
+  return options.find((option) => option.value === value)?.label || value;
+}
 
 type RoleRequest = {
   roleId: string;
@@ -65,16 +129,20 @@ export default function RolesList({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { confirm } = useConfirmation();
+  const initialQueryRef = useRef<RoleListQuery | null>(null);
+  if (!initialQueryRef.current) initialQueryRef.current = readListQuery(searchParams);
+  const initialQuery = initialQueryRef.current;
+  const queryStateRef = useRef(initialQuery);
+  const lastWrittenQueryRef = useRef(searchParams.toString());
+  const activeRequestRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
   const [roles, setRoles] = useState<RoleRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [statusFilter, setStatusFilter] =
-    useState<(typeof statusFilters)[number]>("All");
-  const [department, setDepartment] = useState("");
-  const [requester, setRequester] = useState("");
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("newest");
-  const [page, setPage] = useState(1);
+  const [queryState, setQueryState] = useState<RoleListQuery>(initialQuery);
+  const [searchDraft, setSearchDraft] = useState(initialQuery.search);
+  const [departmentDraft, setDepartmentDraft] = useState(initialQuery.department);
+  const [requesterDraft, setRequesterDraft] = useState(initialQuery.requester);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRoles, setTotalRoles] = useState(0);
   const [deletingRoleId, setDeletingRoleId] = useState("");
@@ -83,13 +151,60 @@ export default function RolesList({
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
 
+  const { statusFilter, department, requester, search, sort, page, pageSize } = queryState;
+
+  const writeListUrl = useCallback((nextQuery: RoleListQuery) => {
+    const nextQueryString = queryString(nextQuery);
+    lastWrittenQueryRef.current = nextQueryString;
+    router.replace(nextQueryString ? `/roles?${nextQueryString}` : "/roles", { scroll: false });
+  }, [router]);
+
+  const updateQuery = useCallback((patch: Partial<RoleListQuery>) => {
+    const nextQuery = { ...queryStateRef.current, ...patch };
+    queryStateRef.current = nextQuery;
+    setQueryState(nextQuery);
+    writeListUrl(nextQuery);
+  }, [writeListUrl]);
+
+  useEffect(() => {
+    const serializedParams = searchParams.toString();
+    if (serializedParams === lastWrittenQueryRef.current) return;
+    const nextQuery = readListQuery(searchParams);
+    lastWrittenQueryRef.current = serializedParams;
+    queryStateRef.current = nextQuery;
+    setQueryState(nextQuery);
+    setSearchDraft(nextQuery.search);
+    setDepartmentDraft(nextQuery.department);
+    setRequesterDraft(nextQuery.requester);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (
+      searchDraft === search &&
+      departmentDraft === department &&
+      requesterDraft === requester
+    ) return;
+    const timeoutId = window.setTimeout(() => {
+      updateQuery({
+        search: searchDraft.trim(),
+        department: departmentDraft.trim(),
+        requester: requesterDraft.trim(),
+        page: 1,
+      });
+    }, 300);
+    return () => window.clearTimeout(timeoutId);
+  }, [department, departmentDraft, requester, requesterDraft, search, searchDraft, updateQuery]);
+
   const loadRoles = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    activeRequestRef.current?.abort();
+    const controller = new AbortController();
+    activeRequestRef.current = controller;
     setLoading(true);
     setError("");
 
     try {
-      const apiSort = sort === "target-latest" ? "target" : sort;
-      const params = new URLSearchParams({ page: String(page), pageSize: "25", sort: apiSort });
+      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize), sort });
       if (statusFilter !== "All") params.set("status", statusFilter);
       if (department.trim()) params.set("department", department.trim());
       if (requester.trim()) params.set("requester", requester.trim());
@@ -98,6 +213,7 @@ export default function RolesList({
         method: "GET",
         cache: "no-store",
         credentials: "same-origin",
+        signal: controller.signal,
       });
 
       const rawResponse = await response.text();
@@ -129,9 +245,13 @@ export default function RolesList({
           : [],
       );
       setSelectedRoleIds(new Set());
-      setTotalPages(data.pagination?.totalPages || 1);
+      const nextTotalPages = data.pagination?.totalPages || 1;
+      setTotalPages(nextTotalPages);
       setTotalRoles(data.pagination?.total || 0);
+      if (page > nextTotalPages) updateQuery({ page: nextTotalPages });
     } catch (loadError) {
+      if (loadError instanceof DOMException && loadError.name === "AbortError") return;
+      if (requestId !== requestIdRef.current) return;
       console.error(
         "[Roles List] Failed to load:",
         loadError,
@@ -143,9 +263,9 @@ export default function RolesList({
           : "Unable to load role requests.",
       );
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [department, page, requester, search, sort, statusFilter]);
+  }, [department, page, pageSize, requester, search, sort, statusFilter, updateQuery]);
 
   useEffect(() => {
     void loadRoles();
@@ -154,16 +274,14 @@ export default function RolesList({
   useEffect(() => {
     if (searchParams.get("published") !== "1") return;
     setActionMessage("Role published successfully. The published role is now available in the role list.");
-    router.replace("/roles", { scroll: false });
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("published");
+    const nextQueryString = nextParams.toString();
+    lastWrittenQueryRef.current = nextQueryString;
+    router.replace(nextQueryString ? `/roles?${nextQueryString}` : "/roles", { scroll: false });
   }, [router, searchParams]);
 
-  const visibleRoles = sort === "target-latest"
-    ? [...roles].sort((left, right) => {
-        const leftDate = left.targetHiringDate || "0000-00-00";
-        const rightDate = right.targetHiringDate || "0000-00-00";
-        return rightDate.localeCompare(leftDate);
-      })
-    : roles;
+  const visibleRoles = roles;
   const selectableRoles = visibleRoles.filter((role) => canEditRole(role));
   const selectedRoles = selectableRoles.filter((role) => selectedRoleIds.has(role.roleId));
   const allVisibleRolesSelected = selectableRoles.length > 0 && selectableRoles.every((role) => selectedRoleIds.has(role.roleId));
@@ -176,12 +294,17 @@ export default function RolesList({
     sort !== "newest";
 
   function clearFilters() {
-    setStatusFilter("All");
-    setDepartment("");
-    setRequester("");
-    setSearch("");
-    setSort("newest");
-    setPage(1);
+    setSearchDraft("");
+    setDepartmentDraft("");
+    setRequesterDraft("");
+    updateQuery({ statusFilter: "All", department: "", requester: "", search: "", sort: "newest", page: 1 });
+  }
+
+  function clearFilter(key: "statusFilter" | "department" | "requester" | "search" | "sort") {
+    if (key === "department") setDepartmentDraft("");
+    if (key === "requester") setRequesterDraft("");
+    if (key === "search") setSearchDraft("");
+    updateQuery({ [key]: key === "statusFilter" ? "All" : key === "sort" ? "newest" : "", page: 1 } as Partial<RoleListQuery>);
   }
 
   function statusClass(status: string) {
@@ -194,8 +317,27 @@ export default function RolesList({
     return formatPortalDateTime(value, includeTime);
   }
 
-  function openRole(roleId: string) {
-    router.push(`/roles/${encodeURIComponent(roleId)}`);
+  function roleStatusLabel(status: string) {
+    const normalized = status.trim().toLowerCase().replace(/[_-]+/g, " ");
+    const knownLabels: Record<string, string> = {
+      "pending hr discussion": "Pending HR review",
+      "recruitment setup": "Recruitment setup",
+      "job posted": "Job posted",
+    };
+    return knownLabels[normalized] || status || "Submitted";
+  }
+
+  function targetDateMeta(value: string) {
+    const date = value.trim().slice(0, 10);
+    if (!date) return { label: "No target date", date: "Not provided", tone: "none" };
+    const target = new Date(`${date}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const difference = Math.round((target.getTime() - today.getTime()) / 86_400_000);
+    if (difference < 0) return { label: "Overdue", date: formatDate(value), tone: "overdue" };
+    if (difference === 0) return { label: "Due today", date: formatDate(value), tone: "soon" };
+    if (difference <= 3) return { label: `Due in ${difference} days`, date: formatDate(value), tone: "soon" };
+    return { label: formatDate(value), date: "", tone: "normal" };
   }
 
   function canEditRole(role: RoleRequest) {
@@ -263,18 +405,29 @@ export default function RolesList({
     });
   }
 
+  const activeFilterChips = [
+    ...(statusFilter !== "All" ? [{ key: "statusFilter" as const, label: `Status: ${optionLabel(statusFilters, statusFilter)}` }] : []),
+    ...(search ? [{ key: "search" as const, label: `Job title or role ID: ${search}` }] : []),
+    ...(department ? [{ key: "department" as const, label: `Department: ${department}` }] : []),
+    ...(requester ? [{ key: "requester" as const, label: `Requester: ${requester}` }] : []),
+    ...(sort !== "newest" ? [{ key: "sort" as const, label: `Sort: ${sort === "oldest" ? "Oldest first" : sort === "target" ? "Target date: earliest" : "Target date: latest"}` }] : []),
+  ];
+
+  const initialLoading = loading && roles.length === 0 && !error;
+  const refreshing = loading && roles.length > 0;
+
   return (
-    <main className="container page">
+    <main className="container page roles-page">
       <div className="hero-row roles-page-header">
         <div className="roles-page-heading">
           <h1>{creatorOnly ? "My Role Requests" : departmentOnly ? "Department Role Requests" : "All Role Requests"}</h1>
 
           <p>
             {creatorOnly
-              ? "Track the Role Requests You Submitted."
+              ? "Track the role requests you submitted."
               : departmentOnly
                 ? "Review role requests submitted for your department."
-                : "Review Submitted Staff Addition and Replacement Requests."}
+                : "Review submitted staff addition and replacement requests."}
           </p>
         </div>
 
@@ -307,17 +460,18 @@ export default function RolesList({
           <div className="roles-toolbar-title">
             <h2>Submitted Requests</h2>
             <span className="roles-result-count" aria-live="polite">
-              {loading
-                ? "Loading..."
-                : `${visibleRoles.length} ${visibleRoles.length === 1 ? "Request" : "Requests"}`}
+              {initialLoading
+                ? "Loading requests…"
+                : `${totalRoles} ${totalRoles === 1 ? "request" : "requests"}`}
             </span>
+            {refreshing && <span className="roles-refreshing" role="status">Updating…</span>}
           </div>
 
           {selectableRoles.length > 0 && <div className="bulk-selection-toolbar"><span>{selectedRoles.length} selected</span><button type="button" className="btn btn-danger-outline" disabled={selectedRoles.length === 0 || deletingRoleId !== ""} onClick={() => void deleteRoles(selectedRoles)}>Delete selected</button></div>}
 
           {filtersActive && (
             <button type="button" className="btn btn-secondary roles-clear-button" onClick={clearFilters}>
-              <UiIcon name="filter" size={16} />Clear Filters
+              <UiIcon name="filter" size={16} />Clear all filters
             </button>
           )}
         </div>
@@ -325,33 +479,38 @@ export default function RolesList({
         {actionMessage && <ActionFeedback kind="success" className="roles-action-feedback">{actionMessage}</ActionFeedback>}
         {actionError && <ActionFeedback kind="error" className="roles-action-feedback">{actionError}</ActionFeedback>}
 
-        <div className="roles-filter-grid" aria-label="Role request filters">
+        {activeFilterChips.length > 0 && (
+          <div className="roles-active-filters" role="group" aria-label="Active filters">
+            <span>Filters:</span>
+            {activeFilterChips.map((filter) => (
+              <button key={filter.key} type="button" className="roles-filter-chip" onClick={() => clearFilter(filter.key)}>
+                {filter.label}<span aria-hidden="true">×</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="roles-filter-grid" role="group" aria-label="Role request filters">
           <div className="roles-filter-field">
             <label htmlFor="status-filter">Status</label>
             <select
               id="status-filter"
               value={statusFilter}
-              onChange={(event) => {
-                setStatusFilter(
-                  event.target.value as (typeof statusFilters)[number],
-                );
-                setPage(1);
-              }}
+              onChange={(event) => updateQuery({ statusFilter: event.target.value as StatusFilter, page: 1 })}
             >
               {statusFilters.map((status) => (
-                <option key={status} value={status}>
-                  {status}
+                <option key={status.value} value={status.value}>
+                  {status.label}
                 </option>
               ))}
             </select>
           </div>
 
           <div className="roles-filter-field">
-            <label htmlFor="job-title-filter">Job Title</label>
+            <label htmlFor="job-title-filter">Job title or role ID</label>
             <div className="roles-input-with-icon">
               <UiIcon name="search" size={16} />
-              <span aria-hidden="true">⌕</span>
-              <input id="job-title-filter" aria-label="Search by job title or role ID" placeholder="Search Job Title" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
+              <input id="job-title-filter" aria-label="Search by job title or role ID" placeholder="Search job title or role ID" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} />
             </div>
           </div>
 
@@ -359,8 +518,7 @@ export default function RolesList({
             <label htmlFor="department-filter">Department</label>
             <div className="roles-input-with-icon">
               <UiIcon name="search" size={16} />
-              <span aria-hidden="true">⌕</span>
-              <input id="department-filter" aria-label="Filter by department" placeholder="Search Department" value={department} onChange={(event) => { setDepartment(event.target.value); setPage(1); }} />
+              <input id="department-filter" aria-label="Filter by department" placeholder="Search department" value={departmentDraft} onChange={(event) => setDepartmentDraft(event.target.value)} />
             </div>
           </div>
 
@@ -368,29 +526,35 @@ export default function RolesList({
             <label htmlFor="requester-filter">Requester</label>
             <div className="roles-input-with-icon">
               <UiIcon name="search" size={16} />
-              <span aria-hidden="true">⌕</span>
-              <input id="requester-filter" aria-label="Filter by requester" placeholder="Search Requester" value={requester} onChange={(event) => { setRequester(event.target.value); setPage(1); }} />
+              <input id="requester-filter" aria-label="Filter by requester" placeholder="Search requester" value={requesterDraft} onChange={(event) => setRequesterDraft(event.target.value)} />
             </div>
           </div>
 
           <div className="roles-filter-field">
-            <label htmlFor="sort-filter">Sort By</label>
-            <select id="sort-filter" aria-label="Sort role requests" value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}>
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="target">Target Date: Earliest</option>
-              <option value="target-latest">Target Date: Latest</option>
+            <label htmlFor="sort-filter">Sort by</label>
+            <select id="sort-filter" aria-label="Sort role requests" value={sort} onChange={(event) => updateQuery({ sort: event.target.value as SortOption, page: 1 })}>
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="target">Target date: earliest</option>
+              <option value="target-latest">Target date: latest</option>
             </select>
           </div>
         </div>
 
-        {loading && (
+        {initialLoading && (
           <div className="roles-table-skeleton" aria-label="Loading role requests" role="status">
             {Array.from({ length: 5 }, (_, index) => <div className="roles-skeleton-row" key={index}><span /><span /><span /><span /><span /></div>)}
           </div>
         )}
 
-        {!loading && error && (
+        {error && roles.length > 0 && (
+          <div className="roles-list-error" role="alert">
+            <span>{error}</span>
+            <button type="button" className="btn btn-secondary" onClick={() => void loadRoles()}>Try again</button>
+          </div>
+        )}
+
+        {!initialLoading && error && roles.length === 0 && (
           <div className="empty">
             <p>{error}</p>
 
@@ -406,18 +570,23 @@ export default function RolesList({
           </div>
         )}
 
-        {!loading &&
+        {!initialLoading &&
           !error &&
           visibleRoles.length === 0 && (
             <div className="empty">
-                No role requests match the current filters.
+              {filtersActive ? <>
+                <p>No role requests match the current filters.</p>
+                <button type="button" className="btn btn-secondary" onClick={clearFilters}>Clear all filters</button>
+              </> : <>
+                <p>No role requests have been submitted yet.</p>
+                {canCreateRole && <Link className="btn btn-primary" href="/roles/new"><UiIcon name="plus" size={17} />Create Role Request</Link>}
+              </>}
             </div>
           )}
 
-        {!loading &&
-          !error &&
+        {!initialLoading &&
           visibleRoles.length > 0 && (
-            <div className="table-wrap">
+            <div className="table-wrap" aria-busy={refreshing}>
               <table className="roles-table">
                 <thead>
                   <tr>
@@ -439,53 +608,43 @@ export default function RolesList({
                     <tr
                       key={role.roleId}
                       className={selectedRoleIds.has(role.roleId) ? "is-selected" : undefined}
-                      tabIndex={0}
-                      role="link"
-                      onClick={(event) => {
-                        if ((event.target as HTMLElement).closest("a,button,input,label")) return;
-                        openRole(role.roleId);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          openRole(role.roleId);
-                        }
-                      }}
                     >
                       <td className="selection-column"><input type="checkbox" aria-label={`Select ${role.jobTitle || role.roleId}`} checked={selectedRoleIds.has(role.roleId)} disabled={!canEditRole(role) || deletingRoleIds.has(role.roleId)} onChange={() => toggleRoleSelection(role.roleId)} /></td>
-                      <td className="roles-column-role">
-                        <Link className="roles-role-link" href={`/roles/${encodeURIComponent(role.roleId)}`}>
+                      <td className="roles-column-role" data-label="Role">
+                        <Link className="roles-role-link" href={`/roles/${encodeURIComponent(role.roleId)}`} aria-label={`View ${role.jobTitle || role.roleId}`}>
                           <strong>{role.jobTitle || "Not provided"}</strong>
                           <span>{role.roleId}</span>
                         </Link>
                       </td>
-                      <td>
+                      <td data-label="Department">
                         {role.department || "Not provided"}
                       </td>
-                      <td>
+                      <td data-label="Request type">
                         {role.requestType || "Not provided"}
                       </td>
-                      <td>{role.numberOfVacancies}</td>
-                      <td>
+                      <td data-label="Vacancies">{role.numberOfVacancies}</td>
+                      <td data-label="Requester">
                         {role.requesterName || "Not provided"}
                       </td>
-                      <td>
+                      <td data-label="Created">
                         {formatDate(role.createdAt, true)}
                       </td>
-                      <td>{formatDate(role.targetHiringDate)}</td>
-                      <td>
+                      <td data-label="Target date">
+                        {(() => { const target = targetDateMeta(role.targetHiringDate); return <span className={`role-target-date role-target-date-${target.tone}`}><strong>{target.label}</strong>{target.date && <span>{target.date}</span>}</span>; })()}
+                      </td>
+                      <td data-label="Status">
                         <span className={statusClass(role.status)}>
-                          {role.status || "Submitted"}
+                          {roleStatusLabel(role.status)}
                         </span>
                       </td>
-                      <td><div className="role-table-actions"><Link href={`/roles/${encodeURIComponent(role.roleId)}`}>View</Link>{canEditRole(role) && <><Link href={`/roles/${encodeURIComponent(role.roleId)}/edit`}>Edit</Link><button type="button" className="table-danger-action" disabled={deletingRoleIds.has(role.roleId) || deletingRoleId === "bulk"} onClick={() => void deleteRoles([role])}>{deletingRoleIds.has(role.roleId) ? "Deleting..." : "Delete"}</button></>}</div></td>
+                      <td data-label="Action"><div className="role-table-actions"><Link href={`/roles/${encodeURIComponent(role.roleId)}`}>View</Link>{canEditRole(role) && <details className="role-actions-menu"><summary>More <UiIcon name="chevron-down" size={14} /></summary><div><Link href={`/roles/${encodeURIComponent(role.roleId)}/edit`}>Edit</Link><button type="button" className="table-danger-action" disabled={deletingRoleIds.has(role.roleId) || deletingRoleId === "bulk"} onClick={() => void deleteRoles([role])}>{deletingRoleIds.has(role.roleId) ? "Deleting…" : "Delete"}</button></div></details>}</div></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-        {!loading && !error && totalRoles > 0 && <Pagination page={page} totalPages={totalPages} totalItems={totalRoles} pageSize={25} onPageChange={setPage} />}
+        {!initialLoading && !error && totalRoles > 0 && <Pagination page={page} totalPages={totalPages} totalItems={totalRoles} pageSize={pageSize} pageSizeOptions={pageSizeOptions} onPageChange={(nextPage) => updateQuery({ page: nextPage })} onPageSizeChange={(nextPageSize) => updateQuery({ page: 1, pageSize: nextPageSize })} />}
       </section>
     </main>
   );
