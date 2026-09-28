@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { and, asc, desc, eq, gte, inArray, isNull, lte, not, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, not, or, sql } from "drizzle-orm";
 
 import { getTenantDb as getDb } from "@/db/client";
 import { appendPostgresLedgerEntryOnExecutor } from "@/lib/ella-credits-postgres";
@@ -41,6 +41,20 @@ const configuredNotificationClaimLeaseMinutes = Number(process.env.NOTIFICATION_
 const NOTIFICATION_CLAIM_LEASE_MINUTES = Number.isFinite(configuredNotificationClaimLeaseMinutes)
   ? Math.min(Math.max(configuredNotificationClaimLeaseMinutes, 1), 60)
   : 10;
+/**
+ * A booking invitation/confirmation or job posting that sat unclaimed this
+ * long is stale, not just late: a "your interview is confirmed for [time]"
+ * email is actively wrong once that time has passed, and an outage lasting
+ * this long is a signal something needs a human, not a backlog dump the
+ * moment it's fixed. Enabling the gate (or an outage recovering) never sends
+ * these -- they're retired to "not_configured" the moment they're seen,
+ * before the send-eligible SELECT even runs.
+ */
+const configuredNotificationMaxAgeHours = Number(process.env.NOTIFICATION_MAX_AGE_HOURS || "48");
+const NOTIFICATION_MAX_AGE_HOURS = Number.isFinite(configuredNotificationMaxAgeHours) && configuredNotificationMaxAgeHours > 0
+  ? Math.min(configuredNotificationMaxAgeHours, 24 * 14)
+  : 48;
+const NOTIFICATION_STALE_ERROR = `Not sent: queued more than ${NOTIFICATION_MAX_AGE_HOURS}h ago and is no longer current.`;
 /**
  * The complete, deliberately short list of application-side notification
  * emails the pilot is allowed to send. Enforced here, at the single claim
@@ -2426,6 +2440,21 @@ export async function notificationQueue(stage?: string) {
   const { applicationIds, roleIds } = await db.transaction(async (tx) => {
     const now = new Date();
     const leaseCutoff = new Date(now.getTime() - NOTIFICATION_CLAIM_LEASE_MINUTES * 60_000);
+    const staleCutoff = new Date(now.getTime() - NOTIFICATION_MAX_AGE_HOURS * 60 * 60_000);
+    // Retire anything past the staleness window before it can be selected
+    // below, rather than filtering it out of the SELECT -- so a row that
+    // ages out is left in an explicit terminal state (auditable, and never
+    // reconsidered) instead of quietly sitting as "pending" forever.
+    await tx.update(applicationStatusHistory).set({ notificationStatus: "not_configured", notificationError: NOTIFICATION_STALE_ERROR }).where(and(
+      inArray(applicationStatusHistory.notificationStatus, ["", "pending", "failed"]),
+      inArray(applicationStatusHistory.notificationEventType, ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES),
+      lt(applicationStatusHistory.changedAt, staleCutoff),
+    ));
+    await tx.update(roleStatusHistory).set({ notificationStatus: "not_configured", notificationError: NOTIFICATION_STALE_ERROR }).where(and(
+      inArray(roleStatusHistory.notificationStatus, ["", "pending", "failed"]),
+      eq(roleStatusHistory.newStatus, "job_posted"),
+      lt(roleStatusHistory.changedAt, staleCutoff),
+    ));
     const applicationCandidates = await tx.select({
       id: applicationStatusHistory.id,
       changedAt: applicationStatusHistory.changedAt,

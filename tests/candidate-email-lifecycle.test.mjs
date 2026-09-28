@@ -195,6 +195,22 @@ test("only job posted, voice booking invitation/confirmation, and final booking 
   assert.match(notificationQueueBody, /eq\(roleStatusHistory\.newStatus, "job_posted"\)/);
 });
 
+test("a booking notification that ages out is retired, never sent, before the send-eligible select runs", () => {
+  const query = read("src/lib/internal-recruitment-queries.ts");
+  const notificationQueueBody = query.slice(query.indexOf("export async function notificationQueue"), query.indexOf("export async function", query.indexOf("export async function notificationQueue") + 1));
+  const retireIndex = notificationQueueBody.indexOf("NOTIFICATION_STALE_ERROR");
+  const selectIndex = notificationQueueBody.indexOf("const applicationCandidates = await tx.select");
+  assert.ok(retireIndex > -1 && retireIndex < selectIndex, "stale rows must be retired before the eligible-rows select runs");
+  // Both domains are retired via an UPDATE to a terminal status (not just
+  // filtered out of the SELECT), so an aged-out row is left in an explicit,
+  // auditable state instead of sitting as "pending" forever.
+  assert.match(notificationQueueBody, /tx\.update\(applicationStatusHistory\)\.set\(\{ notificationStatus: "not_configured", notificationError: NOTIFICATION_STALE_ERROR \}\)/);
+  assert.match(notificationQueueBody, /tx\.update\(roleStatusHistory\)\.set\(\{ notificationStatus: "not_configured", notificationError: NOTIFICATION_STALE_ERROR \}\)/);
+  assert.match(notificationQueueBody, /lt\(applicationStatusHistory\.changedAt, staleCutoff\)/);
+  assert.match(notificationQueueBody, /lt\(roleStatusHistory\.changedAt, staleCutoff\)/);
+  assert.match(query, /NOTIFICATION_MAX_AGE_HOURS/);
+});
+
 test("notification queue claims rows atomically to prevent overlapping duplicate sends", () => {
   const query = read("src/lib/internal-recruitment-queries.ts");
   const route = read("src/app/api/internal/recruitment/notifications/route.ts");
