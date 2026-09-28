@@ -16,8 +16,9 @@ test("workflow pages refresh visible database data without wasteful polling", ()
   assert.match(refresh, /lastRefreshAt/);
   assert.match(list, /enabled intervalMs=\{30_000\} throttleMs=\{30_000\}/);
   assert.match(bookings, /LiveDataRefresh enabled intervalMs=\{30_000\} throttleMs=\{30_000\}/);
-  assert.match(bookings, /APPOINTMENT_RECORD_LIMIT = 100/);
   assert.match(bookings, /APPOINTMENT_STATUS_FILTERS/);
+  assert.doesNotMatch(bookings, /APPOINTMENT_RECORD_LIMIT/);
+  assert.match(bookings, /Showing all \{appointmentRecords\.length\} persisted records/);
   assert.match(page, /TERMINAL_APPLICANT_STAGES/);
   assert.match(page, /enabled=\{!TERMINAL_APPLICANT_STAGES\.has/);
 });
