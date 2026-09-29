@@ -231,7 +231,9 @@ test("existing HeyGen LiveAvatar integration is extended, not replaced", () => {
   assert.match(component, /"pagehide"/);
   const live = read("src/lib/live-avatar.ts");
   assert.match(live, /mode: "FULL"/);
-  assert.match(live, /DEFAULT_MAX_SESSION_DURATION_SECONDS = 10 \* 60/);
+  assert.match(live, /MAX_SESSION_DURATION_SECONDS = 5 \* 60/);
+  assert.match(live, /DEFAULT_MAX_SESSION_DURATION_SECONDS = MAX_SESSION_DURATION_SECONDS/);
+  assert.match(live, /Math\.min\(configured, MAX_SESSION_DURATION_SECONDS\)/, "environment overrides cannot exceed the provider's five-minute limit");
   assert.match(live, /max_session_duration: maxSessionDurationSeconds\(\)/);
   assert.doesNotMatch(live, /max_session_duration: 60[,;]/, "LiveAvatar sessions are not capped at one minute");
 });

@@ -14,11 +14,16 @@
 // generic script. See docs/LIVE-AVATAR-INTEGRATION.md for setup details.
 
 const LIVEAVATAR_API_URL = process.env.LIVEAVATAR_API_URL || "https://api.liveavatar.com";
-const DEFAULT_MAX_SESSION_DURATION_SECONDS = 10 * 60;
+const MAX_SESSION_DURATION_SECONDS = 5 * 60;
+const DEFAULT_MAX_SESSION_DURATION_SECONDS = MAX_SESSION_DURATION_SECONDS;
 
 function maxSessionDurationSeconds(): number {
   const configured = Number.parseInt(process.env.LIVEAVATAR_MAX_SESSION_DURATION_SECONDS || "", 10);
-  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_SESSION_DURATION_SECONDS;
+  if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_MAX_SESSION_DURATION_SECONDS;
+
+  // Never request more than the provider's five-minute plan limit, even when
+  // an environment override from an older deployment is still set to 600.
+  return Math.min(configured, MAX_SESSION_DURATION_SECONDS);
 }
 
 export type LiveAvatarRoleContext = {
@@ -115,9 +120,7 @@ export async function createLiveAvatarSession(
       },
       interactivity_type: "CONVERSATIONAL",
       // Keep an abandoned browser tab from running up LiveAvatar credits
-      // indefinitely, while allowing a normal interview to run for 10 minutes
-      // by default. LiveAvatar enforces the maximum allowed by the account's
-      // subscription tier.
+      // indefinitely, and stay within the provider's five-minute plan limit.
       max_session_duration: maxSessionDurationSeconds(),
     }),
   });
