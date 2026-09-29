@@ -268,12 +268,13 @@ sheet's contact-number fields. The selected role is carried in `jobTitle` and
 `High_Match_Profile`; the portal reads those fields when rendering applicants.
 
 **Which Vapi number places the call.** The voice dispatch response carries
-`caller: { region, phoneNumberId }`. Candidates dialled on a Philippine (+63) or
-Malaysian (+60) number are called from that country's Vapi number
-(`VAPI_PHONE_NUMBER_ID_PH` / `_MY`); everyone else is called from the Singapore
-number (`VAPI_PHONE_NUMBER_ID_SG`, falling back to `PILOT_VAPI_PHONE_NUMBER_ID`).
-The n8n Vapi call node must send `caller.phoneNumberId` as the call's
-`phoneNumberId` instead of a fixed value.
+`caller: { region, phoneNumberId }`. `region` is `PH` for a +63 number, `MY` for
++60, and `SG` for every other country. `phoneNumberId` is the Vapi number
+configured for that region (`VAPI_PHONE_NUMBER_ID_PH` / `_MY` / `_SG`, the last
+also read from `PILOT_VAPI_PHONE_NUMBER_ID`) and is empty when none is set. The
+calling workflow's "Resolve Pilot Vapi configuration" step uses `caller.phoneNumberId`
+when present and otherwise its own default for the region. Philippine candidates
+use the Philippine assistant; all other regions use the Singapore assistant.
 
 The HR intake route uses the same schema, but the `source` value is
 `HR Manual Intake` and `consent` is omitted. The allowed `applicationSource`

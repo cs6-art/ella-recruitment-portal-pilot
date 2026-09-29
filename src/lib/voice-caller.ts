@@ -14,16 +14,19 @@ export function callerRegionFor(e164Number: string): CallerRegion {
   return "SG";
 }
 
+/**
+ * The Vapi phone number id configured for a region, or "" when none is set.
+ * An empty id is deliberate: the n8n calling workflow keeps its own default
+ * for that region, so calls keep working until a number is configured here.
+ */
 export function callerPhoneNumberId(region: CallerRegion, env: Record<string, string | undefined> = process.env): string {
   const specific = env[`VAPI_PHONE_NUMBER_ID_${region}`]?.trim();
   if (specific) return specific;
-  // Until a country number is configured, fall back to the Singapore number
-  // (the single number the pilot has always used) rather than failing the call.
-  return env.VAPI_PHONE_NUMBER_ID_SG?.trim() || env.PILOT_VAPI_PHONE_NUMBER_ID?.trim() || "";
+  // The Singapore number was originally configured under the pilot name.
+  return region === "SG" ? env.PILOT_VAPI_PHONE_NUMBER_ID?.trim() || "" : "";
 }
 
 export function callerFor(e164Number: string, env: Record<string, string | undefined> = process.env) {
   const region = callerRegionFor(e164Number);
-  const phoneNumberId = callerPhoneNumberId(region, env);
-  return { region, phoneNumberId, usedFallback: region !== "SG" && !env[`VAPI_PHONE_NUMBER_ID_${region}`]?.trim() };
+  return { region, phoneNumberId: callerPhoneNumberId(region, env) };
 }

@@ -111,7 +111,7 @@ export const POST = withInternalAuth("voice_attempts", async (request) => {
     // The Vapi number to call from: PH and MY candidates get a number of their
     // own country, everyone else the Singapore number. n8n passes phoneNumberId
     // to Vapi as the call's phoneNumberId.
-    caller: (({ region, phoneNumberId }) => ({ region, phoneNumberId }))(callerFor(phoneNumber)),
+    caller: callerFor(phoneNumber),
     scheduledAt: context.attempt.scheduledAt,
     attemptNumber: context.attempt.attemptNumber,
     maxAttempts: context.attempt.maxAttempts,

@@ -56,15 +56,20 @@ test("calls come from the Philippine or Malaysian number for those candidates an
     assert.equal(caller.callerRegionFor(other), "SG", other);
   }
   const env = { VAPI_PHONE_NUMBER_ID_PH: "ph-id", VAPI_PHONE_NUMBER_ID_MY: "my-id", VAPI_PHONE_NUMBER_ID_SG: "sg-id" };
-  assert.deepEqual(caller.callerFor("+639171234567", env), { region: "PH", phoneNumberId: "ph-id", usedFallback: false });
-  assert.deepEqual(caller.callerFor("+60123456789", env), { region: "MY", phoneNumberId: "my-id", usedFallback: false });
-  assert.deepEqual(caller.callerFor("+93701234567", env), { region: "SG", phoneNumberId: "sg-id", usedFallback: false });
+  assert.deepEqual(caller.callerFor("+639171234567", env), { region: "PH", phoneNumberId: "ph-id" });
+  assert.deepEqual(caller.callerFor("+60123456789", env), { region: "MY", phoneNumberId: "my-id" });
+  assert.deepEqual(caller.callerFor("+93701234567", env), { region: "SG", phoneNumberId: "sg-id" });
 });
 
-test("a missing country number falls back to the Singapore number instead of failing the call", () => {
-  const env = { PILOT_VAPI_PHONE_NUMBER_ID: "legacy-sg" };
-  assert.deepEqual(caller.callerFor("+639171234567", env), { region: "PH", phoneNumberId: "legacy-sg", usedFallback: true });
-  assert.equal(caller.callerFor("+93701234567", env).phoneNumberId, "legacy-sg");
+test("a region with no configured number sends an empty id so the n8n workflow keeps its own default", () => {
+  assert.deepEqual(caller.callerFor("+639171234567", {}), { region: "PH", phoneNumberId: "" });
+  assert.deepEqual(caller.callerFor("+60123456789", {}), { region: "MY", phoneNumberId: "" });
+  assert.deepEqual(caller.callerFor("+93701234567", {}), { region: "SG", phoneNumberId: "" });
+  // The Singapore number was first configured under the pilot name; a Singapore-only id never leaks into PH or MY.
+  const legacy = { PILOT_VAPI_PHONE_NUMBER_ID: "legacy-sg" };
+  assert.equal(caller.callerFor("+93701234567", legacy).phoneNumberId, "legacy-sg");
+  assert.equal(caller.callerFor("+639171234567", legacy).phoneNumberId, "");
+  assert.equal(caller.callerFor("+60123456789", legacy).phoneNumberId, "");
 });
 
 test("all number boxes use the shared guide and check, and the dispatch response names the caller number", () => {
