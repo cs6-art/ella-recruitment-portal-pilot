@@ -239,6 +239,8 @@ export default function DashboardMetrics({
     {slowMessage && <p className="dashboard-slow-message" role="status">This is taking longer than expected. You can continue viewing the dashboard.</p>}
     <p className="sr-only" role="status" aria-live="polite">{refreshing ? "Refreshing dashboard information." : ""}</p>
 
+    {canReviewRole && organizationId && !personalScope && applicantMetrics && <GettingStarted organizationId={organizationId} metrics={metrics} />}
+
     <section className="dashboard-section dashboard-attention" aria-labelledby="dashboard-attention-title" aria-busy={refreshing}>
       <div className="dashboard-section-heading">
         <div><h2 id="dashboard-attention-title">What Needs Your Attention</h2><p>Start with the items waiting for action.</p></div>
@@ -258,7 +260,6 @@ export default function DashboardMetrics({
       {applicantMetrics ? <>
         <div className="dashboard-pipeline-list">{pipeline.map((stage) => <StageLink key={stage.label} label={stage.label} value={stage.value} href={stage.filter ? `/applicants?stage=${encodeURIComponent(stage.filter)}` : "/applicants"} />)}</div>
         <p className="dashboard-pipeline-note">The total shows all applications. The other counts show each candidate’s current stage. “Completed” includes candidates who passed or were not selected.</p>
-        {canReviewRole && organizationId && !personalScope && <GettingStarted organizationId={organizationId} metrics={metrics} />}
       </> : metrics.total !== undefined ? <div className="dashboard-role-overview">
         <StageLink label="Role Requests Waiting for HR Review" value={metrics.pendingHrDiscussion || 0} href="/roles?status=Pending%20HR%20Discussion" />
         <StageLink label="Approved Hiring Requests" value={metrics.approved || 0} href="/roles?status=Approved" />

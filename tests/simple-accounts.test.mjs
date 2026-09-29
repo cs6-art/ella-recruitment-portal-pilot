@@ -110,6 +110,7 @@ test("the dashboard guides a new organization with a self-completing checklist",
   assert.match(card, /google-calendar\/status/);
   assert.match(card, /completed === steps\.length/);
   assert.match(metrics, /<GettingStarted/);
+  assert.ok(metrics.indexOf("<GettingStarted organizationId=") < metrics.indexOf('className="dashboard-section dashboard-attention"'), "the onboarding checklist appears before the dashboard action queues");
   assert.match(dashboard, /organizationId=\{user\.organizationId\}/);
   assert.match(lib, /jobPosted: count\("Job Posted"\)/);
   assert.doesNotMatch(dashboard, /approves, returns, rejects/);
