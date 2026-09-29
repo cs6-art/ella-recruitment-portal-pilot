@@ -32,6 +32,7 @@ import {
   voiceInterviewResults,
 } from "@/db/schema-recruitment";
 import { completeAvatarInterviewByHash, getAvatarInterviewContext } from "@/lib/internal-recruitment-queries";
+import { recordLiveAvatarInterviewDeduction } from "@/lib/ella-credits";
 import {
   beginRecordingUpload,
   isAllowedRecordingMimeType,
@@ -296,6 +297,18 @@ export async function completeInterviewSession(input: { rawToken: string; provid
   }).where(and(eq(liveInterviewSessions.id, session.id), eq(liveInterviewSessions.status, "INTERVIEW_IN_PROGRESS"))).returning();
   if (!updated) return { session: (await getSessionById(session.id)) ?? session, alreadyCompleted: true };
   await stopProviderSession(updated.providerSessionId);
+  try {
+    const [application] = await getDb().select({ externalId: applications.externalId }).from(applications).where(eq(applications.id, updated.applicationId)).limit(1);
+    await recordLiveAvatarInterviewDeduction({
+      applicationId: application?.externalId || updated.applicationId,
+      sessionId: updated.id,
+      organizationId: updated.organizationId,
+    });
+  } catch (error) {
+    // Never block interview completion on a billing failure; the ledger can
+    // be reconciled after the fact from the session id.
+    console.error("[Live Interview] Failed to record credit deduction:", { sessionId: updated.id, error: errorText(error) });
+  }
   return { session: updated, alreadyCompleted: false };
 }
 

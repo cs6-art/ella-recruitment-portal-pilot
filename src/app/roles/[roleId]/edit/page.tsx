@@ -75,6 +75,7 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
       customEvaluationFields: role.customEvaluationFields || [],
       postingChannels: setupChannels(role.postingChannels),
       salaryDisclosureStatus: role.salaryDisclosureStatus || "",
+      experienceRequirementStatus: role.experienceRequirementStatus || "",
       licenseRequirementStatus: role.licenseRequirementStatus || "",
       hodInterviewRequired: role.hodInterviewRequired || "",
       finalInterviewVenue: role.finalInterviewVenue || "",

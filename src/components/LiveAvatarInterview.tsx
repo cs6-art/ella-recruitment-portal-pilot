@@ -517,7 +517,7 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
       <div className="card-header">
         <div>
           <span className="form-eyebrow">STEP 2 · LIVE AVATAR INTERVIEW</span>
-          <h2 id="live-avatar-title">Complete your Live Avatar interview</h2>
+          <h2 id="live-avatar-title">Complete Your Live Avatar Interview</h2>
         </div>
         {state === "live" && <span className="live-avatar-live-pill">Live</span>}
       </div>

@@ -228,7 +228,7 @@ test("evaluation field catalog is shared between the schema, editor, and n8n pay
 
   const sheetsSource = fs.readFileSync("src/lib/google-sheets.ts", "utf8");
   assert.match(sheetsSource, /Evaluation_Field_Toggles/);
-  assert.match(sheetsSource, /dedicated toggle column authoritative/);
+  assert.match(sheetsSource, /evaluationFieldPreferencesFromStored/);
 
   const { recruitmentSetupSchema } = await import("../src/lib/recruitment-setup-schema.ts");
   const base = {
@@ -271,6 +271,25 @@ test("evaluation field catalog is shared between the schema, editor, and n8n pay
     customEvaluationFields: [{ key: "technical_depth", label: "Dup", description: "Duplicates a catalog key." }],
   });
   assert.equal(duplicateCatalogKey.success, false);
+});
+
+test("stored evaluation fields reload as baseline, selected, and custom editor fields", async () => {
+  const { evaluationFieldPreferencesFromStored, evaluationFieldsForSetup, BASELINE_EVALUATION_FIELDS } = await import("../src/lib/recruitment-setup-schema.ts");
+  const stored = JSON.stringify([
+    ...BASELINE_EVALUATION_FIELDS,
+    { key: "technical_depth", label: "Technical depth", description: "Assess technical skills." },
+    { key: "domain_fluency", label: "Domain fluency", description: "Assess domain familiarity." },
+  ]);
+  const preferences = evaluationFieldPreferencesFromStored(stored, []);
+  assert.deepEqual(preferences.evaluationFieldToggles, ["technical_depth"]);
+  assert.deepEqual(preferences.customEvaluationFields.map((field) => field.key), ["domain_fluency"]);
+  assert.deepEqual(evaluationFieldsForSetup(preferences.evaluationFieldToggles, preferences.customEvaluationFields).map((field) => field.key), [
+    "score", "recommendation", "strengths", "concerns", "technical_depth", "domain_fluency",
+  ]);
+
+  const explicit = evaluationFieldPreferencesFromStored(stored, ["communication_quality", "not-a-real-key"]);
+  assert.deepEqual(explicit.evaluationFieldToggles, ["communication_quality"]);
+  assert.deepEqual(evaluationFieldPreferencesFromStored("not json", "").customEvaluationFields, []);
 });
 
 test("evaluation fields flow into the rendered voice interview prompt", async () => {

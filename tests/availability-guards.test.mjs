@@ -46,7 +46,7 @@ test("HR scheduling preserves the default week and allows calendar-checked excep
   assert.match(roleDetails, /Managed through the shared HR Google Calendar configured in Settings/);
   assert.doesNotMatch(roleForm, /addAvailability|removeAvailability|updateAvailability/);
   assert.doesNotMatch(bookings, /<option>Final Interview<\/option>/);
-  assert.match(bookings, /Add an HR exception slot/);
+  assert.match(bookings, /Add an HR Exception Slot/);
   assert.match(bookings, /fetch\("\/api\/bookings\/slots"/);
   assert.match(bookings, /Save exception slot/);
   assert.doesNotMatch(bookings, /<strong>AI Voice Interview<\/strong>/);

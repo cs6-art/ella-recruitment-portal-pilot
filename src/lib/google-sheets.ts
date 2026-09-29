@@ -2,7 +2,7 @@ import { google } from "googleapis";
 import { randomUUID } from "node:crypto";
 
 import { cachedSheetsRead, freshSheetsRead, invalidateSheetsCache } from "@/lib/sheets-cache";
-import { BASELINE_EVALUATION_FIELDS, EVALUATION_FIELD_CATALOG } from "@/lib/recruitment-setup-schema";
+import { evaluationFieldPreferencesFromStored, evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account";
 import { demoRoleSummaries } from "@/lib/demo-data";
 import { isDemoMode, isDemoWindowRecord } from "@/lib/demo-mode";
@@ -362,37 +362,11 @@ function parseStoredEvaluationFields(
   value: string,
   explicitToggleValue = "",
 ): Pick<RoleRequestDetails, "evaluationFieldToggles" | "customEvaluationFields"> {
-  const explicitToggles = explicitToggleValue
-    .split(/[\n,]/)
-    .map((field) => field.trim().toLowerCase())
-    .filter((field) => EVALUATION_FIELD_CATALOG.some((candidate) => candidate.key === field));
-  if (!value.trim()) return { evaluationFieldToggles: [...new Set(explicitToggles)].join(","), customEvaluationFields: [] };
-
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (!Array.isArray(parsed)) return { evaluationFieldToggles: "", customEvaluationFields: [] };
-
-    const catalogKeys = new Set<string>(EVALUATION_FIELD_CATALOG.map((field) => field.key));
-    const baselineKeys = new Set<string>(BASELINE_EVALUATION_FIELDS.map((field) => field.key));
-    const fields = parsed.filter((field): field is { key: string; label: string; description: string } => (
-      typeof field === "object" && field !== null
-      && typeof (field as { key?: unknown }).key === "string"
-      && typeof (field as { label?: unknown }).label === "string"
-      && typeof (field as { description?: unknown }).description === "string"
-    ));
-
-    return {
-      // Keep the dedicated toggle column authoritative. Older workflows may
-      // rewrite Evaluation_Fields and accidentally retain only the first
-      // selected optional field.
-      evaluationFieldToggles: explicitToggles.length > 0
-        ? [...new Set(explicitToggles)].join(",")
-        : fields.filter((field) => catalogKeys.has(field.key)).map((field) => field.key).join(","),
-      customEvaluationFields: fields.filter((field) => !catalogKeys.has(field.key) && !baselineKeys.has(field.key)).slice(0, 3),
-    };
-  } catch {
-    return { evaluationFieldToggles: [...new Set(explicitToggles)].join(","), customEvaluationFields: [] };
-  }
+  const preferences = evaluationFieldPreferencesFromStored(value, explicitToggleValue);
+  return {
+    evaluationFieldToggles: preferences.evaluationFieldToggles.join(","),
+    customEvaluationFields: preferences.customEvaluationFields,
+  };
 }
 
 function mapRoleRequest(
@@ -1319,6 +1293,65 @@ export async function appendRoleRequestDraft(fields: Record<string, string>, org
     const result = await targetUpdateRoleFields(roleId, { ...fields, Role_ID: roleId });
     if (result) return;
     const { createRole } = await import("@/lib/internal-recruitment-queries");
+    const evaluationPreferences = evaluationFieldPreferencesFromStored(fields.Evaluation_Fields || "[]", fields.Evaluation_Field_Toggles || "");
+    const evaluationFields = evaluationFieldsForSetup(evaluationPreferences.evaluationFieldToggles, evaluationPreferences.customEvaluationFields);
+    const parseJsonField = (key: string, fallback: unknown) => {
+      try { return fields[key] ? JSON.parse(fields[key]) as unknown : fallback; } catch { return fallback; }
+    };
+    const setup = {
+      jobDescription: fields.Job_Description || "",
+      screeningCriteria: fields.Screening_Criteria || "",
+      requiredInterviewQuestion1: fields.Required_Interview_Question_1 || "",
+      requiredInterviewQuestion2: fields.Required_Interview_Question_2 || "",
+      requiredInterviewQuestion3: fields.Required_Interview_Question_3 || "",
+      requiredInterviewQuestion4: fields.Required_Interview_Question_4 || "",
+      requiredInterviewQuestion5: fields.Required_Interview_Question_5 || "",
+      keywordsToLookFor: fields.Keywords_to_Look_For || "",
+      minimumYearsOfExperience: fields.Minimum_Years_of_Experience || "",
+      transferableSkillsAccepted: fields.Transferable_Skills_Accepted || "",
+      licenseOrCertificateRequired: fields.License_or_Certificate_Required || "",
+      salaryOrBudgetRange: fields.Salary_or_Budget_Range || "",
+      earliestAvailabilityRule: fields.Earliest_Availability_Rule || "",
+      evaluationFieldToggles: evaluationPreferences.evaluationFieldToggles,
+      customEvaluationFields: evaluationPreferences.customEvaluationFields,
+      postingChannels: (fields.Posting_Channels || "").split(/[\n,]/).map((channel) => channel.trim()).filter(Boolean),
+      aiSystemPrompt: fields.AI_System_Prompt || "",
+      replacementEmployee: fields.Replacement_Employee || "",
+      employmentType: fields.Employment_Type || "Full-Time",
+      hodAvailabilityDates: fields.HOD_Availability_Dates || "",
+      hodAvailabilityTimes: fields.HOD_Availability_Times || "",
+      hodAvailabilitySlots: parseJsonField("HOD_Availability_Slots", []),
+      customScreeningQuestion1: fields.Custom_Screening_Question_1 || "",
+      customScreeningQuestion2: fields.Custom_Screening_Question_2 || "",
+      aiGeneratedScreeningQuestions: fields.AI_Screening_Questions || "",
+      reportingManager: fields.Reporting_Manager || "",
+      workLocation: fields.Work_Location || "",
+      jobResponsibilities: fields.Job_Responsibilities || "",
+      requiredSkills: fields.Required_Skills || "",
+      experienceRequired: fields.Experience_Required || "",
+      educationRequirements: fields.Education_Requirements || "",
+      preferredQualifications: fields.Preferred_Qualifications || "",
+      roleExpectations: fields.Role_Expectations || "",
+      salaryMin: fields.Salary_Minimum || "",
+      salaryMax: fields.Salary_Maximum || "",
+      workSchedule: fields.Work_Schedule || "",
+      noticePeriodRequirement: fields.Notice_Period_Requirement || "",
+      salaryExpectationGuidance: fields.Salary_Expectation_Guidance || "",
+      interviewBehavior: fields.Interview_Behavior || "",
+      initialInterviewBookingLink: fields.Initial_Interview_Booking_Link || "",
+      hodInterviewBookingLink: fields.HOD_Interview_Booking_Link || "",
+      salaryDisclosureStatus: fields.Salary_Disclosure_Status || "Not disclosed",
+      experienceRequirementStatus: fields.Experience_Requirement_Status || "",
+      licenseRequirementStatus: fields.License_Requirement_Status || "Not required",
+      hodInterviewRequired: fields.HOD_Interview_Required || "Not required",
+      finalInterviewVenue: fields.Final_Interview_Venue || "",
+      voiceInterviewAvailabilityMode: fields.Voice_Interview_Availability_Mode || "none",
+      voiceInterviewSlots: parseJsonField("Voice_Interview_Slots", []),
+      voiceInterviewAutoStartDate: fields.Voice_Interview_Auto_Start_Date || "",
+      voiceInterviewAutoEndDate: fields.Voice_Interview_Auto_End_Date || "",
+      voiceInterviewTimezone: fields.Voice_Interview_Timezone || "Asia/Singapore",
+      voiceInterviewSlotsGeneratedAt: fields.Voice_Interview_Slots_Generated_At || "",
+    };
     await createRole({
       externalId: roleId,
       title: fields.Job_Title || fields.Title || "Untitled role",
@@ -1328,9 +1361,14 @@ export async function appendRoleRequestDraft(fields: Record<string, string>, org
       reason: fields.Reason_For_Request,
       targetHiringDate: fields.Target_Hiring_Date || undefined,
       status: fields.Status || "draft",
+      recruitmentSetupStatus: fields.Recruitment_Setup_Status || "Draft",
+      setup,
+      evaluationFields,
+      hrCalendarEmail: fields.HOD_Email || "",
       source: "portal",
       requesterEmail: fields.Requester_Email,
       requesterName: fields.Requester_Name,
+      submittedByEmail: fields.Submitted_By_Email || fields.Requester_Email,
       actionRequestId: `draft:${roleId}`,
       actorEmail: fields.Requester_Email,
       organizationId,

@@ -27,19 +27,64 @@ export const EVALUATION_FIELD_CATALOG = [
 
 export type EvaluationField = { key: string; label: string; description: string };
 
+/**
+ * Split the stored evaluation-field payload back into editable HR selections.
+ * The database stores the complete prompt field list, while the editor needs
+ * only the optional catalog toggles and role-specific custom fields.
+ */
+export function evaluationFieldPreferencesFromStored(
+  value: unknown,
+  explicitToggles: unknown = [],
+): { evaluationFieldToggles: string[]; customEvaluationFields: EvaluationField[] } {
+  let source: unknown = value;
+  if (typeof source === "string") {
+    try { source = JSON.parse(source); } catch { source = []; }
+  }
+  const storedFields = Array.isArray(source) ? source.filter((field): field is EvaluationField => (
+    typeof field === "object" && field !== null
+    && typeof (field as EvaluationField).key === "string"
+    && typeof (field as EvaluationField).label === "string"
+    && typeof (field as EvaluationField).description === "string"
+  )) : [];
+  const catalogKeys = new Set<string>(EVALUATION_FIELD_CATALOG.map((field) => field.key));
+  const baselineKeys = new Set<string>(BASELINE_EVALUATION_FIELDS.map((field) => field.key));
+  const candidates = Array.isArray(explicitToggles)
+    ? explicitToggles
+    : String(explicitToggles ?? "").split(/[\n,]/);
+  const selected = candidates
+    .map((key) => String(key ?? "").trim().toLowerCase())
+    .filter((key) => catalogKeys.has(key));
+  const inferred = storedFields.filter((field) => catalogKeys.has(field.key)).map((field) => field.key);
+  const evaluationFieldToggles = [...new Set(selected.length > 0 ? selected : inferred)];
+  const customEvaluationFields = storedFields
+    .filter((field) => !catalogKeys.has(field.key) && !baselineKeys.has(field.key))
+    .filter((field, index, fields) => fields.findIndex((candidate) => candidate.key === field.key) === index)
+    .slice(0, 3);
+  return { evaluationFieldToggles, customEvaluationFields };
+}
+
 export function evaluationFieldsForSetup(
-  toggles: string[] | string | undefined,
-  customFields: EvaluationField[] | undefined = [],
+  toggles: unknown,
+  customFields: unknown = [],
 ): EvaluationField[] {
+  const rawToggles = Array.isArray(toggles) ? toggles : String(toggles ?? "").split(/[\n,]/);
   const selectedKeys = new Set(
-    (Array.isArray(toggles) ? toggles : String(toggles || "").split(/[\n,]/))
+    rawToggles
       .map((key) => String(key).trim().toLowerCase())
       .filter(Boolean),
   );
+  const validCustomFields = Array.isArray(customFields)
+    ? customFields.filter((field): field is EvaluationField => (
+        typeof field === "object" && field !== null
+        && typeof (field as EvaluationField).key === "string"
+        && typeof (field as EvaluationField).label === "string"
+        && typeof (field as EvaluationField).description === "string"
+      )).slice(0, 3)
+    : [];
   const fields = [
     ...BASELINE_EVALUATION_FIELDS,
     ...EVALUATION_FIELD_CATALOG.filter((field) => selectedKeys.has(field.key)),
-    ...(customFields || []),
+    ...validCustomFields,
   ];
   return fields.filter((field, index, all) => (
     field.key.trim() !== "" && field.label.trim() !== "" &&

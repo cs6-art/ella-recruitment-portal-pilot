@@ -75,10 +75,15 @@ test("target hiring dates cannot be selected or submitted before today", () => {
   assert.match(dateOnlySource, /isDateOnOrAfterToday/);
 });
 
-test("role creation only renders the requisition and HR screening fields", () => {
+test("role creation keeps legacy employment fields optional and exposes evaluation setup", () => {
   assert.match(formSource, /id=\"employmentType\"/);
   assert.match(apiSource, /employmentType: input\.employmentType/);
   assert.match(schemaSource, /employmentType: z\.enum/);
+  assert.match(formSource, /BASELINE_EVALUATION_FIELDS\.map/);
+  assert.match(formSource, /EVALUATION_FIELD_CATALOG\.map/);
+  assert.match(formSource, /function toggleEvaluationField/);
+  assert.match(formSource, /function addCustomEvaluationField/);
+  assert.match(formSource, /evaluationFieldsForSetup\(values\.evaluationFieldToggles, values\.customEvaluationFields\)/);
 
   for (const field of [
     "jobDescription",

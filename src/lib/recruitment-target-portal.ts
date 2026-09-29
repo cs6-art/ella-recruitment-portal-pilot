@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
+import { evaluationFieldPreferencesFromStored } from "@/lib/recruitment-setup-schema";
 
 import {
   getApplication,
@@ -55,6 +56,7 @@ import { extractStoredResumeText, type ResumeFileKind, type ResumeFileRecord } f
 import { scheduledInstant } from "@/lib/interview-time";
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import { applicantStageLabel, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
+import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
 import { generateRoleId } from "@/lib/role-id";
 import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows } from "@/lib/google-calendar";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isFinalInterviewSlotDuration, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
@@ -89,7 +91,8 @@ function text(value: unknown) {
 
 function jsonText(value: unknown, fallback: unknown) {
   try {
-    return JSON.stringify(value ?? fallback);
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    return JSON.stringify(parsed ?? fallback);
   } catch {
     return JSON.stringify(fallback);
   }
@@ -183,6 +186,9 @@ function roleSummary(role: Record<string, unknown>): RoleRequestSummary {
   const setupStatus = label(role.recruitmentSetupStatus || "draft");
   const posted = Boolean(role.postedAt) || role.postingConfirmed === true;
   const archive = role.archive as Record<string, unknown> | undefined;
+  const setup = role.setup && typeof role.setup === "object" && !Array.isArray(role.setup)
+    ? role.setup as Record<string, unknown>
+    : {};
   return {
     roleId: text(role.externalId),
     archivedAt: text(archive?.archivedAt),
@@ -200,16 +206,16 @@ function roleSummary(role: Record<string, unknown>): RoleRequestSummary {
     recruitmentSetupStatus: setupStatus,
     postingConfirmed: posted ? "TRUE" : "FALSE",
     postedAt: text(role.postedAt),
-    jobDescription: text((role.setup as Record<string, unknown> | undefined)?.jobDescription),
-    postingChannels: listText((role.setup as Record<string, unknown> | undefined)?.postingChannels),
+    jobDescription: text(setup.jobDescription),
+    postingChannels: listText(setup.postingChannels),
     hodEmail: text(role.hrCalendarEmail),
-    hodAvailabilitySlots: jsonText((role.setup as Record<string, unknown> | undefined)?.hodAvailabilitySlots, []),
+    hodAvailabilitySlots: jsonText(setup.hodAvailabilitySlots, []),
     interviewAvailabilityRules: jsonText(role.availabilityRules, []),
-    voiceInterviewAvailabilityMode: "",
-    voiceInterviewSlots: "",
-    voiceInterviewAutoStartDate: "",
-    voiceInterviewAutoEndDate: "",
-    voiceInterviewTimezone: "",
+    voiceInterviewAvailabilityMode: text(setup.voiceInterviewAvailabilityMode),
+    voiceInterviewSlots: jsonText(setup.voiceInterviewSlots, []),
+    voiceInterviewAutoStartDate: text(setup.voiceInterviewAutoStartDate),
+    voiceInterviewAutoEndDate: text(setup.voiceInterviewAutoEndDate),
+    voiceInterviewTimezone: text(setup.voiceInterviewTimezone),
   };
 }
 
@@ -252,13 +258,21 @@ export async function targetRoleDetails(externalId: string, organizationId = "")
   // their history (applicants, screenings) remains viewable, not deleted.
   const summary = roleSummary(raw);
   const setup = (raw.setup as Record<string, unknown> | undefined) || {};
+  const evaluationPreferences = evaluationFieldPreferencesFromStored(
+    raw.evaluationFields,
+    setup.evaluationFieldToggles,
+  );
+  const setupEvaluationPreferences = evaluationFieldPreferencesFromStored(
+    setup.customEvaluationFields,
+    setup.evaluationFieldToggles,
+  );
   return {
     ...summary,
-    voiceInterviewAvailabilityMode: text(raw.voiceInterviewAvailabilityMode),
-    voiceInterviewSlots: text(raw.voiceInterviewSlots),
-    voiceInterviewAutoStartDate: text(raw.voiceInterviewAutoStartDate),
-    voiceInterviewAutoEndDate: text(raw.voiceInterviewAutoEndDate),
-    voiceInterviewTimezone: text(raw.voiceInterviewTimezone),
+    voiceInterviewAvailabilityMode: text(setup.voiceInterviewAvailabilityMode || raw.voiceInterviewAvailabilityMode),
+    voiceInterviewSlots: jsonText(setup.voiceInterviewSlots ?? raw.voiceInterviewSlots, []),
+    voiceInterviewAutoStartDate: text(setup.voiceInterviewAutoStartDate || raw.voiceInterviewAutoStartDate),
+    voiceInterviewAutoEndDate: text(setup.voiceInterviewAutoEndDate || raw.voiceInterviewAutoEndDate),
+    voiceInterviewTimezone: text(setup.voiceInterviewTimezone || raw.voiceInterviewTimezone),
     interviewAvailabilityRules: jsonText(raw.availabilityRules, []),
     postingChannels: listText((setup as Record<string, unknown>).postingChannels),
     submittedByEmail: text(raw.submittedByEmail),
@@ -298,8 +312,10 @@ export async function targetRoleDetails(externalId: string, organizationId = "")
     initialInterviewBookingLink: text(setup.initialInterviewBookingLink),
     hodInterviewBookingLink: text(setup.hodInterviewBookingLink),
     licenseOrCertificateRequired: text(setup.licenseOrCertificateRequired),
-    evaluationFieldToggles: listText(raw.evaluationFields),
-    customEvaluationFields: Array.isArray(raw.evaluationFields) ? raw.evaluationFields as { key: string; label: string; description: string }[] : [],
+    evaluationFieldToggles: evaluationPreferences.evaluationFieldToggles.join(","),
+    customEvaluationFields: evaluationPreferences.customEvaluationFields.length
+      ? evaluationPreferences.customEvaluationFields
+      : setupEvaluationPreferences.customEvaluationFields,
     salaryDisclosureStatus: text(setup.salaryDisclosureStatus),
     experienceRequirementStatus: text(setup.experienceRequirementStatus),
     licenseRequirementStatus: text(setup.licenseRequirementStatus),
@@ -912,65 +928,93 @@ export async function targetUseScreeningInvitation(token: string, applicationId:
 }
 
 export async function targetUpdateRoleFields(roleId: string, fields: Record<string, string>, options: { expectedUpdatedAt?: string } = {}) {
-  const setup = {
-    jobDescription: fields.Job_Description,
-    screeningCriteria: fields.Screening_Criteria,
-    requiredInterviewQuestion1: fields.Required_Interview_Question_1,
-    requiredInterviewQuestion2: fields.Required_Interview_Question_2,
-    requiredInterviewQuestion3: fields.Required_Interview_Question_3,
-    requiredInterviewQuestion4: fields.Required_Interview_Question_4,
-    requiredInterviewQuestion5: fields.Required_Interview_Question_5,
-    keywordsToLookFor: fields.Keywords_to_Look_For,
-    minimumYearsOfExperience: fields.Minimum_Years_of_Experience,
-    transferableSkillsAccepted: fields.Transferable_Skills_Accepted,
-    licenseOrCertificateRequired: fields.License_or_Certificate_Required,
-    salaryOrBudgetRange: fields.Salary_or_Budget_Range,
-    earliestAvailabilityRule: fields.Earliest_Availability_Rule,
-    postingChannels: fields.Posting_Channels,
-    aiSystemPrompt: fields.AI_System_Prompt,
-    voiceInterviewAvailabilityMode: fields.Voice_Interview_Availability_Mode,
-    voiceInterviewSlots: fields.Voice_Interview_Slots,
-    voiceInterviewAutoStartDate: fields.Voice_Interview_Auto_Start_Date,
-    voiceInterviewAutoEndDate: fields.Voice_Interview_Auto_End_Date,
-    voiceInterviewTimezone: fields.Voice_Interview_Timezone,
-    replacementEmployee: fields.Replacement_Employee,
-    employmentType: fields.Employment_Type,
-    hodAvailabilityDates: fields.HOD_Availability_Dates,
-    hodAvailabilityTimes: fields.HOD_Availability_Times,
-    hodAvailabilitySlots: fields.HOD_Availability_Slots,
-    customScreeningQuestion1: fields.Custom_Screening_Question_1,
-    customScreeningQuestion2: fields.Custom_Screening_Question_2,
-    aiGeneratedScreeningQuestions: fields.AI_Screening_Questions,
-    reportingManager: fields.Reporting_Manager,
-    workLocation: fields.Work_Location,
-    jobResponsibilities: fields.Job_Responsibilities,
-    requiredSkills: fields.Required_Skills,
-    experienceRequired: fields.Experience_Required,
-    educationRequirements: fields.Education_Requirements,
-    preferredQualifications: fields.Preferred_Qualifications,
-    roleExpectations: fields.Role_Expectations,
-    salaryMin: fields.Salary_Minimum,
-    salaryMax: fields.Salary_Maximum,
-    workSchedule: fields.Work_Schedule,
-    noticePeriodRequirement: fields.Notice_Period_Requirement,
-    salaryExpectationGuidance: fields.Salary_Expectation_Guidance,
-    interviewBehavior: fields.Interview_Behavior,
-    initialInterviewBookingLink: fields.Initial_Interview_Booking_Link,
-    hodInterviewBookingLink: fields.HOD_Interview_Booking_Link,
-    salaryDisclosureStatus: fields.Salary_Disclosure_Status,
-    experienceRequirementStatus: fields.Experience_Requirement_Status,
-    licenseRequirementStatus: fields.License_Requirement_Status,
-    hodInterviewRequired: fields.HOD_Interview_Required,
-    finalInterviewVenue: fields.Final_Interview_Venue,
-    voiceInterviewSlotsGeneratedAt: fields.Voice_Interview_Slots_Generated_At,
+  const organizationId = await targetOrganizationId();
+  const currentRole = await getRole(roleId, organizationId);
+  if (!currentRole) return null;
+  // Merge only fields supplied by this request. Replacing the JSON snapshot
+  // during a partial save used to erase unrelated recruitment setup values.
+  const setup = currentRole.setup && typeof currentRole.setup === "object" && !Array.isArray(currentRole.setup)
+    ? { ...(currentRole.setup as Record<string, unknown>) }
+    : {};
+  const setupFieldMap: Record<string, string> = {
+    Job_Description: "jobDescription",
+    Screening_Criteria: "screeningCriteria",
+    Required_Interview_Question_1: "requiredInterviewQuestion1",
+    Required_Interview_Question_2: "requiredInterviewQuestion2",
+    Required_Interview_Question_3: "requiredInterviewQuestion3",
+    Required_Interview_Question_4: "requiredInterviewQuestion4",
+    Required_Interview_Question_5: "requiredInterviewQuestion5",
+    Keywords_to_Look_For: "keywordsToLookFor",
+    Minimum_Years_of_Experience: "minimumYearsOfExperience",
+    Transferable_Skills_Accepted: "transferableSkillsAccepted",
+    License_or_Certificate_Required: "licenseOrCertificateRequired",
+    Salary_or_Budget_Range: "salaryOrBudgetRange",
+    Earliest_Availability_Rule: "earliestAvailabilityRule",
+    Posting_Channels: "postingChannels",
+    AI_System_Prompt: "aiSystemPrompt",
+    Voice_Interview_Availability_Mode: "voiceInterviewAvailabilityMode",
+    Voice_Interview_Slots: "voiceInterviewSlots",
+    Voice_Interview_Auto_Start_Date: "voiceInterviewAutoStartDate",
+    Voice_Interview_Auto_End_Date: "voiceInterviewAutoEndDate",
+    Voice_Interview_Timezone: "voiceInterviewTimezone",
+    Replacement_Employee: "replacementEmployee",
+    Employment_Type: "employmentType",
+    HOD_Availability_Dates: "hodAvailabilityDates",
+    HOD_Availability_Times: "hodAvailabilityTimes",
+    HOD_Availability_Slots: "hodAvailabilitySlots",
+    Custom_Screening_Question_1: "customScreeningQuestion1",
+    Custom_Screening_Question_2: "customScreeningQuestion2",
+    AI_Screening_Questions: "aiGeneratedScreeningQuestions",
+    Reporting_Manager: "reportingManager",
+    Work_Location: "workLocation",
+    Job_Responsibilities: "jobResponsibilities",
+    Required_Skills: "requiredSkills",
+    Experience_Required: "experienceRequired",
+    Education_Requirements: "educationRequirements",
+    Preferred_Qualifications: "preferredQualifications",
+    Role_Expectations: "roleExpectations",
+    Salary_Minimum: "salaryMin",
+    Salary_Maximum: "salaryMax",
+    Work_Schedule: "workSchedule",
+    Notice_Period_Requirement: "noticePeriodRequirement",
+    Salary_Expectation_Guidance: "salaryExpectationGuidance",
+    Interview_Behavior: "interviewBehavior",
+    Initial_Interview_Booking_Link: "initialInterviewBookingLink",
+    HOD_Interview_Booking_Link: "hodInterviewBookingLink",
+    Salary_Disclosure_Status: "salaryDisclosureStatus",
+    Experience_Requirement_Status: "experienceRequirementStatus",
+    License_Requirement_Status: "licenseRequirementStatus",
+    HOD_Interview_Required: "hodInterviewRequired",
+    Final_Interview_Venue: "finalInterviewVenue",
+    Voice_Interview_Slots_Generated_At: "voiceInterviewSlotsGeneratedAt",
   };
+  for (const [fieldName, setupKey] of Object.entries(setupFieldMap)) {
+    if (Object.prototype.hasOwnProperty.call(fields, fieldName)) setup[setupKey] = fields[fieldName];
+  }
+  if (Object.prototype.hasOwnProperty.call(fields, "Evaluation_Field_Toggles")) {
+    const preferences = evaluationFieldPreferencesFromStored(
+      fields.Evaluation_Fields ?? currentRole.evaluationFields,
+      fields.Evaluation_Field_Toggles,
+    );
+    setup.evaluationFieldToggles = preferences.evaluationFieldToggles;
+    setup.customEvaluationFields = preferences.customEvaluationFields;
+  }
+  if (Object.prototype.hasOwnProperty.call(fields, "Evaluation_Fields") && !Object.prototype.hasOwnProperty.call(fields, "Evaluation_Field_Toggles")) {
+    const preferences = evaluationFieldPreferencesFromStored(fields.Evaluation_Fields, setup.evaluationFieldToggles);
+    setup.evaluationFieldToggles = preferences.evaluationFieldToggles;
+    setup.customEvaluationFields = preferences.customEvaluationFields;
+  }
   let availabilityRules: unknown = undefined;
   try { if (fields.Interview_Availability_Rules) availabilityRules = JSON.parse(fields.Interview_Availability_Rules); } catch { availabilityRules = []; }
   let evaluationFields: unknown = undefined;
-  try { if (fields.Evaluation_Fields) evaluationFields = JSON.parse(fields.Evaluation_Fields); } catch { evaluationFields = []; }
+  try {
+    if (Object.prototype.hasOwnProperty.call(fields, "Evaluation_Fields")) {
+      evaluationFields = fields.Evaluation_Fields ? JSON.parse(fields.Evaluation_Fields) : [];
+    }
+  } catch { evaluationFields = []; }
   return updateRoleDetails({
     externalId: roleId,
-    organizationId: await targetOrganizationId(),
+    organizationId,
     expectedUpdatedAt: options.expectedUpdatedAt,
     status: normalizeTargetRoleStatus(fields.Status) || (["true", "1", "yes"].includes(text(fields.Posting_Confirmed).toLowerCase()) ? "job_posted" : undefined),
     title: fields.Job_Title,
@@ -1239,11 +1283,20 @@ export async function targetApplicantDetails(externalId: string) {
       ? "Completed"
       : liveVoiceAttemptStatus || (summary.currentStage === "voice_review_pending" ? "Awaiting Review" : "");
   const resumeText = await storedResumeText(resumeFile);
+  const roleDetails = await targetRoleDetails(row.roleExternalId);
   return {
     ...summary,
-    roleDetails: await targetRoleDetails(row.roleExternalId),
+    roleDetails,
     aiAnalysisSummary: text(screening?.summary),
-    interviewQuestions: text(screening?.interviewQuestions),
+    // Show HR the same canonical numbered list Smile was driven by (from the
+    // role's current setup), not the AI screening step's own snapshot, so the
+    // question numbers/count line up with what HR configured. Falls back to
+    // the stored screening snapshot for older records saved before a role
+    // had its 5 questions configured.
+    interviewQuestions: buildNumberedInterviewQuestions([
+      roleDetails?.requiredInterviewQuestion1, roleDetails?.requiredInterviewQuestion2, roleDetails?.requiredInterviewQuestion3,
+      roleDetails?.requiredInterviewQuestion4, roleDetails?.requiredInterviewQuestion5,
+    ]).join("\n") || text(screening?.interviewQuestions),
     resumeText,
     resumeFileId: text(resumeFile?.storageRef),
     resumeFileName: text(resumeFile?.filename),

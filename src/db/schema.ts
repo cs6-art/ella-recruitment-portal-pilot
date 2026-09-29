@@ -69,7 +69,7 @@ export const creditLedger = pgTable(
     entryTime: timestamp("entry_time", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     type: text("type").notNull(), // 'TopUp' | 'Deduction'
-    event: text("event").notNull(), // manual_topup | manual_adjustment | volume_discount | cv_analysis | phone_interview
+    event: text("event").notNull(), // Top-ups/adjustments, CV analysis, voice outcomes, or live-avatar interview billing.
     units: integer("units").notNull(),
     creditsDelta: integer("credits_delta").notNull(), // signed
     balanceAfter: integer("balance_after").notNull(),

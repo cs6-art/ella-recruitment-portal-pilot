@@ -9,6 +9,7 @@ export const CREDIT_COST = {
   phone_interview: 10,
   phone_interview_no_answer: 5,
   phone_interview_incomplete: 8,
+  live_avatar_interview: 20,
 } as const;
 
 export type CreditEvent = keyof typeof CREDIT_COST;

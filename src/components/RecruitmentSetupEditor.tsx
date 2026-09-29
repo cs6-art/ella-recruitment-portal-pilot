@@ -782,7 +782,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
         </fieldset>
         <div className="vapi-custom-fields">
           <div className="vapi-section-heading">
-            <div><span className="vapi-kicker">CUSTOM FIELDS</span><h4>Add up to 3 fields specific to this role</h4></div>
+            <div><span className="vapi-kicker">CUSTOM FIELDS</span><h4>Add Up to 3 Fields Specific to This Role</h4></div>
             <span className="vapi-count-badge">{(values.customEvaluationFields || []).length} of 3</span>
           </div>
           {(values.customEvaluationFields || []).map((customField, index) => (

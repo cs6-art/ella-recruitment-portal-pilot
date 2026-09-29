@@ -51,7 +51,7 @@ export default function ResumeScreeningInviteGenerator({ roleOptions }: { roleOp
     <section className="card resume-invite-generator" aria-labelledby="resume-invite-title">
       <div>
         <span className="eyebrow-dark">ALTERNATIVE INTAKE</span>
-        <h2 id="resume-invite-title">Send an application link</h2>
+        <h2 id="resume-invite-title">Send an Application Link</h2>
         <p>Generate a single-use link for one candidate to apply and upload their own resume. It stops working the moment they submit, or after a few days if it goes unused.</p>
       </div>
 

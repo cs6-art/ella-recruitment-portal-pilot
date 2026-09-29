@@ -80,11 +80,11 @@ test("dashboard prioritizes work and shows candidate stages only to users who ca
   assert.match(api, /listDashboardRecordingFailures/);
   assert.ok(api.indexOf("/final|face.to.face/i.test(booking.interviewType)") < api.indexOf("booking.interviewMode === \"avatar\""));
   assert.match(api, /Cache-Control": "private, no-store/);
-  assert.match(dashboard, /What needs your attention/);
-  assert.match(dashboard, /Recruitment overview/);
-  assert.match(dashboard, /Upcoming interviews/);
-  assert.match(dashboard, /Actionable alerts/);
-  assert.match(dashboard, /Recent activity/);
+  assert.match(dashboard, /What Needs Your Attention/);
+  assert.match(dashboard, /Recruitment Overview/);
+  assert.match(dashboard, /Upcoming Interviews/);
+  assert.match(dashboard, /Actionable Alerts/);
+  assert.match(dashboard, /Recent Activity/);
   assert.match(dashboard, /30_000/);
   assert.match(dashboard, /Voice Interview Review/);
   assert.match(dashboard, /Avatar Interview Review/);
@@ -337,7 +337,9 @@ test("Pilot detail pages expose live voice-attempt status and refresh active cal
   assert.match(target, /\["calling", "dispatching"\]\.includes\(voiceAttemptStatus\)/);
   assert.match(target, /\["initiated", "in_progress"\]\.includes\(voiceAttemptStatus\)/);
   assert.match(target, /\["scheduled", "queued", "retry_scheduled"\]\.includes\(voiceAttemptStatus\)/);
-  assert.match(detail, /intervalMs=\{applicant\.currentStage\.trim\(\)\.toLowerCase\(\) === "voice_scheduled" \? 30_000 : undefined\}/);
+  // Face-to-Face booking-link-sent and scheduled stages also fast-poll, so HR
+  // sees a booking update without waiting on the slow 5-minute fallback.
+  assert.match(detail, /\["voice_scheduled", "approved_for_final", "final_scheduled"\]\.includes\(applicant\.currentStage\.trim\(\)\.toLowerCase\(\)\) \? 30_000 : undefined/);
   assert.match(refresh, /intervalMs = 5 \* 60_000/);
   assert.match(refresh, /window\.setInterval\(refresh, intervalMs \|\| REFRESH_MS\)/);
 });

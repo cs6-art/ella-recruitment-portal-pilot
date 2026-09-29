@@ -137,11 +137,21 @@ test("target role creation persists the complete role and setup snapshot", () =>
     assert.match(createRoute, new RegExp(`${field}:`), `create route omitted ${field}`);
   }
   assert.match(createRoute, /submittedByEmail: sessionEmail/);
-  assert.match(createRoute, /recruitmentSetupStatus: "Draft", setup, evaluationFields: setupDraft\.customEvaluationFields/);
-  assert.match(createRoute, /evaluationFields: setupDraft\.customEvaluationFields/);
+  assert.match(createRoute, /recruitmentSetupStatus: "Draft", setup, evaluationFields,/);
+  assert.match(createRoute, /evaluationFieldsForSetup\(setupDraft\.evaluationFieldToggles, setupDraft\.customEvaluationFields\)/);
+  assert.match(createRoute, /salaryDisclosureStatus: input\.recruitmentSetupDraft\?\.salaryDisclosureStatus \|\| "Not disclosed"/);
+  assert.match(createRoute, /finalInterviewVenue: input\.recruitmentSetupDraft\?\.hodInterviewRequired === "Required"/);
+  assert.match(createRoute, /customEvaluationFields: setupDraft\.customEvaluationFields \|\| \[\]/);
   assert.match(queries, /submittedByEmail: input\.submittedByEmail/);
-  assert.match(queries, /setup: \(input\.setup \|\| \{\}\) as object/);
+  assert.match(queries, /evaluationFieldsForSetup\(evaluationFieldToggles, customEvaluationFields\)/);
+  assert.match(queries, /customEvaluationFields,/);
   assert.match(queries, /db\.transaction\(async \(tx\) => \{/);
+  const sheets = read("src/lib/google-sheets.ts");
+  assert.match(sheets, /const setup = \{[\s\S]*jobDescription: fields\.Job_Description/);
+  assert.match(sheets, /evaluationFields,\s*hrCalendarEmail: fields\.HOD_Email/);
+  const targetPortal = read("src/lib/recruitment-target-portal.ts");
+  assert.match(targetPortal, /evaluationFieldPreferencesFromStored\(\s*raw\.evaluationFields/);
+  assert.match(targetPortal, /\{ \.\.\.\(currentRole\.setup as Record<string, unknown>\) \}/);
 });
 
 test("role creation and publishing preserve the target hiring date column", () => {

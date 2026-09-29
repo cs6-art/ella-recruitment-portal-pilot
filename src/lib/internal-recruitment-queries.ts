@@ -9,6 +9,7 @@ import { creditCostFor, EllaCreditsError, placeVoiceInterviewHold, recordVoiceIn
 import { appendAccountLedgerEntryOnExecutor, organizationCreditsEnabled } from "@/lib/ella-credits-accounts";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
+import { evaluationFieldPreferencesFromStored, evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
 import { notificationEmail, notificationEventLabel, notificationStatusLabel, notificationSummary, roleNotificationEmail } from "@/lib/notification-labels";
 import type { ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
@@ -383,9 +384,28 @@ export async function renameRoleExternalId(input: { currentExternalId: string; n
 
 export async function createRole(input: { externalId: string; title: string; code?: string; departmentSnapshot?: string; requestType?: string; vacancies?: number; reason?: string; targetHiringDate?: string; status?: string; recruitmentSetupStatus?: string; setup?: unknown; evaluationFields?: unknown; hrCalendarEmail?: string; source?: string; requesterEmail?: string; requesterName?: string; submittedByEmail?: string; actionRequestId?: string; actorEmail?: string; actorName?: string; organizationId?: string }) {
   const db = getDb();
+  const setupDraft = input.setup && typeof input.setup === "object" && !Array.isArray(input.setup)
+    ? input.setup as Record<string, unknown>
+    : {};
+  const storedEvaluationPreferences = evaluationFieldPreferencesFromStored(input.evaluationFields, setupDraft.evaluationFieldToggles);
+  const setupEvaluationPreferences = evaluationFieldPreferencesFromStored(setupDraft.customEvaluationFields, setupDraft.evaluationFieldToggles);
+  const evaluationFieldToggles = storedEvaluationPreferences.evaluationFieldToggles.length
+    ? storedEvaluationPreferences.evaluationFieldToggles
+    : setupEvaluationPreferences.evaluationFieldToggles;
+  const customEvaluationFields = storedEvaluationPreferences.customEvaluationFields.length
+    ? storedEvaluationPreferences.customEvaluationFields
+    : setupEvaluationPreferences.customEvaluationFields;
+  // Every creation path gets the same required score/recommendation/strengths/
+  // concerns fields, even if it omitted evaluation settings entirely.
+  const setup = {
+    ...setupDraft,
+    evaluationFieldToggles,
+    customEvaluationFields,
+  };
+  const evaluationFields = evaluationFieldsForSetup(evaluationFieldToggles, customEvaluationFields);
   return db.transaction(async (tx) => {
     const organizationId = input.organizationId?.trim() || DEFAULT_ORGANIZATION_ID;
-    const [role] = await tx.insert(roles).values({ organizationId, externalId: input.externalId.trim(), title: input.title.trim(), code: input.code?.trim() || null, departmentSnapshot: input.departmentSnapshot || "", requestType: normalizeRequestType(input.requestType), vacancies: input.vacancies ?? 1, reason: input.reason || "", targetHiringDate: input.targetHiringDate || null, status: normalizeRoleStatus(input.status), recruitmentSetupStatus: normalizeRecruitmentSetupStatus(input.recruitmentSetupStatus), setup: (input.setup || {}) as object, evaluationFields: (input.evaluationFields || []) as object, hrCalendarEmail: input.hrCalendarEmail || "", source: input.source || "internal_api", requesterEmail: input.requesterEmail || "", requesterName: input.requesterName || "", submittedByEmail: input.submittedByEmail || input.requesterEmail || "", updatedByEmail: input.actorEmail || "" }).onConflictDoNothing({ target: [roles.organizationId, roles.externalId] }).returning();
+    const [role] = await tx.insert(roles).values({ organizationId, externalId: input.externalId.trim(), title: input.title.trim(), code: input.code?.trim() || null, departmentSnapshot: input.departmentSnapshot || "", requestType: normalizeRequestType(input.requestType), vacancies: input.vacancies ?? 1, reason: input.reason || "", targetHiringDate: input.targetHiringDate || null, status: normalizeRoleStatus(input.status), recruitmentSetupStatus: normalizeRecruitmentSetupStatus(input.recruitmentSetupStatus), setup, evaluationFields, hrCalendarEmail: input.hrCalendarEmail || "", source: input.source || "internal_api", requesterEmail: input.requesterEmail || "", requesterName: input.requesterName || "", submittedByEmail: input.submittedByEmail || input.requesterEmail || "", updatedByEmail: input.actorEmail || "" }).onConflictDoNothing({ target: [roles.organizationId, roles.externalId] }).returning();
     if (!role) {
       const [existing] = await tx.select().from(roles).where(and(eq(roles.organizationId, organizationId), eq(roles.externalId, input.externalId.trim()))).limit(1);
       return { role: existing ?? null, created: false };

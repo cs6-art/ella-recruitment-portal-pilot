@@ -25,7 +25,7 @@ export default async function SettingsPage() {
     <OrganizationBrandingEditor />
     <main className="container page settings-page">
       <section className="card settings-section" aria-labelledby="calendar-settings-title">
-        <div className="settings-section-header"><div><h2 id="calendar-settings-title">Google Calendar connection</h2><p>Manage the shared HR Google Calendar connection used for face-to-face interviews.</p></div></div>
+        <div className="settings-section-header"><div><h2 id="calendar-settings-title">Google Calendar Connection</h2><p>Manage the shared HR Google Calendar connection used for face-to-face interviews.</p></div></div>
         <GoogleCalendarConnect canManage />
       </section>
     </main>

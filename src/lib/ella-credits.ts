@@ -116,6 +116,7 @@ export type CreditPricing = {
   phoneInterview: number;
   phoneInterviewNoAnswer: number;
   phoneInterviewIncomplete: number;
+  liveAvatarInterview: number;
   discountThreshold: number;
   discountPercent: number;
 };
@@ -132,6 +133,7 @@ export async function getCreditPricing(): Promise<CreditPricing> {
     phoneInterview: CREDIT_COST.phone_interview,
     phoneInterviewNoAnswer: CREDIT_COST.phone_interview_no_answer,
     phoneInterviewIncomplete: CREDIT_COST.phone_interview_incomplete,
+    liveAvatarInterview: CREDIT_COST.live_avatar_interview,
     discountThreshold: configuredWholeNumber(config.Ella_Credit_Discount_Threshold, 2000),
     discountPercent: configuredWholeNumber(config.Ella_Credit_Discount_Percent, 10),
   };
@@ -143,6 +145,7 @@ export async function creditCostFor(event: CreditEvent): Promise<number> {
     case "cv_analysis": return pricing.cvAnalysis;
     case "phone_interview_no_answer": return pricing.phoneInterviewNoAnswer;
     case "phone_interview_incomplete": return pricing.phoneInterviewIncomplete;
+    case "live_avatar_interview": return pricing.liveAvatarInterview;
     default: return pricing.phoneInterview;
   }
 }
@@ -289,6 +292,30 @@ export async function recordVoiceInterviewDeduction(input: {
   });
   // The real charge is on the ledger now; the reservation has done its job.
   await releaseVoiceInterviewHold({ organizationId: input.organizationId, applicationId: input.applicationId, status: "converted", reason: `billed:${input.outcome}` });
+  return cost;
+}
+
+/**
+ * Bill a completed live-avatar (video) interview session. The session id is
+ * the billing identity, so a retried/duplicate completion call cannot charge
+ * the same interview twice.
+ */
+export async function recordLiveAvatarInterviewDeduction(input: {
+  applicationId: string;
+  sessionId: string;
+  actorEmail?: string;
+  organizationId?: string;
+}): Promise<number> {
+  const cost = CREDIT_COST.live_avatar_interview;
+  await recordDeduction({
+    event: "live_avatar_interview",
+    units: 1,
+    reference: input.applicationId,
+    idempotencyKey: `live-avatar-session:${input.sessionId}`,
+    actorEmail: input.actorEmail,
+    organizationId: input.organizationId,
+    note: "Live avatar interview completed",
+  });
   return cost;
 }
 

@@ -15,6 +15,7 @@ import { getPortalConfigValue } from "@/lib/portal-config";
 import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE } from "@/lib/recruitment-prompt";
+import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
 
@@ -35,8 +36,9 @@ function roleDraftFields(input: Record<string, unknown>, roleId: string, now: st
     ? input.recruitmentSetupDraft as Record<string, unknown>
     : {};
   const questions = draftList(input.aiGeneratedScreeningQuestions);
-  const setupQuestions = [1, 2, 3, 4, 5].map((index) => draftText(setup[`requiredInterviewQuestion${index}`], 1000)).filter(Boolean);
-  const setupEvaluationFields = Array.isArray(setup.customEvaluationFields) ? setup.customEvaluationFields.slice(0, 3) : [];
+  const setupQuestionSlots = [1, 2, 3, 4, 5].map((index) => draftText(setup[`requiredInterviewQuestion${index}`], 1000));
+  const setupQuestions = setupQuestionSlots.filter(Boolean);
+  const setupEvaluationFields = evaluationFieldsForSetup(setup.evaluationFieldToggles, setup.customEvaluationFields);
   return {
     Role_ID: roleId,
     Submission_ID: roleId,
@@ -60,12 +62,12 @@ function roleDraftFields(input: Record<string, unknown>, roleId: string, now: st
     AI_Screening_Questions: questions.join("\n"),
     Screening_Criteria: draftText(setup.screeningCriteria, 10000),
     Initial_Interview_Questions: setupQuestions.join("\n"),
-    Required_Interview_Question_1: setupQuestions[0] || "",
-    Required_Interview_Question_2: setupQuestions[1] || "",
-    Required_Interview_Question_3: setupQuestions[2] || "",
-    Required_Interview_Question_4: setupQuestions[3] || "",
-    Required_Interview_Question_5: setupQuestions[4] || "",
-    AI_System_Prompt: draftText(setup.aiSystemPrompt, 30000),
+    Required_Interview_Question_1: setupQuestionSlots[0],
+    Required_Interview_Question_2: setupQuestionSlots[1],
+    Required_Interview_Question_3: setupQuestionSlots[2],
+    Required_Interview_Question_4: setupQuestionSlots[3],
+    Required_Interview_Question_5: setupQuestionSlots[4],
+    AI_System_Prompt: draftText(setup.aiSystemPrompt, 30000) || STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE,
     Evaluation_Field_Toggles: draftList(setup.evaluationFieldToggles, 20).join(","),
     Evaluation_Fields: JSON.stringify(setupEvaluationFields),
     Posting_Channels: draftList(setup.postingChannels, 10).join(", "),
@@ -75,9 +77,10 @@ function roleDraftFields(input: Record<string, unknown>, roleId: string, now: st
     Transferable_Skills_Accepted: draftText(setup.transferableSkillsAccepted, 3000),
     Salary_or_Budget_Range: draftText(setup.salaryOrBudgetRange, 500),
     Earliest_Availability_Rule: draftText(setup.earliestAvailabilityRule, 1000),
-    Salary_Disclosure_Status: draftText(setup.salaryDisclosureStatus, 30),
-    License_Requirement_Status: draftText(setup.licenseRequirementStatus, 30),
-    HOD_Interview_Required: draftText(setup.hodInterviewRequired, 30),
+    Salary_Disclosure_Status: draftText(setup.salaryDisclosureStatus, 30) || "Not disclosed",
+    Experience_Requirement_Status: draftText(setup.experienceRequirementStatus, 30),
+    License_Requirement_Status: draftText(setup.licenseRequirementStatus, 30) || (draftText(setup.licenseOrCertificateRequired, 5000) ? "Required" : "Not required"),
+    HOD_Interview_Required: draftText(setup.hodInterviewRequired, 30) || "Not required",
     Final_Interview_Venue: draftText(setup.finalInterviewVenue, 2000),
     Recruitment_Setup_Status: "Draft",
     Requester_Name: user.name,
@@ -334,10 +337,11 @@ export async function POST(request: Request) {
         salaryOrBudgetRange: setupDraft.salaryOrBudgetRange || "",
         earliestAvailabilityRule: setupDraft.earliestAvailabilityRule || "",
         evaluationFieldToggles: setupDraft.evaluationFieldToggles || [],
+        customEvaluationFields: setupDraft.customEvaluationFields || [],
         postingChannels: setupDraft.postingChannels || [],
         initialInterviewBookingLink: "",
         hodInterviewBookingLink: "",
-        aiSystemPrompt: STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE,
+        aiSystemPrompt: setupDraft.aiSystemPrompt?.trim() || STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE,
         replacementEmployee: input.replacementEmployee,
         employmentType: input.employmentType,
         hodAvailabilityDates: input.hodAvailabilityDates,
@@ -360,15 +364,20 @@ export async function POST(request: Request) {
         noticePeriodRequirement: input.noticePeriodRequirement,
         salaryExpectationGuidance: input.salaryExpectationGuidance,
         interviewBehavior: "",
-        salaryDisclosureStatus: "",
-        experienceRequirementStatus: "",
-        licenseRequirementStatus: "",
-        hodInterviewRequired: "",
+        salaryDisclosureStatus: setupDraft.salaryDisclosureStatus || "Not disclosed",
+        experienceRequirementStatus: setupDraft.experienceRequirementStatus || "",
+        licenseRequirementStatus: setupDraft.licenseRequirementStatus || (setupDraft.licenseOrCertificateRequired?.trim() ? "Required" : "Not required"),
+        hodInterviewRequired: setupDraft.hodInterviewRequired || "Not required",
+        finalInterviewVenue: setupDraft.hodInterviewRequired === "Required" ? setupDraft.finalInterviewVenue || "" : "",
       };
+      // Store the same baseline, selected, and custom scoring fields that the
+      // interview prompt and editor use; saving only custom fields made new
+      // role requests appear to have an empty evaluation setup.
+      const evaluationFields = evaluationFieldsForSetup(setupDraft.evaluationFieldToggles, setupDraft.customEvaluationFields);
       const created = await createRole({
         externalId: roleId, title: input.jobTitle, departmentSnapshot: input.department, requestType: input.requestType,
         vacancies: input.numberOfVacancies, reason: input.reasonForRequest, targetHiringDate: input.targetHiringDate,
-        status: "pending_hr_discussion", recruitmentSetupStatus: "Draft", setup, evaluationFields: setupDraft.customEvaluationFields || [], hrCalendarEmail: finalInterviewCalendar.email,
+        status: "pending_hr_discussion", recruitmentSetupStatus: "Draft", setup, evaluationFields, hrCalendarEmail: finalInterviewCalendar.email,
         source: "portal", requesterEmail: sessionEmail, requesterName: user.name, submittedByEmail: sessionEmail,
         actionRequestId: submissionId, actorEmail: sessionEmail, actorName: user.name,
         organizationId: user.organizationId,
@@ -533,14 +542,19 @@ export async function POST(request: Request) {
         earliestAvailabilityRule: input.recruitmentSetupDraft?.earliestAvailabilityRule || "",
         evaluationFieldToggles: input.recruitmentSetupDraft?.evaluationFieldToggles || [],
         customEvaluationFields: input.recruitmentSetupDraft?.customEvaluationFields || [],
-        aiSystemPrompt: STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE,
+        evaluationFields: evaluationFieldsForSetup(
+          input.recruitmentSetupDraft?.evaluationFieldToggles,
+          input.recruitmentSetupDraft?.customEvaluationFields,
+        ),
+        aiSystemPrompt: input.recruitmentSetupDraft?.aiSystemPrompt?.trim() || STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE,
         initialInterviewBookingLink: "",
         hodInterviewBookingLink: "",
         postingChannels: input.recruitmentSetupDraft?.postingChannels || [],
-        salaryDisclosureStatus: "",
-        experienceRequirementStatus: "",
-        licenseRequirementStatus: "",
-        hodInterviewRequired: "",
+        salaryDisclosureStatus: input.recruitmentSetupDraft?.salaryDisclosureStatus || "Not disclosed",
+        experienceRequirementStatus: input.recruitmentSetupDraft?.experienceRequirementStatus || "",
+        licenseRequirementStatus: input.recruitmentSetupDraft?.licenseRequirementStatus || (input.recruitmentSetupDraft?.licenseOrCertificateRequired?.trim() ? "Required" : "Not required"),
+        hodInterviewRequired: input.recruitmentSetupDraft?.hodInterviewRequired || "Not required",
+        finalInterviewVenue: input.recruitmentSetupDraft?.hodInterviewRequired === "Required" ? input.recruitmentSetupDraft?.finalInterviewVenue || "" : "",
         recruitmentSetupStatus: "Draft",
       },
 

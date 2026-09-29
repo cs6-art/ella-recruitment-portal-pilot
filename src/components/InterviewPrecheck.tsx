@@ -225,7 +225,7 @@ export default function InterviewPrecheck({ avatarToken, onReady, onCancel }: Pr
   return <div className="live-interview-precheck" aria-labelledby="device-check-title">
     <div>
       <span className="form-eyebrow">EQUIPMENT CHECK</span>
-      <h3 id="device-check-title">Check your camera and microphone</h3>
+      <h3 id="device-check-title">Check Your Camera and Microphone</h3>
       <p>Make sure your face is visible and speak a few words to see the microphone level move.</p>
     </div>
     <div className="live-interview-preview">

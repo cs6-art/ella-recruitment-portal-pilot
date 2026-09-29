@@ -13,6 +13,7 @@ import { canDeleteRoleRequest, canEditRoleRequest, canViewRole } from "@/lib/acc
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetArchiveRole, targetRoleDetails, targetRoleStatusHistory, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 import { roleRequestSchema } from "@/lib/role-schema";
+import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { isDateOnOrAfterToday } from "@/lib/date-only";
 import {
   COOKIE_NAME,
@@ -44,6 +45,10 @@ function roleDraftFieldsForPatch(body: Record<string, unknown>, role: RoleReques
     ? body.recruitmentSetupDraft as Record<string, unknown>
     : {};
   const setupQuestions = [1, 2, 3, 4, 5].map((index) => patchText(setup[`requiredInterviewQuestion${index}`], role[`requiredInterviewQuestion${index}` as keyof RoleRequestDetails] as string || "", 1000));
+  const evaluationFieldToggles = patchList(setup.evaluationFieldToggles, role.evaluationFieldToggles || "", 20).replace(/\n/g, ",");
+  const customEvaluationFields = Array.isArray(setup.customEvaluationFields)
+    ? setup.customEvaluationFields.slice(0, 3)
+    : role.customEvaluationFields || [];
   return {
     Request_Type: patchText(body.requestType, role.requestType, 50),
     Department: patchText(body.department, role.department, 100),
@@ -66,8 +71,8 @@ function roleDraftFieldsForPatch(body: Record<string, unknown>, role: RoleReques
     Required_Interview_Question_4: setupQuestions[3],
     Required_Interview_Question_5: setupQuestions[4],
     AI_System_Prompt: patchText(setup.aiSystemPrompt, role.aiSystemPrompt, 30000),
-    Evaluation_Field_Toggles: patchList(setup.evaluationFieldToggles, role.evaluationFieldToggles || "", 20).replace(/\n/g, ","),
-    Evaluation_Fields: JSON.stringify(Array.isArray(setup.customEvaluationFields) ? setup.customEvaluationFields.slice(0, 3) : role.customEvaluationFields || []),
+    Evaluation_Field_Toggles: evaluationFieldToggles,
+    Evaluation_Fields: JSON.stringify(evaluationFieldsForSetup(evaluationFieldToggles, customEvaluationFields)),
     Posting_Channels: patchList(setup.postingChannels, role.postingChannels, 10).replace(/\n/g, ", "),
     License_or_Certificate_Required: patchText(setup.licenseOrCertificateRequired, role.licenseOrCertificateRequired || "", 1000),
     Keywords_to_Look_For: patchText(setup.keywordsToLookFor, role.keywordsToLookFor || "", 2000),
@@ -76,6 +81,7 @@ function roleDraftFieldsForPatch(body: Record<string, unknown>, role: RoleReques
     Salary_or_Budget_Range: patchText(setup.salaryOrBudgetRange, role.salaryOrBudgetRange || "", 500),
     Earliest_Availability_Rule: patchText(setup.earliestAvailabilityRule, role.earliestAvailabilityRule || "", 1000),
     Salary_Disclosure_Status: patchText(setup.salaryDisclosureStatus, role.salaryDisclosureStatus || "", 30),
+    Experience_Requirement_Status: patchText(setup.experienceRequirementStatus, role.experienceRequirementStatus || "", 30),
     License_Requirement_Status: patchText(setup.licenseRequirementStatus, role.licenseRequirementStatus || "", 30),
     HOD_Interview_Required: patchText(setup.hodInterviewRequired, role.hodInterviewRequired || "", 30),
     Final_Interview_Venue: patchText(setup.finalInterviewVenue, role.finalInterviewVenue || "", 2000),

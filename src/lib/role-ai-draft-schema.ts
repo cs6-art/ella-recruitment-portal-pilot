@@ -21,6 +21,7 @@ export const roleAiRecruitmentSetupDraftSchema = z.object({
   postingChannels: z.array(z.string().trim().max(100)).max(10).default([]),
   // Publishing choices made on the single "create role" form.
   salaryDisclosureStatus: text(30),
+  experienceRequirementStatus: text(30),
   licenseRequirementStatus: text(30),
   hodInterviewRequired: text(30),
   finalInterviewVenue: text(2000),

@@ -11,7 +11,7 @@ import { DEPARTMENT_OPTIONS, isKnownDepartment } from "@/lib/department-options"
 import { todayDateInputValue, toDateInputValue } from "@/lib/date-only";
 import { roleRequestSchema } from "@/lib/role-schema";
 import { renderRecruitmentSystemPrompt, STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE } from "@/lib/recruitment-prompt";
-import { EVALUATION_FIELD_CATALOG } from "@/lib/recruitment-setup-schema";
+import { BASELINE_EVALUATION_FIELDS, EVALUATION_FIELD_CATALOG, evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { getSetupReadiness } from "@/lib/recruitment-setup-readiness";
 import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
 import type { RoleAiDraft } from "@/lib/role-ai-draft-schema";
@@ -109,6 +109,7 @@ const initial: FormState = {
     customEvaluationFields: [],
     postingChannels: [],
     salaryDisclosureStatus: "",
+    experienceRequirementStatus: "",
     licenseRequirementStatus: "",
     hodInterviewRequired: "",
     finalInterviewVenue: "",
@@ -337,6 +338,58 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
     updateSetup("postingChannels", selected.includes(channel) ? selected.filter((item) => item !== channel) : [...selected, channel]);
   }
 
+  function toggleEvaluationField(key: string) {
+    const selected = setupDraft.evaluationFieldToggles || [];
+    updateSetup("evaluationFieldToggles", selected.includes(key) ? selected.filter((item) => item !== key) : [...selected, key]);
+  }
+
+  function customEvaluationFieldKey(label: string, index: number) {
+    const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 31);
+    return `custom_${slug || `field_${index + 1}`}`.slice(0, 40);
+  }
+
+  function updateCustomEvaluationField(index: number, property: "label" | "description", value: string) {
+    setForm((current) => {
+      const fields = [...(current.recruitmentSetupDraft.customEvaluationFields || [])];
+      const existing = fields[index];
+      if (!existing) return current;
+      fields[index] = {
+        ...existing,
+        [property]: value,
+        ...(property === "label" ? { key: customEvaluationFieldKey(value, index) } : {}),
+      };
+      return { ...current, recruitmentSetupDraft: { ...current.recruitmentSetupDraft, customEvaluationFields: fields } };
+    });
+    setError("");
+  }
+
+  function addCustomEvaluationField() {
+    setForm((current) => {
+      const fields = current.recruitmentSetupDraft.customEvaluationFields || [];
+      if (fields.length >= 3) return current;
+      let suffix = fields.length + 1;
+      while (fields.some((field) => field.key === `custom_field_${suffix}`)) suffix += 1;
+      return {
+        ...current,
+        recruitmentSetupDraft: {
+          ...current.recruitmentSetupDraft,
+          customEvaluationFields: [...fields, { key: `custom_field_${suffix}`, label: "", description: "" }],
+        },
+      };
+    });
+  }
+
+  function removeCustomEvaluationField(index: number) {
+    setForm((current) => ({
+      ...current,
+      recruitmentSetupDraft: {
+        ...current.recruitmentSetupDraft,
+        customEvaluationFields: (current.recruitmentSetupDraft.customEvaluationFields || []).filter((_, itemIndex) => itemIndex !== index),
+      },
+    }));
+    setError("");
+  }
+
   function setupPayload(setupAction: "publish_role" | "save_draft") {
     const questions = QUESTION_NUMBERS.map((number) => String(setupDraft[`requiredInterviewQuestion${number}` as const] || "").trim());
     const licenseRequired = licenseStatus === "Not required" ? "" : String(setupDraft.licenseOrCertificateRequired || "").trim();
@@ -355,12 +408,9 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
       requiredInterviewQuestion4: questions[3],
       requiredInterviewQuestion5: questions[4],
     };
-    // Every role starts from the standard interview script and the default
-    // scoring fields; HR can fine-tune both later in Recruitment Setup.
-    const evaluationFields = [
-      ...EVALUATION_FIELD_CATALOG.filter((field) => (values.evaluationFieldToggles || []).includes(field.key)),
-      ...(values.customEvaluationFields || []),
-    ];
+    // Use the same required baseline and optional fields in the prompt and
+    // the saved role configuration so screening and interviews stay aligned.
+    const evaluationFields = evaluationFieldsForSetup(values.evaluationFieldToggles, values.customEvaluationFields);
     // Editable on this form (see the "Smile system prompt" field below); an
     // empty draft (e.g. right after applying an AI-generated draft, which
     // never fills this field) falls back to the standard template.
@@ -391,7 +441,15 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
   }
 
   function validateSetup() {
-    const readiness = getSetupReadiness(setupPayload("publish_role"), "ready-for-publishing");
+    const payload = setupPayload("publish_role");
+    const readiness = getSetupReadiness(payload, "ready-for-publishing");
+    const customFields = payload.customEvaluationFields || [];
+    const customKeys = customFields.map((field) => field.key);
+    if (customFields.some((field) => !field.key.trim() || !field.label.trim() || !field.description.trim())
+      || new Set(customKeys).size !== customKeys.length) {
+      setError("Complete each custom evaluation field or remove it before publishing.");
+      return false;
+    }
     if (readiness.valid) return true;
     const messages: Record<string, string> = {
       setup_screeningCriteria: "Describe what a strong candidate looks like.",
@@ -702,6 +760,50 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
                   <label htmlFor="setup_screeningCriteria">Screening criteria <strong className="required-mark">*</strong></label>
                   <textarea id="setup_screeningCriteria" {...fieldErrorProps("setup_screeningCriteria")} value={setupDraft.screeningCriteria} onChange={(event) => updateSetup("screeningCriteria", event.target.value)} placeholder="What does a strong candidate look like? Must-have experience, skills and qualifications." />
                 </div>
+                <div className="vapi-builder">
+                  <div className="vapi-section-heading">
+                    <div><span className="vapi-kicker">EVALUATION FIELDS</span><h3>What should Smile score or note?</h3><p>These fields guide both resume screening and the interview. The four standard fields are always included.</p></div>
+                  </div>
+                  <div className="vapi-baseline-fields">
+                    <span className="vapi-kicker">Always included</span>
+                    <div className="vapi-baseline-chip-row">
+                      {BASELINE_EVALUATION_FIELDS.map((field) => <span className="vapi-chip" key={field.key}>{field.label}</span>)}
+                    </div>
+                  </div>
+                  <fieldset className="vapi-channel-fieldset">
+                    <legend>Optional scoring areas</legend>
+                    <div className="vapi-channel-options">
+                      {EVALUATION_FIELD_CATALOG.map((field) => (
+                        <label key={field.key} className="vapi-channel-option" title={field.description}>
+                          <input type="checkbox" checked={(setupDraft.evaluationFieldToggles || []).includes(field.key)} onChange={() => toggleEvaluationField(field.key)} />
+                          <span>{field.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <div className="vapi-custom-fields">
+                    <div className="vapi-section-heading">
+                      <div><span className="vapi-kicker">CUSTOM FIELDS</span><h4>Add Criteria Specific to This Role</h4></div>
+                      <span className="vapi-count-badge">{(setupDraft.customEvaluationFields || []).length} of 3</span>
+                    </div>
+                    {(setupDraft.customEvaluationFields || []).map((field, index) => (
+                      <div className="vapi-custom-field-row" key={`${field.key}-${index}`}>
+                        <div className="field">
+                          <label htmlFor={`setup-eval-label-${index}`}>Field name</label>
+                          <input id={`setup-eval-label-${index}`} required maxLength={60} value={field.label} onChange={(event) => updateCustomEvaluationField(index, "label", event.target.value)} placeholder="e.g. Product knowledge" />
+                        </div>
+                        <div className="field">
+                          <label htmlFor={`setup-eval-description-${index}`}>What should Smile assess?</label>
+                          <input id={`setup-eval-description-${index}`} required maxLength={200} value={field.description} onChange={(event) => updateCustomEvaluationField(index, "description", event.target.value)} placeholder="Explain the evidence Smile should look for." />
+                        </div>
+                        <button type="button" className="btn btn-secondary" onClick={() => removeCustomEvaluationField(index)}>Remove</button>
+                      </div>
+                    ))}
+                    {(setupDraft.customEvaluationFields || []).length < 3 && (
+                      <button type="button" className="btn btn-secondary" onClick={addCustomEvaluationField}>Add a custom field</button>
+                    )}
+                  </div>
+                </div>
                 {QUESTION_NUMBERS.map((number) => {
                   const key = `requiredInterviewQuestion${number}` as const;
                   const required = number <= 3;
@@ -778,7 +880,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
         <section className="section">
           <div className="section-title">
             <span className="section-number">2</span>
-            <h2>Face-to-Face interview and screening</h2>
+            <h2>Face-to-Face Interview and Screening</h2>
           </div>
           <p className="section-intro">Review the HR interviewer and add up to two optional questions. AI-generated questions appear below for HR guidance and can be refined later in Recruitment Setup.</p>
 
@@ -826,7 +928,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
       </div>
 
       <aside className="sidebar-card">
-        <h3>What happens next</h3>
+        <h3>What Happens Next</h3>
         <div className="sidebar-list">
           {unified
             ? <><div><strong>1. Create &amp; publish</strong><br />The role is approved and posted to the channels you chose.</div>

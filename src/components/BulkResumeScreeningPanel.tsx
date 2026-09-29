@@ -671,7 +671,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     <section className="bulk-screening-panel" aria-labelledby="bulk-screening-title">
       <div className="bulk-screening-header">
         <div>
-          <h2 id="bulk-screening-title">Add resumes for screening</h2>
+          <h2 id="bulk-screening-title">Add Resumes for Screening</h2>
           <p>Choose the role, add resumes from your computer or cloud storage, then follow each screening result below.</p>
         </div>
         <span className="bulk-screening-badge">PDF, DOC, or DOCX · up to 10 MB each</span>

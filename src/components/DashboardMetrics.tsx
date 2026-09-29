@@ -202,16 +202,16 @@ export default function DashboardMetrics({
   if ((canReviewRole || canApproveRole) && applicantMetrics) task("final-decision", applicantMetrics.finalDecisionPending, "hiring decision needs review", "hiring decisions need review", "A face-to-face interview is complete and needs a decision.", "Review decisions", "/applicants?stage=Face-to-Face%20Decision%20Pending");
 
   const pipeline = applicantMetrics ? [
-    { label: "Applications received", value: applicantMetrics.total, filter: "" },
-    { label: "Resume review", value: countFor(applicantMetrics, "resume_review"), filter: "Resume Review" },
-    { label: "Resume approved", value: applicantMetrics.resumeApproved, filter: "Resume Approved" },
-    { label: "Interview choice pending", value: applicantMetrics.interviewChoicePending, filter: "Interview Choice Pending" },
+    { label: "Applications Received", value: applicantMetrics.total, filter: "" },
+    { label: "Resume Review", value: countFor(applicantMetrics, "resume_review"), filter: "Resume Review" },
+    { label: "Resume Approved", value: applicantMetrics.resumeApproved, filter: "Resume Approved" },
+    { label: "Interview Choice Pending", value: applicantMetrics.interviewChoicePending, filter: "Interview Choice Pending" },
     { label: "Voice Interview", value: applicantMetrics.voiceBookingPending + applicantMetrics.voiceScheduled, filter: "Voice Interview" },
     { label: "Live Avatar Interview", value: applicantMetrics.liveAvatarPending + countFor(applicantMetrics, "avatar_scheduled"), filter: "Live Avatar Interview" },
     { label: "Voice Interview Review", value: applicantMetrics.voiceReviewPending, filter: "Voice Interview Review" },
     { label: "Avatar Interview Review", value: applicantMetrics.liveAvatarReviewPending, filter: "Avatar Interview Review" },
-    { label: "Face-to-face interview", value: applicantMetrics.approvedForFinal + applicantMetrics.finalScheduled, filter: "Face-to-Face Interview" },
-    { label: "Final decision", value: applicantMetrics.finalDecisionPending, filter: "Face-to-Face Decision Pending" },
+    { label: "Face-to-Face Interview", value: applicantMetrics.approvedForFinal + applicantMetrics.finalScheduled, filter: "Face-to-Face Interview" },
+    { label: "Final Decision", value: applicantMetrics.finalDecisionPending, filter: "Face-to-Face Decision Pending" },
     { label: "Completed", value: applicantMetrics.passedFinalInterview + applicantMetrics.rejected, filter: "Completed" },
   ] : [];
 
@@ -241,7 +241,7 @@ export default function DashboardMetrics({
 
     <section className="dashboard-section dashboard-attention" aria-labelledby="dashboard-attention-title" aria-busy={refreshing}>
       <div className="dashboard-section-heading">
-        <div><h2 id="dashboard-attention-title">What needs your attention</h2><p>Start with the items waiting for action.</p></div>
+        <div><h2 id="dashboard-attention-title">What Needs Your Attention</h2><p>Start with the items waiting for action.</p></div>
         {tasks.length > 0 && <span className="dashboard-attention-count">{tasks.length} {tasks.length === 1 ? "task" : "tasks"}</span>}
       </div>
       {sectionErrors.overview && <div className="dashboard-section-message" role="status">Some items couldn’t be loaded. Try refreshing to see the latest tasks.</div>}
@@ -253,32 +253,32 @@ export default function DashboardMetrics({
     </section>
 
     <section className="dashboard-section dashboard-overview" aria-labelledby="dashboard-overview-title" aria-busy={refreshing}>
-      <div className="dashboard-section-heading"><div><h2 id="dashboard-overview-title">Recruitment overview</h2><p>{applicantMetrics ? "See how applications are moving through the hiring process." : "See the current status of your hiring requests."}</p></div>{applicantMetrics && <Link className="dashboard-text-link" href="/applicants">View candidates <span aria-hidden="true">→</span></Link>}</div>
+      <div className="dashboard-section-heading"><div><h2 id="dashboard-overview-title">Recruitment Overview</h2><p>{applicantMetrics ? "See how applications are moving through the hiring process." : "See the current status of your hiring requests."}</p></div>{applicantMetrics && <Link className="dashboard-text-link" href="/applicants">View candidates <span aria-hidden="true">→</span></Link>}</div>
       {sectionErrors.overview && <div className="dashboard-section-message" role="status">We couldn’t load part of the recruitment overview. Try refreshing.</div>}
       {applicantMetrics ? <>
         <div className="dashboard-pipeline-list">{pipeline.map((stage) => <StageLink key={stage.label} label={stage.label} value={stage.value} href={stage.filter ? `/applicants?stage=${encodeURIComponent(stage.filter)}` : "/applicants"} />)}</div>
         <p className="dashboard-pipeline-note">The total shows all applications. The other counts show each candidate’s current stage. “Completed” includes candidates who passed or were not selected.</p>
         {canReviewRole && organizationId && !personalScope && <GettingStarted organizationId={organizationId} metrics={metrics} />}
       </> : metrics.total !== undefined ? <div className="dashboard-role-overview">
-        <StageLink label="Role requests waiting for HR review" value={metrics.pendingHrDiscussion || 0} href="/roles?status=Pending%20HR%20Discussion" />
-        <StageLink label="Approved hiring requests" value={metrics.approved || 0} href="/roles?status=Approved" />
-        <StageLink label="Open positions" value={metrics.openPositions || 0} href="/roles" />
+        <StageLink label="Role Requests Waiting for HR Review" value={metrics.pendingHrDiscussion || 0} href="/roles?status=Pending%20HR%20Discussion" />
+        <StageLink label="Approved Hiring Requests" value={metrics.approved || 0} href="/roles?status=Approved" />
+        <StageLink label="Open Positions" value={metrics.openPositions || 0} href="/roles" />
       </div> : <div className="dashboard-section-message">Recruitment overview isn’t available right now.</div>}
     </section>
 
     {canReviewRole && <section className="dashboard-section dashboard-upcoming" aria-labelledby="dashboard-upcoming-title" aria-busy={refreshing}>
-      <div className="dashboard-section-heading"><div><h2 id="dashboard-upcoming-title">Upcoming interviews</h2><p>The next scheduled interviews you can manage.</p></div><Link className="dashboard-text-link" href="/bookings">View all interviews <span aria-hidden="true">→</span></Link></div>
+      <div className="dashboard-section-heading"><div><h2 id="dashboard-upcoming-title">Upcoming Interviews</h2><p>The next scheduled interviews you can manage.</p></div><Link className="dashboard-text-link" href="/bookings">View all interviews <span aria-hidden="true">→</span></Link></div>
       {sectionErrors.upcomingInterviews ? <div className="dashboard-section-message" role="status">We couldn’t load upcoming interviews. Try refreshing.</div> : upcoming.length === 0 ? <div className="dashboard-empty-state"><UiIcon name="calendar" size={20} /><p>There are no upcoming interviews.</p><Link className="dashboard-text-link" href="/bookings">Manage interview schedules <span aria-hidden="true">→</span></Link></div> : <ul className="dashboard-interview-list">{upcoming.map((interview) => <li key={`${interview.applicationId}:${interview.date}:${interview.startTime}`}><article className="dashboard-interview-row"><div className="dashboard-interview-date"><strong>{interviewDate(interview.date)}</strong><span>{interview.startTime}–{interview.endTime} · {interview.timezone}</span></div><div className="dashboard-interview-candidate"><strong>{interview.candidateName}</strong><span>{interview.roleTitle}</span></div><div className="dashboard-interview-meta"><span className="dashboard-interview-type">{interview.interviewType}</span><span>{interview.interviewerName ? `Interviewer: ${interview.interviewerName}` : "Interviewer not assigned"}</span></div><span className="dashboard-status-label"><UiIcon name="check-circle" size={15} />Scheduled</span><Link className="dashboard-interview-link" href={interview.href}>View details</Link></article></li>)}</ul>}
     </section>}
 
     {canReviewRole && <section className="dashboard-section dashboard-alerts" aria-labelledby="dashboard-alerts-title" aria-busy={refreshing}>
-      <div className="dashboard-section-heading"><div><h2 id="dashboard-alerts-title">Actionable alerts</h2><p>Issues that need someone to follow up.</p></div>{alerts.length > 0 && <span className="dashboard-alert-count">{alerts.length} to resolve</span>}</div>
+      <div className="dashboard-section-heading"><div><h2 id="dashboard-alerts-title">Actionable Alerts</h2><p>Issues that need someone to follow up.</p></div>{alerts.length > 0 && <span className="dashboard-alert-count">{alerts.length} to resolve</span>}</div>
       {sectionErrors.alerts && <div className="dashboard-section-message" role="status">We couldn’t check all interview and recording issues. Try refreshing.</div>}
       {alerts.length === 0 && !sectionErrors.alerts ? <div className="dashboard-empty-state"><UiIcon name="check-circle" size={20} /><p>No issues need your attention right now.</p></div> : alerts.length > 0 ? <ul className="dashboard-alert-list">{alerts.map((alert) => <li key={alert.id}><article className="dashboard-alert-row"><span className="dashboard-alert-icon" aria-hidden="true"><UiIcon name="alert" size={19} /></span><div className="dashboard-alert-copy"><strong>{alert.title}</strong><p>{alert.description}</p><small>{alert.savedMessage}</small></div><Link className="dashboard-alert-action" href={alert.href}>{alert.actionLabel}<span aria-hidden="true">→</span></Link></article></li>)}</ul> : null}
     </section>}
 
     <section className="dashboard-section dashboard-activity" aria-labelledby="dashboard-activity-title" aria-busy={refreshing}>
-      <div className="dashboard-section-heading"><div><h2 id="dashboard-activity-title">Recent activity</h2><p>New applications and hiring requests.</p></div></div>
+      <div className="dashboard-section-heading"><div><h2 id="dashboard-activity-title">Recent Activity</h2><p>New applications and hiring requests.</p></div></div>
       {sectionErrors.recentActivity ? <div className="dashboard-section-message" role="status">We couldn’t load recent activity. Try refreshing.</div> : <>
         {sectionErrors.activityPartial && <p className="dashboard-partial-note" role="status">Some recent updates couldn’t be loaded.</p>}
         {activity.length === 0 ? <div className="dashboard-empty-state"><UiIcon name="info" size={20} /><p>No recent activity is available yet.</p></div> : <ul className="dashboard-activity-list">{activity.map((item) => <li key={item.id}><Link className="dashboard-activity-row" href={item.href}><span className="dashboard-activity-marker" aria-hidden="true"><UiIcon name={item.id.startsWith("application:") ? "applicants" : "roles"} size={17} /></span><span className="dashboard-activity-copy"><span><strong>{item.actor}</strong> {item.action} <strong>{item.subject}</strong></span><time dateTime={item.occurredAt}>{dateTime(item.occurredAt)}</time></span><span className="dashboard-pipeline-arrow" aria-hidden="true">→</span></Link></li>)}</ul>}

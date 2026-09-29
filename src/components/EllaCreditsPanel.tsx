@@ -31,15 +31,16 @@ type LedgerResponse = {
     phoneInterview: number;
     phoneInterviewNoAnswer: number;
     phoneInterviewIncomplete: number;
+    liveAvatarInterview: number;
     discountThreshold: number;
     discountPercent: number;
   };
 };
 
 type ActivityTypeFilter = "all" | "added" | "used";
-type ActivityEventFilter = "all" | "manual" | "cv_analysis" | "voice_interview";
+type ActivityEventFilter = "all" | "manual" | "cv_analysis" | "voice_interview" | "live_avatar_interview";
 
-const defaultPricing = { cvAnalysis: 1, phoneInterview: 10, phoneInterviewNoAnswer: 5, phoneInterviewIncomplete: 8, discountThreshold: 2000, discountPercent: 10 };
+const defaultPricing = { cvAnalysis: 1, phoneInterview: 10, phoneInterviewNoAnswer: 5, phoneInterviewIncomplete: 8, liveAvatarInterview: 20, discountThreshold: 2000, discountPercent: 10 };
 
 const eventLabels: Record<string, string> = {
   manual_topup: "Manual top-up",
@@ -49,6 +50,7 @@ const eventLabels: Record<string, string> = {
   phone_interview: "Voice interview",
   phone_interview_no_answer: "Voice interview",
   phone_interview_incomplete: "Voice interview",
+  live_avatar_interview: "Live avatar interview",
 };
 
 const nf = new Intl.NumberFormat("en-US");
@@ -62,6 +64,7 @@ function formatWhen(value: string) {
 function eventFilterFor(event: string): ActivityEventFilter {
   if (event === "cv_analysis") return "cv_analysis";
   if (event.startsWith("phone_interview")) return "voice_interview";
+  if (event === "live_avatar_interview") return "live_avatar_interview";
   return "manual";
 }
 
@@ -167,7 +170,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
       <div className={styles.header}>
         <div>
           <h2>Credit Balance</h2>
-          <p>All signed-in users in this organization share one Smile Credits balance — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer.` : "pricing is loaded from the active credit settings"}. AI actions are blocked when the balance runs out.</p>
+          <p>All signed-in users in this organization share one Smile Credits balance — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer; live avatar interviews cost ${nf.format(pricing.liveAvatarInterview)} when completed.` : "pricing is loaded from the active credit settings"}. AI actions are blocked when the balance runs out.</p>
         </div>
         {data && (
           <div className={`${styles.headline} ${headlineTone}`}>
@@ -226,6 +229,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
               <option value="manual">Manual changes</option>
               <option value="cv_analysis">CV analysis</option>
               <option value="voice_interview">Voice interviews</option>
+              <option value="live_avatar_interview">Live avatar interviews</option>
             </select>
             {hasActivityFilters && <button type="button" className="btn btn-secondary btn-small" onClick={clearActivityFilters}>Clear</button>}
           </div>
