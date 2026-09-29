@@ -57,6 +57,7 @@ import { scheduledInstant } from "@/lib/interview-time";
 import type { RoleRequestDetails, RoleRequestSummary } from "@/lib/google-sheets";
 import { applicantStageLabel, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
+import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { generateRoleId } from "@/lib/role-id";
 import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows } from "@/lib/google-calendar";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isFinalInterviewSlotDuration, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
@@ -790,6 +791,43 @@ export async function targetRecordApplicantDecision(input: { applicationId: stri
   return result;
 }
 
+// Pull the AI's recorded value for each role-configured evaluation field out of
+// whatever object/array shape the screening or voice workflow stored.
+function structuredDataOf(raw: unknown): unknown {
+  const asRecord = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  const root = asRecord(raw);
+  if (!root) return null;
+  const body = asRecord(root.body) ?? root;
+  const message = asRecord(body.message) ?? body;
+  const analysis = asRecord(message.analysis);
+  return analysis?.structuredData ?? analysis?.structured_data ?? message.structuredData ?? message.structured_data ?? null;
+}
+
+function evaluationValuesFor(fields: { key: string; label: string }[], sources: unknown[]) {
+  const lookups = sources.flatMap((source): Record<string, unknown>[] => {
+    if (Array.isArray(source)) {
+      const map: Record<string, unknown> = {};
+      for (const entry of source) {
+        if (entry && typeof entry === "object") {
+          const item = entry as Record<string, unknown>;
+          const key = text(item.key ?? item.field ?? item.name);
+          if (key) map[key] = item.value ?? item.score ?? item.result;
+        }
+      }
+      return [map];
+    }
+    return source && typeof source === "object" ? [source as Record<string, unknown>] : [];
+  });
+  return fields.flatMap((field) => {
+    for (const lookup of lookups) {
+      const raw = lookup[field.key] ?? lookup[field.label];
+      const value = raw !== null && typeof raw === "object" ? JSON.stringify(raw) : text(raw);
+      if (value) return [{ key: field.key, label: field.label, value }];
+    }
+    return [];
+  });
+}
+
 export async function targetSendVoiceBookingInvitation(input: { applicationId: string; reviewer: { name: string; email: string } }) {
   const row = await getApplication(input.applicationId);
   if (!row || rowOrganizationId(row.application) !== await targetOrganizationId()) throw new Error("Applicant not found.");
@@ -1284,6 +1322,10 @@ export async function targetApplicantDetails(externalId: string) {
       : liveVoiceAttemptStatus || (summary.currentStage === "voice_review_pending" ? "Awaiting Review" : "");
   const resumeText = await storedResumeText(resumeFile);
   const roleDetails = await targetRoleDetails(row.roleExternalId);
+  const configuredEvaluationFields = evaluationFieldsForSetup(roleDetails?.evaluationFieldToggles, roleDetails?.customEvaluationFields)
+    .filter((field) => !["score", "recommendation", "strengths", "concerns"].includes(field.key));
+  const resumeEvaluationFields = evaluationValuesFor(configuredEvaluationFields, [screening?.evaluationScores]);
+  const voiceEvaluationFields = evaluationValuesFor(configuredEvaluationFields, [structuredDataOf(voiceResult?.raw)]);
   return {
     ...summary,
     roleDetails,
@@ -1308,7 +1350,7 @@ export async function targetApplicantDetails(externalId: string) {
     resumeDecisionDate: date(application.resumeHrDecisionAt),
     resumeReviewer: text(application.resumeHrReviewer),
     resumeComments: text(application.resumeHrComments),
-    resumeEvaluationFields: [],
+    resumeEvaluationFields,
     voiceDecision: text(application.voiceHrDecision),
     voiceComments: text(application.voiceHrComments),
     // A provider may return score 0 for an interview that ended before any
@@ -1321,7 +1363,7 @@ export async function targetApplicantDetails(externalId: string) {
     voiceCommunicationQuality: voiceLog?.communicationScore == null ? "" : String(voiceLog.communicationScore),
     voiceAnswerCompleteness: voiceLog?.completenessScore == null ? "" : String(voiceLog.completenessScore),
     voiceFollowUpQuestions: text(voiceLog?.followUpQuestions),
-    voiceEvaluationFields: [],
+    voiceEvaluationFields,
     voiceTranscript: text(voiceResult?.transcript || voiceLog?.transcript),
     voiceCallStatus,
     voiceScheduledDate: voiceStartsAt.date,

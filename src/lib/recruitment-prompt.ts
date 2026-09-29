@@ -21,6 +21,8 @@ type RecruitmentPromptInput = Pick<RecruitmentSetupInput, "jobDescription" | "sc
   salaryMin?: string;
   salaryMax?: string;
   noticePeriodRequirement?: string;
+  licenseRequirementStatus?: string;
+  salaryDisclosureStatus?: string;
   evaluationFields?: { key: string; label: string; description: string }[];
 };
 
@@ -238,7 +240,7 @@ If the applicant asks a simple conversational question that can be answered from
 
 Candidates may ask about topics outside the information available to Smile, such as salary or compensation, benefits, incentives or commissions, leave policies, working hours, shift schedules, work setup, team structure, department details, company policies, hiring process details not explicitly provided, application status, why they were selected, job responsibilities beyond what is stated, or any topic not contained in these instructions.
 
-Salary and budget questions: if the applicant asks about salary, compensation, pay, or the approved budget, check the HR Screening Criteria. If an approved salary or budget range is clearly provided, state it briefly and accurately - do not negotiate, do not promise the maximum amount, do not volunteer it unless asked. After answering, return naturally to the current unanswered interview question only if the call is still in SCREENING and a required question remains unanswered; otherwise return to WRAP_UP or the current closing state. Never restart at Q1. Use this format: "The approved budget range for this role is [salary range]. Final compensation will still depend on the recruitment team's assessment." If no range is provided, use the unavailable-information response below.
+Salary and budget questions: if the applicant asks about salary, compensation, pay, or the approved budget, check the HR Screening Criteria. If an approved salary or budget range is clearly provided AND its heading says it MAY BE SHARED, state it briefly and accurately; if its heading says CONFIDENTIAL, never state it and use the unavailable-information response - do not negotiate, do not promise the maximum amount, do not volunteer it unless asked. After answering, return naturally to the current unanswered interview question only if the call is still in SCREENING and a required question remains unanswered; otherwise return to WRAP_UP or the current closing state. Never restart at Q1. Use this format: "The approved budget range for this role is [salary range]. Final compensation will still depend on the recruitment team's assessment." If no range is provided, use the unavailable-information response below.
 
 For unavailable information: do not guess, create, speculate, or invent policies, benefits, compensation, schedules, or company details. Say: "That's a great question. I don't have that information available at the moment, but our recruitment team will be happy to discuss it with you during the next stage of the hiring process." Then immediately return to the current unanswered interview question only if the call is still in SCREENING and a required question remains unanswered; otherwise continue the WRAP_UP or closing flow. If the candidate asks the same unavailable-information question again, say: "I apologize, but I don't have access to those details. Our recruitment team will be able to discuss that with you during the next stage." Then continue the current state without reopening a completed question.
 
@@ -377,13 +379,15 @@ function screeningCriteria(setup: RecruitmentPromptInput) {
     .join(" - ");
 
   const approvedSalary = setup.salaryOrBudgetRange?.trim() || salaryRange;
+  const licenseStatus = setup.licenseRequirementStatus?.trim() || (setup.licenseOrCertificateRequired?.trim() ? "Required" : "Not required");
+  const salaryMayBeShared = /^disclosed$/i.test(setup.salaryDisclosureStatus?.trim() || "");
   return [
     "ROLE:\n" + valueOr(setup.roleTitle, "{{selected_role}}"),
-    "LICENSE OR CERTIFICATE REQUIRED:\n" + valueOr(setup.licenseOrCertificateRequired, "None specified."),
+    `LICENSE OR CERTIFICATE (${licenseStatus.toUpperCase()}):\n` + valueOr(setup.licenseOrCertificateRequired, "None specified."),
     "KEYWORDS TO LOOK FOR:\n" + valueOr(setup.keywordsToLookFor, "None specified."),
     "MINIMUM YEARS OF EXPERIENCE:\n" + valueOr(setup.experienceRequired, "Not specified."),
     "TRANSFERABLE SKILLS ACCEPTED:\n" + valueOr(setup.transferableSkillsAccepted, "None specified."),
-    "SALARY OR BUDGET RANGE:\n" + (approvedSalary || "Not specified."),
+    `SALARY OR BUDGET RANGE (${salaryMayBeShared ? "MAY BE SHARED WITH THE APPLICANT IF ASKED" : "CONFIDENTIAL - NEVER STATE THIS TO THE APPLICANT"}):\n` + (approvedSalary || "Not specified."),
     "CANDIDATE START AVAILABILITY (SCREENING ONLY):\n" + valueOr(setup.earliestAvailabilityRule || setup.noticePeriodRequirement, "Do not ask unless the approved role setup explicitly requires start-availability information."),
     "ADDITIONAL SCREENING CRITERIA:\n" + valueOr(setup.screeningCriteria, "None specified."),
   ].filter(Boolean).join("\n\n");
@@ -485,6 +489,37 @@ export function renderRecruitmentSystemPrompt(template: string, setup: Recruitme
   return fairRendered;
 }
 
+/**
+ * The role-request settings that every AI grader (voice call, live avatar
+ * interview, post-interview analysis) must apply, rendered as plain text so
+ * all channels grade against exactly the same HR-configured criteria.
+ */
+export function buildRoleRequirementsContext(roleSetup: VoiceCallRoleSetup | null | undefined, roleTitle: string) {
+  const setup = roleSetup || {};
+  return {
+    requirements: screeningCriteria({
+      roleTitle,
+      jobDescription: setup.jobDescription || "",
+      screeningCriteria: setup.screeningCriteria || "",
+      licenseOrCertificateRequired: setup.licenseOrCertificateRequired || "",
+      keywordsToLookFor: setup.keywordsToLookFor || "",
+      transferableSkillsAccepted: setup.transferableSkillsAccepted || "",
+      salaryOrBudgetRange: setup.salaryOrBudgetRange || "",
+      earliestAvailabilityRule: setup.earliestAvailabilityRule || "",
+      experienceRequired: setup.minimumYearsOfExperience || "",
+      licenseRequirementStatus: setup.licenseRequirementStatus || "",
+      salaryDisclosureStatus: setup.salaryDisclosureStatus || "",
+    }),
+    interviewQuestions: buildNumberedInterviewQuestions([
+      setup.requiredInterviewQuestion1, setup.requiredInterviewQuestion2, setup.requiredInterviewQuestion3,
+      setup.requiredInterviewQuestion4, setup.requiredInterviewQuestion5,
+    ]).join("\n"),
+    evaluationFields: evaluationFieldLines({
+      evaluationFields: evaluationFieldsForSetup(setup.evaluationFieldToggles, setup.customEvaluationFields),
+    } as RecruitmentPromptInput),
+  };
+}
+
 export function generateRecruitmentSystemPrompt(setup: RecruitmentPromptInput): string {
   return renderRecruitmentSystemPrompt(STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE, setup);
 }
@@ -517,6 +552,8 @@ type VoiceCallRoleSetup = {
   salaryOrBudgetRange?: string;
   earliestAvailabilityRule?: string;
   minimumYearsOfExperience?: string;
+  licenseRequirementStatus?: string;
+  salaryDisclosureStatus?: string;
   requiredInterviewQuestion1?: string;
   requiredInterviewQuestion2?: string;
   requiredInterviewQuestion3?: string;
@@ -579,6 +616,8 @@ export function buildVoiceCallPrompt(
     salaryOrBudgetRange: setup.salaryOrBudgetRange || "",
     earliestAvailabilityRule: setup.earliestAvailabilityRule || "",
     experienceRequired: setup.minimumYearsOfExperience || "",
+    licenseRequirementStatus: setup.licenseRequirementStatus || "",
+    salaryDisclosureStatus: setup.salaryDisclosureStatus || "",
     interviewQuestions,
     evaluationFields,
   };

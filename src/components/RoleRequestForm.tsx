@@ -297,19 +297,33 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
         result.draft.recruitmentSetup.requiredInterviewQuestion5,
       ].filter(Boolean);
 
-      setForm((current) => ({
-        ...current,
-        ...result.draft?.role,
-        // Keep values HR already entered when the AI draft cannot infer them.
-        jobTitle: result.draft?.role.jobTitle || current.jobTitle,
-        department: result.draft?.role.department || current.department,
-        jobDescription: result.draft?.role.jobDescription || current.jobDescription,
-        // The parser intentionally does not invent a hiring date. Do not let
-        // its empty placeholder erase a date HR already selected.
-        targetHiringDate: result.draft?.role.targetHiringDate || current.targetHiringDate,
-        aiGeneratedScreeningQuestions: questions,
-        recruitmentSetupDraft: result.draft?.recruitmentSetup || current.recruitmentSetupDraft,
-      }));
+      const draft = result.draft;
+      setForm((current) => {
+        const jobTitle = draft.role.jobTitle || current.jobTitle;
+        const requestType = draft.role.requestType || current.requestType;
+        // "Populate" should leave nothing for HR to fill in by hand: anything the
+        // parser cannot infer gets a sensible, editable default.
+        const defaultHiringDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        const defaultHiringDateValue = `${defaultHiringDate.getFullYear()}-${String(defaultHiringDate.getMonth() + 1).padStart(2, "0")}-${String(defaultHiringDate.getDate()).padStart(2, "0")}`;
+        return {
+          ...current,
+          ...draft.role,
+          jobTitle,
+          department: draft.role.department || current.department,
+          jobDescription: draft.role.jobDescription || current.jobDescription,
+          reasonForRequest: draft.role.reasonForRequest || current.reasonForRequest
+            || (requestType === "Staff Replacement" ? `Replacement for the ${jobTitle} position.` : `New ${jobTitle} position to support the team.`),
+          targetHiringDate: draft.role.targetHiringDate || current.targetHiringDate || defaultHiringDateValue,
+          aiGeneratedScreeningQuestions: questions,
+          recruitmentSetupDraft: {
+            ...draft.recruitmentSetup,
+            postingChannels: draft.recruitmentSetup.postingChannels.length > 0
+              ? draft.recruitmentSetup.postingChannels
+              : (current.recruitmentSetupDraft.postingChannels?.length ? current.recruitmentSetupDraft.postingChannels : POSTING_CHANNELS),
+            aiSystemPrompt: draft.recruitmentSetup.aiSystemPrompt || current.recruitmentSetupDraft.aiSystemPrompt,
+          },
+        };
+      });
     } catch (error) {
       setParseError(clientErrorMessage(error, "Unable to generate the role draft."));
     } finally {
@@ -392,15 +406,20 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
 
   function setupPayload(setupAction: "publish_role" | "save_draft") {
     const questions = QUESTION_NUMBERS.map((number) => String(setupDraft[`requiredInterviewQuestion${number}` as const] || "").trim());
-    const licenseRequired = licenseStatus === "Not required" ? "" : String(setupDraft.licenseOrCertificateRequired || "").trim();
+    const licenseText = String(setupDraft.licenseOrCertificateRequired || "").trim();
+    // These policies have no field on this form, so never publish a "Required"
+    // choice whose mandatory detail (license name / venue) was never captured.
+    const effectiveLicenseStatus = licenseStatus === "Required" && !licenseText ? "Not required" : licenseStatus;
+    const licenseRequired = effectiveLicenseStatus === "Not required" ? "" : licenseText;
+    const effectiveInterviewStatus = interviewStatus === "Required" && !String(setupDraft.finalInterviewVenue || "").trim() ? "Not required" : interviewStatus;
     const values = {
       ...setupDraft,
       jobDescription: form.jobDescription,
       salaryDisclosureStatus: salaryStatus,
-      licenseRequirementStatus: licenseStatus,
+      licenseRequirementStatus: effectiveLicenseStatus,
       licenseOrCertificateRequired: licenseRequired,
-      hodInterviewRequired: interviewStatus,
-      finalInterviewVenue: interviewStatus === "Required" ? String(setupDraft.finalInterviewVenue || "").trim() : "",
+      hodInterviewRequired: effectiveInterviewStatus,
+      finalInterviewVenue: effectiveInterviewStatus === "Required" ? String(setupDraft.finalInterviewVenue || "").trim() : "",
       postingChannels: setupDraft.postingChannels || [],
       requiredInterviewQuestion1: questions[0],
       requiredInterviewQuestion2: questions[1],
@@ -827,7 +846,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
                 <span className="section-number">3</span>
                 <h2>Publishing</h2>
               </div>
-              <p className="section-intro">Choose where the role is posted and a few hiring policies. Sensible defaults are already selected.</p>
+              <p className="section-intro">Choose where the role is posted. Salary visibility, license requirements and the face-to-face interview can be adjusted later in Recruitment Setup.</p>
               <div className="form-stack">
                 <fieldset className="field publish-channels" id="setup_channels" aria-invalid={Boolean(fieldErrors.setup_channels)}>
                   <legend>Post this role on <strong className="required-mark">*</strong></legend>
@@ -838,41 +857,6 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
                     </label>
                   ))}
                 </fieldset>
-                <div className="field">
-                  <label htmlFor="setup_salary">Show the salary to candidates?</label>
-                  <select id="setup_salary" value={salaryStatus} onChange={(event) => updateSetup("salaryDisclosureStatus", event.target.value)}>
-                    <option value="Not disclosed">No, keep it private</option>
-                    <option value="Disclosed">Yes, show it</option>
-                  </select>
-                </div>
-                <div className="field">
-                  <label htmlFor="setup_licenseStatus">Is a license or certificate needed?</label>
-                  <select id="setup_licenseStatus" value={licenseStatus} onChange={(event) => updateSetup("licenseRequirementStatus", event.target.value)}>
-                    <option value="Not required">Not required</option>
-                    <option value="Preferred">Preferred</option>
-                    <option value="Required">Required</option>
-                  </select>
-                </div>
-                {licenseStatus === "Required" && (
-                  <div className="field">
-                    <label htmlFor="setup_license">Which license or certificate? <strong className="required-mark">*</strong></label>
-                    <input id="setup_license" {...fieldErrorProps("setup_license")} value={setupDraft.licenseOrCertificateRequired} onChange={(event) => updateSetup("licenseOrCertificateRequired", event.target.value)} placeholder="e.g. Professional Engineer license" />
-                  </div>
-                )}
-                <div className="field">
-                  <label htmlFor="setup_interview">Add a face-to-face interview with HR?</label>
-                  <select id="setup_interview" value={interviewStatus} onChange={(event) => updateSetup("hodInterviewRequired", event.target.value)}>
-                    <option value="Not required">No</option>
-                    <option value="Required">Yes</option>
-                  </select>
-                  <small className="field-help">Times come from the HR Google Calendar connected in Settings.</small>
-                </div>
-                {interviewStatus === "Required" && (
-                  <div className="field">
-                    <label htmlFor="setup_venue">Interview venue and arrival instructions <strong className="required-mark">*</strong></label>
-                    <textarea id="setup_venue" {...fieldErrorProps("setup_venue")} value={setupDraft.finalInterviewVenue} onChange={(event) => updateSetup("finalInterviewVenue", event.target.value)} placeholder="Address, floor or room, and who to ask for." />
-                  </div>
-                )}
               </div>
             </section>
           </>

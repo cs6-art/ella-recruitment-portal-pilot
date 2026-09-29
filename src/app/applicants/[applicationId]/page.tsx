@@ -23,6 +23,7 @@ import { formatMatchScore } from "@/lib/score-format";
 import { formatPortalClock, formatPortalDateTime } from "@/lib/portal-time";
 import { applicantDecisionLabel, applicantStageLabel, LIVE_AVATAR_REVIEW_LABEL, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 import { parseTextList } from "@/lib/formatters";
+import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { getLiveInterviewReview, type LiveInterviewReview as LiveReview } from "@/lib/live-interview-store";
 import { INTERVIEW_STATE_LABELS } from "@/lib/live-interview";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
@@ -94,6 +95,46 @@ function DetailField({ label, value, className = "" }: { label: string; value?: 
 
 function DetailCardHeader({ icon, title, description }: { icon: UiIconName; title: string; description?: string }) {
   return <div className="card-header applicant-section-header"><div className="applicant-section-heading"><span className="applicant-section-icon"><UiIcon name={icon} size={17} /></span><div><h2>{title}</h2>{description && <p>{description}</p>}</div></div></div>;
+}
+
+// Shows HR exactly which role-request settings the AI applied when it screened
+// and interviewed this applicant, and the value it recorded for each scored field.
+function AiGradingCriteria({ applicant }: { applicant: ApplicantDetails }) {
+  const role = applicant.roleDetails;
+  if (!role) return null;
+  const licenseStatus = role.licenseRequirementStatus || (role.licenseOrCertificateRequired ? "Required" : "Not required");
+  const salaryShared = /^disclosed$/i.test(role.salaryDisclosureStatus || "");
+  const criteria: { label: string; value: string }[] = [
+    { label: "Screening criteria", value: role.screeningCriteria || "" },
+    { label: `License or certificate (${licenseStatus})`, value: licenseStatus === "Not required" ? "Not required for this role." : (role.licenseOrCertificateRequired || "") },
+    { label: "Keywords to look for", value: role.keywordsToLookFor || "" },
+    { label: "Minimum experience", value: role.minimumYearsOfExperience || role.experienceRequired || "" },
+    { label: "Transferable skills accepted", value: role.transferableSkillsAccepted || "" },
+    { label: `Salary or budget range (${salaryShared ? "may be shared with the applicant" : "kept confidential"})`, value: role.salaryOrBudgetRange || "" },
+    { label: "Candidate start availability", value: role.earliestAvailabilityRule || role.noticePeriodRequirement || "" },
+  ];
+  const fields = evaluationFieldsForSetup(role.evaluationFieldToggles, role.customEvaluationFields);
+  const recorded = new Map([...applicant.resumeEvaluationFields, ...applicant.voiceEvaluationFields].map((field) => [field.key, field.value]));
+  const baselineResults: Record<string, string> = {
+    score: applicant.voiceScore ? `${applicant.voiceScore} (interview)` : applicant.matchScore ? `${applicant.matchScore} (resume match)` : "",
+    recommendation: applicant.voiceRecommendation || applicant.recommendation,
+    strengths: applicant.voiceStrengths || applicant.strengths,
+    concerns: applicant.voiceConcerns || applicant.gaps,
+  };
+  return <section className="card applicant-detail-card">
+    <DetailCardHeader icon="document" title="How AI Graded This Applicant" description="The role settings Smile applied and the value it recorded for each scored field." />
+    <div className="applicant-detail-content">
+      <h3>Role requirements applied</h3>
+      <div className="applicant-detail-inline-fields">
+        {criteria.map((item) => <DetailField key={item.label} label={item.label} value={item.value} />)}
+      </div>
+      <h3>Scored fields</h3>
+      <div className="applicant-detail-inline-fields">
+        {fields.map((field) => <DetailField key={field.key} label={field.label} value={recorded.get(field.key) || baselineResults[field.key] || "Not recorded yet"} />)}
+      </div>
+      <p className="applicant-voice-review-hint">Fields are set in the role request. Communication quality and answer completeness appear in the interview review above once the interview is graded.</p>
+    </div>
+  </section>;
 }
 
 function FinalInterviewCard({ applicant, role }: { applicant: ApplicantDetails; role: RoleRequestDetails | null }) {
@@ -302,6 +343,7 @@ export default async function ApplicantDetailsPage({ params, searchParams }: { p
     <div className="applicant-detail-summary"><DetailField label="Selected Role" value={applicant.selectedRole} /><DetailField label="Department" value={applicant.department} /><DetailField label="Applied" value={dateValue(applicant.appliedAt)} /><DetailField label="Interview type" value={interviewMode === "pending" ? "Not selected" : interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"} /><DetailField label="Match Score" value={formatMatchScore(applicant.matchScore)} /><DetailField label="Recommendation" value={applicant.recommendation} /><DetailField label="Next Action" value={applicant.nextAction} /></div>
     <div className="applicant-detail-grid"><div className="applicant-detail-main">
       <CombinedScreeningEvidence applicant={applicant} liveReview={liveReview} canRetryLiveReview={canDecideApplicant(user)} />
+      <AiGradingCriteria applicant={applicant} />
       <ApplicantDecisionPanel applicationId={applicant.applicationId} currentStage={applicant.currentStage} resumeDecision={applicant.resumeDecision} resumeComments={resumeComments} voiceDecision={applicant.voiceDecision} voiceComments={voiceComments} voiceStatus={applicant.voiceCallStatus || applicant.voiceStatus} finalInterviewStatus={applicant.finalInterviewStatus} finalStatus={applicant.finalStatus} finalComments={finalComments} finalBookingLink={applicant.finalBookingLink} voiceBookingLink={externalUrl(applicant.voiceBookingLink)} voiceRetryEligible={!/(?:^|[^a-z])failed(?:[^a-z]|$)|blocked|system[_ -]?failure|provider[_ -]?failure|technical[_ -]?failure|dispatch[_ -]?fail/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus}`) && /no[_ -]?answer|no[_ -]?show|incomplete|not connected|voicemail|busy|declined|cancell?ed/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus} ${applicant.voiceBookingStatus}`)} canReview={canDecideApplicant(user)} interviewMode={interviewMode} />
       <section className="card applicant-detail-card"><DetailCardHeader icon="document" title="Resume / CV" description="The candidate's submitted resume document." /><ResumeResource value={applicant.resumeText} fileId={applicant.resumeFileId} fileName={applicant.resumeFileName} expiresAt={applicant.resumeFileExpiresAt} /></section>
       <section className="card applicant-detail-card"><DetailCardHeader icon="microphone" title="Interview Questions" description="Questions prepared for the candidate's interview." /><InterviewQuestions value={applicant.interviewQuestions} /></section>

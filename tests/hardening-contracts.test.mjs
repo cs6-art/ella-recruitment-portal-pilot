@@ -78,7 +78,7 @@ test("status and setup payloads preserve idempotency and event contracts", () =>
 test("structured Recruitment Setup can generate a readable prompt", () => {
   assert.match(promptSource, /Job description/);
   assert.match(promptSource, /KEYWORDS TO LOOK FOR/);
-  assert.match(promptSource, /LICENSE OR CERTIFICATE REQUIRED/);
+  assert.match(promptSource, /LICENSE OR CERTIFICATE \(\$\{licenseStatus\.toUpperCase\(\)\}\)/);
   assert.match(promptSource, /\{\{interview_questions\}\}/);
   assert.match(promptSource, /\{\{system_prompt\}\}/);
 });
