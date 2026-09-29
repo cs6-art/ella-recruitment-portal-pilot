@@ -160,7 +160,7 @@ export async function POST(request: Request, context: Context) {
     const webhookUrl = portalConfig.N8N_Recruitment_Setup_Webhook_URL || portalConfig.N8N_Role_Webhook_URL;
     const webhookSecret = process.env.N8N_WEBHOOK_SECRET;
     const workflowConfigured = Boolean(webhookUrl && webhookSecret);
-    if (!workflowConfigured && setupAction !== "save_draft" && !isAutosaveDraft) return NextResponse.json({ success: false, error: "The recruitment setup workflow is not configured. Save can still be used, but publishing requires the workflow." }, { status: 503 });
+    if (!workflowConfigured && setupAction !== "save_draft" && !isAutosaveDraft) return NextResponse.json({ success: false, error: "Publishing is not available right now. You can still save your changes as a draft. Please contact your administrator." }, { status: 503 });
 
     const updatedAt = new Date().toISOString();
     const finalInterviewCalendar = await getFinalInterviewCalendarConfig();

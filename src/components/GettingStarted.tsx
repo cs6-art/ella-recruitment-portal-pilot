@@ -90,7 +90,7 @@ export default function GettingStarted({ organizationId, metrics }: { organizati
         key: "email",
         title: "Confirm email delivery",
         detail: !email ? "Checking whether candidate and HR emails are being sent."
-          : !email.enabled ? "Outbound email is switched off for this deployment, so no candidate or HR emails will be sent. Ask your administrator to turn it on."
+          : !email.enabled ? "Email sending is switched off, so no candidate or HR emails will be sent. Ask your administrator to turn it on."
           : email.failed > 0 ? `${email.failed} email${email.failed === 1 ? "" : "s"} failed to send. Ask your administrator to check the email connection.`
           : email.sent > 0 ? "Emails are being sent."
           : email.pending > 0 ? `${email.pending} email${email.pending === 1 ? " is" : "s are"} waiting to be sent. If they stay queued, the email connection may not be running.`

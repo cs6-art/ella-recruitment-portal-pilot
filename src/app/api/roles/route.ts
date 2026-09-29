@@ -564,7 +564,7 @@ export async function POST(request: Request) {
     const configuredWebhookUrl = webhookUrl.trim();
     const configuredWebhookSecret = webhookSecret?.trim() || "";
     if (!configuredWebhookUrl || !configuredWebhookSecret) {
-      return NextResponse.json({ success: false, error: "The n8n role automation is not configured. Contact an administrator." }, { status: 503 });
+      return NextResponse.json({ success: false, error: "Role requests cannot be submitted right now. Please contact your administrator." }, { status: 503 });
     }
 
     // Retry transient n8n failures, including HTTP 429 rate limits, but never

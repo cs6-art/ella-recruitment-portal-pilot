@@ -40,7 +40,7 @@ async function view(row: NonNullable<Awaited<ReturnType<typeof getPaymentByRefer
 export async function GET(_request: Request, { params }: { params: Promise<{ reference: string }> }) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
-  if (!isPaymentsConfigured()) return NextResponse.json({ success: false, code: "NOT_CONFIGURED", error: "Payments are not configured." }, { status: 503 });
+  if (!isPaymentsConfigured()) return NextResponse.json({ success: false, code: "NOT_CONFIGURED", error: "Payments are not available right now. Please contact your administrator." }, { status: 503 });
 
   const { reference } = await params;
   const row = await paymentVisibleToUser(reference, user);
@@ -53,7 +53,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ref
 export async function POST(request: Request, { params }: { params: Promise<{ reference: string }> }) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
-  if (!isPaymentsConfigured()) return NextResponse.json({ success: false, code: "NOT_CONFIGURED", error: "Payments are not configured." }, { status: 503 });
+  if (!isPaymentsConfigured()) return NextResponse.json({ success: false, code: "NOT_CONFIGURED", error: "Payments are not available right now. Please contact your administrator." }, { status: 503 });
 
   const rate = consumeRateLimit(`payment-reconcile:${user.email}:${requestClientKey(request)}`, 20, 15 * 60 * 1000);
   if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many reconcile attempts." }, { status: 429, headers: rateLimitHeaders(rate) });

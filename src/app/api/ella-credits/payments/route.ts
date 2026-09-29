@@ -55,7 +55,7 @@ export async function POST(request: Request) {
 
   if (!isPaymentsConfigured()) {
     return NextResponse.json(
-      { success: false, code: "NOT_CONFIGURED", error: "Credit purchases are not configured yet (DATABASE_URL + HitPay keys required)." },
+      { success: false, code: "NOT_CONFIGURED", error: "Credit purchases are not available yet. Please contact your administrator." },
       { status: 503 },
     );
   }

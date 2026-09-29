@@ -254,7 +254,7 @@ test("a lost connection or platform timeout during bulk submit never throws and 
   // a 502/503/504 with no parsed app error is treated the same way
   assert.match(submitBatchBody, /\[502, 503, 504\]\.includes\(response\.status\)/);
   // the message tells the user work already done is safe, not lost
-  assert.match(submitBatchBody, /already queued for screening/);
+  assert.match(submitBatchBody, /already being screened/);
   assert.match(submitBatchBody, /duplicates are detected automatically and skipped/);
   // runBulkQueue's loop relies on submitBatch never throwing here -- it has
   // no try/catch of its own around these calls

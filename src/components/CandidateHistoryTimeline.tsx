@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import Pagination from "@/components/Pagination";
 import UiIcon from "@/components/UiIcon";
 import type { CandidateStatusHistoryEntry } from "@/lib/candidate-applications";
-import { applicantDecisionLabel, applicantStageLabel, historySourceLabel, historyStageLabel, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
+import { applicantDecisionLabel, applicantStageLabel, historyActorLabel, historySourceLabel, historyStageLabel, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
 const PAGE_SIZE = 5;
@@ -34,6 +34,7 @@ export default function CandidateHistoryTimeline({ history, interviewMode = "ava
           <div className="history-timeline">
             {visible.map((entry, index) => {
               const source = historySourceLabel(entry.actionSource, interviewMode);
+              const actor = historyActorLabel(entry.changedByName, entry.changedByEmail);
               return (
                 <article className="timeline-entry" key={`${entry.historyId || entry.changedAt}-${index}`}>
                   <span className="timeline-marker" aria-hidden="true" />
@@ -45,7 +46,7 @@ export default function CandidateHistoryTimeline({ history, interviewMode = "ava
                       </div>
                       <time dateTime={entry.changedAt}>{formatPortalDateTime(entry.changedAt, true)}</time>
                     </div>
-                    {(entry.changedByName || entry.changedByEmail) && <div className="timeline-performer"><strong>{entry.changedByName}</strong><span>{entry.changedByEmail}</span></div>}
+                    {actor.automated ? <div className="timeline-performer"><strong>Automatic update</strong></div> : (actor.name || actor.email) && <div className="timeline-performer"><strong>{actor.name}</strong><span>{actor.email}</span></div>}
                     {source && <div className="timeline-meta">{source}</div>}
                     {entry.comments && <p className="timeline-comments">{entry.comments}</p>}
                     {entry.rejectionReason && <div className="history-entry-comments"><span>Rejection reason</span><p>{entry.rejectionReason}</p></div>}

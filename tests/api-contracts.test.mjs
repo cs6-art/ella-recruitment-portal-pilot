@@ -197,7 +197,9 @@ test("history display preserves email casing rules and creation label", () => {
   const roleDetails = fs.readFileSync("src/components/RoleDetails.tsx", "utf8");
   const actions = fs.readFileSync("src/lib/status-actions.ts", "utf8");
   assert.match(formatter, /trim\(\)\.toLowerCase\(\)/);
-  assert.match(roleDetails, /formatEmail\(entry\.performedByEmail\)/);
+  // The performer goes through historyActorLabel (hides technical names), then keeps the email casing rule.
+  assert.match(roleDetails, /historyActorLabel\(entry\.performedByName, entry\.performedByEmail\)/);
+  assert.match(roleDetails, /formatEmail\(actor\.email\)/);
   assert.match(roleDetails, /entry\.action === "role_request_created"/);
   assert.match(actions, /role_request_created: "Role Request Created"/);
   assert.doesNotMatch(roleDetails, /entry\.previousStatus\}.*→.*entry\.newStatus\}/);

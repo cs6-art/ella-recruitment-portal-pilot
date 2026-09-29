@@ -130,6 +130,23 @@ const HISTORY_SOURCE_LABELS: Record<string, string> = {
   "live_avatar": "Live Avatar Interview Completed",
 };
 
+/**
+ * Who to show as having made a change. Automatic updates are recorded under
+ * technical identifiers (a worker name, "system@…local"), which mean nothing to
+ * users, so those show as an automatic update instead of a person.
+ */
+export function historyActorLabel(name: string | null | undefined, email: string | null | undefined): { automated: boolean; name: string; email: string } {
+  const cleanName = String(name || "").trim();
+  const cleanEmail = String(email || "").trim();
+  const technical = (value: string) => /^(system|pilot|internal|worker|automation|automatic|service|bot|n8n|cron|webhook)\b/i.test(value) || /(^|[-_:])(worker|system|bot|api)([-_:@.]|$)/i.test(value) || /\.local$/i.test(value);
+  // A name with a space in it ("Sam Worker") is a person; technical names are single tokens.
+  const technicalName = (value: string) => !/\s/.test(value) && technical(value);
+  const emailIsPerson = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail) && !technical(cleanEmail);
+  const nameIsPerson = Boolean(cleanName) && !technicalName(cleanName);
+  if (emailIsPerson || nameIsPerson) return { automated: false, name: nameIsPerson ? cleanName : "", email: emailIsPerson ? cleanEmail : "" };
+  return { automated: Boolean(cleanName || cleanEmail), name: "", email: "" };
+}
+
 export function historySourceLabel(value: string | null | undefined, mode: ApplicantInterviewMode = "avatar") {
   const text = String(value || "").trim();
   if (!text) return "";

@@ -152,7 +152,7 @@ function hasNonEmptyTemplateFields(values: Setup) {
 const setupFieldLabels: Record<string, string> = {
   Job_Description: "Job description",
   Screening_Criteria: "Screening instructions",
-  AI_System_Prompt: "VAPI system prompt",
+  AI_System_Prompt: "Voice interview instructions",
   Required_Interview_Question_1: "Question 1",
   Required_Interview_Question_2: "Question 2",
   Required_Interview_Question_3: "Question 3",

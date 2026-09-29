@@ -63,7 +63,7 @@ function displayStatus(status: string) {
   if (normalized === "screened" || normalized === "processed" || normalized === "completed") return { label: "Screened", result: "Screening completed" };
   if (normalized === "processing") return { label: "Processing", result: "AI analysis running" };
   if (normalized === "failed") return { label: "Failed", result: "Retry" };
-  if (normalized === "skipped") return { label: "Skipped", result: "Already screened or queued" };
+  if (normalized === "skipped") return { label: "Skipped", result: "Already screened or waiting to be screened" };
   if (normalized === "queued" || !normalized) return { label: "Queued", result: "Waiting" };
   return { label: "Other", result: "Status needs review" };
 }
@@ -390,7 +390,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     // confirmation was lost, not the work. Return a structured outcome that
     // says so instead of letting this throw and leave the caller (in
     // particular runBulkQueue's loop) with no message and a stuck spinner.
-    const timeoutOutcome = { ok: false as const, retryable: false as const, error: "Lost connection or timed out partway through this batch. Any resumes that finished uploading are already queued for screening -- check the list below before re-submitting; duplicates are detected automatically and skipped." };
+    const timeoutOutcome = { ok: false as const, retryable: false as const, error: "Lost connection or timed out partway through this batch. Any resumes that finished uploading are already being screened. Check the list below before submitting again; duplicates are detected automatically and skipped." };
     let response: Response;
     try {
       response = await fetch("/api/resume-screening/bulk/upload", { method: "POST", body: formData });
@@ -508,7 +508,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to retry the failed resumes.");
       const returnedQueueIds = Array.isArray(result.queueIds) ? result.queueIds.filter((value: unknown): value is string => typeof value === "string" && value.length > 0) : [];
-      if (returnedQueueIds.length === 0) throw new Error("No failed queue items were re-queued. Refresh the status and try again.");
+      if (returnedQueueIds.length === 0) throw new Error("No failed resumes could be retried. Refresh the status and try again.");
       const retriedIds = new Set<string>(returnedQueueIds);
       const retriedBatch = new Map(queueItems.filter((item) => retriedIds.has(queueIdentity(item))).map((item) => [queueIdentity(item), item.driveFileName || "Resume"]));
       setActiveBatch(retriedBatch);

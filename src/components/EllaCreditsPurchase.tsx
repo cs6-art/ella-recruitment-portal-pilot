@@ -197,7 +197,7 @@ export default function EllaCreditsPurchase() {
         <div>
           <span className={styles.eyebrow}>CREDIT PURCHASE</span>
           <h2>Buy Smile Credits</h2>
-          <p>Choose a pack and continue to the secure HitPay checkout. Credits are added only after the verified payment webhook succeeds.</p>
+          <p>Choose a pack and continue to the secure checkout. Credits are added as soon as your payment is confirmed.</p>
         </div>
       </div>
 

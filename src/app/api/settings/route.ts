@@ -148,7 +148,7 @@ export async function PUT(request: Request) {
       settings: settingsForEditor(merged).map((setting) => ({ ...setting, connectionStatus: "active" as const })),
     });
   } catch (error) {
-    if (error instanceof z.ZodError) return NextResponse.json({ success: false, error: "Invalid settings payload." }, { status: 400 });
+    if (error instanceof z.ZodError) return NextResponse.json({ success: false, error: "Those settings are not valid. Please check them and try again." }, { status: 400 });
     console.error("[API Settings] PUT failed:", error);
     return NextResponse.json({ success: false, error: "Unable to save portal settings." }, { status: 500 });
   }

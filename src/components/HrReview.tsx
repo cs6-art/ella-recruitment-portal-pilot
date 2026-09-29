@@ -143,9 +143,7 @@ export default function HrReview({
         throw new Error(
           missingFields
             ? `${data.error || "Complete the requisition before approving this role."} Missing: ${missingFields}.`
-            : [data.error || "Unable to update the role status.", data.workflowError]
-                .filter(Boolean)
-                .join(" "),
+            : data.error || "Unable to update the role status.",
         );
       }
 

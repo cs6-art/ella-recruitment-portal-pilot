@@ -5,7 +5,20 @@ import { useEffect, useState } from "react";
 import ActionFeedback from "@/components/ActionFeedback";
 import ValidationSummary from "@/components/ValidationSummary";
 import { ELLA_CREDITS_REFRESH_EVENT, requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
+import { historyActorLabel } from "@/lib/applicant-stage-labels";
 import styles from "./EllaCreditsPanel.module.css";
+
+// Stored notes from the automated screening carry an internal prefix; drop it.
+function friendlyNote(note: string) {
+  const text = note.replace(/^Postgres target\s+/i, "").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : note;
+}
+
+// Automatic postings are recorded under technical identifiers; show them as "Automatic".
+function ledgerActor(entry: { actorName?: string | null; actorEmail?: string | null }) {
+  const actor = historyActorLabel(entry.actorName, entry.actorEmail);
+  return actor.automated ? "Automatic" : actor.name || actor.email || "—";
+}
 
 type LedgerEntry = {
   entryId: string;
@@ -243,11 +256,11 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
             <tbody>{visibleEntries.map((entry) => (
               <tr key={entry.entryId}>
                 <td><span className={styles.cellClamp} title={formatWhen(entry.timestamp)}>{formatWhen(entry.timestamp)}</span></td>
-                <td><span className={styles.eventName}>{eventLabels[entry.event] || entry.event}</span>{entry.note && <small className={styles.eventNote} title={entry.note}>{entry.note}</small>}</td>
+                <td><span className={styles.eventName}>{eventLabels[entry.event] || entry.event}</span>{entry.note && <small className={styles.eventNote} title={friendlyNote(entry.note)}>{friendlyNote(entry.note)}</small>}</td>
                 <td className={`${styles.delta} ${entry.creditsDelta >= 0 ? styles.deltaPlus : styles.deltaMinus}`}>{entry.creditsDelta > 0 ? `+${nf.format(entry.creditsDelta)}` : nf.format(entry.creditsDelta)}</td>
                 <td>{nf.format(entry.balanceAfter)}</td>
                 <td><span className={styles.cellClamp} title={entry.reference || entry.roleId || "—"}>{entry.reference || entry.roleId || "—"}</span></td>
-                <td><span className={styles.cellClamp} title={entry.actorName || entry.actorEmail || "—"}>{entry.actorName || entry.actorEmail || "—"}</span></td>
+                <td><span className={styles.cellClamp} title={ledgerActor(entry)}>{ledgerActor(entry)}</span></td>
               </tr>
             ))}{Array.from({ length: Math.max(0, ACTIVITY_PAGE_SIZE - visibleEntries.length) }, (_, index) => <tr className={styles.placeholderRow} aria-hidden="true" key={`placeholder-${index}`}><td colSpan={6}>&nbsp;</td></tr>)}</tbody>
           </table></div>}
