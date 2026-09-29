@@ -205,8 +205,13 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
     };
   }
 
+  // Only new requests and drafts autosave. An approved or submitted request is
+  // changed by the explicit "Save role request" button; autosaving it would mark
+  // the edit as saved and make that button disappear.
+  const autosaves = !isEditing || isDraftRole;
+
   async function autosaveDraft() {
-    if (!hasChanges || loading || parsing || draftSaveInFlight.current) return;
+    if (!autosaves || !hasChanges || loading || parsing || draftSaveInFlight.current) return;
     const snapshot = form;
     const request = (async () => {
       setDraftSaving(true);
@@ -247,10 +252,10 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
   }
 
   useEffect(() => {
-    if (!hasChanges) return;
+    if (!autosaves || !hasChanges) return;
     const timer = window.setTimeout(() => void autosaveDraft(), 850);
     return () => window.clearTimeout(timer);
-  }, [form, hasChanges, effectiveRoleId, loading, parsing]);
+  }, [form, hasChanges, effectiveRoleId, loading, parsing, autosaves]);
 
   async function populateFromJobDescription() {
     if (!jobDescriptionFile && form.jobDescription.trim().length < 20) {
@@ -897,12 +902,12 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
         </section>
         )}
 
-        {(!isEditing || hasChanges || isDraftRole) && (
+        {(
           <>
           <div className="form-actions">
             <a className="btn btn-secondary" href="/roles">Cancel</a>
             {unified && <button type="button" className="btn btn-secondary" disabled={loading || parsing} onClick={() => void saveDraftAndExit()}>Save as draft</button>}
-            <button type="submit" className="btn btn-primary" disabled={loading}>
+            <button type="submit" className="btn btn-primary" disabled={loading || (isEditing && !isDraftRole && !hasChanges)}>
               {loading ? (stage || "Submitting…") : unified ? "Create & publish" : isEditing && !isDraftRole ? "Save role request" : canApproveRole ? "Submit & approve" : "Submit for HR approval"}
             </button>
           </div>
