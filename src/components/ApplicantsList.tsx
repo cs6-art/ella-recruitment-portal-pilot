@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
@@ -134,6 +134,7 @@ function scoreValue(value: string) {
 }
 
 export default function ApplicantsList({ applicants: initialApplicants, initialTotal, scopeRoleId, title = "Applicants", description = "Review candidates across every published role.", topContent, publishedRoles, canManageApplicants = false, userEmail, historyMetrics, lastUpdatedAt }: Props) {
+  const pathname = usePathname();
   const router = useRouter();
   const { confirm } = useConfirmation();
   const [applicants, setApplicants] = useState(initialApplicants);
@@ -395,7 +396,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
     if (sortFilter === "Highest match") params.set("sort", "match");
     if (dateFrom) params.set("from", dateFrom);
     if (dateTo) params.set("to", dateTo);
-    const currentPath = window.location.pathname;
+    // usePathname is safe during server rendering; window is not.
+    const currentPath = pathname;
     const returnPath = currentPath.startsWith("/roles/") && currentPath.endsWith("/applicants") ? currentPath : "/applicants";
     const returnTo = params.size ? `${returnPath}?${params}` : returnPath;
     return `/applicants/${encodeURIComponent(applicationId)}?returnTo=${encodeURIComponent(returnTo)}`;
