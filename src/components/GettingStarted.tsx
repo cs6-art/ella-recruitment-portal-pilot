@@ -26,6 +26,8 @@ export default function GettingStarted({ organizationId, metrics }: { organizati
   const [hidden, setHidden] = useState(true);
   const [hasCredits, setHasCredits] = useState<boolean | null>(null);
   const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null);
+  const [email, setEmail] = useState<{ enabled: boolean; sent: number; pending: number; failed: number } | null>(null);
+  const [hasTeammates, setHasTeammates] = useState<boolean | null>(null);
 
   useEffect(() => {
     try {
@@ -45,6 +47,14 @@ export default function GettingStarted({ organizationId, metrics }: { organizati
       .then((response) => response.json())
       .then((data) => { if (active && data?.success === true) setCalendarConnected(data.connected === true); })
       .catch(() => { if (active) setCalendarConnected(false); });
+    fetch("/api/notifications/health", { credentials: "same-origin", cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => { if (active && data?.success === true) setEmail({ enabled: data.enabled === true, sent: Number(data.sent) || 0, pending: Number(data.pending) || 0, failed: Number(data.failed) || 0 }); else if (active) setEmail({ enabled: false, sent: 0, pending: 0, failed: 0 }); })
+      .catch(() => { if (active) setEmail({ enabled: false, sent: 0, pending: 0, failed: 0 }); });
+    fetch("/api/user-directory", { credentials: "same-origin", cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => { if (active) setHasTeammates(Array.isArray(data?.users) ? data.users.length > 1 : false); })
+      .catch(() => { if (active) setHasTeammates(false); });
     return () => { active = false; };
   }, []);
 
@@ -77,6 +87,28 @@ export default function GettingStarted({ organizationId, metrics }: { organizati
         action: "Add candidates",
       },
       {
+        key: "email",
+        title: "Confirm email delivery",
+        detail: !email ? "Checking whether candidate and HR emails are being sent."
+          : !email.enabled ? "Outbound email is switched off for this deployment, so no candidate or HR emails will be sent. Ask your administrator to turn it on."
+          : email.failed > 0 ? `${email.failed} email${email.failed === 1 ? "" : "s"} failed to send. Ask your administrator to check the email connection.`
+          : email.sent > 0 ? "Emails are being sent."
+          : email.pending > 0 ? `${email.pending} email${email.pending === 1 ? " is" : "s are"} waiting to be sent. If they stay queued, the email connection may not be running.`
+          : "Emails go out automatically when a candidate applies or moves forward. This completes after the first one is sent.",
+        done: email !== null && email.enabled && email.failed === 0 && email.sent > 0,
+        href: "/applicants",
+        action: "View applicants",
+      },
+      {
+        key: "team",
+        title: "Invite your team",
+        detail: "Colleagues join by registering with your organization email. Add teammates so reviews and interviews are not tied to one person.",
+        done: hasTeammates === true,
+        optional: true,
+        href: "/user-accounts",
+        action: "Manage team",
+      },
+      {
         key: "calendar",
         title: "Connect Google Calendar",
         detail: "Only needed for face-to-face interviews. It lets candidates book a time when your HR calendar is free.",
@@ -86,9 +118,9 @@ export default function GettingStarted({ organizationId, metrics }: { organizati
         action: "Connect calendar",
       },
     ];
-  }, [metrics, hasCredits, calendarConnected]);
+  }, [metrics, hasCredits, calendarConnected, email, hasTeammates]);
 
-  const loaded = hasCredits !== null && calendarConnected !== null;
+  const loaded = hasCredits !== null && calendarConnected !== null && email !== null && hasTeammates !== null;
   const completed = steps.filter((step) => step.done).length;
   const nextKey = steps.find((step) => !step.done)?.key;
 
