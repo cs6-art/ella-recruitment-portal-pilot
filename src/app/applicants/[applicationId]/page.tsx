@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 
 import AppShell from "@/components/AppShell";
 import ApplicantDetailActions from "@/components/ApplicantDetailActions";
@@ -97,6 +98,33 @@ function DetailCardHeader({ icon, title, description }: { icon: UiIconName; titl
   return <div className="card-header applicant-section-header"><div className="applicant-section-heading"><span className="applicant-section-icon"><UiIcon name={icon} size={17} /></span><div><h2>{title}</h2>{description && <p>{description}</p>}</div></div></div>;
 }
 
+// Splits "Label: explanation" list items so the label can be emphasised.
+function labelledItem(item: string) {
+  const match = item.match(/^([^:]{3,70}):\s+([\s\S]+)$/);
+  return match ? { label: match[1].trim(), text: match[2].trim() } : { label: "", text: item };
+}
+
+// A stored result as a tidy bulleted list, never as raw JSON or brackets.
+function ResultList({ value, empty }: { value: string; empty: string }) {
+  const items = parseTextList(value);
+  if (items.length === 0) return <p className="grading-empty">{empty}</p>;
+  if (items.length === 1) { const { label, text } = labelledItem(items[0]); return <p>{label && <strong>{label}: </strong>}{text}</p>; }
+  return <ul className="grading-list">{items.map((item, index) => { const { label, text } = labelledItem(item); return <li key={`${item}-${index}`}>{label && <strong>{label}: </strong>}{text}</li>; })}</ul>;
+}
+
+// Long criteria are written as sentences separated by semicolons; show them as points.
+function CriteriaValue({ value, chips = false }: { value: string; chips?: boolean }) {
+  const text = value.trim();
+  if (!text) return <p className="grading-empty">Not specified</p>;
+  if (chips) {
+    const parts = text.split(/[,;\n]+/).map((part) => part.trim()).filter(Boolean);
+    if (parts.length > 1) return <ul className="grading-chips">{parts.map((part, index) => <li key={`${part}-${index}`}>{part}</li>)}</ul>;
+  }
+  const points = parseTextList(text).flatMap((line) => line.split(/;\s+/)).map((line) => line.replace(/[.;]\s*$/, "").trim()).filter(Boolean);
+  if (points.length > 2) return <ul className="grading-list">{points.map((point, index) => <li key={`${point}-${index}`}>{point}</li>)}</ul>;
+  return <p>{text}</p>;
+}
+
 // Shows HR exactly which role-request settings the AI applied when it screened
 // and interviewed this applicant, and the value it recorded for each scored field.
 function AiGradingCriteria({ applicant }: { applicant: ApplicantDetails }) {
@@ -104,33 +132,56 @@ function AiGradingCriteria({ applicant }: { applicant: ApplicantDetails }) {
   if (!role) return null;
   const licenseStatus = role.licenseRequirementStatus || (role.licenseOrCertificateRequired ? "Required" : "Not required");
   const salaryShared = /^disclosed$/i.test(role.salaryDisclosureStatus || "");
-  const criteria: { label: string; value: string }[] = [
-    { label: "Screening criteria", value: role.screeningCriteria || "" },
-    { label: `License or certificate (${licenseStatus})`, value: licenseStatus === "Not required" ? "Not required for this role." : (role.licenseOrCertificateRequired || "") },
-    { label: "Keywords to look for", value: role.keywordsToLookFor || "" },
-    { label: "Minimum experience", value: role.minimumYearsOfExperience || role.experienceRequired || "" },
-    { label: "Transferable skills accepted", value: role.transferableSkillsAccepted || "" },
-    { label: `Salary or budget range (${salaryShared ? "may be shared with the applicant" : "kept confidential"})`, value: role.salaryOrBudgetRange || "" },
-    { label: "Candidate start availability", value: role.earliestAvailabilityRule || role.noticePeriodRequirement || "" },
-  ];
   const fields = evaluationFieldsForSetup(role.evaluationFieldToggles, role.customEvaluationFields);
   const recorded = new Map([...applicant.resumeEvaluationFields, ...applicant.voiceEvaluationFields].map((field) => [field.key, field.value]));
-  const baselineResults: Record<string, string> = {
-    score: applicant.voiceScore ? `${applicant.voiceScore} (interview)` : applicant.matchScore ? `${applicant.matchScore} (resume match)` : "",
+
+  const fromInterview = Boolean(applicant.voiceScore);
+  const baseline: Record<string, string> = {
+    score: applicant.voiceScore || applicant.matchScore || "",
     recommendation: applicant.voiceRecommendation || applicant.recommendation,
     strengths: applicant.voiceStrengths || applicant.strengths,
     concerns: applicant.voiceConcerns || applicant.gaps,
   };
+  const resultFor = (key: string) => (recorded.get(key) || baseline[key] || "").trim();
+  const enabled = new Set(fields.map((field) => field.key));
+  const score = resultFor("score").replace(/\s*\((interview|resume match)\)\s*$/i, "");
+  const recommendation = resultFor("recommendation");
+  const scoreBasis = fromInterview ? "Interview score" : "Resume match score";
+  const otherFields = fields.filter((field) => !["score", "recommendation", "strengths", "concerns"].includes(field.key));
+  const pending = "Recorded once the interview has been graded.";
+
+  const requirementRows: { label: string; node: ReactNode; wide?: boolean; note?: string }[] = [
+    { label: "Screening criteria", node: <CriteriaValue value={role.screeningCriteria || ""} />, wide: true },
+    { label: "Keywords to look for", node: <CriteriaValue value={role.keywordsToLookFor || ""} chips />, wide: true },
+    { label: "License or certificate", node: <><span className={`grading-pill ${licenseStatus === "Required" ? "is-required" : ""}`}>{licenseStatus}</span>{licenseStatus !== "Not required" && role.licenseOrCertificateRequired && <p>{role.licenseOrCertificateRequired}</p>}</> },
+    { label: "Minimum experience", node: <CriteriaValue value={role.minimumYearsOfExperience || role.experienceRequired || ""} /> },
+    { label: "Transferable skills accepted", node: <CriteriaValue value={role.transferableSkillsAccepted || ""} /> },
+    { label: "Salary or budget range", node: <CriteriaValue value={role.salaryOrBudgetRange || ""} />, note: salaryShared ? "May be shared with the applicant" : "Kept confidential" },
+    { label: "Start availability", node: <CriteriaValue value={role.earliestAvailabilityRule || role.noticePeriodRequirement || ""} /> },
+  ];
+
   return <section className="card applicant-detail-card">
-    <DetailCardHeader icon="document" title="How AI Graded This Applicant" description="The role settings Smile applied and the value it recorded for each scored field." />
-    <div className="applicant-detail-content">
-      <h3>Role requirements applied</h3>
-      <div className="applicant-detail-inline-fields">
-        {criteria.map((item) => <DetailField key={item.label} label={item.label} value={item.value} />)}
-      </div>
-      <h3>Scored fields</h3>
-      <div className="applicant-detail-inline-fields">
-        {fields.map((field) => <DetailField key={field.key} label={field.label} value={recorded.get(field.key) || baselineResults[field.key] || "Not recorded yet"} />)}
+    <DetailCardHeader icon="document" title="How AI Graded This Applicant" description="The role settings Smile applied and the result it recorded for each scored field." />
+    <div className="applicant-detail-content grading-content">
+      <h3>Results</h3>
+      {(enabled.has("score") || enabled.has("recommendation")) && <div className="grading-summary">
+        {enabled.has("score") && <div className="grading-stat"><span>{scoreBasis}</span><strong className="grading-score">{score || "—"}</strong></div>}
+        {enabled.has("recommendation") && <div className="grading-stat"><span>Recommendation</span><strong>{recommendation || "Pending"}</strong></div>}
+      </div>}
+      {(enabled.has("strengths") || enabled.has("concerns")) && <div className="grading-columns">
+        {enabled.has("strengths") && <div className="grading-panel grading-strengths"><h4>Strengths</h4><ResultList value={resultFor("strengths")} empty="No strengths recorded." /></div>}
+        {enabled.has("concerns") && <div className="grading-panel grading-concerns"><h4>Areas To Review</h4><ResultList value={resultFor("concerns")} empty="No concerns recorded." /></div>}
+      </div>}
+      {otherFields.length > 0 && <div className="grading-fields">
+        {otherFields.map((field) => <div className="grading-panel" key={field.key}><h4>{field.label}</h4><ResultList value={resultFor(field.key)} empty={pending} /></div>)}
+      </div>}
+
+      <h3>Role Requirements Applied</h3>
+      <div className="grading-requirements">
+        {requirementRows.map((row) => <div key={row.label} className={`grading-requirement ${row.wide ? "is-wide" : ""}`}>
+          <h4>{row.label}{row.note && <small>{row.note}</small>}</h4>
+          {row.node}
+        </div>)}
       </div>
       <p className="applicant-voice-review-hint">Fields are set in the role request. Communication quality and answer completeness appear in the interview review above once the interview is graded.</p>
     </div>

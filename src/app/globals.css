@@ -6328,3 +6328,31 @@ textarea:focus-visible {
   .dashboard-skeleton > span,
   .dashboard-skeleton > i { animation: none; }
 }
+
+/* How AI Graded This Applicant: results and requirements as readable panels. */
+.grading-content h3 { margin: 22px 0 12px; font-size: 15px; color: var(--navy); }
+.grading-content h3:first-child { margin-top: 4px; }
+.grading-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.grading-stat { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid #dce6f0; border-radius: 10px; background: #fbfdff; }
+.grading-stat span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.grading-stat strong { color: var(--navy); font-size: 16px; }
+.grading-stat .grading-score { font-size: 30px; line-height: 1.1; }
+.grading-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 14px; align-items: start; }
+.grading-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 6px; align-items: start; }
+.grading-panel { min-width: 0; padding: 14px 16px; border: 1px solid #dce6f0; border-radius: 10px; background: #fbfdff; }
+.grading-panel h4, .grading-requirement h4 { margin: 0 0 8px; color: var(--navy); font-size: 13px; font-weight: 800; }
+.grading-strengths { border-left: 4px solid #2f9e6f; }
+.grading-concerns { border-left: 4px solid #d9822b; }
+.grading-panel p, .grading-requirement p { margin: 0; color: #2b3a4a; font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.grading-panel p + p, .grading-requirement p + p { margin-top: 6px; }
+.grading-list { margin: 0; padding-left: 18px; display: grid; gap: 8px; color: #2b3a4a; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.grading-list strong { color: var(--navy); }
+.grading-empty { color: var(--muted) !important; font-style: italic; }
+.grading-requirements { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; align-items: start; }
+.grading-requirement { min-width: 0; padding: 14px 16px; border: 1px solid #dce6f0; border-radius: 10px; background: #fff; }
+.grading-requirement.is-wide { grid-column: 1 / -1; }
+.grading-requirement h4 small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 600; }
+.grading-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.grading-chips li { padding: 4px 10px; border-radius: 999px; background: #eaf2fb; color: var(--navy); font-size: 12px; font-weight: 600; }
+.grading-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #eef2f6; color: #4a5a6b; font-size: 12px; font-weight: 700; }
+.grading-pill.is-required { background: #fdecd7; color: #8a4a08; }
