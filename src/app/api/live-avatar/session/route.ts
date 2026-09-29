@@ -1,9 +1,15 @@
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { canManagePipeline } from "@/lib/access-control";
+import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { CREDIT_COST, getCreditBalance } from "@/lib/ella-credits";
+import { consumeDurableRateLimit } from "@/lib/durable-rate-limit";
+import { rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { createLiveAvatarSession, isLiveAvatarConfigured } from "@/lib/live-avatar";
 import { isRecordingStorageConfigured } from "@/lib/interview-recording-storage";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { finalizeAvatarInterviewStart, releaseAvatarInterviewStart, startAvatarInterview } from "@/lib/internal-recruitment-queries";
+import { finalizeAvatarInterviewStart, getAvatarInterviewContext, releaseAvatarInterviewStart, startAvatarInterview } from "@/lib/internal-recruitment-queries";
 import { assertReadyToStart, LiveInterviewError, markInterviewStarted, stopProviderSession } from "@/lib/live-interview-store";
 
 export const runtime = "nodejs";
@@ -37,6 +43,9 @@ export async function POST(request: NextRequest) {
   }
 
   if (typeof avatarToken === "string" && avatarToken.trim()) {
+    // Each accepted request can open a paid provider session, so cap attempts per network.
+    const rate = await consumeDurableRateLimit(`avatar-session:${requestClientKey(request)}`, 15, 15 * 60 * 1000);
+    if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many attempts. Please wait a few minutes and try again." }, { status: 429, headers: rateLimitHeaders(rate) });
     if (!isPostgresRecruitmentTarget()) return NextResponse.json({ success: false, error: "This avatar interview link is not available." }, { status: 404 });
     let sessionCreated = false;
     try {
@@ -52,6 +61,17 @@ export async function POST(request: NextRequest) {
       // private Drive recording path is ready for this interview.
       if (!isRecordingStorageConfigured()) {
         return NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable because private recording storage is not configured. Please contact the recruitment team.", code: "recording_storage_unavailable" }, { status: 503 });
+      }
+      // Do not consume the one-time link, or open a paid provider room, for an
+      // organization that cannot cover the interview. The message is neutral
+      // because the candidate cannot act on it.
+      const preview = await getAvatarInterviewContext(avatarToken);
+      if (preview) {
+        const { balance } = await getCreditBalance({ organizationId: preview.organizationId, ownerEmail: preview.creditOwnerEmail });
+        if (balance < CREDIT_COST.live_avatar_interview) {
+          console.error("[API Live Avatar Candidate Session] Blocked: organization has insufficient credits.", { organizationId: preview.organizationId, balance });
+          return NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable. Please contact the recruitment team.", code: "interview_unavailable" }, { status: 503 });
+        }
       }
       const context = await startAvatarInterview(avatarToken);
       if (!context) return NextResponse.json({ success: false, error: "This avatar interview link has already been used, expired, or is no longer available." }, { status: 410 });
@@ -89,6 +109,14 @@ export async function POST(request: NextRequest) {
       console.error("[API Live Avatar Candidate Session] POST failed:", error);
       return NextResponse.json({ success: false, error: "Unable to start the avatar interview." }, { status: 502 });
     }
+  }
+
+  // Without an invitation token this path starts a paid LiveAvatar session for
+  // any published role, so it is limited to signed-in HR reviewers (the
+  // resume-screening preview). Candidates always arrive with a token.
+  const reviewer = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  if (!reviewer || !canManagePipeline(reviewer)) {
+    return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   }
 
   if (typeof roleId !== "string" || !roleId.trim()) {

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getBookingContext, reserveBooking, type BookingKind } from "@/lib/applicant-workflow";
 import type { TargetBookingSlotDetails } from "@/lib/recruitment-target-portal";
 import { safeErrorResponse } from "@/lib/safe-error";
+import { consumeDurableRateLimit } from "@/lib/durable-rate-limit";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 
 function validKind(value: string): value is BookingKind { return value === "voice" || value === "final"; }
@@ -30,7 +31,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ kind
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ kind: string; token: string }> }) {
-  const rate = consumeRateLimit(`public-booking-write:${requestClientKey(request)}`, 20, 15 * 60 * 1000);
+  const rate = await consumeDurableRateLimit(`public-booking-write:${requestClientKey(request)}`, 20, 15 * 60 * 1000);
   if (!rate.allowed) return NextResponse.json({ error: "Too many booking attempts. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
   const { kind, token } = await params;
   if (!validKind(kind)) return NextResponse.json({ error: "Booking type not found." }, { status: 404 });

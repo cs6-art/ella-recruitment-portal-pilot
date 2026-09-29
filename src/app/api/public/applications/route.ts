@@ -14,6 +14,7 @@ import { getPortalConfigValue } from "@/lib/portal-config";
 import { publicCorsOptionsResponse, withPublicCors } from "@/lib/public-cors";
 import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
+import { consumeDurableRateLimit } from "@/lib/durable-rate-limit";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { deleteResumeFile, MAX_RESUME_REQUEST_BYTES, storeResumeFile } from "@/lib/resume-files";
 import { getResumeScreeningInvitationByToken, markResumeScreeningInvitationUsed } from "@/lib/resume-screening-invite";
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
     // Demo mode still accepts new applications so the complete intake and
     // screening pipeline can be demonstrated. Applicant-facing side effects
     // remain disabled in the downstream contact workflows.
-    const rate = consumeRateLimit(`public-application:${requestClientKey(request)}`, 10, 15 * 60 * 1000);
+    const rate = await consumeDurableRateLimit(`public-application:${requestClientKey(request)}`, 10, 15 * 60 * 1000);
     if (!rate.allowed) return withPublicCors(request, NextResponse.json({ success: false, error: "Too many applications from this network. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) }));
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > MAX_RESUME_REQUEST_BYTES) return responseError(request, "Application uploads must be 10 MB or smaller.", 413);

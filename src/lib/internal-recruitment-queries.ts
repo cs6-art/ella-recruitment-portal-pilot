@@ -888,6 +888,8 @@ export type AvatarInterviewContext = {
   roleRequirements: string;
   interviewQuestions: string;
   evaluationFields: string;
+  organizationId: string;
+  creditOwnerEmail: string;
   expiresAt: string;
   tokenStatus: string;
 };
@@ -937,6 +939,8 @@ async function avatarInterviewContextByHash(tokenHash: string, allowedStatuses: 
     roleRequirements: grading.requirements,
     interviewQuestions: grading.interviewQuestions,
     evaluationFields: grading.evaluationFields,
+    organizationId: row.application.organizationId,
+    creditOwnerEmail: row.application.creditOwnerEmail,
     expiresAt: row.token.expiresAt?.toISOString() || "",
     tokenStatus: row.token.status,
   } satisfies AvatarInterviewContext;
