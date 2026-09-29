@@ -58,7 +58,7 @@ export const oauthConnections = pgTable("oauth_connections", {
   accountEmail: text("account_email").notNull().default(""),
   connectedAt: ts("connected_at").notNull().defaultNow(),
   updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [uniqueIndex("oauth_connections_org_provider_email_uidx").on(t.organizationId, t.provider, t.userEmail)]);
 
 export const portalSettings = pgTable("portal_settings", {
   key: text("key").notNull(),

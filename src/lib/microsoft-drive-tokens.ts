@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import { google } from "googleapis";
 import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account";
 import { cachedSheetsRead, invalidateSheetsCache } from "@/lib/sheets-cache";
+import { deleteOAuthConnection, readOAuthConnection, saveOAuthConnection } from "@/lib/oauth-connection-store";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 
 /**
  * Per-HR-user Microsoft OneDrive OAuth tokens, stored separately from both the
@@ -101,7 +103,7 @@ async function readRows(): Promise<{ rows: string[][]; rowNumbers: number[] }> {
   return { rows, rowNumbers };
 }
 
-export async function getMicrosoftDriveConnection(email: string): Promise<MicrosoftDriveConnection | null> {
+async function getMicrosoftDriveConnectionFromSheet(email: string): Promise<MicrosoftDriveConnection | null> {
   const normalized = email.trim().toLowerCase();
   const { rows } = await readRows();
   const row = rows.find((r) => text(r[0]).toLowerCase() === normalized);
@@ -116,7 +118,7 @@ export async function getMicrosoftDriveConnection(email: string): Promise<Micros
   };
 }
 
-export async function saveMicrosoftDriveConnection(input: { email: string; accessToken: string; refreshToken?: string; tokenExpiresAt: string; scope: string }): Promise<void> {
+async function saveMicrosoftDriveConnectionFromSheet(input: { email: string; accessToken: string; refreshToken?: string; tokenExpiresAt: string; scope: string }): Promise<void> {
   const normalized = input.email.trim().toLowerCase();
   const now = new Date().toISOString();
   const { rows, rowNumbers } = await readRows();
@@ -143,11 +145,47 @@ export async function saveMicrosoftDriveConnection(input: { email: string; acces
   invalidateSheetsCache(TAB);
 }
 
-export async function deleteMicrosoftDriveConnection(email: string): Promise<void> {
+async function deleteMicrosoftDriveConnectionFromSheet(email: string): Promise<void> {
   const normalized = email.trim().toLowerCase();
   const { rows, rowNumbers } = await readRows();
   const index = rows.findIndex((r) => text(r[0]).toLowerCase() === normalized);
   if (index < 0) return;
   await sheets.spreadsheets.values.clear({ spreadsheetId, range: `'${TAB}'!A${rowNumbers[index]}:G${rowNumbers[index]}` });
   invalidateSheetsCache(TAB);
+}
+
+// When the portal runs on Postgres the connection lives in oauth_connections
+// (tokens stay encrypted with this module's key, so rows copied from the old
+// sheet tab work unchanged). The sheet functions above remain for the legacy path.
+export async function getMicrosoftDriveConnection(email: string): Promise<MicrosoftDriveConnection | null> {
+  if (!isPostgresRecruitmentTarget()) return getMicrosoftDriveConnectionFromSheet(email);
+  const row = await readOAuthConnection("microsoft_drive", email);
+  if (!row) return null;
+  return {
+    email: row.userEmail,
+    accessToken: decrypt(row.accessTokenEnc),
+    refreshToken: decrypt(row.refreshTokenEnc),
+    tokenExpiresAt: row.tokenExpiresAt ? row.tokenExpiresAt.toISOString() : "",
+    scope: row.scope,
+    connectedAt: row.connectedAt.toISOString(),
+  };
+}
+
+export async function saveMicrosoftDriveConnection(input: { email: string; accessToken: string; refreshToken?: string; tokenExpiresAt: string; scope: string }): Promise<void> {
+  if (!isPostgresRecruitmentTarget()) return saveMicrosoftDriveConnectionFromSheet(input);
+  // The provider only returns a refresh token on first consent; never blank an existing one.
+  const existing = await readOAuthConnection("microsoft_drive", input.email);
+  const refreshToken = input.refreshToken || (existing ? decrypt(existing.refreshTokenEnc) : "");
+  await saveOAuthConnection("microsoft_drive", input.email, {
+    accessTokenEnc: encrypt(input.accessToken),
+    refreshTokenEnc: encrypt(refreshToken),
+    tokenExpiresAt: input.tokenExpiresAt,
+    scope: input.scope,
+    connectedAt: existing?.connectedAt,
+  });
+}
+
+export async function deleteMicrosoftDriveConnection(email: string): Promise<void> {
+  if (!isPostgresRecruitmentTarget()) return deleteMicrosoftDriveConnectionFromSheet(email);
+  await deleteOAuthConnection("microsoft_drive", email);
 }

@@ -11,6 +11,9 @@ import { PORTAL_CONFIG_CATALOG } from "@/lib/portal-config-catalog";
 import { applyAccessRolePolicy } from "@/lib/access-roles";
 import { isPublishedRoleForIntake as isPublishedRoleForIntakeShared } from "@/lib/recruitment-role-eligibility";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { readPortalSettingRows, writePortalSettingRows } from "@/lib/portal-settings-db";
+import { findPostgresDirectoryUser, getPostgresDirectoryUsers, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
+import { DEFAULT_ORGANIZATION_ID, runWithTenantDatabase } from "@/lib/tenant-database";
 import { configureGoogleApiTimeout } from "@/lib/google-api-options";
 import { targetRoleDetails, targetRoleStatusHistory, targetRoleSummaries, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 
@@ -725,6 +728,13 @@ async function getRoleRequestRecords(options: { fresh?: boolean } = {}): Promise
 export async function findDirectoryUser(
   email: string,
 ): Promise<DirectoryUser | null> {
+  // McLink staff now live in the users table. The sheet below is only a
+  // fallback for anyone not copied over yet, so a missing row never locks a
+  // staff member out.
+  if (isPostgresRecruitmentTarget()) {
+    const stored = await runWithTenantDatabase(DEFAULT_ORGANIZATION_ID, () => findPostgresDirectoryUser(email, DEFAULT_ORGANIZATION_ID));
+    if (stored) return stored;
+  }
   console.log("[User Directory] Looking up:", email);
 
   // Cached: this runs on essentially every authenticated request, so it is
@@ -858,6 +868,31 @@ function directoryUserFromRow(row: unknown[]): DirectoryUser | null {
 }
 
 export async function getDirectoryUsers(): Promise<DirectoryUser[]> {
+  if (isPostgresRecruitmentTarget()) {
+    const stored = await runWithTenantDatabase(DEFAULT_ORGANIZATION_ID, () => getPostgresDirectoryUsers(DEFAULT_ORGANIZATION_ID));
+    let legacy: DirectoryUser[] = [];
+    try {
+      legacy = await getLegacySheetDirectoryUsers();
+    } catch (error) {
+      console.error("[User Directory] Sheet fallback unavailable; using the database only:", error instanceof Error ? error.message : error);
+    }
+    const known = new Set(stored.map((user) => user.email.trim().toLowerCase()));
+    return [...stored, ...legacy.filter((user) => !known.has(user.email.trim().toLowerCase()))];
+  }
+  return getLegacySheetDirectoryUsers();
+}
+
+// Insert or update a McLink staff row in the users table. A row that only
+// exists in the legacy sheet (not copied over yet) is created on first save.
+async function saveDefaultOrganizationUser(user: DirectoryUser, originalEmail?: string): Promise<void> {
+  const target = (originalEmail || user.email).trim().toLowerCase();
+  await runWithTenantDatabase(DEFAULT_ORGANIZATION_ID, async () => {
+    const existing = await findPostgresDirectoryUser(target, DEFAULT_ORGANIZATION_ID);
+    await upsertPostgresDirectoryUser(DEFAULT_ORGANIZATION_ID, user, existing ? target : undefined);
+  });
+}
+
+async function getLegacySheetDirectoryUsers(): Promise<DirectoryUser[]> {
   const rows = await cachedSheetsRead(`User_Directory:L:${spreadsheetId}`, async () => {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -872,6 +907,10 @@ export async function getDirectoryUsers(): Promise<DirectoryUser[]> {
 }
 
 export async function upsertDirectoryUser(user: DirectoryUser): Promise<void> {
+  if (isPostgresRecruitmentTarget()) {
+    await saveDefaultOrganizationUser(user);
+    return;
+  }
   const rows = await cachedSheetsRead(`User_Directory:L:${spreadsheetId}`, async () => {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -918,6 +957,10 @@ export async function upsertDirectoryUser(user: DirectoryUser): Promise<void> {
 }
 
 export async function updateDirectoryUser(originalEmail: string, user: DirectoryUser): Promise<void> {
+  if (isPostgresRecruitmentTarget()) {
+    await saveDefaultOrganizationUser(user, originalEmail);
+    return;
+  }
   const rows = await cachedSheetsRead(`User_Directory:L:${spreadsheetId}`, async () => {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -1470,6 +1513,11 @@ function findSettingsHeaderRow(rows: string[][]): number {
 }
 
 export async function getPortalSettings(): Promise<PortalSetting[]> {
+  // On Postgres the settings live in portal_settings, one set per organization.
+  if (isPostgresRecruitmentTarget()) {
+    const describe = new Map(defaultPortalSettings.map((setting) => [setting.key, setting.description]));
+    return (await readPortalSettingRows()).map((row) => ({ ...row, description: describe.get(row.key) || "" }));
+  }
   const rows = await cachedSheetsRead(`Settings:F:${spreadsheetId}`, async () => {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -1504,6 +1552,10 @@ export async function getFinalInterviewCalendarConfig(): Promise<{ email: string
 }
 
 export async function upsertPortalSettings(settings: PortalSetting[]): Promise<void> {
+  if (isPostgresRecruitmentTarget()) {
+    await writePortalSettingRows(settings.map((setting) => ({ key: setting.key, value: setting.value, category: setting.category, updatedBy: setting.updatedBy })));
+    return;
+  }
   const existingRows = await cachedSheetsRead(`Settings:F:${spreadsheetId}`, async () => {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
