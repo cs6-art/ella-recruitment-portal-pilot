@@ -267,6 +267,14 @@ sheet's contact-number fields. The selected role is carried in `jobTitle` and
 `department` so CV analysis can populate `Selected_Role` and `Department` in
 `High_Match_Profile`; the portal reads those fields when rendering applicants.
 
+**Which Vapi number places the call.** The voice dispatch response carries
+`caller: { region, phoneNumberId }`. Candidates dialled on a Philippine (+63) or
+Malaysian (+60) number are called from that country's Vapi number
+(`VAPI_PHONE_NUMBER_ID_PH` / `_MY`); everyone else is called from the Singapore
+number (`VAPI_PHONE_NUMBER_ID_SG`, falling back to `PILOT_VAPI_PHONE_NUMBER_ID`).
+The n8n Vapi call node must send `caller.phoneNumberId` as the call's
+`phoneNumberId` instead of a fixed value.
+
 The HR intake route uses the same schema, but the `source` value is
 `HR Manual Intake` and `consent` is omitted. The allowed `applicationSource`
 values are `Direct Application`, `Referral`, `Walk-in`, `Agency`,

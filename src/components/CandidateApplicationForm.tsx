@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import { countryOptions, CountrySelect } from "@/components/CountryOptions";
+import { internationalNumber, phoneGuide, phonePlaceholder, phoneProblem } from "@/lib/phone-guide";
 import ValidationSummary from "@/components/ValidationSummary";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 import { clientErrorMessage } from "@/lib/client-error";
@@ -50,10 +51,6 @@ const resumeMimeTypes = new Set([
 
 function cleanDigits(value: string) {
   return value.replace(/\D/g, "");
-}
-
-function normalizedContactNumber(countryCode: string, localNumber: string) {
-  return `${countryCode}${cleanDigits(localNumber)}`;
 }
 
 function readFieldError(errors: Partial<Record<keyof FormState | "resumeFile", string>>, key: keyof FormState | "resumeFile") {
@@ -135,11 +132,11 @@ export default function CandidateApplicationForm({
 
   function validate() {
     const nextErrors: Partial<Record<keyof FormState | "resumeFile", string>> = {};
-    const contactNumber = normalizedContactNumber(selectedCountry.code, form.localContactNumber);
 
     if (!form.candidateName.trim()) nextErrors.candidateName = "Full name is required.";
     if (!/^\S+@\S+\.\S+$/.test(form.email.trim().toLowerCase())) nextErrors.email = "Enter a valid email address.";
-    if (!/^\+[1-9]\d{7,14}$/.test(contactNumber)) nextErrors.localContactNumber = "Enter a valid local contact number.";
+    const contactProblem = phoneProblem(selectedCountry, form.localContactNumber);
+    if (contactProblem) nextErrors.localContactNumber = contactProblem;
     if (!resumeFile) nextErrors.resumeFile = "Choose a PDF, DOC, or DOCX resume file.";
     if (showRoleSelect && !form.resumeRoleId.trim()) nextErrors.resumeRoleId = "Choose a role.";
 
@@ -186,7 +183,7 @@ export default function CandidateApplicationForm({
     }
 
     try {
-      const contactNumber = normalizedContactNumber(selectedCountry.code, form.localContactNumber);
+      const contactNumber = internationalNumber(selectedCountry, form.localContactNumber);
       if (needsConsentCheckbox && !consentGiven) {
         setError("Please confirm you have read the privacy notice and agree before submitting.");
         return;
@@ -259,10 +256,10 @@ export default function CandidateApplicationForm({
               </label>
               <label>
                 <span className="sr-only">Local contact number</span>
-                <input id="candidate-contact-number" required aria-label="Local contact number" inputMode="numeric" placeholder={selectedCountry.placeholder} value={form.localContactNumber} disabled={saving} onChange={(event) => update("localContactNumber", cleanDigits(event.target.value))} />
+                <input id="candidate-contact-number" required aria-label="Local contact number" inputMode="numeric" placeholder={phonePlaceholder(selectedCountry)} value={form.localContactNumber} disabled={saving} onChange={(event) => update("localContactNumber", cleanDigits(event.target.value))} />
               </label>
             </div>
-            <small>Enter the local number only, without the country code.</small>
+            <small>{phoneGuide(selectedCountry)}</small>
             {readFieldError(fieldErrors, "localContactNumber") && <small>{readFieldError(fieldErrors, "localContactNumber")}</small>}
           </div>
 

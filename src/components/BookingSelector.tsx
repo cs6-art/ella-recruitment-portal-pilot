@@ -6,6 +6,7 @@ import ActionFeedback from "@/components/ActionFeedback";
 import { countryOptions, CountrySelect } from "@/components/CountryOptions";
 import ValidationSummary from "@/components/ValidationSummary";
 import { countryForPhone, localNumberForCountry } from "@/lib/country-codes";
+import { internationalNumber, phoneGuide, phonePlaceholder, phoneProblem } from "@/lib/phone-guide";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
 type Slot = { slotId: string; date: string; startTime: string; endTime: string; timezone: string; status?: string };
@@ -79,10 +80,13 @@ export default function BookingSelector({ token, initialContext }: { token: stri
       setError("That time is no longer in the current availability list. Refresh the available times and choose again.");
       return;
     }
-    const preferredMobile = context.kind === "voice" ? `${selectedCountry.code}${cleanDigits(localMobile)}` : "";
-    if (context.kind === "voice" && !localMobile.trim()) {
-      setError("Confirm your preferred mobile number before booking.");
-      return;
+    const preferredMobile = context.kind === "voice" ? internationalNumber(selectedCountry, localMobile) : "";
+    if (context.kind === "voice") {
+      const mobileProblem = localMobile.trim() ? phoneProblem(selectedCountry, localMobile) : "Confirm your preferred mobile number before booking.";
+      if (mobileProblem) {
+        setError(mobileProblem);
+        return;
+      }
     }
     setSaving(true);
     setError("");
@@ -143,7 +147,7 @@ export default function BookingSelector({ token, initialContext }: { token: stri
       <small>{completed ? "The recruitment team has received the interview result." : "You may close this page. The recruitment team has received your booking."}</small>
     </div> : noAvailability ? <div className="booking-empty booking-no-availability" role="status"><strong>No times are currently available</strong><p>Please reply to your invitation email so our recruitment team can provide a new booking link.</p></div> : <>
       {noShow && <div className="booking-notice">This interview was marked as a <strong>no-show</strong>. You can choose a new time below.</div>}
-      {context.kind === "voice" && <div className="field booking-mobile-field"><span>Mobile number for the interview call *</span><div className="contact-number-controls"><label><CountrySelect ariaLabel="Country code" value={country} disabled={saving} onChange={(option) => { setCountry(option.country); setLocalMobile(""); }} /></label><label><span className="sr-only">Local mobile number</span><input required aria-label="Local mobile number" inputMode="numeric" value={localMobile} disabled={saving} placeholder={selectedCountry.placeholder} onChange={(event) => setLocalMobile(cleanDigits(event.target.value))} /></label></div><small>Enter the local number only, without the country code.</small></div>}
+      {context.kind === "voice" && <div className="field booking-mobile-field"><span>Mobile number for the interview call *</span><div className="contact-number-controls"><label><CountrySelect ariaLabel="Country code" value={country} disabled={saving} onChange={(option) => { setCountry(option.country); setLocalMobile(""); }} /></label><label><span className="sr-only">Local mobile number</span><input required aria-label="Local mobile number" inputMode="numeric" value={localMobile} disabled={saving} placeholder={phonePlaceholder(selectedCountry)} onChange={(event) => setLocalMobile(cleanDigits(event.target.value))} /></label></div><small>{phoneGuide(selectedCountry)}</small></div>}
       {confirmationMessage && !booked && <ActionFeedback kind="success" className="booking-confirmed-feedback">{confirmationMessage}</ActionFeedback>}
       <div className="booking-section-heading"><h2>Select a Date</h2><span>{context.slots.length} available time{context.slots.length === 1 ? "" : "s"}</span></div>
       {context.slots.length === 0 ? <div className="booking-empty">There are no available times right now. Please contact the recruitment team for a new booking link.</div> : <>

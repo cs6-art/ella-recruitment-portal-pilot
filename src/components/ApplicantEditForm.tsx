@@ -7,6 +7,7 @@ import { useState } from "react";
 import ValidationSummary, { type ValidationIssue } from "@/components/ValidationSummary";
 import { countryOptions, CountrySelect } from "@/components/CountryOptions";
 import { countryForPhone, localNumberForCountry } from "@/lib/country-codes";
+import { internationalNumber, phoneGuide, phonePlaceholder, phoneProblem } from "@/lib/phone-guide";
 import { clientErrorMessage } from "@/lib/client-error";
 
 type ApplicantEditValues = { applicationId: string; candidateName: string; email: string; contactNumber: string; roleId: string; selectedRole: string; department: string; applicantCountry: string };
@@ -30,13 +31,8 @@ export default function ApplicantEditForm({ applicant }: { applicant: ApplicantE
     const issues: ValidationIssue[] = [];
     if (candidateName.trim().length < 3) issues.push({ field: "candidateName", label: "Full name", message: "Enter at least 3 characters.", href: "#applicant-edit-name" });
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) issues.push({ field: "email", label: "Email address", message: "Enter a valid email address.", href: "#applicant-edit-email" });
-    const digits = localNumber.replace(/\D/g, "");
-    const validLocalNumber = selectedCountry.code === "+63"
-      ? /^\d{10}$/.test(digits)
-      : selectedCountry.code === "+65"
-        ? /^\d{8}$/.test(digits)
-        : /^\d{6,14}$/.test(digits);
-    if (!validLocalNumber) issues.push({ field: "localNumber", label: "Preferred mobile number", message: `Enter a valid local ${selectedCountry.label} mobile number.`, href: "#applicant-edit-mobile" });
+    const numberProblem = phoneProblem(selectedCountry, localNumber);
+    if (numberProblem) issues.push({ field: "localNumber", label: "Preferred mobile number", message: numberProblem, href: "#applicant-edit-mobile" });
     if (issues.length > 0) {
       setFieldErrors(Object.fromEntries(issues.map((issue) => [issue.field || issue.label, issue.message])));
       setError("Please correct the highlighted fields before saving.");
@@ -44,7 +40,7 @@ export default function ApplicantEditForm({ applicant }: { applicant: ApplicantE
     }
     setSaving(true);
     try {
-      const preferredMobile = `${selectedCountry.code}${digits}`;
+      const preferredMobile = internationalNumber(selectedCountry, localNumber);
       const response = await fetch(`/api/applicants/${encodeURIComponent(applicant.applicationId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ candidateName, email, preferredMobile, applicantCountry: selectedCountry.country }) });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.success !== true) {
@@ -61,13 +57,13 @@ export default function ApplicantEditForm({ applicant }: { applicant: ApplicantE
   }
 
   return <section className="card applicant-edit-card">
-    <div className="card-header"><div><Link className="portal-back-link applicant-back-link" href={`/applicants/${encodeURIComponent(applicant.applicationId)}`}>← Back to Applicant</Link><h1>Edit Applicant</h1><p>Update the candidate&apos;s contact details without changing their workflow history.</p></div></div>
+    <div className="card-header"><div><Link className="portal-back-link applicant-back-link" href={`/applicants/${encodeURIComponent(applicant.applicationId)}`}>← Back to Applicant</Link><h1>Edit Applicant</h1><p>Update the candidate&apos;s contact details without changing their status history.</p></div></div>
     {error && <ValidationSummary error={error} title="Save failed" issues={Object.entries(fieldErrors).filter(([, message]) => Boolean(message)).map(([field, message]) => ({ field, label: field === "candidateName" ? "Full name" : field === "localNumber" ? "Preferred mobile number" : "Email address", message, href: field === "candidateName" ? "#applicant-edit-name" : field === "localNumber" ? "#applicant-edit-mobile" : "#applicant-edit-email" }))} />}
     <form className="applicant-edit-form" noValidate onSubmit={(event) => void submit(event)}>
       <div className="applicant-edit-meta"><div><span>Application ID</span><strong>{applicant.applicationId}</strong></div><div><span>Role</span><strong>{applicant.selectedRole || applicant.roleId}</strong><small>{applicant.department}</small></div></div>
       <label>Full name *<input id="applicant-edit-name" required minLength={3} maxLength={150} value={candidateName} aria-invalid={Boolean(fieldErrors.candidateName)} onChange={(event) => { setCandidateName(event.target.value); setFieldErrors((current) => ({ ...current, candidateName: "" })); }} />{fieldErrors.candidateName && <small className="field-error">{fieldErrors.candidateName}</small>}</label>
       <label>Email address *<input id="applicant-edit-email" required type="email" value={email} aria-invalid={Boolean(fieldErrors.email)} onChange={(event) => { setEmail(event.target.value); setFieldErrors((current) => ({ ...current, email: "" })); }} />{fieldErrors.email && <small className="field-error">{fieldErrors.email}</small>}</label>
-      <label>Preferred mobile number *<div className="contact-number-controls"><CountrySelect ariaLabel="Country code" value={country} onChange={(option) => { setCountry(option.country); setFieldErrors((current) => ({ ...current, localNumber: "" })); }} /><input id="applicant-edit-mobile" required inputMode="numeric" placeholder={selectedCountry.placeholder} value={localNumber} aria-invalid={Boolean(fieldErrors.localNumber)} onChange={(event) => { setLocalNumber(event.target.value.replace(/\D/g, "")); setFieldErrors((current) => ({ ...current, localNumber: "" })); }} /></div><small>Enter the local number only, without the country code.</small>{fieldErrors.localNumber && <small className="field-error">{fieldErrors.localNumber}</small>}</label>
+      <label>Preferred mobile number *<div className="contact-number-controls"><CountrySelect ariaLabel="Country code" value={country} onChange={(option) => { setCountry(option.country); setFieldErrors((current) => ({ ...current, localNumber: "" })); }} /><input id="applicant-edit-mobile" required inputMode="numeric" placeholder={phonePlaceholder(selectedCountry)} value={localNumber} aria-invalid={Boolean(fieldErrors.localNumber)} onChange={(event) => { setLocalNumber(event.target.value.replace(/\D/g, "")); setFieldErrors((current) => ({ ...current, localNumber: "" })); }} /></div><small>{phoneGuide(selectedCountry)}</small>{fieldErrors.localNumber && <small className="field-error">{fieldErrors.localNumber}</small>}</label>
       <div className="applicant-edit-actions"><Link className="btn btn-secondary" href={`/applicants/${encodeURIComponent(applicant.applicationId)}`}>Cancel</Link><button className="btn btn-primary" type="submit" disabled={saving}>{saving ? "Saving..." : "Save changes"}</button></div>
     </form>
   </section>;
