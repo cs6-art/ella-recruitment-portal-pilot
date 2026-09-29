@@ -30,10 +30,15 @@ export async function GET() {
         audience: event.audience,
         when: event.when,
         placeholders: event.placeholders,
+        buttons: event.buttons,
         defaultSubject: event.subject,
         defaultBody: event.body,
         subject: custom?.subject || event.subject,
         body: custom?.body || event.body,
+        ctaLabel: custom?.ctaLabel || "",
+        secondaryCtaLabel: custom?.secondaryCtaLabel || "",
+        imageUrl: custom?.imageUrl || "",
+        imageAlt: custom?.imageAlt || "",
         customized: Boolean(custom),
         updatedBy: custom?.updatedBy || "",
         updatedAt: custom?.updatedAt.toISOString() || "",
@@ -46,7 +51,15 @@ export async function GET() {
   }
 }
 
-const saveSchema = z.object({ eventType: z.string().trim().min(1), subject: z.string(), body: z.string() });
+const saveSchema = z.object({
+  eventType: z.string().trim().min(1),
+  subject: z.string(),
+  body: z.string(),
+  ctaLabel: z.string().default(""),
+  secondaryCtaLabel: z.string().default(""),
+  imageUrl: z.string().default(""),
+  imageAlt: z.string().default(""),
+});
 
 export async function PUT(request: Request) {
   const { user, error } = await settingsUser();
@@ -55,9 +68,19 @@ export async function PUT(request: Request) {
   if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many updates. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
   try {
     const input = saveSchema.parse(await request.json());
-    const problem = validateEmailTemplate(input.eventType, input.subject, input.body);
+    const problem = validateEmailTemplate(input.eventType, input.subject, input.body, input);
     if (problem) return NextResponse.json({ success: false, error: problem }, { status: 400 });
-    await saveEmailTemplate({ organizationId: user.organizationId, eventType: input.eventType, subject: input.subject.trim(), body: input.body.replace(/\r\n/g, "\n").trim(), updatedBy: user.name || user.email });
+    await saveEmailTemplate({
+      organizationId: user.organizationId,
+      eventType: input.eventType,
+      subject: input.subject.trim(),
+      body: input.body.replace(/\r\n/g, "\n").trim(),
+      ctaLabel: input.ctaLabel.trim(),
+      secondaryCtaLabel: input.secondaryCtaLabel.trim(),
+      imageUrl: input.imageUrl.trim(),
+      imageAlt: input.imageUrl.trim() ? input.imageAlt.trim() : "",
+      updatedBy: user.name || user.email,
+    });
     return NextResponse.json({ success: true, message: "Email saved. It applies to emails sent from now on." });
   } catch (caught) {
     if (caught instanceof z.ZodError) return NextResponse.json({ success: false, error: "Enter a subject and the email text." }, { status: 400 });

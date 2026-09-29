@@ -1,7 +1,8 @@
 /**
- * Wording of the automated emails. Each organization may override the subject
- * and body of the emails it sends; everything else (buttons, links, layout)
- * stays fixed so an edit can never break a booking link.
+ * Wording of the automated emails. Each organization may override the subject,
+ * the text, the button labels and a header image of the emails it sends; the
+ * links behind the buttons and the sign-off stay fixed so an edit can never
+ * break a booking link.
  */
 
 export type EditableEmailEvent = "voice_booking_invitation" | "voice_booking_confirmation" | "final_booking_invitation" | "job_posted";
@@ -21,6 +22,20 @@ export const PLACEHOLDER_HELP: Record<EmailPlaceholder, string> = {
   requested_by: "Who requested the role",
 };
 
+/** Short names for the "insert a detail" buttons in the editor. */
+export const PLACEHOLDER_LABEL: Record<EmailPlaceholder, string> = {
+  candidate_name: "Candidate name",
+  role_title: "Role title",
+  role_phrase: "Role (in a sentence)",
+  company_name: "Company name",
+  interview_time: "Interview time",
+  ai_notice: "AI interview notice",
+  recipient_name: "Recipient name",
+  role_id: "Role number",
+  department: "Department",
+  requested_by: "Requested by",
+};
+
 export type EmailEventDefinition = {
   key: EditableEmailEvent;
   label: string;
@@ -28,6 +43,8 @@ export type EmailEventDefinition = {
   when: string;
   /** False when no active sender uses the portal's wording for this email, so editing it would do nothing. */
   editable: boolean;
+  /** The standard label of each button the email can carry. The link behind a button is added automatically. */
+  buttons: { primary?: string; secondary?: string };
   placeholders: EmailPlaceholder[];
   subject: string;
   body: string;
@@ -48,6 +65,7 @@ export const EMAIL_EVENTS: EmailEventDefinition[] = [
     audience: "Candidate",
     when: "Sent when HR invites a candidate to book their AI voice interview. Contains the booking button.",
     editable: true,
+    buttons: { primary: "Schedule a call", secondary: "Interview with our Avatar now" },
     placeholders: ["candidate_name", "role_title", "role_phrase", "company_name", "ai_notice"],
     subject: "Schedule your AI voice interview | {{company_name}}",
     body: `Dear {{candidate_name}},\n\nWe are pleased to invite you to the next interview step for {{role_phrase}}. Please use one of the secure options below to choose a suitable time. Each link expires automatically and can be used once.\n\nSmile, {{company_name}}'s AI interview assistant, will conduct the voice interview and ask focused questions about your experience. We look forward to speaking with you.\n\n{{ai_notice}}`,
@@ -58,6 +76,7 @@ export const EMAIL_EVENTS: EmailEventDefinition[] = [
     audience: "Candidate",
     when: "Sent when a candidate books their AI voice interview.",
     editable: true,
+    buttons: {},
     placeholders: ["candidate_name", "role_title", "role_phrase", "company_name", "interview_time", "ai_notice"],
     subject: "Your AI voice interview is confirmed | {{company_name}}",
     body: `Dear {{candidate_name}},\n\nYour AI voice interview for {{role_phrase}} is confirmed.\n\nInterview time: {{interview_time}}\n\nSmile, {{company_name}}'s AI interview assistant, will call your preferred mobile number around the scheduled time. Please be available in a quiet location with a stable phone connection.\n\n{{ai_notice}}`,
@@ -68,6 +87,7 @@ export const EMAIL_EVENTS: EmailEventDefinition[] = [
     audience: "Candidate",
     when: "Sent when HR invites a candidate to book their final interview. Contains the booking button.",
     editable: false,
+    buttons: { primary: "Schedule final interview" },
     placeholders: ["candidate_name", "role_title", "role_phrase", "company_name"],
     subject: "Next step: schedule your final interview with {{company_name}}",
     body: `Hi {{candidate_name}},\n\nThank you for completing your AI voice interview. We are pleased to invite you to the final interview stage for {{role_phrase}}. Please use the button below to select your preferred interview time. This invitation expires automatically.`,
@@ -78,6 +98,7 @@ export const EMAIL_EVENTS: EmailEventDefinition[] = [
     audience: "Organization owner",
     when: "Sent to the organization's owner when a role is published.",
     editable: true,
+    buttons: { primary: "View role" },
     placeholders: ["recipient_name", "role_title", "role_id", "department", "requested_by", "company_name"],
     subject: "A new role has been posted | {{company_name}}",
     body: `Hi {{recipient_name}},\n\n"{{role_title}}" {{role_id}} {{department}} has just been published and is now open for applications.\n\nRequested by: {{requested_by}}\n\nYou can review the role and its applicants in the recruitment portal.`,
@@ -106,10 +127,48 @@ function plainValue(value: string | undefined) {
 
 const PLACEHOLDER_PATTERN = /\{\{\s*([a-z_]+)\s*\}\}/g;
 
+export const MAX_BUTTON_LABEL_LENGTH = 40;
+export const MAX_IMAGE_URL_LENGTH = 500;
+export const MAX_IMAGE_ALT_LENGTH = 120;
+
+/** The extra, optional parts of an edit: button labels and a header image. Empty means standard / none. */
+export type EmailExtras = { ctaLabel?: string; secondaryCtaLabel?: string; imageUrl?: string; imageAlt?: string };
+
+/** Only a public https link to an image is accepted, and never one that could carry markup. */
+export function isValidImageUrl(value: string): boolean {
+  if (!value || value.length > MAX_IMAGE_URL_LENGTH || /[\s"'<>\\]/.test(value)) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && Boolean(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+function validateEmailExtras(event: EmailEventDefinition, extras: EmailExtras): string | null {
+  const labels: [string, string | undefined, string | undefined][] = [["The button text", extras.ctaLabel, event.buttons.primary], ["The second button text", extras.secondaryCtaLabel, event.buttons.secondary]];
+  for (const [name, value, standard] of labels) {
+    const label = (value || "").trim();
+    if (!label) continue;
+    if (!standard) return "This email does not have that button.";
+    if (label.length > MAX_BUTTON_LABEL_LENGTH) return `${name} must be at most ${MAX_BUTTON_LABEL_LENGTH} characters.`;
+    if (/[\r\n<>]/.test(label)) return `${name} must be one line and cannot contain < or >.`;
+  }
+  const imageUrl = (extras.imageUrl || "").trim();
+  const imageAlt = (extras.imageAlt || "").trim();
+  if (imageUrl && !isValidImageUrl(imageUrl)) return "The image must be a public https link (starting with https://) with no spaces.";
+  if (imageAlt.length > MAX_IMAGE_ALT_LENGTH) return `The image description must be at most ${MAX_IMAGE_ALT_LENGTH} characters.`;
+  if (/[\r\n<>]/.test(imageAlt)) return "The image description must be one line and cannot contain < or >.";
+  if (imageAlt && !imageUrl) return "Add the image link, or clear the image description.";
+  return null;
+}
+
 /** Returns an error message when the text cannot be saved, otherwise null. */
-export function validateEmailTemplate(eventKey: string, subject: string, body: string): string | null {
+export function validateEmailTemplate(eventKey: string, subject: string, body: string, extras: EmailExtras = {}): string | null {
   const event = editableEmailEvent(eventKey);
   if (!event) return "Unknown email.";
+  const extraProblem = validateEmailExtras(event, extras);
+  if (extraProblem) return extraProblem;
   if (!subject.trim()) return "Enter a subject.";
   if (!body.trim()) return "Enter the email text.";
   if (subject.length > MAX_SUBJECT_LENGTH) return `The subject must be at most ${MAX_SUBJECT_LENGTH} characters.`;
@@ -140,7 +199,19 @@ export function renderEmailText(template: string, values: Partial<Record<EmailPl
   return lines.join("\n").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-export type EmailOverride = { subject: string; body: string };
+export type EmailOverride = { subject: string; body: string } & EmailExtras;
+
+/**
+ * Applies an organization's button labels and header image to the email copy.
+ * A label only replaces a button that exists (a button without a link is not shown),
+ * and an image is only added when its link is valid.
+ */
+export function applyEmailExtras<T extends { cta: string; secondaryCta: string }>(copy: T, override?: EmailOverride | null): T & { imageUrl: string; imageAlt: string } {
+  const cta = copy.cta && override?.ctaLabel?.trim() ? override.ctaLabel.trim() : copy.cta;
+  const secondaryCta = copy.secondaryCta && override?.secondaryCtaLabel?.trim() ? override.secondaryCtaLabel.trim() : copy.secondaryCta;
+  const imageUrl = override?.imageUrl?.trim() && isValidImageUrl(override.imageUrl.trim()) ? override.imageUrl.trim() : "";
+  return { ...copy, cta, secondaryCta, imageUrl, imageAlt: imageUrl ? (override?.imageAlt || "").trim() : "" };
+}
 
 /** Subject and body for an event: the organization's edit when present, otherwise the default. */
 export function renderEventEmail(eventKey: EditableEmailEvent, values: Partial<Record<EmailPlaceholder, string>>, override?: EmailOverride | null) {

@@ -6,14 +6,21 @@ import { getOrganizationBranding } from "@/lib/organization-branding";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import type { EmailOverride } from "@/lib/email-templates";
 
-export async function listEmailTemplates(organizationId: string): Promise<Map<string, EmailOverride & { updatedAt: Date; updatedBy: string }>> {
-  const rows = await getDb().select().from(emailTemplates).where(eq(emailTemplates.organizationId, organizationId));
-  return new Map(rows.map((row) => [row.eventType, { subject: row.subject, body: row.body, updatedAt: row.updatedAt, updatedBy: row.updatedBy }]));
+export type StoredEmailTemplate = Required<EmailOverride> & { updatedAt: Date; updatedBy: string };
+
+function toOverride(row: typeof emailTemplates.$inferSelect): Required<EmailOverride> {
+  return { subject: row.subject, body: row.body, ctaLabel: row.ctaLabel, secondaryCtaLabel: row.secondaryCtaLabel, imageUrl: row.imageUrl, imageAlt: row.imageAlt };
 }
 
-export async function saveEmailTemplate(input: { organizationId: string; eventType: string; subject: string; body: string; updatedBy: string }) {
-  await getDb().insert(emailTemplates).values({ organizationId: input.organizationId, eventType: input.eventType, subject: input.subject, body: input.body, updatedBy: input.updatedBy })
-    .onConflictDoUpdate({ target: [emailTemplates.organizationId, emailTemplates.eventType], set: { subject: input.subject, body: input.body, updatedBy: input.updatedBy, updatedAt: new Date() } });
+export async function listEmailTemplates(organizationId: string): Promise<Map<string, StoredEmailTemplate>> {
+  const rows = await getDb().select().from(emailTemplates).where(eq(emailTemplates.organizationId, organizationId));
+  return new Map(rows.map((row) => [row.eventType, { ...toOverride(row), updatedAt: row.updatedAt, updatedBy: row.updatedBy }]));
+}
+
+export async function saveEmailTemplate(input: { organizationId: string; eventType: string; updatedBy: string } & Required<EmailOverride>) {
+  const values = { subject: input.subject, body: input.body, ctaLabel: input.ctaLabel, secondaryCtaLabel: input.secondaryCtaLabel, imageUrl: input.imageUrl, imageAlt: input.imageAlt, updatedBy: input.updatedBy };
+  await getDb().insert(emailTemplates).values({ organizationId: input.organizationId, eventType: input.eventType, ...values })
+    .onConflictDoUpdate({ target: [emailTemplates.organizationId, emailTemplates.eventType], set: { ...values, updatedAt: new Date() } });
 }
 
 /** Removing the row restores the built-in default wording. */
@@ -36,7 +43,7 @@ export async function loadEmailContexts(organizationIds: string[]): Promise<Map<
   const contexts = new Map<string, OrganizationEmailContext>();
   if (!ids.length) return contexts;
   // Sending must never stop because wording could not be loaded (for example
-  // before migration 0030 has been applied): fall back to the default text.
+  // before migrations 0030 and 0031 have been applied): fall back to the default text.
   const rows = await getDb().select().from(emailTemplates).where(inArray(emailTemplates.organizationId, ids)).catch((error: unknown) => {
     console.error("[Email Templates] Could not load organization templates; using defaults:", error);
     return [];
@@ -44,7 +51,7 @@ export async function loadEmailContexts(organizationIds: string[]): Promise<Map<
   for (const id of ids) {
     contexts.set(id, {
       companyName: await companyNameFor(id),
-      templates: new Map(rows.filter((row) => row.organizationId === id).map((row) => [row.eventType, { subject: row.subject, body: row.body }])),
+      templates: new Map(rows.filter((row) => row.organizationId === id).map((row) => [row.eventType, toOverride(row)])),
     });
   }
   return contexts;

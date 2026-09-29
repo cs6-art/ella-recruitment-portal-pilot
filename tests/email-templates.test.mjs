@@ -72,3 +72,51 @@ test("the queue applies each organization's wording and company name, and the si
   assert.match(read("src/lib/email-template-store.ts"), /using defaults/);
   assert.match(read("drizzle/0030_email_templates.sql"), /CREATE TABLE IF NOT EXISTS "email_templates"/);
 });
+
+test("button text and a header image can be edited, but only where they can work", async () => {
+  const { validateEmailTemplate, isValidImageUrl } = await import("../src/lib/email-templates.ts");
+  const ok = { ctaLabel: "Book my call", secondaryCtaLabel: "Talk to Smile now", imageUrl: "https://cdn.example.com/banner.png", imageAlt: "Company banner" };
+  assert.equal(validateEmailTemplate("voice_booking_invitation", "Hi", "Body", ok), null);
+  // The confirmation email has no buttons, so a button label makes no sense there.
+  assert.match(validateEmailTemplate("voice_booking_confirmation", "Hi", "Body", { ctaLabel: "Click" }), /does not have that button/);
+  // The new-role email has one button only.
+  assert.match(validateEmailTemplate("job_posted", "Hi", "Body", { secondaryCtaLabel: "Another" }), /does not have that button/);
+  assert.match(validateEmailTemplate("voice_booking_invitation", "Hi", "Body", { ctaLabel: "x".repeat(41) }), /at most 40/);
+  assert.match(validateEmailTemplate("voice_booking_invitation", "Hi", "Body", { ctaLabel: "<b>Go</b>" }), /cannot contain/);
+  assert.match(validateEmailTemplate("voice_booking_invitation", "Hi", "Body", { imageUrl: "http://cdn.example.com/a.png" }), /https/);
+  assert.match(validateEmailTemplate("voice_booking_invitation", "Hi", "Body", { imageUrl: "javascript:alert(1)" }), /https/);
+  assert.match(validateEmailTemplate("voice_booking_invitation", "Hi", "Body", { imageAlt: "A banner" }), /image link/);
+  for (const bad of ["", "https://", "https://user:pw@example.com/a.png", "https://example.com/a b.png", 'https://example.com/a".png', "https://example.com/<a>.png", "ftp://example.com/a.png", "//example.com/a.png"]) {
+    assert.equal(isValidImageUrl(bad), false, bad);
+  }
+  assert.equal(isValidImageUrl("https://example.com/a.png?x=1&y=2"), true);
+});
+
+test("saved button text and image are applied only to buttons that exist and only when the link is valid", async () => {
+  const { applyEmailExtras } = await import("../src/lib/email-templates.ts");
+  const copy = { cta: "Schedule a call", secondaryCta: "", extra: "kept" };
+  const applied = applyEmailExtras(copy, { subject: "s", body: "b", ctaLabel: "Book my call", secondaryCtaLabel: "Ignored", imageUrl: "https://cdn.example.com/a.png", imageAlt: "Banner" });
+  assert.deepEqual(applied, { cta: "Book my call", secondaryCta: "", extra: "kept", imageUrl: "https://cdn.example.com/a.png", imageAlt: "Banner" });
+  // A button that has no link (empty label) is never brought back by an edit.
+  assert.equal(applyEmailExtras({ cta: "", secondaryCta: "" }, { subject: "s", body: "b", ctaLabel: "Click" }).cta, "");
+  // Nothing saved: labels stay standard and no image is sent.
+  assert.deepEqual(applyEmailExtras(copy, null), { ...copy, imageUrl: "", imageAlt: "" });
+  // An unsafe link that somehow reached storage is dropped instead of sent.
+  const unsafe = applyEmailExtras(copy, { subject: "s", body: "b", imageUrl: "javascript:alert(1)", imageAlt: "x" });
+  assert.equal(unsafe.imageUrl, "");
+  assert.equal(unsafe.imageAlt, "");
+});
+
+test("the editor, API, storage and queue carry buttons and the image end to end", () => {
+  assert.match(read("drizzle/0031_email_template_buttons_image.sql"), /ADD COLUMN IF NOT EXISTS "image_url"/);
+  assert.match(read("src/db/schema-recruitment.ts"), /imageUrl: text\("image_url"\)/);
+  const route = read("src/app/api/email-templates/route.ts");
+  assert.match(route, /imageUrl: z\.string\(\)\.default\(""\)/);
+  assert.match(route, /validateEmailTemplate\(input\.eventType, input\.subject, input\.body, input\)/);
+  const labels = read("src/lib/notification-labels.ts");
+  assert.match(labels, /applyEmailExtras\(copy, context\.template\)/);
+  assert.match(labels, /imageUrl: string;/);
+  const editor = read("src/components/EmailTemplatesEditor.tsx");
+  for (const text of ["Button text", "Header image (optional)", "Image link", "Preview", "Restore Original", "Discard Changes", "Insert:"]) assert.ok(editor.includes(text), text);
+  assert.match(editor, /validateEmailTemplate\(selected\.key, draft\.subject, draft\.body, draft\)/);
+});

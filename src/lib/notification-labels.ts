@@ -1,5 +1,5 @@
 import { applicantStageLabel, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
-import { emailSignoff, renderEventEmail, type EmailOverride, type EmailPlaceholder } from "@/lib/email-templates";
+import { applyEmailExtras, emailSignoff, renderEventEmail, type EmailOverride, type EmailPlaceholder } from "@/lib/email-templates";
 import { pilotOutboundEmailEnabled } from "@/lib/pilot-email-policy";
 
 /**
@@ -104,7 +104,12 @@ export type NotificationEmailCopy = {
   secondaryCta: string;
   secondaryCtaLink: string;
   signoff: string;
+  /** Optional header image (a public https link), or "" for none. The senders show it above the text. */
+  imageUrl: string;
+  imageAlt: string;
 };
+
+type EmailCopyBody = Omit<NotificationEmailCopy, "imageUrl" | "imageAlt">;
 
 /**
  * Candidate-facing email copy for a notification event. The n8n notifier
@@ -112,7 +117,7 @@ export type NotificationEmailCopy = {
  * separate template. Returns `null` for events that must not send an email
  * (e.g. the face-to-face booking confirmation, which Google Calendar covers).
  */
-export function notificationEmail(eventType: string | null | undefined, context: NotificationEmailContext = {}): NotificationEmailCopy | null {
+function buildNotificationEmail(eventType: string | null | undefined, context: NotificationEmailContext): EmailCopyBody | null {
   if (!pilotOutboundEmailEnabled()) return null;
 
   const key = normalize(eventType);
@@ -232,7 +237,7 @@ export type RoleNotificationEmailContext = {
  * but this stays keyed by status so a future role event can add a case here
  * without touching the sender.
  */
-export function roleNotificationEmail(newStatus: string | null | undefined, context: RoleNotificationEmailContext = {}): NotificationEmailCopy | null {
+function buildRoleNotificationEmail(newStatus: string | null | undefined, context: RoleNotificationEmailContext): EmailCopyBody | null {
   if (!pilotOutboundEmailEnabled()) return null;
   const key = normalize(newStatus);
   if (key !== "job_posted") return null;
@@ -263,4 +268,16 @@ export function roleNotificationEmail(newStatus: string | null | undefined, cont
     includeRawBookingLink: false,
     signoff: emailSignoff(String(context.companyName || "").trim() || "McLink Group"),
   };
+}
+
+/** Candidate-facing copy for an event, with the organization's button labels and header image applied. */
+export function notificationEmail(eventType: string | null | undefined, context: NotificationEmailContext = {}): NotificationEmailCopy | null {
+  const copy = buildNotificationEmail(eventType, context);
+  return copy ? applyEmailExtras(copy, context.template) : null;
+}
+
+/** Staff-facing copy for a role event, with the organization's button label and header image applied. */
+export function roleNotificationEmail(newStatus: string | null | undefined, context: RoleNotificationEmailContext = {}): NotificationEmailCopy | null {
+  const copy = buildRoleNotificationEmail(newStatus, context);
+  return copy ? applyEmailExtras(copy, context.template) : null;
 }

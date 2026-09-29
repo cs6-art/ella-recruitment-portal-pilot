@@ -6356,3 +6356,50 @@ textarea:focus-visible {
 .grading-chips li { padding: 4px 10px; border-radius: 999px; background: #eaf2fb; color: var(--navy); font-size: 12px; font-weight: 600; }
 .grading-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #eef2f6; color: #4a5a6b; font-size: 12px; font-weight: 700; }
 .grading-pill.is-required { background: #fdecd7; color: #8a4a08; }
+
+/* Settings: Automated Emails editor. */
+.email-editor { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 20px; align-items: start; }
+.email-editor-list { display: grid; gap: 8px; }
+.email-editor-item { position: relative; display: grid; gap: 3px; width: 100%; padding: 12px 14px; text-align: left; border: 1px solid #dce6f0; border-radius: 10px; background: #fff; cursor: pointer; }
+.email-editor-item:hover { border-color: #b7c9dc; background: #fbfdff; }
+.email-editor-item.is-active { border-color: var(--primary, #0b5cad); background: #eef5fc; box-shadow: inset 3px 0 0 var(--primary, #0b5cad); }
+.email-editor-item-title { color: var(--navy); font-size: 13px; font-weight: 800; padding-right: 54px; }
+.email-editor-item-meta { color: var(--muted); font-size: 12px; }
+.email-editor-badge { position: absolute; top: 10px; right: 10px; padding: 2px 8px; border-radius: 999px; background: #e3f3ea; color: #1d6b45; font-size: 11px; font-weight: 700; }
+.email-editor-main { min-width: 0; }
+.email-editor-intro h3 { margin: 0 0 4px; color: var(--navy); font-size: 17px; }
+.email-editor-intro p { margin: 0 0 16px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.email-editor-columns { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
+.email-editor-form { display: grid; gap: 16px; min-width: 0; }
+.email-editor-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.email-editor-label-row small { color: var(--muted); font-size: 11px; }
+.email-editor-form textarea { min-height: 220px; resize: vertical; line-height: 1.5; }
+.email-editor-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
+.email-editor-chips > span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.email-editor-chip { padding: 4px 10px; border: 1px solid #c6d6e8; border-radius: 999px; background: #f4f8fc; color: var(--navy); font-size: 12px; font-weight: 600; cursor: pointer; }
+.email-editor-chip:hover { background: #e6effa; border-color: var(--primary, #0b5cad); }
+.email-editor-fieldset { display: grid; gap: 12px; margin: 0; padding: 14px 16px; border: 1px solid #dce6f0; border-radius: 10px; min-width: 0; }
+.email-editor-fieldset legend { padding: 0 6px; color: var(--navy); font-size: 13px; font-weight: 800; }
+.email-editor-actions { flex-wrap: wrap; gap: 10px; }
+.email-editor-preview { position: sticky; top: 16px; min-width: 0; padding: 14px 16px; border: 1px solid #dce6f0; border-radius: 12px; background: #f6f9fc; }
+.email-editor-preview h4 { margin: 0 0 2px; color: var(--navy); font-size: 14px; }
+.email-editor-preview-note { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+.email-preview { overflow: hidden; border: 1px solid #dce6f0; border-radius: 10px; background: #fff; }
+.email-preview-meta { display: grid; gap: 2px; padding: 10px 14px; border-bottom: 1px solid #e8eef5; background: #fbfdff; }
+.email-preview-meta span { color: var(--muted); font-size: 11px; font-weight: 700; }
+.email-preview-meta strong { color: var(--navy); font-size: 13px; overflow-wrap: anywhere; }
+.email-preview-body { padding: 16px 18px; color: #1f2933; font-size: 13.5px; line-height: 1.55; overflow-wrap: anywhere; }
+.email-preview-body p { margin: 0 0 14px; }
+.email-preview-image { display: block; max-width: 100%; height: auto; margin: 0 0 14px; border-radius: 4px; }
+.email-preview-broken { padding: 10px 12px; border: 1px dashed #d9822b; border-radius: 6px; color: #8a4a08; font-size: 12px; }
+.email-preview-button { display: inline-block; padding: 10px 18px; border-radius: 6px; background: #0b5cad; color: #fff; font-weight: 600; }
+.email-preview-button.is-secondary { background: #fff; color: #0b5cad; border: 1px solid #0b5cad; }
+.email-preview-signoff { margin-bottom: 0 !important; color: #52606d; }
+@media (max-width: 1100px) {
+  .email-editor-columns { grid-template-columns: 1fr; }
+  .email-editor-preview { position: static; }
+}
+@media (max-width: 760px) {
+  .email-editor { grid-template-columns: 1fr; }
+  .email-editor-list { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+}
