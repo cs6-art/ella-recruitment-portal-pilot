@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import RoleInterviewerPicker from "@/components/RoleInterviewerPicker";
 import ValidationSummary, { type ValidationIssue } from "@/components/ValidationSummary";
 import { notificationPresentation } from "@/lib/notification-status";
 import {
@@ -896,6 +897,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
               hint="Included in the candidate's face-to-face interview invitation and calendar event."
             />
           )}
+          {values.hodInterviewRequired === "Required" && <RoleInterviewerPicker roleId={roleId} editable={editable && !saving} />}
         </div>
       </details>
 

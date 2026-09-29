@@ -517,6 +517,25 @@ export async function updateRoleDetails(input: {
   });
 }
 
+/**
+ * Assigns (or clears, with an empty email) the interviewer whose own Google
+ * Calendar hosts a role's face-to-face interviews. Stored in the role setup so
+ * later role saves keep it, and mirrored to hr_calendar_email, which every
+ * booking and calendar call already reads.
+ */
+export async function setRoleInterviewer(input: { externalId: string; organizationId: string; email: string; sharedCalendarEmail: string; actorEmail: string }) {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const [role] = await tx.select({ id: roles.id, setup: roles.setup }).from(roles).where(and(eq(roles.externalId, input.externalId.trim()), eq(roles.organizationId, input.organizationId))).for("update").limit(1);
+    if (!role) return null;
+    const setup = role.setup && typeof role.setup === "object" ? { ...(role.setup as Record<string, unknown>) } : {};
+    const email = input.email.trim().toLowerCase();
+    if (email) setup.interviewerEmail = email; else delete setup.interviewerEmail;
+    await tx.update(roles).set({ setup: setup as object, hrCalendarEmail: email || input.sharedCalendarEmail, updatedByEmail: input.actorEmail, updatedAt: new Date() }).where(eq(roles.id, role.id));
+    return { email };
+  });
+}
+
 export class RoleWriteConflictError extends Error {
   readonly code = "ROLE_WRITE_CONFLICT" as const;
 
@@ -2541,6 +2560,8 @@ export async function markInterviewCalendarEvent(input: {
   eventId?: string;
   eventLink?: string;
   error?: string;
+  interviewerName?: string;
+  interviewerEmail?: string;
 }) {
   const db = getDb();
   return db.transaction(async (tx) => {
@@ -2560,8 +2581,9 @@ export async function markInterviewCalendarEvent(input: {
     if (!slot) return { updated: false, duplicate: false, error: "slot_not_found" as const, eventId: null };
 
     const incomingId = (input.eventId || "").trim();
+    const interviewer = input.interviewerEmail ? { interviewerName: input.interviewerName || "", interviewerEmail: input.interviewerEmail } : {};
     if (input.status === "failed") {
-      await tx.update(interviewSlots).set({ calendarEventStatus: "failed", calendarEventError: input.error || "calendar_event_failed", updatedAt: new Date() }).where(eq(interviewSlots.id, slot.id));
+      await tx.update(interviewSlots).set({ calendarEventStatus: "failed", calendarEventError: input.error || "calendar_event_failed", ...interviewer, updatedAt: new Date() }).where(eq(interviewSlots.id, slot.id));
       return { updated: true, duplicate: false, error: null, eventId: slot.calendarEventId || null };
     }
     if (slot.calendarEventId && incomingId && slot.calendarEventId !== incomingId) {
@@ -2575,6 +2597,7 @@ export async function markInterviewCalendarEvent(input: {
       calendarEventLink: input.eventLink || slot.calendarEventLink,
       calendarEventStatus: input.status === "skipped" ? "skipped" : input.status === "updated" ? "updated" : "created",
       calendarEventError: "",
+      ...interviewer,
       updatedAt: new Date(),
     }).where(eq(interviewSlots.id, slot.id));
     return { updated: true, duplicate: false, error: null, eventId: incomingId || slot.calendarEventId || null };

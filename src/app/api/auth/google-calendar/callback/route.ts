@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { cookies } from "next/headers";
+
 import { exchangeCodeAndStore, verifyOAuthState } from "@/lib/google-calendar";
+import { getFinalInterviewCalendarConfig } from "@/lib/google-sheets";
+import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 function calendarErrorReason(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -20,7 +24,10 @@ export async function GET(request: Request) {
   const state = url.searchParams.get("state");
   const oauthError = url.searchParams.get("error");
 
-  const settingsUrl = new URL("/settings", url);
+  // A user connecting their own calendar returns to their profile; the shared
+  // HR calendar (an administrator's connection) returns to Settings.
+  const sessionUser = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  let settingsUrl = new URL("/settings", url);
 
   if (oauthError) {
     settingsUrl.searchParams.set("calendar", "denied");
@@ -41,6 +48,12 @@ export async function GET(request: Request) {
   }
 
   try {
+    const shared = (await getFinalInterviewCalendarConfig()).email.trim().toLowerCase();
+    if (sessionUser && sessionUser.email.trim().toLowerCase() === email.trim().toLowerCase() && email.trim().toLowerCase() !== shared) {
+      const profileUrl = new URL("/profile", url);
+      for (const [key, value] of settingsUrl.searchParams) profileUrl.searchParams.set(key, value);
+      settingsUrl = profileUrl;
+    }
     await exchangeCodeAndStore(code, email, url.origin);
     settingsUrl.searchParams.set("calendar", "connected");
   } catch (error) {

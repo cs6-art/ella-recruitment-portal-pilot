@@ -29,12 +29,24 @@ function normalizedEmail(value: string): string {
   return value.trim().toLowerCase();
 }
 
-async function finalInterviewCalendarTarget(fallbackEmail = ""): Promise<{ email: string; calendarId: string }> {
+async function finalInterviewCalendarTarget(assignedEmail = ""): Promise<{ email: string; calendarId: string }> {
   const configured = await getFinalInterviewCalendarConfig();
+  const assigned = normalizedEmail(assignedEmail);
+  // A role's assigned interviewer wins only when that person has connected
+  // their own calendar; otherwise every role keeps using the shared HR
+  // calendar exactly as before, so an assignment can never break booking.
+  if (assigned && assigned !== normalizedEmail(configured.email || "") && await getCalendarConnection(assigned)) {
+    return { email: assigned, calendarId: "primary" };
+  }
   return {
-    email: configured.email || normalizedEmail(fallbackEmail),
+    email: configured.email || assigned,
     calendarId: configured.calendarId || "primary",
   };
+}
+
+/** The calendar account a role's face-to-face interviews will actually use. */
+export async function resolveFinalInterviewCalendarEmail(assignedEmail = ""): Promise<string> {
+  return (await finalInterviewCalendarTarget(assignedEmail)).email;
 }
 
 // Reuses the same OAuth 2.0 Web application client already registered for

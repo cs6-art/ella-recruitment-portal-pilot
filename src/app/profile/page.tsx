@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import AppShell from "@/components/AppShell";
+import MyCalendarConnect from "@/components/MyCalendarConnect";
 import { canAdministerAccess } from "@/lib/access-control";
 import {
   COOKIE_NAME,
@@ -102,6 +103,8 @@ export default async function ProfilePage() {
             </div>
           </div>
         </section>
+
+        {user.canReviewRole === true && <MyCalendarConnect email={user.email} />}
       </main>
     </AppShell>
   );

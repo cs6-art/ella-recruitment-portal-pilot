@@ -9,12 +9,17 @@ import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 export async function GET(request: Request) {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.redirect(new URL("/", request.url));
-  if (user.canEditSettings !== true) return NextResponse.json({ success: false, error: "Only settings administrators can connect the shared HR calendar." }, { status: 403 });
+  // ?self=1 lets any HR reviewer connect their OWN calendar (so they can be
+  // assigned as a role's interviewer); the shared HR calendar stays admin-only.
+  const self = new URL(request.url).searchParams.get("self") === "1";
+  if (self) {
+    if (user.canReviewRole !== true) return NextResponse.json({ success: false, error: "Only HR reviewers can connect a personal calendar." }, { status: 403 });
+  } else if (user.canEditSettings !== true) return NextResponse.json({ success: false, error: "Only settings administrators can connect the shared HR calendar." }, { status: 403 });
   const rate = consumeRateLimit(`calendar-connect:${user.email}:${requestClientKey(request)}`, 10, 15 * 60 * 1000);
   if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many calendar connection attempts. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
 
   try {
-    const calendarConfig = await getFinalInterviewCalendarConfig();
+    const calendarConfig = self ? { email: user.email.trim().toLowerCase() } : await getFinalInterviewCalendarConfig();
     // Use the host that initiated OAuth so custom-domain deployments do not
     // accidentally exchange the authorization code against localhost.
     const url = getGoogleConsentUrl(calendarConfig.email, new URL(request.url).origin);

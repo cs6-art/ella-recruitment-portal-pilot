@@ -49,6 +49,7 @@ import {
 } from "@/lib/internal-recruitment-queries";
 import { getDb } from "@/db/client";
 import { organizations } from "@/db/schema";
+import { users } from "@/db/schema-recruitment";
 import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
 import { creditCostFor } from "@/lib/ella-credits";
 import { applicantVoiceTimezone } from "@/lib/applicant-timezone";
@@ -59,7 +60,7 @@ import { applicantStageLabel, type ApplicantInterviewMode } from "@/lib/applican
 import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
 import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { generateRoleId } from "@/lib/role-id";
-import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows } from "@/lib/google-calendar";
+import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows, resolveFinalInterviewCalendarEmail } from "@/lib/google-calendar";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isFinalInterviewSlotDuration, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { getPortalConfigNumber } from "@/lib/portal-config";
 import { applicationLinkWithOrganization } from "@/lib/public-url";
@@ -555,6 +556,19 @@ async function targetBookingContextInTenant(kind: "voice" | "final", tokenHash: 
   };
 }
 
+// Who the interview is with, for the appointment record and dashboard: the
+// interviewer whose calendar hosts the event, or the shared HR calendar.
+async function interviewerLabelFor(assignedEmail: string): Promise<{ interviewerName: string; interviewerEmail: string }> {
+  try {
+    const email = (await resolveFinalInterviewCalendarEmail(assignedEmail)).trim().toLowerCase();
+    if (!email) return { interviewerName: "", interviewerEmail: "" };
+    const [user] = await getDb().select({ fullName: users.fullName }).from(users).where(eq(users.email, email)).limit(1);
+    return { interviewerName: user?.fullName?.trim() || "HR", interviewerEmail: email };
+  } catch {
+    return { interviewerName: "", interviewerEmail: "" };
+  }
+}
+
 export async function targetReserveBooking(kind: "voice" | "final", tokenHash: string, slotId: string, actorEmail: string, details?: TargetBookingSlotDetails) {
   const organizationId = await findBookingTokenOrganization(tokenHash);
   if (!organizationId) return { booked: false, error: "invalid_booking_token" as const };
@@ -666,6 +680,7 @@ async function targetReserveBookingInTenant(kind: "voice" | "final", tokenHash: 
       eventId: calendar.created ? calendar.eventId : undefined,
       eventLink: calendar.created ? calendar.htmlLink : undefined,
       error: calendar.created ? undefined : ("error" in calendar ? calendar.error : calendar.reason),
+      ...(await interviewerLabelFor(context.roleHrCalendarEmail)),
     });
   } catch (error) {
     calendar = calendar.created
@@ -1065,7 +1080,9 @@ export async function targetUpdateRoleFields(roleId: string, fields: Record<stri
     setup,
     evaluationFields,
     availabilityRules,
-    hrCalendarEmail: fields.HOD_Email,
+    // An assigned interviewer (role setup) outranks the shared calendar that every
+    // role save otherwise re-applies.
+    hrCalendarEmail: text(setup.interviewerEmail) || fields.HOD_Email,
     applicationLink: fields.Application_Link,
     postedAt: fields.Posted_At || undefined,
     postedBy: fields.Posted_By,
@@ -1526,7 +1543,8 @@ export async function targetUpcomingBookings(limit = 50) {
       candidateEmail: text(slot.candidateEmail) || text(applicationEmail),
       bookedAt: text(slot.bookedAt),
       lastUpdated: text(slot.updatedAt),
-      interviewerName: text(slot.interviewerName),
+      // Bookings made before interviewer labels were recorded were still put on the shared HR calendar.
+      interviewerName: text(slot.interviewerName) || (slot.interviewType === "final" && slot.calendarEventId ? "HR" : ""),
       interviewerEmail: text(slot.interviewerEmail),
       calendarEventId: text(slot.calendarEventId),
       calendarEventLink: text(slot.calendarEventLink),
