@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
+import { consumeDurableRateLimit } from "@/lib/durable-rate-limit";
+import { rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { getPublicAppBaseUrl } from "@/lib/public-url";
 import { isPlausibleEmail, normalizeEmail, passwordProblem, registerUser, sendVerificationEmail } from "@/lib/registration";
 
 export async function POST(request: Request) {
-  const rate = consumeRateLimit(`register:${requestClientKey(request)}`, 5, 60 * 60 * 1000);
+  const rate = await consumeDurableRateLimit(`register:${requestClientKey(request)}`, 5, 60 * 60 * 1000);
   if (!rate.allowed) return NextResponse.json({ error: "Too many registration attempts. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
 
   try {

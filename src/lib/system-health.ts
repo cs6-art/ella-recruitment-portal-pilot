@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { applicationStatusHistory, interviewSlots, liveInterviewSessions, voiceCallAttempts } from "@/db/schema-recruitment";
 
 export type HealthIssue = { key: string; label: string; count: number; hint: string };
@@ -38,6 +39,10 @@ export async function collectHealthIssues(now = new Date()): Promise<HealthIssue
     { key: "calendar_failed", label: "Calendar events that failed to create (7 days)", count: failedCalendar, hint: "The interviewer's or the shared HR calendar may need to be reconnected." },
     { key: "voice_failed", label: "Voice interview calls that failed (7 days)", count: failedCalls, hint: "Check the voice workflow and provider status." },
   ];
+  // The Google Sheets recruitment path is legacy. Production must run on Postgres.
+  if (process.env.NODE_ENV === "production" && !isPostgresRecruitmentTarget()) {
+    issues.push({ key: "legacy_backend", label: "Production is not running on the Postgres backend", count: 1, hint: "Set RECRUITMENT_BACKEND=postgres. The Google Sheets recruitment path is legacy and no longer maintained." });
+  }
   return issues.filter((issue) => issue.count > 0);
 }
 

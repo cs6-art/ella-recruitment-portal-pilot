@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
+import { consumeDurableRateLimit } from "@/lib/durable-rate-limit";
+import { rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { getPublicAppBaseUrl } from "@/lib/public-url";
 import { isPlausibleEmail, issuePasswordReset, normalizeEmail, sendPasswordResetEmail } from "@/lib/registration";
 
 export async function POST(request: Request) {
-  const rate = consumeRateLimit(`forgot:${requestClientKey(request)}`, 5, 60 * 60 * 1000);
+  const rate = await consumeDurableRateLimit(`forgot:${requestClientKey(request)}`, 5, 60 * 60 * 1000);
   if (!rate.allowed) return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
 
   // Identical response whether or not the account exists.
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const email = normalizeEmail(body?.email);
     if (!isPlausibleEmail(email)) return NextResponse.json(generic);
-    if (!consumeRateLimit(`forgot-email:${email}`, 3, 60 * 60 * 1000).allowed) return NextResponse.json(generic);
+    if (!(await consumeDurableRateLimit(`forgot-email:${email}`, 3, 60 * 60 * 1000)).allowed) return NextResponse.json(generic);
 
     const issued = await issuePasswordReset(email);
     if (issued) {

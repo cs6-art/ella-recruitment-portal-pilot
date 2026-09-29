@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getGoogleConsentUrl } from "@/lib/google-calendar";
-import { getFinalInterviewCalendarConfig } from "@/lib/google-sheets";
+import { defaultPortalSettings, getFinalInterviewCalendarConfig, upsertPortalSettings } from "@/lib/google-sheets";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -20,6 +20,14 @@ export async function GET(request: Request) {
 
   try {
     const calendarConfig = self ? { email: user.email.trim().toLowerCase() } : await getFinalInterviewCalendarConfig();
+    // An organization that has not chosen a shared calendar yet uses the
+    // administrator who is connecting it, and remembers that choice.
+    if (!self && !calendarConfig.email) {
+      const template = defaultPortalSettings.find((setting) => setting.key === "Final_Interview_Calendar_Email");
+      if (!template) throw new Error("Final_Interview_Calendar_Email setting is not defined.");
+      calendarConfig.email = user.email.trim().toLowerCase();
+      await upsertPortalSettings([{ ...template, value: calendarConfig.email, updatedAt: new Date().toISOString(), updatedBy: user.email }]);
+    }
     // Use the host that initiated OAuth so custom-domain deployments do not
     // accidentally exchange the authorization code against localhost.
     const url = getGoogleConsentUrl(calendarConfig.email, new URL(request.url).origin);

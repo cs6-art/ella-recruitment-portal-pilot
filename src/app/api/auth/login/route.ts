@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 
 import { canAdministerAccess } from "@/lib/access-control";
 import { syncOrganizationMembership } from "@/lib/organization-accounts";
-import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
+import { consumeDurableRateLimit } from "@/lib/durable-rate-limit";
+import { rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { ensureDirectoryUserForLogin, findCredential, isPlausibleEmail, loadDirectoryUser, normalizeEmail, recordLogin, resolveLoginOrganization, verifyAgainstDummyHash, verifyPassword } from "@/lib/registration";
 import { COOKIE_NAME, createSessionToken } from "@/lib/session";
 
 const INVALID = "Incorrect email or password.";
 
 export async function POST(request: Request) {
-  const rate = consumeRateLimit(`login:${requestClientKey(request)}`, 10, 15 * 60 * 1000);
+  const rate = await consumeDurableRateLimit(`login:${requestClientKey(request)}`, 10, 15 * 60 * 1000);
   if (!rate.allowed) return NextResponse.json({ error: "Too many login attempts. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
 
   try {
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
     const password = typeof body?.password === "string" ? body.password : "";
     if (!isPlausibleEmail(email) || !password || password.length > 128) return NextResponse.json({ error: INVALID }, { status: 401 });
 
-    const perEmail = consumeRateLimit(`login-email:${email}`, 8, 15 * 60 * 1000);
+    const perEmail = await consumeDurableRateLimit(`login-email:${email}`, 8, 15 * 60 * 1000);
     if (!perEmail.allowed) return NextResponse.json({ error: "Too many login attempts. Try again later." }, { status: 429, headers: rateLimitHeaders(perEmail) });
 
     const credential = await findCredential(email);

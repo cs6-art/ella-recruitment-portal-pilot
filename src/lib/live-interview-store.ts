@@ -36,6 +36,7 @@ import { recordLiveAvatarInterviewDeduction } from "@/lib/ella-credits";
 import { buildRoleRequirementsContext } from "@/lib/recruitment-prompt";
 import {
   beginRecordingUpload,
+  deleteInterviewRecording,
   isAllowedRecordingMimeType,
   isRecordingStorageConfigured,
   MAX_RECORDING_BYTES,
@@ -945,4 +946,42 @@ export async function getCandidateInterviewStatus(rawToken: string) {
   const session = await getSessionByToken(rawToken);
   if (!session) return null;
   return { status: session.status as LiveInterviewStatus, completedAt: session.interviewCompletedAt?.toISOString() || "" };
+}
+
+/** Days an interview recording is kept before deletion. 0 (or a negative value) keeps recordings until the applicant is deleted. */
+export function interviewRecordingRetentionDays() {
+  const raw = process.env.INTERVIEW_RECORDING_RETENTION_DAYS?.trim();
+  if (!raw) return 90;
+  const days = Number.parseInt(raw, 10);
+  return Number.isFinite(days) && days > 0 ? days : 0;
+}
+
+/**
+ * Deletes recordings older than the retention period from Drive. The
+ * transcript, scores and HR decision stay on the applicant record; only the
+ * video is removed. A failed Drive delete keeps the row so the next run retries.
+ */
+export async function purgeExpiredInterviewRecordings(options: { limit?: number } = {}) {
+  const days = interviewRecordingRetentionDays();
+  if (days === 0) return { purged: 0, failed: 0, skipped: "retention_disabled" as const };
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const db = getDb();
+  const expired = await db.select({ id: liveInterviewSessions.id, ref: liveInterviewSessions.recordingStorageRef }).from(liveInterviewSessions).where(and(
+    eq(liveInterviewSessions.recordingStatus, "available"),
+    lt(liveInterviewSessions.interviewCompletedAt, cutoff),
+    sql`${liveInterviewSessions.recordingStorageRef} <> ''`,
+  )).limit(options.limit ?? 25);
+  let purged = 0;
+  let failed = 0;
+  for (const row of expired) {
+    try {
+      await deleteInterviewRecording(row.ref);
+      await db.update(liveInterviewSessions).set({ recordingStatus: "deleted", recordingStorageRef: "", recordingUploadUrl: "", recordingError: "", updatedAt: new Date() }).where(eq(liveInterviewSessions.id, row.id));
+      purged += 1;
+    } catch (error) {
+      failed += 1;
+      console.error("[Live Interview] Recording retention delete failed:", { sessionId: row.id, error: errorText(error) });
+    }
+  }
+  return { purged, failed };
 }

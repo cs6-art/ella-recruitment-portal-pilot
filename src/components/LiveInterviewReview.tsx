@@ -58,6 +58,7 @@ function recordingLabel(review: Review) {
     case "pending": return "The recording is being prepared";
     case "uploading": return "The recording is being uploaded to secure Google Drive storage";
     case "failed": return "The recording could not be saved and is not available";
+    case "deleted": return "The recording was deleted after the retention period. The transcript and review remain";
     default: return "Recording status not available";
   }
 }

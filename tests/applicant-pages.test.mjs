@@ -559,5 +559,5 @@ test("high-cost and state-changing APIs apply request throttling", () => {
     "src/app/api/public/bookings/[kind]/[token]/route.ts",
   ];
 
-  for (const route of routes) assert.match(read(route), /consumeRateLimit/);
+  for (const route of routes) assert.match(read(route), /consume(Durable)?RateLimit/);
 });

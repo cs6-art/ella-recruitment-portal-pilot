@@ -61,3 +61,49 @@ test("health monitoring: liveness endpoint, authenticated daily digest, and CI",
   const ci = read(".github/workflows/ci.yml");
   for (const step of ["npm run lint", "npx tsc --noEmit", "npm test"]) assert.ok(ci.includes(step), step);
 });
+
+test("sign-in and recovery routes use the shared durable rate limit and store only hashed keys", () => {
+  for (const route of ["login", "register", "forgot", "reset", "resend", "verify"]) {
+    assert.match(read(`src/app/api/auth/${route}/route.ts`), /await consumeDurableRateLimit\(/, route);
+  }
+  assert.match(read("src/lib/durable-rate-limit.ts"), /createHash\("sha256"\)\.update\(key\)/);
+});
+
+test("a new organization never inherits McLink's calendar address", () => {
+  const sheets = read("src/lib/google-sheets.ts");
+  assert.match(sheets, /inheritsMcLinkDefaults/);
+  assert.match(sheets, /\(inheritsMcLinkDefaults \? "hrsg@mclinkgroup\.com" : ""\)/);
+  assert.match(read("src/app/api/auth/google-calendar/connect/route.ts"), /!self && !calendarConfig\.email/);
+});
+
+test("an avatar interview reserves credits atomically and releases them on every failed start", () => {
+  const session = read("src/app/api/live-avatar/session/route.ts");
+  assert.match(session, /placeAvatarInterviewHold\(/);
+  assert.equal((session.match(/await releaseHold\(\)/g) || []).length >= 4, true, "release on 410, recording failures and startup errors");
+  const credits = read("src/lib/ella-credits.ts");
+  assert.match(credits, /holdKey: avatarHoldKey\(input\.applicationId\)/);
+  assert.match(credits, /status: "converted", reason: "billed"/);
+});
+
+test("consent is a visible required checkbox on both candidate apply forms, and the privacy notice is public", () => {
+  assert.match(read("src/components/CandidateApplicationForm.tsx"), /needsConsentCheckbox && !consentGiven/);
+  const page = read("public/index.html");
+  assert.match(page, /id="consentCheckbox"/);
+  assert.match(page, /consentBox && !consentBox\.checked/);
+  assert.match(read("src/app/privacy/page.tsx"), /Privacy Notice for Applicants/);
+});
+
+test("interview recordings are deleted after the retention period without touching the transcript", () => {
+  const store = read("src/lib/live-interview-store.ts");
+  const purge = store.slice(store.indexOf("export async function purgeExpiredInterviewRecordings"));
+  assert.match(purge, /deleteInterviewRecording\(row\.ref\)/);
+  assert.match(purge, /recordingStatus: "deleted"/);
+  assert.doesNotMatch(purge, /clientTranscript|analysis:/);
+  assert.match(read("src/app/api/cron/interview-retention/route.ts"), /suppliedSecret\(request\) !== expected/);
+  assert.match(read("vercel.json"), /\/api\/cron\/interview-retention/);
+});
+
+test("production reports it if the legacy Sheets backend is ever active", () => {
+  assert.match(read("src/lib/system-health.ts"), /legacy_backend/);
+  assert.ok(fs.existsSync("docs/LEGACY-SHEETS-REMOVAL.md"));
+});

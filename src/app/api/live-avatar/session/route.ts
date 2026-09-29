@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { canManagePipeline } from "@/lib/access-control";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
-import { CREDIT_COST, getCreditBalance } from "@/lib/ella-credits";
+import { CREDIT_COST, EllaCreditsError, getCreditBalance, placeAvatarInterviewHold, releaseAvatarInterviewHold } from "@/lib/ella-credits";
 import { consumeDurableRateLimit } from "@/lib/durable-rate-limit";
 import { rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
@@ -48,6 +48,8 @@ export async function POST(request: NextRequest) {
     if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many attempts. Please wait a few minutes and try again." }, { status: 429, headers: rateLimitHeaders(rate) });
     if (!isPostgresRecruitmentTarget()) return NextResponse.json({ success: false, error: "This avatar interview link is not available." }, { status: 404 });
     let sessionCreated = false;
+    let heldFor: { organizationId: string; applicationId: string } | null = null;
+    const releaseHold = () => heldFor ? releaseAvatarInterviewHold({ ...heldFor, reason: "session_not_started" }) : Promise.resolve();
     try {
       // Consent and the camera/microphone check must be on record before the
       // one-time invitation is consumed.
@@ -67,14 +69,24 @@ export async function POST(request: NextRequest) {
       // because the candidate cannot act on it.
       const preview = await getAvatarInterviewContext(avatarToken);
       if (preview) {
-        const { balance } = await getCreditBalance({ organizationId: preview.organizationId, ownerEmail: preview.creditOwnerEmail });
-        if (balance < CREDIT_COST.live_avatar_interview) {
-          console.error("[API Live Avatar Candidate Session] Blocked: organization has insufficient credits.", { organizationId: preview.organizationId, balance });
-          return NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable. Please contact the recruitment team.", code: "interview_unavailable" }, { status: 503 });
+        const unavailable = () => NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable. Please contact the recruitment team.", code: "interview_unavailable" }, { status: 503 });
+        try {
+          // Reserve the charge now (atomic on the organization wallet) so the
+          // organization cannot spend it elsewhere while the interview runs.
+          const hold = await placeAvatarInterviewHold({ organizationId: preview.organizationId, applicationId: preview.applicationId, expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000) });
+          if (hold.supported) heldFor = { organizationId: preview.organizationId, applicationId: preview.applicationId };
+          else if ((await getCreditBalance({ organizationId: preview.organizationId, ownerEmail: preview.creditOwnerEmail })).balance < CREDIT_COST.live_avatar_interview) throw new EllaCreditsError(CREDIT_COST.live_avatar_interview, 0);
+        } catch (creditError) {
+          if (!(creditError instanceof EllaCreditsError)) throw creditError;
+          console.error("[API Live Avatar Candidate Session] Blocked: organization has insufficient credits.", { organizationId: preview.organizationId });
+          return unavailable();
         }
       }
       const context = await startAvatarInterview(avatarToken);
-      if (!context) return NextResponse.json({ success: false, error: "This avatar interview link has already been used, expired, or is no longer available." }, { status: 410 });
+      if (!context) {
+        await releaseHold();
+        return NextResponse.json({ success: false, error: "This avatar interview link has already been used, expired, or is no longer available." }, { status: 410 });
+      }
       const session = await createLiveAvatarSession({ roleTitle: context.roleTitle, jobDescription: context.roleDescription, candidateName: context.candidateName, resumeSummary: context.resumeSummary, screeningQuestion: context.screeningQuestion, roleRequirements: context.roleRequirements, interviewQuestions: context.interviewQuestions, evaluationFields: context.evaluationFields });
       sessionCreated = true;
       try {
@@ -89,17 +101,20 @@ export async function POST(request: NextRequest) {
         if (!recordingEnabled) {
           await stopProviderSession(session.sessionId);
           await releaseAvatarInterviewStart(avatarToken);
+          await releaseHold();
           return NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable because recording could not be prepared. Please try again or contact the recruitment team.", code: "recording_not_ready" }, { status: 503 });
         }
       } catch (trackError) {
         console.error("[API Live Avatar Candidate Session] Failed to record interview start:", trackError);
         await stopProviderSession(session.sessionId).catch((stopError) => console.error("[API Live Avatar Candidate Session] Failed to stop untracked provider session:", stopError));
         await releaseAvatarInterviewStart(avatarToken).catch((releaseError) => console.error("[API Live Avatar Candidate Session] Failed to release invitation after tracking failure:", releaseError));
+        await releaseHold();
         return NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable because the interview could not be prepared for recording. Please try again.", code: "recording_not_ready" }, { status: 503 });
       }
       return NextResponse.json({ success: true, ...session, recordingEnabled }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
       if (!sessionCreated) {
+        await releaseHold();
         try {
           await releaseAvatarInterviewStart(avatarToken);
         } catch (releaseError) {

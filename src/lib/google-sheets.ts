@@ -13,7 +13,7 @@ import { isPublishedRoleForIntake as isPublishedRoleForIntakeShared } from "@/li
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { readPortalSettingRows, writePortalSettingRows } from "@/lib/portal-settings-db";
 import { findPostgresDirectoryUser, getPostgresDirectoryUsers, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
-import { DEFAULT_ORGANIZATION_ID, runWithTenantDatabase } from "@/lib/tenant-database";
+import { currentTenantOrganizationId, DEFAULT_ORGANIZATION_ID, runWithTenantDatabase } from "@/lib/tenant-database";
 import { configureGoogleApiTimeout } from "@/lib/google-api-options";
 import { targetRoleDetails, targetRoleStatusHistory, targetRoleSummaries, targetUpdateRoleFields } from "@/lib/recruitment-target-portal";
 
@@ -1546,7 +1546,10 @@ export async function getPortalSettings(): Promise<PortalSetting[]> {
 export async function getFinalInterviewCalendarConfig(): Promise<{ email: string; calendarId: string }> {
   const stored = await getPortalSettings();
   const storedByKey = new Map(stored.map((setting) => [setting.key, setting.value.trim()]));
-  const email = storedByKey.get("Final_Interview_Calendar_Email") || defaultPortalSettings.find((setting) => setting.key === "Final_Interview_Calendar_Email")?.value || "hrsg@mclinkgroup.com";
+  // McLink's own HR address is only a default for McLink. Another organization
+  // must connect its own calendar, never inherit McLink's account name.
+  const inheritsMcLinkDefaults = !isPostgresRecruitmentTarget() || currentTenantOrganizationId() === DEFAULT_ORGANIZATION_ID;
+  const email = storedByKey.get("Final_Interview_Calendar_Email") || (inheritsMcLinkDefaults ? defaultPortalSettings.find((setting) => setting.key === "Final_Interview_Calendar_Email")?.value : "") || (inheritsMcLinkDefaults ? "hrsg@mclinkgroup.com" : "");
   const calendarId = storedByKey.get("Final_Interview_Calendar_ID") || defaultPortalSettings.find((setting) => setting.key === "Final_Interview_Calendar_ID")?.value || "primary";
   return { email: email.trim().toLowerCase(), calendarId: calendarId.trim() || "primary" };
 }

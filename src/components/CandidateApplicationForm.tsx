@@ -90,6 +90,11 @@ export default function CandidateApplicationForm({
   successRedirectTo,
 }: Props) {
   const router = useRouter();
+  // Candidates apply through the public form and must agree to the privacy
+  // notice themselves. HR staff screening a resume on someone's behalf (the
+  // role picker variant) handle consent outside this form.
+  const needsConsentCheckbox = requireConsent && !showRoleSelect;
+  const [consentGiven, setConsentGiven] = useState(false);
   const [form, setForm] = useState<FormState>({
     candidateName: "",
     email: "",
@@ -182,6 +187,10 @@ export default function CandidateApplicationForm({
 
     try {
       const contactNumber = normalizedContactNumber(selectedCountry.code, form.localContactNumber);
+      if (needsConsentCheckbox && !consentGiven) {
+        setError("Please confirm you have read the privacy notice and agree before submitting.");
+        return;
+      }
       const body = new FormData();
       body.append("candidateName", form.candidateName.trim());
       body.append("email", form.email.trim().toLowerCase());
@@ -207,6 +216,7 @@ export default function CandidateApplicationForm({
       setMessage(result.message || `Application submitted. Application ID: ${result.applicationId}`);
       setForm({ candidateName: "", email: "", countryCode: "+63", country: "PH", localContactNumber: "", resumeRoleId: roleId || "" });
       setResumeFile(null);
+      setConsentGiven(false);
       setFileInputKey((value) => value + 1);
       if (fileInput.current) fileInput.current.value = "";
       setFieldErrors({});
@@ -295,6 +305,12 @@ export default function CandidateApplicationForm({
           </div>
         </div>
 
+        {needsConsentCheckbox && (
+          <label className="field consent-check" style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <input type="checkbox" checked={consentGiven} onChange={(event) => setConsentGiven(event.target.checked)} style={{ marginTop: 4 }} />
+            <span>I have read the <a href="/privacy" target="_blank" rel="noreferrer">Privacy Notice</a> and agree that my details and resume may be processed for this application, including AI-assisted screening and interviews that may be recorded. A person reviews every hiring decision.</span>
+          </label>
+        )}
         {!submitInUploadCard && <div className="candidate-form-actions"><button className="btn btn-primary" type="submit" disabled={saving}>{saving ? "Submitting..." : submitLabel}</button></div>}
       </div>
     </form>

@@ -205,6 +205,37 @@ export async function releaseVoiceInterviewHold(input: { organizationId?: string
   }
 }
 
+// --- Live avatar interview holds -----------------------------------------------
+
+export function avatarHoldKey(applicationId: string) {
+  return `avatar:${applicationId.trim()}`;
+}
+
+/**
+ * Reserve the avatar interview charge when the session starts, so credits spent
+ * elsewhere during the interview cannot leave it unbillable. Throws
+ * EllaCreditsError when the organization cannot cover it. Legacy Sheets
+ * balances have no holds; callers then rely on a plain balance check.
+ */
+export async function placeAvatarInterviewHold(input: { organizationId?: string; applicationId: string; expiresAt: Date }): Promise<{ supported: boolean }> {
+  const organizationId = input.organizationId?.trim();
+  if (!organizationCreditsEnabled() || !organizationId) return { supported: false };
+  const credits = await creditCostFor("live_avatar_interview");
+  await runWithTenantDatabase(organizationId, () => placeAccountCreditHold({ organizationId, holdKey: avatarHoldKey(input.applicationId), credits, expiresAt: input.expiresAt, reference: input.applicationId }));
+  return { supported: true };
+}
+
+/** Best-effort: a failed release only means the hold lapses at its expiry. */
+export async function releaseAvatarInterviewHold(input: { organizationId?: string; applicationId: string; reason?: string; status?: "released" | "converted" }): Promise<void> {
+  const organizationId = input.organizationId?.trim();
+  if (!organizationCreditsEnabled() || !organizationId || !input.applicationId.trim()) return;
+  try {
+    await runWithTenantDatabase(organizationId, () => resolveAccountCreditHold({ organizationId, holdKey: avatarHoldKey(input.applicationId), status: input.status ?? "released", reason: input.reason }));
+  } catch (error) {
+    console.error(`[Credits][hold] Unable to resolve avatar hold for ${input.applicationId}; it will expire on its own:`, error);
+  }
+}
+
 async function append(entry: LedgerAppend, opts: { guard: boolean; excludeHoldKey?: string }, scope: CreditScope = {}): Promise<{ balanceAfter: number }> {
   const account = accountScope(scope);
   if (account) {
@@ -315,7 +346,10 @@ export async function recordLiveAvatarInterviewDeduction(input: {
     actorEmail: input.actorEmail,
     organizationId: input.organizationId,
     note: "Live avatar interview completed",
+    holdKey: avatarHoldKey(input.applicationId),
   });
+  // The real charge is on the ledger now; the reservation has done its job.
+  await releaseAvatarInterviewHold({ organizationId: input.organizationId, applicationId: input.applicationId, status: "converted", reason: "billed" });
   return cost;
 }
 
