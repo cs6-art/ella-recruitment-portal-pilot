@@ -63,12 +63,20 @@ function externalUrl(value: string) {
 function bookingInvitationStatus(input: { tokenLink: string; notificationStatus: string; isScheduled: boolean }) {
   if (input.isScheduled) return "Invitation Completed";
   switch (input.notificationStatus.trim().toLowerCase()) {
-    case "sent": return "Invitation Sent";
-    case "pending": return "Invitation Queued";
-    case "failed": return "Invitation Failed — Retry Available";
-    case "not_configured": return "Invitation Email Not Configured";
-    default: return input.tokenLink ? "Invitation Not Sent" : "Invitation Not Created";
+    case "sent": return "Email sent — inbox delivery not confirmed";
+    case "pending": return "Invitation queued to send";
+    case "failed": return "Not sent — retry available";
+    case "not_configured": return "Not sent — email is not configured";
+    default: return input.tokenLink ? "Invitation created — no email status recorded" : "Invitation not created";
   }
+}
+
+function interviewInvitationNotSentStatus(stage: string) {
+  // HR approval advances the candidate, but does not itself send an interview invitation.
+  const stageKey = stage.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (stageKey === "resume_review" || stageKey === "resume_hr_review") return "Not sent — awaiting HR review";
+  if (stageKey === "resume_approved") return "Not sent — no interview invitation is queued";
+  return "Not sent — interview invitation not created";
 }
 
 function latestDecisionComment(history: CandidateStatusHistoryEntry[], stage: CandidateStatusHistoryEntry["stage"]) {
@@ -271,8 +279,16 @@ function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }
   const liveFields = liveAssessmentFields(liveReview);
   const interviewMode: ApplicantInterviewMode = liveReview ? "avatar" : applicant.interviewMode;
   const isAvatarInterview = interviewMode === "avatar";
-  const isInterviewChoicePending = interviewMode === "pending";
-  const interviewReviewTitle = isAvatarInterview ? LIVE_AVATAR_REVIEW_LABEL : interviewMode === "voice" ? "Voice Interview Review" : "Interview Choice Pending";
+  const currentStageKey = applicant.currentStage.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const isInterviewFormatPending = interviewMode === "pending";
+  const isInterviewChoicePending = isInterviewFormatPending && currentStageKey === "voice_booking_pending";
+  const interviewReviewTitle = isAvatarInterview
+    ? LIVE_AVATAR_REVIEW_LABEL
+    : interviewMode === "voice"
+      ? "Voice Interview Review"
+      : isInterviewChoicePending
+        ? "Interview Choice Pending"
+        : "Interview Invitation";
   const voiceCallStatus = applicant.voiceCallStatus?.trim() || "";
   const voiceBookingLink = externalUrl(applicant.voiceBookingLink);
   // The candidate declined, missed, or cut the call short — no system fault.
@@ -297,7 +313,7 @@ function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }
       ? "No Recommendation — Not Enough Interview Content to Evaluate"
       : "Awaiting AI Evaluation";
   return <section className="card applicant-detail-card applicant-screening-evidence-card">
-    <DetailCardHeader icon="document" title="AI Screening Evidence" description={`CV analysis and ${isInterviewChoicePending ? "interview" : isAvatarInterview ? "Live Avatar" : "voice interview"} evidence to support a consistent review.`} />
+    <DetailCardHeader icon="document" title="AI Screening Evidence" description={`CV analysis and ${isInterviewFormatPending ? "interview" : isAvatarInterview ? "Live Avatar" : "voice interview"} evidence to support a consistent review.`} />
     <div className="applicant-detail-content">
       <div className="applicant-evidence-subsection">
         <div className="applicant-evidence-subsection-heading"><UiIcon name="document" size={16} /><h3>AI CV Analysis</h3></div>
@@ -319,13 +335,13 @@ function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }
               slot. Keep every interview field visible with explicit wording so
               HR can tell the difference between “not applicable” and missing
               data. */}
-          <DetailField label="Status" value={isInterviewChoicePending ? applicantStageLabel(applicant.currentStage, "pending") : isAvatarInterview ? liveReview ? INTERVIEW_STATE_LABELS[liveReview.interviewState] : applicantStageLabel(applicant.currentStage, "avatar") || "Not Started" : applicantStageLabel(voiceCallStatus) || applicantStageLabel(applicant.voiceStatus) || "Not Started"} />
-          <DetailField label="Booking Status" value={isInterviewChoicePending ? "Waiting for the candidate to choose a call or Live Avatar interview" : isAvatarInterview ? "One-time invitation link — no slot required" : applicant.voiceBookingStatus || "Not Booked"} />
-          <DetailField label="Invitation status" value={isInterviewChoicePending ? "Invitation sent — candidate choice not recorded yet" : isAvatarInterview ? liveReview ? (liveReview.interviewState === "completed" ? "Used — interview completed" : "Used — interview session started") : "Issued — secure one-time link" : bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "completed"].includes(voiceCallStatus.toLowerCase()) })} />
-          <DetailField label="Interview time" value={isInterviewChoicePending ? "Not selected yet" : isAvatarInterview ? liveReview ? dateValue(liveReview.interviewDate) : "Candidate chooses when ready" : scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />
-          <DetailField label="Timezone" value={isInterviewChoicePending ? "Not selected yet" : isAvatarInterview ? liveReview ? "Asia/Singapore (portal time)" : "Not applicable — no slot required" : recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || applicant.voiceTimezone || "Not provided"} />
-          <DetailField label={isInterviewChoicePending ? "Interview Score" : isAvatarInterview ? "Live Avatar Interview Score" : "Voice AI Score"} value={isInterviewChoicePending ? "Not available until the candidate chooses an interview format" : liveFields ? liveFields.score : applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : voiceScorePending} />
-          <DetailField label="AI Recommendation" value={isInterviewChoicePending ? "Not available until the candidate completes an interview" : liveFields ? liveFields.recommendation : applicant.voiceRecommendation || voiceRecommendationPending} />
+          <DetailField label="Status" value={isInterviewFormatPending ? applicantStageLabel(applicant.currentStage, "pending") || "Not Started" : isAvatarInterview ? liveReview ? INTERVIEW_STATE_LABELS[liveReview.interviewState] : applicantStageLabel(applicant.currentStage, "avatar") || "Not Started" : applicantStageLabel(voiceCallStatus) || applicantStageLabel(applicant.voiceStatus) || "Not Started"} />
+          <DetailField label="Booking Status" value={isInterviewChoicePending ? "Waiting for the candidate to choose a call or Live Avatar interview" : isInterviewFormatPending ? "Not booked — waiting for the interview invitation" : isAvatarInterview ? "One-time invitation link — no slot required" : applicant.voiceBookingStatus || "Not Booked"} />
+          <DetailField label="Invitation status" value={isInterviewFormatPending ? isInterviewChoicePending ? bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: false }) : interviewInvitationNotSentStatus(applicant.currentStage) : isAvatarInterview ? liveReview ? (liveReview.interviewState === "completed" ? "Used — interview completed" : "Used — interview session started") : "Issued — secure one-time link" : bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "completed"].includes(voiceCallStatus.toLowerCase()) })} />
+          <DetailField label="Interview time" value={isInterviewFormatPending ? isInterviewChoicePending ? "Not selected yet" : "Available after the invitation is sent" : isAvatarInterview ? liveReview ? dateValue(liveReview.interviewDate) : "Candidate chooses when ready" : scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />
+          <DetailField label="Timezone" value={isInterviewFormatPending ? "Not selected yet" : isAvatarInterview ? liveReview ? "Asia/Singapore (portal time)" : "Not applicable — no slot required" : recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || applicant.voiceTimezone || "Not provided"} />
+          <DetailField label={isInterviewFormatPending ? "Interview Score" : isAvatarInterview ? "Live Avatar Interview Score" : "Voice AI Score"} value={isInterviewFormatPending ? "Not available until the candidate completes an interview" : liveFields ? liveFields.score : applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : voiceScorePending} />
+          <DetailField label="AI Recommendation" value={isInterviewFormatPending ? "Not available until the candidate completes an interview" : liveFields ? liveFields.recommendation : applicant.voiceRecommendation || voiceRecommendationPending} />
         </div>
         {!liveReview && voiceBookingLink && <div className="applicant-copy-block"><span>Call booking page</span><p><Link href={voiceBookingLink} target="_blank" rel="noreferrer">Open the call booking page</Link></p></div>}
         {/* AI Summary, Strengths, Concerns, Communication Quality, Answer
@@ -337,12 +353,12 @@ function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }
             don't have -- showing both duplicates (once analysis completes)
             or contradicts it (while analysis is still pending, since these
             plain-text fields have no "processing" state of their own). */}
-        {!liveReview && !isInterviewChoicePending && <div className="applicant-copy-block"><span>AI Summary</span><p>{applicant.voiceSummary || (voiceSystemFailure ? "The call did not go through due to a system or dispatch error — the candidate was never reached, so there is no AI summary. Check the voice call logs, or ask a developer to, for the failure reason and consider re-sending the booking link." : voiceNotConducted ? "No interview took place, so there is no AI summary." : voiceCompletedNoScore ? "The call ended before the candidate answered enough questions to evaluate, so there is no AI summary." : "No AI summary is available.")}</p></div>}
-        {!liveReview && !isInterviewChoicePending && <div className="applicant-copy-columns"><div><span>Strengths</span><ReadableList value={applicant.voiceStrengths} empty="No strengths recorded." /></div><div><span>Concerns</span><ReadableList value={applicant.voiceConcerns} empty="No concerns recorded." /></div></div>}
-        {!liveReview && !isInterviewChoicePending && <div className="applicant-copy-columns"><div><span>Communication Quality</span><p>{applicant.voiceCommunicationQuality || "Not provided."}</p></div><div><span>Answer Completeness</span><p>{applicant.voiceAnswerCompleteness || "Not provided."}</p></div></div>}
-        {!liveReview && !isInterviewChoicePending && applicant.voiceEvaluationFields.length > 0 && <div className="applicant-copy-columns">{applicant.voiceEvaluationFields.map((evaluation) => <div key={evaluation.key}><span>{evaluation.label}</span><p>{evaluation.value}</p></div>)}</div>}
-        {!liveReview && !isInterviewChoicePending && <div className="applicant-copy-block"><span>Recommended Follow-up Questions</span><ReadableList value={applicant.voiceFollowUpQuestions} empty="No follow-up questions were recommended." /></div>}
-        {liveReview || isInterviewChoicePending ? null : applicant.voiceTranscript ? <details className="applicant-transcript"><summary>View full transcript</summary><pre>{applicant.voiceTranscript}</pre></details> : <div className="applicant-copy-block"><span>Transcript</span><p>No transcript is available.</p></div>}
+        {!liveReview && !isInterviewFormatPending && <div className="applicant-copy-block"><span>AI Summary</span><p>{applicant.voiceSummary || (voiceSystemFailure ? "The call did not go through due to a system or dispatch error — the candidate was never reached, so there is no AI summary. Check the voice call logs, or ask a developer to, for the failure reason and consider re-sending the booking link." : voiceNotConducted ? "No interview took place, so there is no AI summary." : voiceCompletedNoScore ? "The call ended before the candidate answered enough questions to evaluate, so there is no AI summary." : "No AI summary is available.")}</p></div>}
+        {!liveReview && !isInterviewFormatPending && <div className="applicant-copy-columns"><div><span>Strengths</span><ReadableList value={applicant.voiceStrengths} empty="No strengths recorded." /></div><div><span>Concerns</span><ReadableList value={applicant.voiceConcerns} empty="No concerns recorded." /></div></div>}
+        {!liveReview && !isInterviewFormatPending && <div className="applicant-copy-columns"><div><span>Communication Quality</span><p>{applicant.voiceCommunicationQuality || "Not provided."}</p></div><div><span>Answer Completeness</span><p>{applicant.voiceAnswerCompleteness || "Not provided."}</p></div></div>}
+        {!liveReview && !isInterviewFormatPending && applicant.voiceEvaluationFields.length > 0 && <div className="applicant-copy-columns">{applicant.voiceEvaluationFields.map((evaluation) => <div key={evaluation.key}><span>{evaluation.label}</span><p>{evaluation.value}</p></div>)}</div>}
+        {!liveReview && !isInterviewFormatPending && <div className="applicant-copy-block"><span>Recommended Follow-up Questions</span><ReadableList value={applicant.voiceFollowUpQuestions} empty="No follow-up questions were recommended." /></div>}
+        {liveReview || isInterviewFormatPending ? null : applicant.voiceTranscript ? <details className="applicant-transcript"><summary>View full transcript</summary><pre>{applicant.voiceTranscript}</pre></details> : <div className="applicant-copy-block"><span>Transcript</span><p>No transcript is available.</p></div>}
       </div>
     </div>
   </section>;

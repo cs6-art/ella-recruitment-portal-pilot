@@ -182,9 +182,13 @@ test("HR booking cards expose invitation delivery separately from booking state"
   const target = read("src/lib/recruitment-target-portal.ts");
   const query = read("src/lib/internal-recruitment-queries.ts");
   assert.match(page, /Invitation status/);
-  assert.match(page, /Invitation Sent/);
-  assert.match(page, /Invitation Queued/);
-  assert.match(page, /Invitation Failed/);
+  assert.match(page, /Email sent — inbox delivery not confirmed/);
+  assert.match(page, /Invitation queued to send/);
+  assert.match(page, /Not sent — retry available/);
+  assert.match(page, /currentStageKey === "voice_booking_pending"/);
+  assert.match(page, /Not sent — no interview invitation is queued/);
+  assert.match(page, /notificationStatus: applicant\.voiceBookingNotificationStatus/);
+  assert.doesNotMatch(page, /Invitation sent — candidate choice not recorded yet/);
   assert.match(target, /getApplicationBookingNotification\(externalId, "final"\)/);
   assert.match(query, /final_booking_invitation/);
   assert.match(query, /notificationSentAt/);
