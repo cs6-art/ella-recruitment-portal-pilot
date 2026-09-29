@@ -163,9 +163,10 @@ test("role creation and publishing preserve the target hiring date column", () =
 
 test("pilot target allowlist is explicit and does not use a global bypass", () => {
   const source = read("src/lib/internal-api.ts");
-  const env = read(".env.local");
+  // .env.local exists only on a developer machine, so CI checks the source alone.
+  const env = existsSync(new URL("../.env.local", import.meta.url)) ? read(".env.local") : null;
   assert.match(source, /internalEntityAllowed/);
-  assert.match(env, /INTERNAL_API_ENTITIES=roles,applicants,applications,screening,screening_invitations,booking,status_history,notifications,voice_attempts,voice_logs,bulk_queue,voice_queue,voice_results,hr_decisions/);
+  if (env !== null) assert.match(env, /INTERNAL_API_ENTITIES=roles,applicants,applications,screening,screening_invitations,booking,status_history,notifications,voice_attempts,voice_logs,bulk_queue,voice_queue,voice_results,hr_decisions/);
   assert.doesNotMatch(source, /list\.includes\(["']all["']\)/);
 });
 
