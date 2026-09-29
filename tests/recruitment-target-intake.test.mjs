@@ -48,7 +48,7 @@ test("target manual intake does not leave an unqueueable application after hando
 
 test("target bulk intake refuses an under-funded batch before any file is stored or queued", () => {
   const source = read("src/lib/recruitment-target-bulk.ts");
-  const preCheckIndex = source.indexOf("assertCreditsAvailable(toProcess.length");
+  const preCheckIndex = source.indexOf("assertCreditsAvailable(chargeable.length");
   assert.ok(preCheckIndex > -1, "expected an upfront assertCreditsAvailable call sized to the batch");
   const storeIndex = source.indexOf("storeResumeFile(file");
   const enqueueIndex = source.indexOf("enqueueBulkScreening({");

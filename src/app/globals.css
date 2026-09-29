@@ -1000,7 +1000,8 @@ a { color: inherit; text-decoration: none; }
 .settings-integration strong { color: var(--navy); font-size: 13px; }
 .settings-integration span:not(.settings-connection-status) { color: var(--muted); font-size: 11px; line-height: 1.35; }
 .settings-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 22px; padding-bottom: 12px; color: var(--muted); font-size: 12px; }
-@media (max-width: 700px) { .settings-header { align-items: flex-start; flex-direction: column; } .settings-grid { grid-template-columns: 1fr; padding: 18px; } .settings-actions { align-items: flex-start; flex-direction: column; } .settings-integration-grid { grid-template-columns: 1fr; padding: 18px; } }
+.organization-branding-actions { grid-column: 1 / -1; }
+@media (max-width: 700px) { .settings-header { align-items: flex-start; flex-direction: column; } .settings-grid { grid-template-columns: 1fr; padding: 18px; } .settings-actions { align-items: flex-start; flex-direction: column; } .organization-branding-actions { align-items: center; flex-direction: row; flex-wrap: wrap; justify-content: space-between; } .settings-integration-grid { grid-template-columns: 1fr; padding: 18px; } }
 
 .user-accounts-page { --user-account-card-padding: 24px; }
 .user-accounts-header { align-items: flex-end; }

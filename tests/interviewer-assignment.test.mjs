@@ -14,7 +14,12 @@ test("an assigned interviewer's calendar is used only when connected, otherwise 
 test("role saves keep the assigned interviewer instead of resetting to the shared calendar", () => {
   const target = read("src/lib/recruitment-target-portal.ts");
   assert.match(target, /hrCalendarEmail: text\(setup\.interviewerEmail\) \|\| fields\.HOD_Email/);
-  assert.match(target, /\.\.\.\(await interviewerLabelFor\(context\.roleHrCalendarEmail\)\)/);
+  assert.match(target, /\.\.\.\(await interviewerLabelFor\(context\.roleHrCalendarEmail, organizationId\)\)/);
+  assert.match(target, /eq\(users\.email, normalizedEmail\), eq\(users\.organizationId, organizationId\)/);
+  assert.match(target, /interviewerNamesForOrganization\(organizationId\)/);
+  assert.match(target, /interviewerNameForSlot\(slot, interviewerNames\)/);
+  assert.match(target, /directoryInterviewerName\(text\(finalSlot\.interviewerEmail\), organizationId\)/);
+  assert.match(target, /interviewer_name: finalSlot\s*\?\s*interviewerNameForSlot\(finalSlot,/);
 });
 
 test("assignment requires an eligible HR reviewer with a connected calendar and HR edit access", () => {

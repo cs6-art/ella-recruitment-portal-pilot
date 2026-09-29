@@ -96,7 +96,7 @@ test("cloud pickers allow campaign-sized selection and split imports into 20-fil
   assert.match(panel, /maxSelection=\{MAX_CAMPAIGN_FILES\}/g);
   assert.match(panel, /selectedCloudFiles\(selections\)/);
   assert.match(panel, /index \+= MAX_FILES_PER_SUBMISSION/);
-  assert.match(panel, /buildCloudImportRequest\(provider, roleId, chunk\)/);
+  assert.match(panel, /buildCloudImportRequest\(provider, roleId, chunk, submissionId\)/);
   assert.match(panel, /Submitting \$\{label\} batch/);
   const oneDriveBlock = panel.slice(panel.indexOf('cloudPicker === "microsoft"'));
   assert.match(oneDriveBlock.slice(0, 400), /maxSelection=\{MAX_CAMPAIGN_FILES\}/);

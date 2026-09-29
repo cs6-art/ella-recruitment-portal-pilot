@@ -16,6 +16,10 @@ function errorResponse(error: string, status: number) {
   return NextResponse.json({ success: false, error }, { status });
 }
 
+function screeningEvidenceKey(item: { roleId: string; driveFileId: string; dedupeKey?: string; applicationId: string }) {
+  return `${item.roleId.toLowerCase()}|${(item.dedupeKey || item.applicationId || item.driveFileId).toLowerCase()}`;
+}
+
 export async function GET(request: Request) {
   const startedAt = performance.now();
   const timings: Record<string, number> = {};
@@ -53,8 +57,10 @@ export async function GET(request: Request) {
       search: params.get("search") || undefined,
       status: params.get("status") || undefined,
       source: params.get("source") || undefined,
+      submissionId: params.get("submissionId") || undefined,
     }));
     const queueItems = queuePage.items.filter((item) => publishedRoleIds.has(item.roleId.toLowerCase()));
+    const submissionQueueItems = (queuePage.submissionItems || []).filter((item) => publishedRoleIds.has(item.roleId.toLowerCase()));
     queueCount = Object.values(queuePage.counts).reduce((sum, count) => sum + count, 0);
     // Keep the table on the latest state per resume, but count every saved
     // queue event separately so retries and repeated failed batches are not
@@ -65,7 +71,11 @@ export async function GET(request: Request) {
     // Reconcile the requested page, including older rows without a job ID.
     // Matching is scoped by role and may use application ID, SHA, Drive file
     // ID, filename, and unique candidate identifiers.
-    const screeningEvidence = await measureServerOperation(timings, "screeningEvidence", () => getBulkResumeScreeningEvidence(queueItems));
+    const relevantQueueItems = [...new Map([...queueItems, ...submissionQueueItems].map((item) => [
+      screeningEvidenceKey(item),
+      item,
+    ])).values()];
+    const screeningEvidence = await measureServerOperation(timings, "screeningEvidence", () => getBulkResumeScreeningEvidence(relevantQueueItems));
     evidenceCount = screeningEvidence.size;
     const now = Date.now();
     const queueAge = (item: (typeof queueItems)[number]) => {
@@ -77,9 +87,9 @@ export async function GET(request: Request) {
     // that reconciliation so the retry endpoint can find the same row instead
     // of only showing a derived failure that cannot be re-queued.
     if (isPostgresRecruitmentTarget()) {
-      const staleFailures = queueItems.filter((item) => {
+      const staleFailures = relevantQueueItems.filter((item) => {
         const rawStatus = item.status.toLowerCase();
-        const hasEvidence = screeningEvidence.has(`${item.roleId.toLowerCase()}|${item.driveFileId.toLowerCase()}`);
+        const hasEvidence = screeningEvidence.has(screeningEvidenceKey(item));
         return !hasEvidence && queueAge(item) >= STALE_PROCESSING_MS && ["screened", "processed", "processing"].includes(rawStatus);
       });
       await Promise.all(staleFailures.map((item) => updateBulkQueueStatus({
@@ -91,9 +101,9 @@ export async function GET(request: Request) {
           : "Applicant result could not be persisted.",
       })));
     }
-    const items = queueItems.map((item) => {
+    const reconcileStatus = (item: (typeof queueItems)[number]) => {
       const rawStatus = item.status.toLowerCase();
-      const hasEvidence = screeningEvidence.has(`${item.roleId.toLowerCase()}|${item.driveFileId.toLowerCase()}`);
+      const hasEvidence = screeningEvidence.has(screeningEvidenceKey(item));
       if (hasEvidence && ["screened", "processed", "processing"].includes(rawStatus)) {
         return { ...item, status: "Screened", errorMessage: "" };
       }
@@ -110,7 +120,9 @@ export async function GET(request: Request) {
         return { ...item, status: "Failed", errorMessage: "Screening did not produce a saved result within 10 minutes." };
       }
       return item;
-    });
+    };
+    const items = queueItems.map(reconcileStatus);
+    const submissionItems = submissionQueueItems.map(reconcileStatus);
     const counts = queuePage.counts;
 
     logServerTiming(new URL(request.url).pathname, startedAt, timings, { dbOperations: isPostgresRecruitmentTarget() ? 3 : 0, roleCount, queueCount, evidenceCount });
@@ -133,6 +145,7 @@ export async function GET(request: Request) {
       roleTotals: counts,
       historicalTotals,
       items,
+      submissionItems,
       total: queuePage.total,
       page: queuePage.page,
       pageSize: queuePage.pageSize,

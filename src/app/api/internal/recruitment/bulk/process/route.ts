@@ -1,9 +1,7 @@
-import crypto from "node:crypto";
-
 import { extractStoredResumeText, type ResumeFileKind, type ResumeFileRecord } from "@/lib/resume-files";
 import { internalJson, readInternalJson, withInternalAuth } from "@/lib/internal-api-http";
 import { record, requiredString } from "@/lib/internal-recruitment-http";
-import { getBulkScreeningContext } from "@/lib/internal-recruitment-queries";
+import { bulkScreeningApplicationExternalId, getBulkScreeningContext } from "@/lib/internal-recruitment-queries";
 import { processTargetBulkScreening } from "@/lib/recruitment-target-screening";
 import { logServerTiming, measureServerOperation } from "@/lib/server-timing";
 
@@ -12,10 +10,6 @@ export const dynamic = "force-dynamic";
 
 function text(value: unknown) {
   return String(value ?? "").trim();
-}
-
-function plannedApplicationId(roleExternalId: string, resumeSha256: string) {
-  return `APP-${crypto.createHash("sha256").update(`${roleExternalId}:${resumeSha256}`).digest("hex").slice(0, 24)}`;
 }
 
 function dateText(value: unknown) {
@@ -69,7 +63,7 @@ export const GET = withInternalAuth("bulk_queue", async (request) => {
         // Keep the worker contract stable even though the actual application
         // is intentionally created only inside the credit-guarded finalize
         // transaction.
-        applicationId: context.application?.externalId || plannedApplicationId(context.role.externalId, context.item.resumeSha256),
+        applicationId: context.application?.externalId || bulkScreeningApplicationExternalId(context.role.externalId, context.item.resumeSha256, context.item.submissionId),
         name: context.application?.candidateName || context.item.candidateName,
         email: context.application?.email || context.item.candidateEmail,
         phone: context.application?.phone || context.item.preferredMobile,

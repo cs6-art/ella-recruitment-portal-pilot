@@ -87,6 +87,7 @@ export type IntakeSource = {
 export type IntakeResult = {
   results: Array<Record<string, unknown>>;
   batchId: string;
+  submissionId?: string;
   environment: string;
   isUat: boolean;
   notificationStatus: "sent" | "failed" | "disabled" | "not_requested";
@@ -107,6 +108,8 @@ export async function intakeResumeBatch(input: {
   sourceLabel: string;
   /** The Production-UAT recovery batch id, when the operator supplied it. */
   uatRecoveryToken?: string;
+  /** Stable idempotency key for one user-submitted screening attempt. */
+  submissionId?: string;
 }): Promise<IntakeResult> {
   if (isPostgresRecruitmentTarget()) return intakeTargetResumeBatch(input);
   const { roleId, actorName, actorEmail } = input;
@@ -383,6 +386,7 @@ export async function intakeResumeBatch(input: {
   return {
     results,
     batchId,
+    submissionId: input.submissionId,
     environment: isUat ? "uat" : environment,
     isUat,
     notificationStatus,

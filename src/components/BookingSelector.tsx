@@ -51,13 +51,17 @@ export default function BookingSelector({ token, initialContext }: { token: stri
   const [confirmationMessage, setConfirmationMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const title = context.kind === "voice" ? "AI Voice Interview Booking" : "Face-to-Face Interview Booking";
   const roleName = context.selectedRole.trim();
   const noShow = context.currentSlot?.status?.toLowerCase() === "no show" || context.bookingStatus.toLowerCase() === "no show";
   // A completed appointment must remain read-only even if its original link
   // has not yet been marked used by the upstream calling workflow.
   const completed = context.currentSlot?.status?.toLowerCase() === "completed" || context.bookingStatus.toLowerCase() === "completed";
   const booked = completed || context.currentSlot?.status?.toLowerCase() === "booked" || (!context.currentSlot && (context.bookingStatus.toLowerCase() === "used" || context.bookingStatus.toLowerCase().includes("scheduled") || context.bookingStatus.toLowerCase() === "booked" || Boolean(context.scheduledDate)));
+  const title = completed && !noShow
+    ? context.kind === "voice" ? "AI Voice Interview Details" : "Face-to-Face Interview Details"
+    : booked && !noShow
+      ? context.kind === "voice" ? "AI Voice Interview Confirmation" : "Face-to-Face Interview Confirmation"
+      : context.kind === "voice" ? "AI Voice Interview Booking" : "Face-to-Face Interview Booking";
   const selecting = !booked || noShow;
   const noAvailability = selecting && context.slots.length === 0;
   const selectedCountry = countryOptions.find((option) => option.country === country) || countryOptions[0];

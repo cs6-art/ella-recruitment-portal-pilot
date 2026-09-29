@@ -52,7 +52,7 @@ export function selectedCloudFiles(selections: CloudImportSelection[]) {
 }
 
 /** Build the browser request for a selected cloud-file import. */
-export function buildCloudImportRequest(provider: CloudImportProvider, roleId: string, selections: CloudImportSelection[]) {
+export function buildCloudImportRequest(provider: CloudImportProvider, roleId: string, selections: CloudImportSelection[], submissionId?: string) {
   const normalizedRoleId = roleId.trim();
   const normalizedFiles = selectedCloudFiles(selections);
   const normalizedFileIds = normalizedFiles.map((file) => file.id);
@@ -63,7 +63,7 @@ export function buildCloudImportRequest(provider: CloudImportProvider, roleId: s
     init: {
       method: "POST" as const,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roleId: normalizedRoleId, fileIds: normalizedFileIds, files: normalizedFiles }),
+      body: JSON.stringify({ roleId: normalizedRoleId, fileIds: normalizedFileIds, files: normalizedFiles, ...(submissionId ? { submissionId } : {}) }),
     },
   };
 }

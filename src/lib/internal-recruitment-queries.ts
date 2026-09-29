@@ -18,6 +18,7 @@ import type { ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 import { PORTAL_TIME_ZONE } from "@/lib/portal-time";
 import { pilotOutboundEmailEnabled } from "@/lib/pilot-email-policy";
 import { avatarInterviewLink } from "@/lib/public-url";
+import { STALE_PROCESSING_MS } from "@/lib/bulk-resume-config";
 import type { LiveAvatarEvaluation, LiveAvatarTranscriptTurn } from "@/lib/live-avatar-screening";
 import { evaluateVoiceInterview } from "@/lib/voice-interview-evaluation";
 import { MAX_CONCURRENT_VOICE_INTERVIEWS } from "@/lib/voice-interview-capacity";
@@ -1991,6 +1992,21 @@ export async function listBulkQueueForPortal(
     .offset(offset);
 }
 
+export async function listBulkQueueForSubmission(submissionId: string, roleExternalId: string, organizationId = DEFAULT_ORGANIZATION_ID) {
+  const db = getDb();
+  return db.select({ item: bulkScreeningQueueItems, roleExternalId: roles.externalId, applicationExternalId: applications.externalId })
+    .from(bulkScreeningQueueItems)
+    .innerJoin(roles, eq(roles.id, bulkScreeningQueueItems.roleId))
+    .leftJoin(applications, eq(applications.id, bulkScreeningQueueItems.applicationId))
+    .where(and(
+      eq(roles.organizationId, organizationId.trim()),
+      eq(roles.externalId, roleExternalId.trim()),
+      eq(bulkScreeningQueueItems.submissionId, submissionId.trim()),
+    ))
+    .orderBy(desc(bulkScreeningQueueItems.updatedAt))
+    .limit(500);
+}
+
 export async function countBulkQueueForPortal(
   statuses: string[] | undefined = undefined,
   roleExternalId?: string,
@@ -2019,21 +2035,59 @@ export async function countBulkQueueByStatus(roleExternalId = "", organizationId
   const db = getDb();
   const conditions = [eq(roles.organizationId, organizationId.trim())];
   if (roleExternalId) conditions.push(eq(roles.externalId, roleExternalId.trim()));
-  const rows = await db.select({ status: bulkScreeningQueueItems.status, count: sql<number>`count(*)::int` })
+  // Mirror the public status endpoint: a saved result is Screened, while a
+  // stale queue row without its result is Failed (or Processing while fresh).
+  const displayStatus = sql<string>`case
+    when ${bulkScreeningQueueItems.status} in ('screened', 'processed', 'completed', 'processing') and ${screeningResults.id} is not null then 'screened'
+    when ${bulkScreeningQueueItems.status} in ('screened', 'processed', 'completed') and ${bulkScreeningQueueItems.updatedAt} < now() - (${STALE_PROCESSING_MS} * interval '1 millisecond') then 'failed'
+    when ${bulkScreeningQueueItems.status} in ('screened', 'processed', 'completed') then 'processing'
+    when ${bulkScreeningQueueItems.status} = 'processing' and ${bulkScreeningQueueItems.updatedAt} < now() - (${STALE_PROCESSING_MS} * interval '1 millisecond') then 'failed'
+    when ${bulkScreeningQueueItems.status} = 'processing' then 'processing'
+    else ${bulkScreeningQueueItems.status}
+  end`;
+  const rows = await db.select({ status: displayStatus, count: sql<number>`count(*)::int` })
     .from(bulkScreeningQueueItems)
     .innerJoin(roles, eq(roles.id, bulkScreeningQueueItems.roleId))
+    .leftJoin(screeningResults, eq(screeningResults.applicationId, bulkScreeningQueueItems.applicationId))
     .where(and(...conditions))
-    .groupBy(bulkScreeningQueueItems.status);
+    .groupBy(displayStatus);
   return Object.fromEntries(rows.map((row) => [row.status, row.count]));
 }
 
 /** Fast target duplicate check used before resume parsing/upload work. */
 export async function findBulkQueueByRoleAndSha(roleExternalId: string, resumeSha256: string, organizationId = DEFAULT_ORGANIZATION_ID) {
   const db = getDb();
-  const [row] = await db.select({ id: bulkScreeningQueueItems.id, status: bulkScreeningQueueItems.status })
+  const [row] = await db.select({
+    id: bulkScreeningQueueItems.id,
+    status: bulkScreeningQueueItems.status,
+    dedupeKey: bulkScreeningQueueItems.dedupeKey,
+    submissionId: bulkScreeningQueueItems.submissionId,
+    applicationId: bulkScreeningQueueItems.applicationId,
+  })
     .from(bulkScreeningQueueItems)
     .innerJoin(roles, eq(roles.id, bulkScreeningQueueItems.roleId))
     .where(and(eq(roles.externalId, roleExternalId.trim()), eq(roles.organizationId, organizationId.trim()), eq(bulkScreeningQueueItems.resumeSha256, resumeSha256.trim().toLowerCase())))
+    .orderBy(desc(bulkScreeningQueueItems.updatedAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function findBulkQueueBySubmission(roleExternalId: string, submissionId: string, resumeSha256: string, organizationId = DEFAULT_ORGANIZATION_ID) {
+  const db = getDb();
+  const [row] = await db.select({
+    id: bulkScreeningQueueItems.id,
+    status: bulkScreeningQueueItems.status,
+    dedupeKey: bulkScreeningQueueItems.dedupeKey,
+    applicationId: bulkScreeningQueueItems.applicationId,
+  })
+    .from(bulkScreeningQueueItems)
+    .innerJoin(roles, eq(roles.id, bulkScreeningQueueItems.roleId))
+    .where(and(
+      eq(roles.externalId, roleExternalId.trim()),
+      eq(roles.organizationId, organizationId.trim()),
+      eq(bulkScreeningQueueItems.submissionId, submissionId.trim()),
+      eq(bulkScreeningQueueItems.resumeSha256, resumeSha256.trim().toLowerCase()),
+    ))
     .limit(1);
   return row ?? null;
 }
@@ -2043,6 +2097,7 @@ export async function enqueueBulkScreening(input: {
   organizationId?: string;
   applicationExternalId?: string;
   batchId?: string;
+  submissionId?: string;
   dedupeKey: string;
   resumeSha256: string;
   driveFileId: string;
@@ -2070,15 +2125,26 @@ export async function enqueueBulkScreening(input: {
       applicationId = application.id;
     }
     const [item] = await tx.insert(bulkScreeningQueueItems).values({
-      organizationId: role.organizationId, roleId: role.id, applicationId, batchId: input.batchId || "", dedupeKey: input.dedupeKey.trim(), resumeSha256: input.resumeSha256.trim().toLowerCase(),
+      organizationId: role.organizationId, roleId: role.id, applicationId, batchId: input.batchId || "", submissionId: input.submissionId?.trim() || "", dedupeKey: input.dedupeKey.trim(), resumeSha256: input.resumeSha256.trim().toLowerCase(),
       driveFileId: input.driveFileId.trim(), filename: input.filename.trim(), fileUrl: input.fileUrl || "", mimeType: input.mimeType || "",
       candidateName: input.candidateName || "", candidateEmail: input.candidateEmail || "", preferredMobile: input.preferredMobile || "", applicantCountry: input.applicantCountry || "",
       source: input.source || "", environment: input.environment || "", isUat: input.isUat ?? false, jobId: input.jobId || "",
-    }).onConflictDoNothing({ target: [bulkScreeningQueueItems.roleId, bulkScreeningQueueItems.resumeSha256] }).returning();
+    }).onConflictDoNothing({ target: [bulkScreeningQueueItems.roleId, bulkScreeningQueueItems.submissionId, bulkScreeningQueueItems.resumeSha256] }).returning();
     if (item) return { item, created: true, error: null };
-    const [existing] = await tx.select().from(bulkScreeningQueueItems).where(and(eq(bulkScreeningQueueItems.roleId, role.id), eq(bulkScreeningQueueItems.resumeSha256, input.resumeSha256.trim().toLowerCase()))).limit(1);
+    const [existing] = await tx.select().from(bulkScreeningQueueItems).where(and(
+      eq(bulkScreeningQueueItems.roleId, role.id),
+      eq(bulkScreeningQueueItems.submissionId, input.submissionId?.trim() || ""),
+      eq(bulkScreeningQueueItems.resumeSha256, input.resumeSha256.trim().toLowerCase()),
+    )).limit(1);
     return { item: existing ?? null, created: false, error: null };
   });
+}
+
+export function bulkScreeningApplicationExternalId(roleExternalId: string, resumeSha256: string, submissionId = "") {
+  // Keep the original deterministic ID for queue rows created before attempt
+  // IDs existed. New submissions get their own application/result history.
+  const attempt = submissionId.trim() ? `:${submissionId.trim()}` : "";
+  return `APP-${crypto.createHash("sha256").update(`${roleExternalId}:${resumeSha256}${attempt}`).digest("hex").slice(0, 24)}`;
 }
 
 /** Claim bulk rows atomically; a row can never be claimed twice concurrently. */
@@ -2246,7 +2312,7 @@ export async function finalizeBulkScreening(input: {
         ? await tx.update(applicants).set({ fullName: queue.candidateName || existingApplicant.fullName, phoneE164: queue.preferredMobile || "", country: queue.applicantCountry || "", updatedAt: new Date() }).where(eq(applicants.id, existingApplicant.id)).returning()
         : await tx.insert(applicants).values({ organizationId: role.organizationId, primaryEmail: email, fullName: queue.candidateName || "", phoneE164: queue.preferredMobile || "", country: queue.applicantCountry || "" }).returning();
       if (!applicant) return { processed: false, duplicate: false, error: "applicant_persistence_failed" as const };
-      const externalId = `APP-${crypto.createHash("sha256").update(`${role.externalId}:${queue.resumeSha256}`).digest("hex").slice(0, 24)}`;
+      const externalId = bulkScreeningApplicationExternalId(role.externalId, queue.resumeSha256, queue.submissionId);
       const [created] = await tx.insert(applications).values({
         organizationId: role.organizationId,
         externalId,

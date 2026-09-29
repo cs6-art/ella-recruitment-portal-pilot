@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { evaluationFieldPreferencesFromStored } from "@/lib/recruitment-setup-schema";
 
 import {
@@ -27,6 +27,7 @@ import {
   reconcileMissingTargetScreeningQueue,
   listRecentApplications,
   listBulkQueueForPortal,
+  listBulkQueueForSubmission,
   listBookingSlots,
   listUpcomingBookingSlots,
   listRoleStatusHistory,
@@ -558,15 +559,47 @@ async function targetBookingContextInTenant(kind: "voice" | "final", tokenHash: 
 
 // Who the interview is with, for the appointment record and dashboard: the
 // interviewer whose calendar hosts the event, or the shared HR calendar.
-async function interviewerLabelFor(assignedEmail: string): Promise<{ interviewerName: string; interviewerEmail: string }> {
+async function directoryInterviewerName(email: string, organizationId: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return "";
+  try {
+    // The same address can have different display names in different orgs;
+    // never resolve an interviewer's identity from another tenant's directory.
+    const [user] = await getDb().select({ fullName: users.fullName }).from(users).where(and(eq(users.email, normalizedEmail), eq(users.organizationId, organizationId))).limit(1);
+    return user?.fullName?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
+async function interviewerLabelFor(assignedEmail: string, organizationId: string): Promise<{ interviewerName: string; interviewerEmail: string }> {
   try {
     const email = (await resolveFinalInterviewCalendarEmail(assignedEmail)).trim().toLowerCase();
     if (!email) return { interviewerName: "", interviewerEmail: "" };
-    const [user] = await getDb().select({ fullName: users.fullName }).from(users).where(eq(users.email, email)).limit(1);
-    return { interviewerName: user?.fullName?.trim() || "HR", interviewerEmail: email };
+    return { interviewerName: (await directoryInterviewerName(email, organizationId)) || "HR", interviewerEmail: email };
   } catch {
     return { interviewerName: "", interviewerEmail: "" };
   }
+}
+
+async function interviewerNamesForOrganization(organizationId: string) {
+  try {
+    const rows = await getDb().select({ email: users.email, fullName: users.fullName }).from(users).where(eq(users.organizationId, organizationId));
+    return new Map(rows.map((user) => [user.email.trim().toLowerCase(), user.fullName.trim()]));
+  } catch {
+    return new Map<string, string>();
+  }
+}
+
+function interviewerNameForSlot(slot: { interviewerName?: unknown; interviewerEmail?: unknown; interviewType?: unknown; calendarEventId?: unknown }, organizationNames: ReadonlyMap<string, string>) {
+  const email = text(slot.interviewerEmail).trim().toLowerCase();
+  const hasCalendarEvent = Boolean(text(slot.calendarEventId));
+  if (email) {
+    // Older rows may contain a name written by the former global email lookup.
+    // Prefer this org's directory, and use a neutral label if no local user exists.
+    return organizationNames.get(email) || (slot.interviewType === "final" && hasCalendarEvent ? "HR" : "");
+  }
+  return text(slot.interviewerName) || (slot.interviewType === "final" && hasCalendarEvent ? "HR" : "");
 }
 
 export async function targetReserveBooking(kind: "voice" | "final", tokenHash: string, slotId: string, actorEmail: string, details?: TargetBookingSlotDetails) {
@@ -680,7 +713,7 @@ async function targetReserveBookingInTenant(kind: "voice" | "final", tokenHash: 
       eventId: calendar.created ? calendar.eventId : undefined,
       eventLink: calendar.created ? calendar.htmlLink : undefined,
       error: calendar.created ? undefined : ("error" in calendar ? calendar.error : calendar.reason),
-      ...(await interviewerLabelFor(context.roleHrCalendarEmail)),
+      ...(await interviewerLabelFor(context.roleHrCalendarEmail, organizationId)),
     });
   } catch (error) {
     calendar = calendar.created
@@ -1302,6 +1335,10 @@ export async function targetApplicantDetails(externalId: string) {
   ]);
   const voiceSlot = slots.map(({ slot }) => slot as unknown as Record<string, unknown>).find((slot) => text(slot.interviewType) === "voice");
   const finalSlot = slots.map(({ slot }) => slot as unknown as Record<string, unknown>).find((slot) => text(slot.interviewType) === "final");
+  const organizationId = rowOrganizationId(row.application);
+  const finalInterviewerName = finalSlot
+    ? await directoryInterviewerName(text(finalSlot.interviewerEmail), organizationId)
+    : "";
   const voiceToken = tokens.find((token) => token.kind === "voice");
   const finalToken = tokens.find((token) => token.kind === "final");
   const date = (value: unknown) => value instanceof Date ? value.toISOString() : text(value);
@@ -1407,14 +1444,19 @@ export async function targetApplicantDetails(externalId: string) {
       start_time: finalStartsAt.time,
       end_time: finalEndsAt.time,
       timezone: finalSlotTimezone,
-      interviewer_name: text(finalSlot.interviewerName),
+      interviewer_name: finalSlot
+        ? interviewerNameForSlot(finalSlot, new Map([[text(finalSlot.interviewerEmail).trim().toLowerCase(), finalInterviewerName]]))
+        : "",
       interviewer_email: text(finalSlot.interviewerEmail),
       hod_name: text(finalSlot.hodName),
       hod_email: text(finalSlot.hodEmail),
       google_calendar_event_status: text(finalSlot.calendarEventStatus),
       google_calendar_event_error: text(finalSlot.calendarEventError),
     } : undefined,
-    finalBookingLink: text(finalToken?.link),
+    finalBookingLink: ["used", "booked", "completed"].includes(text(finalToken?.status).toLowerCase())
+      || ["booked", "completed"].includes(text(finalSlot?.status).toLowerCase())
+      ? ""
+      : text(finalToken?.link),
     finalBookingTokenExpiresAt: date(finalToken?.expiresAt),
     finalBookingNotificationStatus: text(finalBookingNotification?.notificationStatus),
     finalBookingNotificationSentAt: date(finalBookingNotification?.notificationSentAt),
@@ -1444,6 +1486,7 @@ export async function targetBulkResumeQueue(roleExternalId = "") {
   }
   return rows.map(({ item, roleExternalId: roleId, applicationExternalId }) => ({
     dedupeKey: text(item.dedupeKey) || text(item.driveFileId),
+    submissionId: text(item.submissionId),
     driveFileId: text(item.driveFileId), driveFileName: text(item.filename), driveFileUrl: text(item.fileUrl), roleId: text(roleId),
     candidateName: text(item.candidateName), candidateEmail: text(item.candidateEmail), status: bulkQueueStatusLabel(item.status), source: text(item.source), applicationId: text(applicationExternalId),
     errorMessage: text(item.errorMessage), discoveredAt: text(item.discoveredAt), processingStartedAt: text(item.processingStartedAt), processedAt: text(item.processedAt),
@@ -1458,6 +1501,7 @@ export async function targetBulkResumeQueuePage(input: {
   search?: string;
   status?: string;
   source?: string;
+  submissionId?: string;
 }) {
   const organizationId = await targetOrganizationId();
   const page = Number.isFinite(input.page) && input.page > 0 ? Math.trunc(input.page) : 1;
@@ -1478,19 +1522,23 @@ export async function targetBulkResumeQueuePage(input: {
       "Recovered record": "reconciled",
     } as Record<string, string>)[input.source] : undefined,
   };
-  const [rows, total, counts] = await Promise.all([
+  const [rows, total, counts, submissionRows] = await Promise.all([
     listBulkQueueForPortal(statuses, input.roleExternalId || undefined, organizationId, { limit: pageSize, offset: (page - 1) * pageSize, ...filters }),
     countBulkQueueForPortal(statuses, input.roleExternalId || undefined, organizationId, filters),
     countBulkQueueByStatus(input.roleExternalId, organizationId),
+    input.submissionId ? listBulkQueueForSubmission(input.submissionId, input.roleExternalId, organizationId) : Promise.resolve([]),
   ]);
+  const toItem = ({ item, roleExternalId: roleId, applicationExternalId }: (typeof rows)[number]) => ({
+    dedupeKey: text(item.dedupeKey) || text(item.driveFileId),
+    submissionId: text(item.submissionId),
+    driveFileId: text(item.driveFileId), driveFileName: text(item.filename), driveFileUrl: text(item.fileUrl), roleId: text(roleId),
+    candidateName: text(item.candidateName), candidateEmail: text(item.candidateEmail), status: bulkQueueStatusLabel(item.status), source: text(item.source), applicationId: text(applicationExternalId),
+    errorMessage: text(item.errorMessage), discoveredAt: text(item.discoveredAt), processingStartedAt: text(item.processingStartedAt), processedAt: text(item.processedAt),
+    attemptCount: String(item.attemptCount ?? 0), lastUpdated: text(item.updatedAt), environment: text(item.environment), isUat: Boolean(item.isUat), batchId: text(item.batchId), jobId: text(item.jobId),
+  });
   return {
-    items: rows.map(({ item, roleExternalId: roleId, applicationExternalId }) => ({
-      dedupeKey: text(item.dedupeKey) || text(item.driveFileId),
-      driveFileId: text(item.driveFileId), driveFileName: text(item.filename), driveFileUrl: text(item.fileUrl), roleId: text(roleId),
-      candidateName: text(item.candidateName), candidateEmail: text(item.candidateEmail), status: bulkQueueStatusLabel(item.status), source: text(item.source), applicationId: text(applicationExternalId),
-      errorMessage: text(item.errorMessage), discoveredAt: text(item.discoveredAt), processingStartedAt: text(item.processingStartedAt), processedAt: text(item.processedAt),
-      attemptCount: String(item.attemptCount ?? 0), lastUpdated: text(item.updatedAt), environment: text(item.environment), isUat: Boolean(item.isUat), batchId: text(item.batchId), jobId: text(item.jobId),
-    })),
+    items: rows.map(toItem),
+    submissionItems: submissionRows.map(toItem),
     total,
     page,
     pageSize,
@@ -1512,18 +1560,20 @@ export async function targetAppendBulkResumeQueue(event: { driveFileId: string; 
 export async function targetBookings() {
   const organizationId = await targetOrganizationId();
   const rows = await listBookingSlots(undefined, undefined, organizationId, { availableOnly: false });
+  const interviewerNames = await interviewerNamesForOrganization(organizationId);
   return rows.map((row) => {
     const slot = (row as { slot?: Record<string, unknown> }).slot || row as unknown as Record<string, unknown>;
     const timezone = text(slot.timezone) || "Asia/Singapore";
     const startsAt = slotDateTime(slot.startsAt, timezone);
     const endsAt = slotDateTime(slot.endsAt, timezone);
-    return { slotId: text(slot.id), interviewType: text(slot.interviewType), roleId: text((row as { roleExternalId?: string }).roleExternalId), date: startsAt.date, startTime: startsAt.time, endTime: endsAt.time, timezone, status: label(slot.status), applicationId: text(slot.applicationId), candidateName: text(slot.candidateName), candidateEmail: text(slot.candidateEmail), bookedAt: text(slot.bookedAt), lastUpdated: text(slot.updatedAt), calendarEventId: text(slot.calendarEventId), calendarEventLink: text(slot.calendarEventLink), calendarEventStatus: text(slot.calendarEventStatus), calendarEventError: text(slot.calendarEventError) };
+    return { slotId: text(slot.id), interviewType: text(slot.interviewType), roleId: text((row as { roleExternalId?: string }).roleExternalId), date: startsAt.date, startTime: startsAt.time, endTime: endsAt.time, timezone, status: label(slot.status), applicationId: text(slot.applicationId), candidateName: text(slot.candidateName), candidateEmail: text(slot.candidateEmail), bookedAt: text(slot.bookedAt), lastUpdated: text(slot.updatedAt), interviewerName: interviewerNameForSlot(slot, interviewerNames), interviewerEmail: text(slot.interviewerEmail), calendarEventId: text(slot.calendarEventId), calendarEventLink: text(slot.calendarEventLink), calendarEventStatus: text(slot.calendarEventStatus), calendarEventError: text(slot.calendarEventError) };
   });
 }
 
 export async function targetUpcomingBookings(limit = 50) {
   const organizationId = await targetOrganizationId();
   const rows = await listUpcomingBookingSlots(organizationId, limit);
+  const interviewerNames = await interviewerNamesForOrganization(organizationId);
   return rows.map(({ slot, roleExternalId, applicationExternalId, applicationCandidateName, applicationEmail, hasLiveAvatarSession }) => {
     const timezone = text(slot.timezone) || "Asia/Singapore";
     const startsAt = slotDateTime(slot.startsAt, timezone);
@@ -1544,7 +1594,7 @@ export async function targetUpcomingBookings(limit = 50) {
       bookedAt: text(slot.bookedAt),
       lastUpdated: text(slot.updatedAt),
       // Bookings made before interviewer labels were recorded were still put on the shared HR calendar.
-      interviewerName: text(slot.interviewerName) || (slot.interviewType === "final" && slot.calendarEventId ? "HR" : ""),
+      interviewerName: interviewerNameForSlot(slot, interviewerNames),
       interviewerEmail: text(slot.interviewerEmail),
       calendarEventId: text(slot.calendarEventId),
       calendarEventLink: text(slot.calendarEventLink),

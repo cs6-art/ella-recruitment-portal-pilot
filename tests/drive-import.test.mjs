@@ -66,7 +66,7 @@ test("the panel offers connect / choose-from-Drive and imports into the same bat
   assert.match(panel, /\/api\/auth\/google-drive\/status/);
   assert.match(panel, /Connect Google Drive/);
   assert.match(panel, /Choose from Google Drive/);
-  assert.match(panel, /buildCloudImportRequest\(provider, roleId, chunk\)/);
+  assert.match(panel, /buildCloudImportRequest\(provider, roleId, chunk, submissionId\)/);
   assert.match(panel, /selectedCloudFiles\(selections\)/);
   assert.match(request, /\/api\/resume-screening\/drive\/import/);
   assert.match(panel, /applyBatchResult/);
@@ -82,12 +82,12 @@ test("Drive picker selection builds the authenticated import request with the ac
   assert.match(picker, /const selectedFiles = Array\.from\(selected\.values\(\)\)/);
   assert.match(picker, /next\.set\(file\.id, file\)/);
   assert.match(picker, /onImport\(selectedFiles\)/);
-  assert.match(panel, /buildCloudImportRequest\(provider, roleId, chunk\)/);
+  assert.match(panel, /buildCloudImportRequest\(provider, roleId, chunk, submissionId\)/);
   assert.match(panel, /fetch\(request\.endpoint, request\.init\)/);
   assert.match(request, /\/api\/resume-screening\/drive\/import/);
   assert.match(request, /selectedCloudFileIds\(selections\)/);
   assert.match(request, /selectedCloudFiles\(selections\)/);
-  assert.match(request, /JSON\.stringify\(\{ roleId: normalizedRoleId, fileIds: normalizedFileIds, files: normalizedFiles \}\)/);
+  assert.match(request, /JSON\.stringify\(\{ roleId: normalizedRoleId, fileIds: normalizedFileIds, files: normalizedFiles, \.\.\.\(submissionId \? \{ submissionId \} : \{\}\) \}\)/);
 });
 
 test("Drive selection rejects folders, roots, unsupported files, and stale picker IDs", () => {

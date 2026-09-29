@@ -31,6 +31,18 @@ test("FKs, unique constraints, and indexes are present on the hot tables", () =>
   assert.match(sql, /"action_request_id"\s+text UNIQUE/i); // idempotency on history
 });
 
+test("bulk queue supports a new screening attempt for a previously screened resume", () => {
+  const migration = read("drizzle/0032_resume_screening_attempts.sql");
+  const schema = read("src/db/schema-recruitment.ts");
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS "submission_id" text NOT NULL DEFAULT ''/i);
+  assert.match(migration, /DROP CONSTRAINT IF EXISTS "bulk_screening_queue_items_role_id_resume_sha256_key"/i);
+  assert.match(migration, /UNIQUE INDEX IF NOT EXISTS "bulk_queue_role_submission_sha_uidx"\s+ON "bulk_screening_queue_items" \("role_id", "submission_id", "resume_sha256"\)/i);
+  assert.match(schema, /submissionId: text\("submission_id"\)/);
+  assert.match(schema, /uniqueIndex\("bulk_queue_role_submission_sha_uidx"\)\.on\(t\.roleId, t\.submissionId, t\.resumeSha256\)/);
+  assert.match(schema, /index\("bulk_queue_role_sha_updated_idx"\)\.on\(t\.roleId, t\.resumeSha256, t\.updatedAt\.desc\(\)\)/);
+  assert.doesNotMatch(migration, /DELETE FROM|TRUNCATE|DROP TABLE/i);
+});
+
 test("timestamps are timestamptz and status columns are constrained", () => {
   const sql = read("drizzle/0003_recruitment_core.sql");
   assert.doesNotMatch(sql, /timestamp(?!tz)\b/i);

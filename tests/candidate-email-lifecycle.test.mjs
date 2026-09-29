@@ -107,7 +107,8 @@ test("notification queue carries ready-to-send candidate email copy per booking 
   assert.doesNotMatch(templates, /Please use the secure link below/);
   assert.match(labels, /cta: "Schedule a call"/);
   assert.match(labels, /secondaryCta: avatarLink \? "Interview with our Avatar now"/);
-  assert.match(labels, /cta: "Schedule final interview"/);
+  assert.match(labels, /cta: "Schedule Final Interview"/);
+  assert.match(labels, /heading: "Schedule Your Final Interview"/);
   assert.match(labels, /includeRawBookingLink: false/);
   // Google Calendar delivers the face-to-face confirmation, so no email here.
   assert.match(labels, /if \(key === "final_booking_confirmation"\) return null/);

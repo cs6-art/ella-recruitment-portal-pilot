@@ -124,6 +124,24 @@ test("all saved bulk screening states remain visible and unknown states are not 
   assert.match(panel, /return \{ label: "Other", result: "Status needs review" \}/);
 });
 
+test("each intentional re-screen has its own attempt identity and progress uses reconciled attempt statuses", () => {
+  const applicants = read("src/lib/candidate-applications.ts");
+  const targetIntake = read("src/lib/recruitment-target-bulk.ts");
+  const queries = read("src/lib/internal-recruitment-queries.ts");
+  const statusRoute = read("src/app/api/resume-screening/bulk/route.ts");
+  const panel = read("src/components/BulkResumeScreeningPanel.tsx");
+  assert.match(applicants, /submissionId\?: string/);
+  assert.match(applicants, /const attemptId = text\(item\.dedupeKey\) \|\| text\(item\.applicationId\)/);
+  assert.match(targetIntake, /A new submission is a new, intentional screening attempt/);
+  assert.match(targetIntake, /submissionId,\s*dedupeKey: storedQueueId/);
+  assert.match(queries, /bulkScreeningApplicationExternalId\(role\.externalId, queue\.resumeSha256, queue\.submissionId\)/);
+  assert.match(statusRoute, /const submissionItems = submissionQueueItems\.map\(reconcileStatus\)/);
+  assert.match(statusRoute, /const screeningEvidence = .*getBulkResumeScreeningEvidence\(relevantQueueItems\)/);
+  assert.match(statusRoute, /screeningEvidence\.has\(screeningEvidenceKey\(item\)\)/);
+  assert.match(panel, /submissionItems: nextSubmissionItems\.map/);
+  assert.match(panel, /params\.set\("submissionId", activeSubmissionId\)/);
+});
+
 test("each per-file screening webhook is time-bounded so one stuck n8n call cannot hang the batch", () => {
   const route = read("src/lib/bulk-resume-intake.ts");
   assert.match(route, /N8N_BULK_RESUME_TIMEOUT_MS/);
@@ -260,8 +278,8 @@ test("a lost connection or platform timeout during bulk submit never throws and 
   // no try/catch of its own around these calls
   const queueStart = panel.indexOf("async function runBulkQueue(");
   const queueBody = panel.slice(queueStart, panel.indexOf("\n  }", queueStart));
-  assert.match(queueBody, /let outcome = await submitBatch\(chunk\);/);
-  assert.match(queueBody, /outcome = await submitBatch\(chunk\);/g);
+  assert.match(queueBody, /let outcome = await submitBatch\(chunk, submissionId\);/);
+  assert.match(queueBody, /outcome = await submitBatch\(chunk, submissionId\);/g);
 });
 
 test("the bulk panel supports drag-and-drop, live auto-refresh, and retrying only failed files", () => {

@@ -16,6 +16,21 @@ test("default booking emails read exactly as before once the company name is fil
   assert.equal(emailSignoff("McLink Group"), "Kind regards,\nMcLink Group Recruitment Team");
 });
 
+test("the final interview invitation uses consistent title capitalization", async () => {
+  const { renderEventEmail } = await import("../src/lib/email-templates.ts");
+  const invitation = renderEventEmail("final_booking_invitation", {
+    candidate_name: "Alex",
+    role_phrase: "the General Manager position",
+    company_name: "McTest",
+  });
+  assert.equal(invitation.subject, "Schedule Your Final Interview with McTest");
+  const invitationTemplate = read("src/lib/email-templates.ts");
+  const notificationCopy = read("src/lib/notification-labels.ts");
+  assert.match(invitationTemplate, /buttons: \{ primary: "Schedule Final Interview" \}/);
+  assert.match(notificationCopy, /heading: "Schedule Your Final Interview"/);
+  assert.match(notificationCopy, /cta: "Schedule Final Interview"/);
+});
+
 test("an interview time line is dropped when there is no time", async () => {
   const { renderEventEmail } = await import("../src/lib/email-templates.ts");
   const values = { candidate_name: "Alex", role_phrase: "this position", company_name: "Acme" };

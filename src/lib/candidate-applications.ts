@@ -182,6 +182,7 @@ export type InterviewBooking = {
 
 export type BulkResumeQueueItem = {
   dedupeKey?: string;
+  submissionId?: string;
   driveFileId: string;
   driveFileName: string;
   driveFileUrl: string;
@@ -920,6 +921,7 @@ export async function getBulkResumeQueue(roleId = "", options: { fresh?: boolean
   rows
     .map((record) => ({
       dedupeKey: field(record, "Dedupe_Key", "Dedupe Key", "dedupeKey"),
+      submissionId: field(record, "Submission_ID", "Submission ID", "submissionId"),
       driveFileId: field(record, "Drive_File_ID", "Drive File ID", "driveFileId"),
       driveFileName: field(record, "Drive_File_Name", "Drive File Name", "driveFileName"),
       driveFileUrl: field(record, "Drive_File_URL", "Drive File URL", "driveFileUrl"),
@@ -963,7 +965,8 @@ export async function getBulkResumeQueuePage(input: {
   search?: string;
   status?: string;
   source?: string;
-}): Promise<{ items: BulkResumeQueueItem[]; total: number; counts: Record<string, number>; page: number; pageSize: number }> {
+  submissionId?: string;
+}): Promise<{ items: BulkResumeQueueItem[]; total: number; counts: Record<string, number>; page: number; pageSize: number; submissionItems?: BulkResumeQueueItem[] }> {
   if (isPostgresRecruitmentTarget()) return targetBulkResumeQueuePage({ ...input, roleExternalId: input.roleId });
   const items = await getBulkResumeQueue(input.roleId, { fresh: true });
   const queueStatusLabel = (rawStatus: string) => {
@@ -988,7 +991,8 @@ export async function getBulkResumeQueuePage(input: {
   });
   const page = Math.max(1, Math.trunc(input.page));
   const pageSize = Math.min(100, Math.max(10, Math.trunc(input.pageSize)));
-  return { items: filtered.slice((page - 1) * pageSize, page * pageSize), total: filtered.length, counts, page, pageSize };
+  const submissionItems = input.submissionId ? items.filter((item) => item.submissionId === input.submissionId) : [];
+  return { items: filtered.slice((page - 1) * pageSize, page * pageSize), total: filtered.length, counts, page, pageSize, submissionItems };
 }
 
 /**
@@ -1168,8 +1172,11 @@ export async function getBulkResumeQueueTotals(roleId = "", options: { fresh?: b
  * is only partially successful. Matching remains backward-compatible with
  * historical rows that predate jobId metadata.
  */
-function bulkQueueKey(item: Pick<BulkResumeQueueItem, "roleId" | "driveFileId">) {
-  return `${text(item.roleId).toLowerCase()}|${text(item.driveFileId).toLowerCase()}`;
+function bulkQueueKey(item: Pick<BulkResumeQueueItem, "roleId" | "driveFileId"> & Partial<Pick<BulkResumeQueueItem, "dedupeKey" | "applicationId">>) {
+  // A stored file can be screened more than once. Prefer the unique queue or
+  // application identity so an earlier result cannot complete a later attempt.
+  const attemptId = text(item.dedupeKey) || text(item.applicationId);
+  return `${text(item.roleId).toLowerCase()}|${(attemptId || text(item.driveFileId)).toLowerCase()}`;
 }
 
 function normalizedFileName(value: unknown) {
@@ -1410,7 +1417,11 @@ export async function getApplicantById(id: string): Promise<ApplicantDetails | n
     finalScheduledDate: field(record, "Final_Interview_Scheduled_Date"),
     finalScheduledTime: field(record, "Final_Interview_Scheduled_Time"),
     finalTimezone: field(record, "Final_Interview_Timezone"),
-    finalBookingLink: field(record, "Final_Interview_Booking_Link"),
+    finalBookingLink: ["used", "booked", "completed"].includes(field(record, "Final_Interview_Booking_Token_Status").toLowerCase())
+      || ["booked", "completed"].includes(field(finalInterviewSlot ?? {}, "Status").toLowerCase())
+      || /(?:interview )?(?:scheduled|booked|completed)/i.test(field(record, "Status 3 (Final Interview)"))
+      ? ""
+      : field(record, "Final_Interview_Booking_Link"),
     finalBookingTokenExpiresAt: field(record, "Final_Interview_Booking_Token_Expires_At"),
     finalBookingNotificationStatus: "",
     finalBookingNotificationSentAt: "",

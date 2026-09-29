@@ -45,6 +45,9 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const roleId = String(formData.get("roleId") || "").trim();
+    const submissionIdInput = String(formData.get("submissionId") || "").trim();
+    if (submissionIdInput && !/^[A-Za-z0-9_-]{8,80}$/.test(submissionIdInput)) return responseError("The upload session is invalid. Refresh the page and try again.", 422);
+    const submissionId = submissionIdInput || crypto.randomUUID();
     const files = formData.getAll("resumes").filter((value): value is File => value instanceof File);
     fileCount = files.length;
     if (!roleId) return responseError("Select a published role before uploading resumes.", 422);
@@ -63,6 +66,7 @@ export async function POST(request: Request) {
       submittedByEmail: user.email,
       sourceLabel: "Portal Bulk Upload",
       uatRecoveryToken: String(formData.get("uatRecovery") || "").trim(),
+      submissionId,
       sources: files.map((file) => ({
         name: file.name,
         mimeType: file.type,
@@ -72,7 +76,7 @@ export async function POST(request: Request) {
 
     submittedCount = intake.submitted;
     logServerTiming(new URL(request.url).pathname, startedAt, { }, { dbOperations: 0, fileCount, submittedCount });
-    return NextResponse.json({ success: true, roleId, ...intake }, { status: 202 });
+    return NextResponse.json({ success: true, roleId, submissionId, ...intake }, { status: 202 });
   } catch (error) {
     logServerTiming(new URL(request.url).pathname, startedAt, { }, { dbOperations: 0, fileCount, submittedCount });
     if (error instanceof EllaCreditsError) {

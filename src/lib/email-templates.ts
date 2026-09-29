@@ -87,9 +87,9 @@ export const EMAIL_EVENTS: EmailEventDefinition[] = [
     audience: "Candidate",
     when: "Sent when HR invites a candidate to book their final interview. Contains the booking button.",
     editable: false,
-    buttons: { primary: "Schedule final interview" },
+    buttons: { primary: "Schedule Final Interview" },
     placeholders: ["candidate_name", "role_title", "role_phrase", "company_name"],
-    subject: "Next step: schedule your final interview with {{company_name}}",
+    subject: "Schedule Your Final Interview with {{company_name}}",
     body: `Hi {{candidate_name}},\n\nThank you for completing your AI voice interview. We are pleased to invite you to the final interview stage for {{role_phrase}}. Please use the button below to select your preferred interview time. This invitation expires automatically.`,
   },
   {

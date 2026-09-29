@@ -4,12 +4,13 @@ import { assertCreditsAvailable } from "@/lib/ella-credits";
 import { extractResumeContactDetails } from "@/lib/resume-contact-extraction";
 import { bulkResumeEnvironment, bulkResumeIsUatMarked, productionUatBatchId } from "@/lib/bulk-resume-config";
 import { deleteResumeFile, MAX_RESUME_FILE_BYTES, storeResumeFile } from "@/lib/resume-files";
-import { enqueueBulkScreening, findBulkQueueByRoleAndSha, registerResumeFile, updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
+import { enqueueBulkScreening, findBulkQueueByRoleAndSha, findBulkQueueBySubmission, registerResumeFile, updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
 import type { IntakeResult, IntakeSource } from "@/lib/bulk-resume-intake";
 
-function queueIdForHash(roleId: string, sha256: string) {
+function queueIdForHash(roleId: string, sha256: string, submissionId = "") {
   const roleKey = roleId.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "-");
-  return `BULK-${roleKey}-${sha256}`;
+  const submissionKey = submissionId.trim().replace(/[^A-Z0-9_-]/gi, "-");
+  return `BULK-${roleKey}-${sha256}${submissionKey ? `-${submissionKey}` : ""}`;
 }
 
 function driveFileUrl(fileId: string) {
@@ -43,9 +44,11 @@ export async function intakeTargetResumeBatch(input: {
   sources: IntakeSource[];
   sourceLabel: string;
   uatRecoveryToken?: string;
+  submissionId?: string;
 }): Promise<IntakeResult> {
   const environment = bulkResumeEnvironment();
   const isUat = bulkResumeIsUatMarked();
+  const submissionId = input.submissionId?.trim() || crypto.randomUUID();
   const batchId = productionUatBatchId() || `${isUat ? "UAT-BATCH" : "BATCH"}-${crypto.randomUUID()}`;
   const results: Array<Record<string, unknown>> = new Array(input.sources.length);
   const creditsCharged = 0;
@@ -87,34 +90,57 @@ export async function intakeTargetResumeBatch(input: {
     toProcess.push(item);
   }
 
+  // A new submission is a new, intentional screening attempt, even when its
+  // resume hash matches a previous completed/failed attempt. Replays of the
+  // same submission stay idempotent, and already-active work is not queued a
+  // second time or charged twice.
+  type SameSubmissionQueueItem = NonNullable<Awaited<ReturnType<typeof findBulkQueueBySubmission>>>;
+  type LatestQueueItem = NonNullable<Awaited<ReturnType<typeof findBulkQueueByRoleAndSha>>>;
+  const priorBySha = new Map<string, { sameSubmission: SameSubmissionQueueItem | null; latest: LatestQueueItem | null }>();
+  await Promise.all(toProcess.map(async (item) => {
+    const sameSubmission = await findBulkQueueBySubmission(input.roleId, submissionId, item.sha256, input.organizationId);
+    const latest = sameSubmission ? null : await findBulkQueueByRoleAndSha(input.roleId, item.sha256, input.organizationId);
+    priorBySha.set(item.sha256, { sameSubmission, latest });
+  }));
+  const chargeable = toProcess.filter((item) => {
+    const prior = priorBySha.get(item.sha256);
+    return !prior?.sameSubmission && !["queued", "processing"].includes(prior?.latest?.status.toLowerCase() || "");
+  });
+
   // Each resume that reaches the screening workflow costs 1 Smile Credit.
   // Pre-check the whole batch so an under-funded intake is refused before any
   // file is stored, extracted, or queued -- mirroring the Sheets-backend
   // intake path (bulk-resume-intake.ts), which this Postgres target path was
   // missing: zero-credit batches used to be queued in full and only fail,
   // one file at a time, once each was claimed for screening.
-  if (toProcess.length > 0) {
-    await assertCreditsAvailable(toProcess.length, "cv_analysis", { organizationId: input.organizationId, ownerEmail: input.actorEmail });
+  if (chargeable.length > 0) {
+    await assertCreditsAvailable(chargeable.length, "cv_analysis", { organizationId: input.organizationId, ownerEmail: input.actorEmail });
   }
 
   async function processSource(item: (typeof hashed)[number]): Promise<Record<string, unknown>> {
     const { source, bytes, sha256: sourceSha256 } = item;
     let stored: Awaited<ReturnType<typeof storeResumeFile>> | null = null;
-    let queueKey = "";
+    const queueId = queueIdForHash(input.roleId, sourceSha256, submissionId);
+    let queueKey = queueId;
     let durableQueue = false;
     let stage = "destination_storage";
     try {
       if (!bytes) throw new Error("Unable to download the resume.");
       if (bytes.length > MAX_RESUME_FILE_BYTES) throw new Error("Resume files must be 10 MB or smaller.");
-      const existingQueue = await findBulkQueueByRoleAndSha(input.roleId, sourceSha256, input.organizationId);
-      if (existingQueue) {
-        return { fileName: source.name, status: "Skipped", skipped: true, message: "This resume is already queued or processed for this role." };
+      const prior = priorBySha.get(sourceSha256);
+      if (prior?.sameSubmission) {
+        const status = prior.sameSubmission.status.replace(/^./, (char) => char.toUpperCase());
+        return { fileName: source.name, queueId: prior.sameSubmission.dedupeKey, status, skipped: true, message: "This upload was already received; its existing screening status is shown below." };
+      }
+      if (["queued", "processing"].includes(prior?.latest?.status.toLowerCase() || "")) {
+        const status = prior?.latest?.status.replace(/^./, (char) => char.toUpperCase()) || "Queued";
+        return { fileName: source.name, queueId: prior?.latest?.dedupeKey, status, skipped: true, message: "This resume is already queued or being screened for this role." };
       }
       const file = new File([new Uint8Array(bytes)], source.name || "resume", { type: source.mimeType || "application/octet-stream" });
       stored = await storeResumeFile(file, { environment, organizationId: input.organizationId });
       stage = "contact_extraction";
-      const queueId = queueIdForHash(input.roleId, stored.record.sha256);
-      queueKey = queueId;
+      const storedQueueId = queueIdForHash(input.roleId, stored.record.sha256, submissionId);
+      queueKey = storedQueueId;
       const contact = extractResumeContactDetails(stored.extractedText);
       const candidateName = contact.candidateName || fallbackCandidateName(source.name);
       if (!contact.candidateEmail) throw new Error("The resume must contain a readable candidate email address.");
@@ -147,7 +173,8 @@ export async function intakeTargetResumeBatch(input: {
         roleExternalId: input.roleId,
         organizationId: input.organizationId,
         batchId,
-        dedupeKey: queueId,
+        submissionId,
+        dedupeKey: storedQueueId,
         resumeSha256: stored.record.sha256,
         driveFileId: source.driveFileId || stored.record.fileId,
         filename: stored.record.fileName,
@@ -160,17 +187,18 @@ export async function intakeTargetResumeBatch(input: {
         source: input.sourceLabel.toLowerCase().includes("drive") ? "drive" : "upload",
         environment,
         isUat,
-        jobId: queueId,
+        jobId: storedQueueId,
       });
       if (!queued.item) throw new Error(queued.error || "Unable to enqueue the resume.");
       if (!queued.created) {
         if (!stored.reused) await deleteResumeFile(stored.record).catch(() => undefined);
-        return { fileName: source.name, queueId, status: "Skipped", skipped: true, message: "This resume is already queued or processed for this role." };
+        const status = queued.item.status.replace(/^./, (char) => char.toUpperCase());
+        return { fileName: source.name, queueId: queued.item.dedupeKey, status, skipped: true, message: "This upload was already received; its existing screening status is shown below." };
       }
       durableQueue = true;
-      await updateBulkQueueStatus({ dedupeKey: queueId, status: "queued" });
+      await updateBulkQueueStatus({ dedupeKey: storedQueueId, status: "queued" });
       submitted += 1;
-      return { fileName: stored.record.fileName, queueId, status: "Queued", driveFileUrl: driveFileUrl(stored.record.fileId) };
+      return { fileName: stored.record.fileName, queueId: storedQueueId, status: "Queued", driveFileUrl: driveFileUrl(stored.record.fileId) };
     } catch (error) {
       if (durableQueue && queueKey) {
         await updateBulkQueueStatus({ dedupeKey: queueKey, status: "failed", errorMessage: error instanceof Error ? error.message : "Unable to process the resume." }).catch(() => undefined);
@@ -179,7 +207,7 @@ export async function intakeTargetResumeBatch(input: {
       }
       const message = error instanceof Error ? error.message : "Unable to queue the resume.";
       console.warn("[Target Intake] failed", { batchId, stage, fileName: source.name, sourceFileId: source.driveFileId || "" });
-      return { fileName: source.name, status: "Failed", stage, error: message };
+      return { fileName: source.name, queueId, status: "Failed", stage, error: message };
     }
   }
 
@@ -192,5 +220,5 @@ export async function intakeTargetResumeBatch(input: {
   }
   await Promise.all(Array.from({ length: Math.min(INTAKE_CONCURRENCY, toProcess.length) }, worker));
 
-  return { results, batchId, environment, isUat, notificationStatus: "disabled", concurrency: INTAKE_CONCURRENCY, submitted, creditsCharged };
+  return { results, batchId, submissionId, environment, isUat, notificationStatus: "disabled", concurrency: INTAKE_CONCURRENCY, submitted, creditsCharged };
 }

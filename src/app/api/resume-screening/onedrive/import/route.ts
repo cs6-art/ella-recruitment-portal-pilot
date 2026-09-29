@@ -22,6 +22,7 @@ const RESUME_EXT = /\.(pdf|docx?|doc)$/i;
 
 const bodySchema = z.object({
   roleId: z.string().trim().min(1).max(200),
+  submissionId: z.string().trim().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
   fileIds: z.array(z.string().trim().min(1).max(400)).min(1).max(MAX_FILES_PER_SUBMISSION),
 });
 
@@ -88,6 +89,7 @@ export async function POST(request: Request) {
       organizationId: user.organizationId,
       submittedByEmail: user.email,
       sourceLabel: "Portal OneDrive Import",
+      submissionId: parsed.data.submissionId || crypto.randomUUID(),
       sources: valid.map((file) => ({
         name: file.name,
         mimeType: file.mimeType,

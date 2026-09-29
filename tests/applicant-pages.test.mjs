@@ -253,6 +253,7 @@ test("a call that never reached the candidate reads as a system failure, not 'aw
 test("eligible final bookings invite the applicant through Google Calendar", () => {
   const workflow = read("src/lib/applicant-workflow.ts");
   const applications = read("src/lib/candidate-applications.ts");
+  const targetPortal = read("src/lib/recruitment-target-portal.ts");
   assert.match(workflow, /attendeeEmails: \[context\.email\]/);
   assert.match(workflow, /Final_Interview_Booking_Token_Status", value: "Used"/);
   assert.match(workflow, /Final_Interview_Scheduled_Date/);
@@ -267,6 +268,10 @@ test("eligible final bookings invite the applicant through Google Calendar", () 
   assert.match(workflow, /Voice_Call_Scheduled_At/);
   assert.doesNotMatch(workflow, /High_Match_Profile", "BH"/);
   assert.doesNotMatch(applications, /High_Match_Profile", "BH"/);
+  // Once the one-time token is used or the slot is booked, the stale booking
+  // URL must no longer appear as an available action on the applicant page.
+  assert.match(applications, /\["used", "booked", "completed"\]\.includes\(field\(record, "Final_Interview_Booking_Token_Status"\)/);
+  assert.match(targetPortal, /\["used", "booked", "completed"\]\.includes\(text\(finalToken\?\.status\)/);
 });
 
 test("resume extraction uses the supported PDF parser entrypoint", () => {
@@ -507,6 +512,14 @@ test("final booking links use the public portal host and final tokens are single
   assert.match(decisionRoute, /getPublicAppBaseUrl\(request\)/);
   assert.match(publicUrl, /NEXT_PUBLIC_APP_URL/);
   assert.match(publicUrl, /x-forwarded-host/);
+});
+
+test("a successful booking is labeled as a confirmation, not a booking page", () => {
+  const selector = read("src/components/BookingSelector.tsx");
+  assert.match(selector, /booked && !noShow[\s\S]*"Face-to-Face Interview Confirmation"/);
+  assert.match(selector, /completed && !noShow[\s\S]*"Face-to-Face Interview Details"/);
+  assert.match(selector, /"Your interview is confirmed"/);
+  assert.match(selector, /<strong>\{title\}<\/strong>/);
 });
 
 test("booking links render a branded unavailable page when the token is not valid", () => {

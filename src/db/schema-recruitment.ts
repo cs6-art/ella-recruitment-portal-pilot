@@ -295,6 +295,8 @@ export const bulkScreeningQueueItems = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     batchId: text("batch_id").notNull().default(""),
+    /** One user-submitted attempt; a later submission may intentionally re-screen the same file. */
+    submissionId: text("submission_id").notNull().default(""),
     roleId: uuid("role_id").notNull().references(() => roles.id),
     dedupeKey: text("dedupe_key").notNull(),
     resumeSha256: text("resume_sha256").notNull().default(""),
@@ -319,7 +321,12 @@ export const bulkScreeningQueueItems = pgTable(
     processedAt: ts("processed_at"),
     updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
   },
-  (t) => [index("bulk_queue_batch_id_idx").on(t.batchId), index("bulk_queue_role_status_idx").on(t.roleId, t.status)],
+  (t) => [
+    index("bulk_queue_batch_id_idx").on(t.batchId),
+    index("bulk_queue_role_status_idx").on(t.roleId, t.status),
+    index("bulk_queue_role_sha_updated_idx").on(t.roleId, t.resumeSha256, t.updatedAt.desc()),
+    uniqueIndex("bulk_queue_role_submission_sha_uidx").on(t.roleId, t.submissionId, t.resumeSha256),
+  ],
 );
 
 export const interviewSlots = pgTable(

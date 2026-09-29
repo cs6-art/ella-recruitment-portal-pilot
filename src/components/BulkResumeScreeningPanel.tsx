@@ -16,6 +16,7 @@ import { clientErrorMessage } from "@/lib/client-error";
 type RoleOption = { roleId: string; label: string };
 type QueueItem = {
   dedupeKey: string;
+  submissionId?: string;
   driveFileId: string;
   driveFileName: string;
   driveFileUrl: string;
@@ -77,12 +78,12 @@ function LoadingLabel({ children }: { children: string }) {
   return <><span className="bulk-screening-spinner" aria-hidden="true" />{children}</>;
 }
 
-async function fileQueueId(roleId: string, file: File) {
+async function fileQueueId(roleId: string, file: File, submissionId: string) {
   const buffer = await file.arrayBuffer();
   const digest = await crypto.subtle.digest("SHA-256", buffer);
   const sha256 = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
   const roleKey = roleId.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "-");
-  return `BULK-${roleKey}-${sha256}`;
+  return `BULK-${roleKey}-${sha256}-${submissionId.replace(/[^A-Z0-9_-]/gi, "-")}`;
 }
 
 export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions: RoleOption[] }) {
@@ -112,6 +113,8 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   // the role's entire screening history.
   const [activeBatch, setActiveBatch] = useState<Map<string, string>>(new Map());
   const [batchResultStatuses, setBatchResultStatuses] = useState<Map<string, string>>(new Map());
+  const [activeSubmissionId, setActiveSubmissionId] = useState("");
+  const [submissionItems, setSubmissionItems] = useState<QueueItem[]>([]);
   // "Let it sit" queue state for a selection bigger than one request can take
   // — see runBulkQueue below.
   const [queueRunning, setQueueRunning] = useState(false);
@@ -142,6 +145,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     try {
       const params = new URLSearchParams({ roleId, page: String(queuePage), pageSize: String(queuePageSize), status: queueStatus, source: queueSource });
       if (queueSearch.trim()) params.set("search", queueSearch.trim());
+      if (activeSubmissionId) params.set("submissionId", activeSubmissionId);
       const response = await fetch(`/api/resume-screening/bulk?${params}`, { cache: "no-store", signal: controller.signal });
       const result = await response.json();
       if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to load bulk screening status.");
@@ -149,14 +153,17 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       // slow poll from overwriting a newer queue snapshot.
       if (requestId !== statusRequestId.current) return false;
       const nextItems = (Array.isArray(result.items) ? result.items : []) as QueueItem[];
+      const nextSubmissionItems = (Array.isArray(result.submissionItems) ? result.submissionItems : []) as QueueItem[];
       const nextCounts = (result.counts || result.roleTotals || {}) as Record<string, number>;
       const nextSignature = JSON.stringify({
         counts: Object.entries(nextCounts).sort(([left], [right]) => left.localeCompare(right)),
         items: nextItems.map((item) => [queueIdentity(item), item.status, item.lastUpdated, item.errorMessage]),
+        submissionItems: nextSubmissionItems.map((item) => [queueIdentity(item), item.status, item.lastUpdated, item.errorMessage]),
       });
       const changed = Boolean(statusSignature.current) && statusSignature.current !== nextSignature;
       statusSignature.current = nextSignature;
       setItems(nextItems);
+      setSubmissionItems(nextSubmissionItems);
       setQueueTotal(Number(result.total) || 0);
       setRetrySupported(result.retrySupported === true);
       // Use the reconciled latest-state counts. Historical retry-event totals
@@ -177,7 +184,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
         if (requestId === statusRequestId.current) setLoading(false);
       }
     }
-  }, [queuePage, queuePageSize, queueSearch, queueSource, queueStatus, roleId]);
+  }, [activeSubmissionId, queuePage, queuePageSize, queueSearch, queueSource, queueStatus, roleId]);
 
   function selectRole(nextRoleId: string) {
     if (queueRunning) return;
@@ -195,6 +202,8 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     setRetrySupported(false);
     setActiveBatch(new Map());
     setBatchResultStatuses(new Map());
+    setActiveSubmissionId("");
+    setSubmissionItems([]);
     setQueueProgress(null);
     batchFiles.current.clear();
     setFiles([]);
@@ -266,7 +275,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   const pendingInBatch = useMemo(() => {
     if (activeBatch.size === 0) return false;
     return Array.from(activeBatch.keys()).some((queueId) => {
-      const item = items.find((entry) => queueIdentity(entry) === queueId);
+      const item = submissionItems.find((entry) => queueIdentity(entry) === queueId) || items.find((entry) => queueIdentity(entry) === queueId);
       const reportedStatus = batchResultStatuses.get(queueId)?.toLowerCase() || "";
       // A successful response without a queue row is still only an accepted
       // handoff. Local validation/request failures may terminate immediately,
@@ -274,7 +283,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       const status = item?.status || (["failed", "skipped"].includes(reportedStatus) ? reportedStatus : "Queued");
       return !TERMINAL_STATUSES.has(status.toLowerCase());
     });
-  }, [activeBatch, batchResultStatuses, items]);
+  }, [activeBatch, batchResultStatuses, items, submissionItems]);
   // The queue only advances while this tab is open and running its own JS
   // loop -- there's no server-side job behind it. Warn before an accidental
   // close mid-run so the reviewer knows the remaining files won't submit.
@@ -360,19 +369,15 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   // whether to back off-and-retry (rate limited) or stop the whole run (a
   // real failure, e.g. insufficient credits). Never call this with more than
   // MAX_FILES_PER_SUBMISSION files -- the server rejects it.
-  async function submitBatch(fileList: File[]) {
+  async function submitBatch(fileList: File[], submissionId: string) {
     // Pre-compute each file's queue ID client-side (same hash the server
     // uses) so the live section below can track this exact batch from the
     // moment upload starts, rather than only after the request resolves.
     // Merged onto (not replacing) the existing maps so a multi-batch queue
     // run accumulates one combined progress view across all its batches.
-    const batch = new Map<string, string>();
-    const fileMap = new Map<string, File>();
-    await Promise.all(fileList.map(async (file) => {
-      const queueId = await fileQueueId(roleId, file);
-      batch.set(queueId, file.name);
-      fileMap.set(queueId, file);
-    }));
+    const fileEntries = await Promise.all(fileList.map(async (file) => [await fileQueueId(roleId, file, submissionId), file] as const));
+    const batch = new Map(fileEntries.map(([queueId, file]) => [queueId, file.name]));
+    const fileMap = new Map(fileEntries);
     batchFiles.current = new Map([...batchFiles.current, ...fileMap]);
     setActiveBatch((current) => new Map([...current, ...batch]));
     setUploadPhase("uploading");
@@ -380,6 +385,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
 
     const formData = new FormData();
     formData.set("roleId", roleId);
+    formData.set("submissionId", submissionId);
     fileList.forEach((file) => formData.append("resumes", file));
 
     // A lost connection or a hard function timeout throws here (a plain
@@ -424,12 +430,17 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     batchFiles.current = new Map();
     setActiveBatch(new Map());
     setBatchResultStatuses(new Map());
+    const submissionId = crypto.randomUUID();
+    setActiveSubmissionId(submissionId);
+    setSubmissionItems([]);
     try {
-      const outcome = await submitBatch(fileList);
+      const outcome = await submitBatch(fileList, submissionId);
       if (!outcome.ok) throw new Error(outcome.error);
       setFiles((current) => current.filter((file) => !fileList.includes(file) || outcome.failedFileSet.has(file)));
     } catch (caught) {
       setError(clientErrorMessage(caught, "Unable to submit the bulk resumes."));
+      setActiveBatch(new Map());
+      setSubmissionItems([]);
     } finally {
       setUploading(false);
     }
@@ -458,6 +469,9 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     batchFiles.current = new Map();
     setActiveBatch(new Map());
     setBatchResultStatuses(new Map());
+    const submissionId = crypto.randomUUID();
+    setActiveSubmissionId(submissionId);
+    setSubmissionItems([]);
 
     const chunks: File[][] = [];
     for (let index = 0; index < allFiles.length; index += MAX_FILES_PER_SUBMISSION) chunks.push(allFiles.slice(index, index + MAX_FILES_PER_SUBMISSION));
@@ -467,12 +481,12 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       if (queueCancelRef.current) { setUploadMessage(`Stopped after batch ${i} of ${chunks.length}. Remaining files stay selected below.`); break; }
       const chunk = chunks[i];
       setUploadMessage(`Submitting batch ${i + 1} of ${chunks.length} (${chunk.length} resumes) — keep this tab open until the queue finishes.`);
-      let outcome = await submitBatch(chunk);
+      let outcome = await submitBatch(chunk, submissionId);
       if (!outcome.ok && outcome.retryable) {
         const retryAfterSeconds = outcome.retryAfterSeconds;
         setUploadMessage(`Batch ${i + 1} of ${chunks.length} was rate limited; waiting ${retryAfterSeconds}s before retrying it.`);
         await new Promise((resolve) => setTimeout(resolve, retryAfterSeconds * 1000));
-        outcome = await submitBatch(chunk);
+        outcome = await submitBatch(chunk, submissionId);
       }
       if (!outcome.ok) {
         setError(`Bulk queue stopped after batch ${i} of ${chunks.length}: ${outcome.error} Remaining files stay selected below — fix the issue and click Start screening again.`);
@@ -538,13 +552,25 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     if (results.length > 0) {
       setActiveBatch((current) => {
         const next = new Map(current);
-        for (const item of results) if (item.queueId && !next.has(item.queueId)) next.set(item.queueId, item.fileName || "Resume");
+        const submittedKeys = [...fileMap.keys()];
+        for (const [index, item] of results.entries()) {
+          const predictedId = submittedKeys[index];
+          if (item.queueId && predictedId && item.queueId !== predictedId) next.delete(predictedId);
+          if (item.queueId) next.set(item.queueId, item.fileName || (predictedId ? fileMap.get(predictedId)?.name : "") || "Resume");
+          else if (predictedId && String(item.status || "").toLowerCase() === "failed") next.set(predictedId, fileMap.get(predictedId)?.name || "Resume");
+        }
         return next;
       });
     }
     setBatchResultStatuses((current) => {
       const next = new Map(current);
-      for (const item of results) if (item.queueId) next.set(item.queueId, String(item.status || "Queued"));
+      const submittedKeys = [...fileMap.keys()];
+      for (const [index, item] of results.entries()) {
+        const predictedId = submittedKeys[index];
+        if (item.queueId && predictedId && item.queueId !== predictedId) next.delete(predictedId);
+        const key = item.queueId || (String(item.status || "").toLowerCase() === "failed" ? predictedId : undefined);
+        if (key) next.set(key, String(item.status || "Queued"));
+      }
       return next;
     });
     const submitted = Number(result.submitted || 0);
@@ -583,6 +609,9 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     setUploadMessage("");
     setActiveBatch(new Map());
     setBatchResultStatuses(new Map());
+    const submissionId = crypto.randomUUID();
+    setActiveSubmissionId(submissionId);
+    setSubmissionItems([]);
     batchFiles.current = new Map();
     try {
       const chunks: CloudImportSelection[][] = [];
@@ -592,7 +621,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       for (let index = 0; index < chunks.length; index += 1) {
         const chunk = chunks[index];
         setUploadMessage(`Submitting ${label} batch ${index + 1} of ${chunks.length} (${chunk.length} resumes) — keep this tab open until the queue finishes.`);
-        const request = buildCloudImportRequest(provider, roleId, chunk);
+        const request = buildCloudImportRequest(provider, roleId, chunk, submissionId);
         if (!request) throw new Error(`Unable to prepare the ${label} batch.`);
         console.info("[Cloud Import] request", { roleId, files: chunk.map(({ id, name }) => ({ id, name })), fileIds: JSON.parse(request.init.body).fileIds });
         let response = await fetch(request.endpoint, request.init);
@@ -621,7 +650,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     if (batchTotal === 0) return { completed: 0, failed: 0, processing: 0, queued: 0, skipped: 0 };
     let completed = 0, failed = 0, processing = 0, queued = 0, skipped = 0;
     for (const queueId of activeBatch.keys()) {
-      const item = items.find((entry) => queueIdentity(entry) === queueId);
+      const item = submissionItems.find((entry) => queueIdentity(entry) === queueId) || items.find((entry) => queueIdentity(entry) === queueId);
       const reportedStatus = batchResultStatuses.get(queueId)?.toLowerCase() || "";
       const status = (item?.status || (["failed", "skipped"].includes(reportedStatus) ? reportedStatus : "Queued")).toLowerCase();
       if (status === "screened" || status === "processed") completed += 1;
@@ -631,7 +660,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       else queued += 1;
     }
     return { completed, failed, processing, queued, skipped };
-  }, [activeBatch, batchResultStatuses, items, batchTotal]);
+  }, [activeBatch, batchResultStatuses, items, submissionItems, batchTotal]);
   const batchProcessed = batchTerminal.completed + batchTerminal.failed + batchTerminal.skipped;
   const batchPercent = batchTotal > 0 ? Math.round((batchProcessed / batchTotal) * 100) : 0;
   // While a multi-batch queue run is in flight, batchTotal only reflects the
@@ -640,11 +669,11 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   const batchFinished = !queueRunning && batchTotal > 0 && batchTerminal.queued === 0 && batchTerminal.processing === 0;
   const failedFiles = useMemo(() => {
     const failedIds = [...activeBatch.keys()].filter((queueId) => {
-      const item = items.find((entry) => queueIdentity(entry) === queueId);
+      const item = submissionItems.find((entry) => queueIdentity(entry) === queueId) || items.find((entry) => queueIdentity(entry) === queueId);
       return (item?.status || batchResultStatuses.get(queueId) || "").toLowerCase() === "failed";
     });
     return failedIds.map((queueId) => batchFiles.current.get(queueId)).filter((file): file is File => Boolean(file));
-  }, [activeBatch, batchResultStatuses, items]);
+  }, [activeBatch, batchResultStatuses, items, submissionItems]);
   const failedQueueItems = useMemo(() => items.filter((item) => item.status.toLowerCase() === "failed"), [items]);
   const retryableFailureCount = retrySupported ? failedQueueItems.length : failedFiles.length;
   const visibleCounts = useMemo(() => {
@@ -806,7 +835,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
             <li>Choose the role you are hiring for.</li>
             <li>Add resumes from your computer, Google Drive, or OneDrive.</li>
             <li>Selections larger than {MAX_FILES_PER_SUBMISSION} files are submitted automatically in smaller batches. Keep this page open until all batches have been sent.</li>
-            <li>Review each resume&apos;s status below. Previously screened duplicates are skipped, and failed resumes can be retried without selecting the whole batch again.</li>
+            <li>Review each resume&apos;s status below. A resume already being screened is not queued twice; you can intentionally screen it again after the earlier attempt finishes. Failed resumes can be retried below.</li>
           </ol>
         </div>
 
@@ -818,7 +847,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
               <span>{batchPercent}% complete</span>
               <span>{batchTerminal.queued} queued</span>
               <span>{batchTerminal.processing} processing</span>
-              <span>{batchTerminal.completed} completed</span>
+              <span>{batchTerminal.completed} screened</span>
               <span>{batchTerminal.failed} failed</span>
               {batchTerminal.skipped > 0 && <span>{batchTerminal.skipped} skipped</span>}
             </div>
@@ -829,7 +858,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
           <div className="success-box bulk-screening-finished" role="status" aria-live="polite">
             <div>
               <strong>Bulk screening completed</strong>
-              <span>{batchTerminal.completed} successfully processed{batchTerminal.failed ? ` · ${batchTerminal.failed} failed` : ""}{batchTerminal.skipped ? ` · ${batchTerminal.skipped} skipped` : ""}</span>
+              <span>{batchTerminal.completed} screened successfully{batchTerminal.failed ? ` · ${batchTerminal.failed} failed` : ""}{batchTerminal.skipped ? ` · ${batchTerminal.skipped} skipped` : ""}</span>
             </div>
             <div className="bulk-screening-finished-actions">
               <a className="btn btn-primary" href="/applicants">View Processed Applicants</a>

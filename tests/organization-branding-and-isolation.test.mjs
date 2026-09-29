@@ -9,8 +9,10 @@ test("organization branding is tenant-scoped and editable only through Settings 
   const route = read("src/app/api/organization/branding/route.ts");
   const shell = read("src/components/AppShell.tsx");
   const context = read("src/components/PortalBrandingContext.tsx");
+  const editor = read("src/components/OrganizationBrandingEditor.tsx");
   const layout = read("src/app/layout.tsx");
   const settingsPage = read("src/app/settings/page.tsx");
+  const styles = read("src/app/globals.css");
 
   assert.match(branding, /eq\(portalSettings\.organizationId, organizationId\)/);
   assert.match(branding, /target: \[portalSettings\.organizationId, portalSettings\.key\]/);
@@ -19,6 +21,10 @@ test("organization branding is tenant-scoped and editable only through Settings 
   assert.match(context, /portal-branding-updated/);
   assert.match(layout, /getOrganizationBranding\(user\.organizationId\)/);
   assert.match(settingsPage, /OrganizationBrandingEditor/);
+  assert.match(editor, /setSavedBranding\(loadedBranding\)/, "the initial server value is the comparison baseline");
+  assert.match(editor, /hasChanges && <button/, "save is shown only when a branding field differs from the saved value");
+  assert.match(editor, /organization-branding-actions/);
+  assert.match(styles, /\.organization-branding-actions \{ grid-column: 1 \/ -1; \}/, "the action row spans both branding columns");
   assert.match(branding, /name: "McLink"/);
   assert.match(branding, /DEFAULT_ORGANIZATION_ID/);
   assert.match(branding, /organizations\.name/);

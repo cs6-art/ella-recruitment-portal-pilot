@@ -71,7 +71,7 @@ const AI_INTERVIEW_NOTICE = "AI Interview Notice: This interview will be conduct
 const EMAIL_SUBJECTS: Record<string, string> = {
   voice_booking_invitation: "Schedule your AI voice interview | McLink Group",
   voice_booking_confirmation: "Your AI voice interview is confirmed | McLink Group",
-  final_booking_invitation: "Next step: schedule your final interview with McLink Group",
+  final_booking_invitation: "Schedule Your Final Interview with McLink Group",
   voice_result_next_step: "Your McLink Group application — next steps",
   voice_no_show: "Your missed AI voice interview with McLink Group",
   voice_retry: "We will call you again for your AI voice interview",
@@ -162,7 +162,7 @@ function buildNotificationEmail(eventType: string | null | undefined, context: N
     }
     case "final_booking_invitation": {
       const { subject, body } = renderEventEmail(key, templateValues, context.template);
-      return { ...base, subject, signoff: emailSignoff(companyName), heading: "Schedule your final interview", message: body, cta: "Schedule final interview", ctaLink: link };
+      return { ...base, subject, signoff: emailSignoff(companyName), heading: "Schedule Your Final Interview", message: body, cta: "Schedule Final Interview", ctaLink: link };
     }
     // The event summaries above are written for HR reviewers, so events that are
     // emailed to the candidate need their own candidate-facing wording.
