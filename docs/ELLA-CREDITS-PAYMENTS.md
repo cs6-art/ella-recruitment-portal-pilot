@@ -48,3 +48,28 @@ purchase. Only CEO, Admin, and authorized HR users see the manual top-up control
 Payment status and reconciliation are limited to the purchaser, except that
 authorized credit managers may review payments. Credits are granted only by
 the verified webhook transition.
+
+## Costs and holds (updated 29 September 2026)
+
+The product name is now **Smile Credits**. One organisation shares one balance, held in the
+Postgres organisation wallet (`credit_accounts`). Prices, in credits:
+
+| Action | Credits |
+| --- | --- |
+| CV analysis (each resume that screens successfully) | 1 |
+| AI phone interview, completed | 10 |
+| AI phone interview, connected but incomplete | 8 |
+| AI phone interview, no answer | 5 |
+| Interview with Smile on video (live avatar) | 20 |
+
+Duplicate resumes for the same role and failed or invalid files are not charged.
+
+A video interview reserves its 20 credits in a **credit hold** (`credit_holds`) when the
+candidate starts it, under a row lock so two starts cannot spend the same credits. The hold is
+released if the session cannot start or the recording cannot be set up, and converted into the
+charge (idempotency key `live-avatar-session:<sessionId>`) when the interview is billed. Voice
+interviews use the same hold mechanism. If the balance is short, the interview is refused
+before any provider cost is incurred.
+
+Payments are still HitPay. `HITPAY_MODE=sandbox` moves no real money; switch to live keys and
+URLs only when the organisation is ready to take payment.

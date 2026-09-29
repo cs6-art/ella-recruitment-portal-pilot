@@ -1,168 +1,110 @@
-# McLink Recruitment Portal
+# McLink Recruitment Portal (Smile)
 
-A role-first internal recruitment website starter for:
+A multi-organisation recruitment portal. A team requests a role, HR publishes it, candidates
+apply, and **Smile** (the AI assistant) screens resumes and interviews candidates by phone or
+on video. People review the evidence and make every hiring decision.
 
-**Google login → Role Creation Form → Secure Next.js backend → n8n webhook → Google Sheets → HR notification**
+Last updated: 29 September 2026
 
-## Included
+## How it fits together
 
-- Google Identity Services login page
-- Server-side Google ID-token verification
-- Access limited to active users in the portal directory, regardless of email domain
-- Signed, HTTP-only session cookie
-- Responsive recruitment dashboard
-- Staff addition/replacement role request form
-- Server-side form validation
-- Secure n8n webhook call with a secret header
-- McLink-inspired corporate styling
+| Part | What it does |
+| --- | --- |
+| **Next.js 16 app** (Vercel) | Every page and API route: sign-in, role requests, applicants, bookings, credits, settings, public application and booking pages. |
+| **Postgres** (Neon, `drizzle-orm`) | The system of record, with an `organization_id` on every row. `RECRUITMENT_BACKEND=postgres` in production. |
+| **n8n** (self-hosted) | Runs the AI resume analysis, places the Vapi voice calls, and sends the emails (its Gmail credential). It talks to the app through the internal API, never to the database. |
+| **Vapi** | AI voice interviews. Calls come from a Philippine, Malaysian or Singapore number by the candidate's country code. |
+| **LiveAvatar** (HeyGen) | The "Interview with Smile" video interview. |
+| **HitPay** | Buying Smile Credits. |
+| **Google** | Calendar (interviewer availability and events), Drive (resume import, recording storage). |
 
-## 1. Install
+The original Google Sheets implementation is still in the code for local development and
+demo mode. It is not used in production. See
+[docs/LEGACY-SHEETS-REMOVAL.md](docs/LEGACY-SHEETS-REMOVAL.md).
+
+## What people can do
+
+- **Sign in** with email and password. Accounts are created with an organisation email and
+  confirmed from a link we email; new accounts start with HR access for their organisation.
+- **Request a role.** Paste a job description and Smile fills in the whole form. HR approvers
+  create and publish in one step.
+- **Set up hiring.** Screening criteria, interview questions, scoring areas, an interviewer
+  for face-to-face interviews (from people who connected their own Google Calendar).
+- **Screen resumes** by upload (20 per batch), Google Drive, OneDrive, a single form, or a
+  personal application link. Candidates confirm a privacy notice when they apply.
+- **Review applicants.** *How AI Graded This Applicant* shows the result and every role
+  setting Smile applied; all interview questions are shown; history shows automatic changes
+  as "Automatic update".
+- **Interview.** AI voice interviews and video interviews with Smile, then face-to-face
+  interviews booked against the interviewer's calendar.
+- **Credits.** One shared balance per organisation. CV analysis 1, phone interview 10 (8
+  incomplete, 5 no answer), video interview 20 (reserved when it starts).
+- **Edit the automated emails** (subject, message, button text, header image) in Settings.
+
+The end-user guide is [docs/McLink-Recruitment-Portal-User-Manual.html](docs/McLink-Recruitment-Portal-User-Manual.html)
+(and the `.pdf`). The in-portal help assistant reads
+[src/lib/help-bot/knowledge.md](src/lib/help-bot/knowledge.md); keep the two in step.
+
+## Run it locally
 
 ```bash
 npm install
-```
-
-## 2. Configure environment variables
-
-Copy `.env.example` to `.env.local` and fill in the values.
-
-```bash
-cp .env.example .env.local
-```
-
-Important:
-
-- `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is visible to the browser and is used by Google Identity Services.
-- `GOOGLE_CLIENT_ID` must use the same Web Client ID and remains available to the server.
-- `SESSION_SECRET` and `N8N_WEBHOOK_SECRET` must never use the `NEXT_PUBLIC_` prefix.
-- The n8n production webhook must expect an `X-Webhook-Secret` header.
-
-Generate secrets with:
-
-```bash
-openssl rand -base64 48
-```
-
-## 3. Google Cloud setup
-
-1. Create a Google Cloud project.
-2. Configure the OAuth consent screen.
-3. Create an OAuth 2.0 Client ID for a Web application.
-4. Add local and production origins, for example:
-   - `http://localhost:3000`
-   - `https://recruitment.your-domain.com`
-5. Put the Web Client ID into both Google client ID variables.
-
-The backend checks `email_verified` and then authorizes the exact normalized email against the active portal directory. A Google hosted-domain claim or matching email suffix is not used as an access rule.
-
-## 4. n8n webhook
-
-Recommended Webhook node:
-
-- Method: `POST`
-- Path: `role-request`
-- Authentication: Header Auth
-- Header: `X-Webhook-Secret`
-- Response: Respond to Webhook node
-
-The backend sends the role data in the JSON structure defined in `src/app/api/roles/route.ts`.
-
-The n8n workflow should treat the server-generated foundation fields as authoritative. The role submission API sends these fields on every request; they must be mapped unchanged to the matching `Role_Requests` columns:
-
-- `Role_ID` (generated by the portal as a readable role code and sequence, such as `CSE01`; existing IDs remain valid)
-- `Created_At`
-- `Status` (`Pending HR Discussion`)
-- `Last_Updated_At`
-- `Last_Updated_By_Name`
-- `Last_Updated_By_Email`
-- `Latest_Comments` (empty on creation)
-- `Resume_Target_Status` (empty on creation)
-
-The n8n workflow should:
-
-1. Validate fields
-2. Check duplicate `submissionId`
-3. Check duplicate `Role_ID`
-4. Append the server-generated fields and role data to `Role_Requests`
-5. Append the initial `Pending HR Discussion` event to `Role_Status_History`
-6. Return `{ success: true, roleId: <Role_ID>, status: "Pending HR Discussion", message }`
-
-An importable foundation workflow is provided at `integrations/n8n/role-request-foundation.json`. Configure its Google Sheets credential and spreadsheet ID in n8n before activating it.
-
-## 5. Run locally
-
-```bash
+cp .env.example .env.local   # then fill in the values you need
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3000`. `next dev` rewrites `next-env.d.ts` each run; do not commit
+that change. Read the Next.js guides in `node_modules/next/dist/docs/` before changing
+framework-level code (see `AGENTS.md`): this Next.js version has breaking changes.
+
+Generate secrets with `openssl rand -base64 48`. `SESSION_SECRET` (at least 32 characters)
+signs the session cookie and derives the key that encrypts stored Google tokens. Never use
+the `NEXT_PUBLIC_` prefix for a secret.
+
+## Checks
+
+```bash
+npm run lint          # eslint src tests
+npx tsc --noEmit
+npm test              # contract and behaviour tests
+npm run test:browser  # Playwright, optional
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs lint, type-check and the tests on Node 24 for
+every push. Tests run without a database or `.env.local`.
+
+## Database
+
+Migrations are plain SQL in `drizzle/`, applied forward-only and in order:
+
+```bash
+npm run db:migrate -- --target=0031_email_template_buttons_image.sql
+```
+
+A target is required whenever migrations are pending, so a later one is never applied by
+accident. The runner uses `DATABASE_URL` (from `.env.local` or the environment).
+`npm run db:backfill:sheets` copies old Sheets data into Postgres and is safe to re-run.
+
+## Operating it
+
+- **Scheduled jobs** (`vercel.json`, daily on the Vercel Hobby plan, protected by
+  `CRON_SECRET`): queue reconciliation, voice-attempt reconciliation, resume cleanup (files
+  older than 30 days), live-interview recovery, the health digest, and interview-recording
+  retention (90 days, `INTERVIEW_RECORDING_RETENTION_DAYS`, 0 keeps them).
+- **Monitoring**: `GET /api/health` for an uptime monitor; the daily digest emails
+  `HEALTH_ALERT_EMAIL` about failed or stuck emails, recordings, interviews, calendar events
+  and voice calls, and flags production running without the Postgres backend.
+- **Deploying**: [docs/DEPLOYMENT-CHECKLIST.md](docs/DEPLOYMENT-CHECKLIST.md).
+- **Emails**: [docs/EMAIL-TEMPLATES.md](docs/EMAIL-TEMPLATES.md).
+- **n8n contracts and workflows**: [docs/N8N-CONTRACTS.md](docs/N8N-CONTRACTS.md),
+  [docs/WORKING-RECRUITMENT-WORKFLOW.md](docs/WORKING-RECRUITMENT-WORKFLOW.md).
+- **Access model**: [docs/access-control-matrix.md](docs/access-control-matrix.md).
+- **Known issues and open items**: [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
 
 ## Project layout
 
-- `src/app/` — Next.js pages and API routes
-- `src/components/` — reusable UI components
-- `src/lib/` — server utilities, schemas, access control, and prompt generation
-- `data/sheet-templates/` — Google Sheets CSV/XLSX templates
-- `integrations/n8n/` — importable n8n workflows and workflow notes
-- `tools/scripts/` — operational scripts
-- `tests/` — contract, policy, and browser tests
-- `docs/` — deployment, schema, migration, and troubleshooting documentation
-
-Root-level files are limited to Next.js configuration, package metadata, public
-assets, and environment configuration.
-
-## Google Sheet tabs
-
-Create these tabs:
-
-- `Role_Requests`
-- `Role_Status_History`
-- `User_Directory`
-- `Recruitment_Templates`
-- `Settings`
-
-Use the exact headers in [docs/GOOGLE-SHEETS-SCHEMA.md](docs/GOOGLE-SHEETS-SCHEMA.md).
-The portal enforces creator-only visibility on the server. Reviewers and
-approvers can see all roles; creators can see only rows matching their session
-email. Settings requires `Can_Edit_Settings`.
-
-The supported status flow is HR discussion → management approval → Approved,
-with return, hold, resume, and rejection actions defined in the status API.
-Recruitment Setup is editable only by reviewers while the role is Approved or
-Recruitment Setup, and Job Description, Screening Criteria, and Initial
-Interview Questions are required.
-
-The full n8n event and response contract is documented in
-[docs/N8N-CONTRACTS.md](docs/N8N-CONTRACTS.md). Testing, deployment, migration,
-and troubleshooting instructions are in the `docs/` directory. The CEO-ready
-requirements baseline is documented in
-[docs/USER-REQUIREMENTS-STUDY.md](docs/USER-REQUIREMENTS-STUDY.md).
-
-## Protected routes
-
-The portal uses `/api/session`, `/api/auth/logout`, `/api/roles`,
-`/api/roles/[roleId]`, `/api/roles/[roleId]/status`,
-`/api/roles/[roleId]/recruitment-setup`, `/api/dashboard/metrics`, and
-`/api/settings`. Every protected page and API validates the signed session and
-server-side User_Directory permissions.
-
-Recruitment Setup includes structured screening fields and a manual
-`Regenerate from fields` action for `AI_System_Prompt`. Regeneration is a
-client-side convenience; the saved prompt and all structured values are sent
-to n8n with `recruitment_setup_updated`.
-
-## Production notes
-
-- Deploy behind HTTPS.
-- Keep n8n and session secrets server-side.
-- Keep `User_Directory` authorization checks enabled for every protected API.
-- Add CSRF protection for high-risk write actions if you expand beyond SameSite cookies and same-origin forms.
-- Add rate limiting and an audit log before exposing the portal broadly.
-- Do not connect the browser directly to Google Sheets or the n8n production webhook.
-### Recruitment Setup stages
-
-Recruitment Setup supports partial draft saves using the three minimum fields:
-Job Description, Screening Criteria, and Initial Interview Questions. HR can
-then validate the setup as Recruitment Ready, Ready for Publishing, and finally
-Published. Publishing requires explicit salary, experience, license, and HOD
-interview choices where applicable. Draft saves never set a role to Job Posted.
+- `src/app/` pages and API routes; `src/components/` UI; `src/lib/` server logic, access
+  control, prompts, credits, help-assistant knowledge.
+- `src/db/` schema and operational scripts; `drizzle/` migrations.
+- `integrations/n8n/` importable workflows; `tests/` contract, policy and browser tests;
+  `docs/` guides and reports.

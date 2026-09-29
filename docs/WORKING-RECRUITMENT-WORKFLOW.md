@@ -1,27 +1,29 @@
 # Working Recruitment Workflow
 
-Last verified: August 20, 2026 (Asia/Singapore)
+Last updated: 29 September 2026 (Asia/Singapore). This replaces the 20 August 2026 version,
+which described the Google Sheets implementation; it is still in git history.
 
-This document records the production path verified during the client-demo preparation. Credential names are included for maintenance; no secrets or tokens are stored here.
+Credential names are included for maintenance; no secrets are stored here. Where a workflow
+is named, its behaviour was read from n8n on 29 September 2026 unless marked "not re-checked".
 
-## Application intake
+## The path a candidate takes
 
-1. The public CV Analysis page or authenticated HR manual intake validates the candidate details, resume, published role, file type, and request size.
-2. Every submission receives a new `APP-<UUID>` identity. Reusing an email address, including for the same role, is allowed and creates a separate application record.
-3. Network and authenticated-user rate limits remain active to prevent accidental submission floods.
-4. The portal sends `candidate_application_submitted` to the configured candidate application webhook.
-5. n8n workflow `9k5nGuC1CHQBdVHx` (`AI Recruitment Application Workflow`) confirms that the role is published, extracts the resume, runs AI CV analysis, and appends the applicant to `High_Match_Profile` for HR review.
-
-## Voice interview invitation and booking
-
-1. HR approval moves the application to the AI voice interview stage.
-2. n8n workflow `yKb9DvRNahvGAcRO` (`AI Voice Interview Booking Invitations`)
-   sends the secure booking invitation, and workflow `If1HFQmMY9AeFUiz`
-   (`AI Voice Interview Booking Confirmation`) sends the booking confirmation.
-3. Both workflows use Google Sheets credential `ELAI`; applicant emails use
-   `Gmail account 4`.
-4. Both emails must include this exact notice near the booking link or
-   interview details:
+1. **Apply.** The candidate opens a published role (public Open roles page or a private
+   link from HR), enters name, email, country and mobile number (with an example shown for
+   their country), attaches a resume, ticks the required privacy box, and submits. The
+   portal validates the file and role, stores the resume, and queues the application. HR can
+   also upload up to 20 resumes at once, import from Google Drive or OneDrive, or screen one
+   resume from a form.
+2. **CV analysis.** n8n reads the resume, scores it against the role's screening criteria,
+   and writes the result back through the internal API. One Smile Credit is used when the
+   analysis succeeds; duplicates and failures are free.
+3. **HR review.** HR opens the applicant, sees *How AI Graded This Applicant*, and approves
+   or rejects with a comment.
+4. **Invitation.** Approval creates a secure booking invitation. The email goes out through
+   the queue (see [EMAIL-TEMPLATES.md](EMAIL-TEMPLATES.md)). It may also offer the
+   one-time "Interview with our Avatar now" link. The voice invitation and confirmation
+   emails must include this exact notice (it is the `{{ai_notice}}` detail, with the
+   organisation's name in place of the company name):
 
    > AI Interview Notice: This interview will be conducted with the assistance
    > of an AI interviewing system, which may record, transcribe and assess your
@@ -31,46 +33,58 @@ This document records the production path verified during the client-demo prepar
    > authorized representative.
 
    The notice must not be summarized, paraphrased, or omitted.
-5. The secure `/book/voice/<token>` page displays generated 10-minute weekday slots and reserves the selected slot.
-6. A successful reservation writes the scheduled date, time, timezone, used token state, booking completion time, and call-queue row before the confirmation email is sent.
-7. Each voice time is shared across roles and remains available until ten active applicants are scheduled for that exact time. The tenth booking is allowed; once ten calls are active, the time is hidden and a final booking check rejects any eleventh attempt.
+5. **Voice interview or video interview.**
+   - Voice: the candidate books a 10-minute time and confirms a mobile number. A
+     confirmation email follows. At the time, the calling workflow claims the attempt,
+     asks the portal to prepare it (`POST /api/internal/recruitment/voice/dispatch`), and
+     places the Vapi call from the number in `caller.phoneNumberId` (Philippine for +63,
+     Malaysian for +60 when configured, Singapore for everyone else).
+   - Video: the candidate agrees to recording, camera and microphone, and interviews with
+     Smile for up to about five minutes. The portal reserves 20 credits when it starts,
+     records to the interview recording Drive folder, and analyses the transcript.
+6. **Result.** The result, transcript and scores are written back; HR reviews the *Voice
+   Interview Review* or *Live Avatar Review*.
+7. **Face-to-face.** Approval sends a new invitation. The candidate books a one-hour time
+   checked against the interviewer's Google Calendar (chosen per role) or the shared HR
+   calendar. The event is created with the candidate as attendee. After the meeting HR
+   records the decision.
 
-## Scheduled voice call
+## n8n workflows in use (read on 29 September 2026)
 
-1. n8n workflow `A6M0lIp5YARQ1VDJ` (`AI Voice Interview Scheduled Calling`) polls every minute using the standard scheduler path.
-2. It joins `Voice_Call_Queue` with the applicant and role setup, verifies the booking state and phone number, and locks the queue row before contacting Vapi.
-3. It starts the Vapi call only when the scheduled time is due, records the provider call ID, and syncs the applicant status using the `ELAI` Sheets credential.
-4. `IsGpeZUaeNN1VLC3` (`Phase 5 - Scheduled Vapi Result Polling`) receives the Vapi result webhook and writes the transcript and structured interview result.
-5. `JKv9cdP7ihejhl9D` (`Voice Result Status Sync`) polls every two minutes and reflects terminal Vapi results in the applicant record using the `ELAI` credential.
+| Workflow | Id | What it does |
+| --- | --- | --- |
+| `[TARGET-PG][PILOT] AI Voice Interview Scheduled Calling (Pilot)` | `sJM0djTE8oIjpPvo` | Every 5 minutes: claims due attempts, calls the portal's dispatch endpoint, calls Vapi, records success or failure. |
+| `[TARGET-PG][PILOT] Voice Booking Notification Sender` | `Rw4C1fv1QMQEs28z` | Sends the voice invitation email from the queue. |
+| `[TARGET-PG][PILOT] Voice Booking Confirmation Sender` | `RT5FulX8zXeNryK9` | Sends the candidate confirmation and an internal HR notice. |
+| `Job Posted Notification Sender (Pilot, API)` | `xCNkDrLMEGAmjgL4` | Emails the organisation owner when a role is published. |
 
-## HR decision and HR interview
+Not re-checked in this pass: the Vapi result reconciler (`uNGVWvnBMjcszXOV`), the voice result
+status sync (`kWggA7OONmU4yNFR`), the booking-invitation worker (`ZAUPKJcUtW6cGR7K`), the
+final-interview confirmation (`SgCRdqfCfj4YjqaQ`), and the resume analysis workflows. The full
+mapping from Sheets to API workflows is in
+[N8N-PILOT-TARGET-MANIFEST-2026-09-04.md](N8N-PILOT-TARGET-MANIFEST-2026-09-04.md).
 
-1. HR reviews the voice interview evidence in the applicant profile.
-2. n8n workflow `4FsKYuSxyaKxFtsM` (`Voice Interview HR Decision v2 - Hashed Final Booking Token`) polls every two minutes and processes explicit HR decisions.
-3. Approval generates the hashed HR interview booking token and sends the HR interview booking invitation.
-4. The HR interview calendar uses the connected shared HR Google Calendar for conflicts and event creation.
-5. A valid booking adds the applicant email as a Google Calendar attendee, marks the final token `Used`, and stores the scheduled date, time, and timezone on the applicant row.
-6. Workflow `4FsKYuSxyaKxFtsM` skips applicants whose final token is already `Used`/`Booked` or whose HR interview is scheduled. Its invitation-completion writes are limited to email and processing fields, so a delayed n8n execution cannot revert a completed booking.
+The older Google Sheets workflows tagged `recruitment-prod` are still present. Keep them from
+sending for events the queue now owns.
 
-## Demo safety boundary
+## Safety boundaries
 
-- August 20, 2026 at 00:00 Asia/Singapore is the fixed, inclusive production-data baseline. It does not move at midnight: applications and roles from August 20 and every later date remain valid on future days and deployments.
-- Applicant-facing email, calls, bookings, calendar writes, profile edits, and status maintenance are allowed for eligible non-synthetic applications at or after that baseline.
-- Historical applications and records identified as dummy, synthetic, demo, test, or `example.com` data remain blocked from outbound side effects.
-- Queue locks, sent flags, used booking tokens, and provider call IDs prevent duplicate email sends, duplicate reservations, and repeated calls.
-
-## Verified production trace
-
-- Application: `APP-cfcf51d0-a7e4-4d25-9b56-19579a7a7965`
-- Voice booking: August 20, 2026 at 16:40 Asia/Singapore
-- Booking confirmation email: sent successfully and marked `Yes`
-- Vapi call: initiated successfully with provider call ID `01a01e54-5e03-7000-84e3-90070a56f9bc`
-- Portal booking fix: commit `cda8d14` (`Allow current demo applicants to book interviews`)
+- **Outbound email** is fail-closed under the Postgres backend until
+  `PILOT_OUTBOUND_EMAIL_ENABLED=true`.
+- **Voice calls** stay in dry run until `PILOT_VOICE_DRY_RUN=false`.
+- A queued email older than 48 hours is retired instead of being sent late.
+- Historical or synthetic records (dummy, demo, test, `example.com`) are blocked from outbound
+  side effects.
+- Queue leases, sent flags, single-use booking tokens and provider call ids prevent duplicate
+  emails, reservations and calls.
+- Each voice time takes at most ten calls at once across roles.
+- Recordings are deleted after 90 days; resumes after 30.
 
 ## Maintenance checks
 
-- Keep the candidate application and role webhooks configured in the portal environment.
-- Keep `ELAI` authorized for the recruitment spreadsheet; the older `Google Sheets account` credential returned `403 PERMISSION_DENIED` on writes.
-- Keep `Gmail account 4` assigned to applicant voice invitation and confirmation nodes.
-- After credential or scheduler changes, publish the workflow and verify a production execution rather than relying only on a manual run.
-- Never remove the historical/synthetic side-effect guard when preparing demo data.
+- After a credential, scheduler or expression change: publish the workflow (a saved draft
+  does not run) and check a real execution.
+- Keep `Ella Pilot Internal API` bound to every HTTP node that calls the portal, and
+  `Gmail account 4` on every email node.
+- Move any secret written inside a workflow expression into an n8n credential. The calling
+  workflow currently carries the Vapi webhook secret in its request expression.

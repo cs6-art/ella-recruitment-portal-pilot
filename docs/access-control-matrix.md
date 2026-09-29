@@ -7,15 +7,12 @@ when adding or editing an account.
 
 ## Directory schema
 
-`User_Directory` stores:
-
-`Email`, `Full_Name`, `Access_Role`, `Department`, `Can_Create_Role`,
-`Can_Review_Role`, `Can_Approve_Role`, `Can_Edit_Settings`,
-`Can_Manage_Users`, `Active`, `Can_Review_Department_Role`,
-`Can_Manage_Credits`.
-
-The Postgres `users` table stores the same capabilities using snake_case
-columns. `Can_Manage_Credits` is intentionally separate from settings,
+In production the directory is the Postgres `users` table, with these columns per
+person and organisation: `email`, `full_name`, `access_role`, `department`,
+`can_create_role`, `can_review_role`, `can_approve_role`, `can_edit_settings`,
+`can_manage_users`, `active`, `can_review_department_role`, `can_manage_credits`.
+The legacy Google Sheets `User_Directory` tab uses the same fields (`Can_Create_Role`, ...)
+and is only read as a last-resort fallback for the original organisation. `Can_Manage_Credits` is intentionally separate from settings,
 recruitment, and user administration.
 
 ## Presets
@@ -41,6 +38,24 @@ what the API enforces.
 | Manage Smile Credits | Manual credit administration and authorized credit purchases |
 | Edit settings | Portal settings and shared HR calendar connection management |
 | Manage users | Retained as a compatibility field; effective account administration is HR-only |
+
+## How accounts are created
+
+People sign in with **email and password**. Creating an account (`Create account` on the
+sign-in page) requires an address that belongs to an organisation: the organisation's allowed
+email domains or allowed addresses decide which one, and an allowed address wins over a domain.
+A confirmation link (valid 24 hours) must be used before the first login. Passwords are
+salted scrypt hashes (10-character minimum). Sign-in, registration, password reset and public
+form attempts are rate limited in the database.
+
+A self-registered account starts as **HR** with the full HR capabilities (create, review and
+approve roles, edit settings, manage users) but **not** Manage Smile Credits, and it is
+scoped to its own organisation. HR can change any account afterwards. Adding a person in User
+Accounts pre-sets their access; they still create their own password.
+
+Google is no longer used to sign in. Google is used only to connect a calendar (settings
+administrators for the shared HR calendar; any reviewer for their own calendar on Profile)
+and Drive.
 
 ## Enforcement rules
 

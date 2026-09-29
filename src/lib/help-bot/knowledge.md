@@ -60,7 +60,7 @@ current Smile Credits balance and, for pipeline users, aggregate bulk-queue or
 interview counts. She cannot look up candidate records, resume files, applicant
 scores, calendars, or other live business records.
 
-**What is the current bulk screening limit?** The current Pilot limit is
+**What is the current bulk screening limit?** The current limit is
 {{BULK_FILE_LIMIT}} files per batch, with PDF, DOC, and DOCX accepted up to
 10 MB per file. The limit is shared by computer upload, Google Drive import,
 and OneDrive import.
@@ -69,17 +69,43 @@ and OneDrive import.
 
 ## Signing in
 
-Sign in with the Google account listed in the portal user directory using "Sign in with
-Google". The portal checks that the email is verified and has an active User_Directory
-row; the Google hosted domain is not an access rule. If access is denied after
-a successful Google sign-in, your account may not have recruitment access yet —
-contact HR or the portal administrator.
+Sign in with your email address and password. The first time, choose **Create
+account**, enter your name, your organisation email address, and a password of at
+least 10 characters. Your account is placed in your organisation automatically,
+based on your email address. We email you a link; select it within 24 hours to
+confirm your address, then **Log in**.
+
+- **Forgot your password?** Choose **Forgot your password?** on the sign-in page and
+  follow the link we email you. The link works once and expires after an hour.
+- **"Verify your email":** choose **Resend verification email** and use the newest link.
+- **Your email is not accepted when creating an account:** only addresses that belong
+  to an organisation on the portal can register. Ask HR to add you in User Accounts.
+- **Too many attempts:** wait a few minutes and try again.
+- **"Limited access" after signing in:** your account is active but has not been given
+  recruitment permissions yet. Contact HR.
+
+A person who creates their own account with an organisation email starts with HR
+access for that organisation (create, review and approve roles, edit settings,
+manage accounts). They do not get Manage Smile Credits. HR can change any account
+in User Accounts.
+
+## Getting started checklist for a new organisation
+
+When a new organisation first signs in, HR users see a **Getting Started** card on
+the Dashboard. Its steps: create and publish your first role (paste a job description
+and Smile fills in the screening questions); add Smile credits (a new organisation
+starts with none); get your first candidates (share the role's application link or
+upload a batch of resumes); confirm email delivery (shows whether candidate and HR
+emails are going out and whether any failed); invite your team (colleagues join by
+creating an account with your organisation email); and connect Google Calendar (only
+needed for face-to-face interviews). Each step shows whether it is done and has a
+button that goes straight there.
 
 ---
 
 ## User accounts and organizations
 
-An active user-directory account is required to sign in. The account's access
+Every account belongs to one organisation. The account's access
 role, department, and permissions determine which screens and actions are
 available. An administrator can open **User Accounts**, choose **Add user
 account**, then set the user's name, email, access role, department, permissions,
@@ -119,31 +145,39 @@ visibility; they do not delete recruitment history.
 ## How to create a role requisition (role request)
 
 A role request is used when a team needs an additional employee or a replacement.
-
-Before starting, gather: the job title and department; whether it is a staff
-addition or a replacement; a description of the work and the reason; the number of
-vacancies and the target hiring date; and salary or budget information if your
-process requires it.
+The quickest way is to paste or upload the job description and let Smile fill in the
+form.
 
 Steps:
 
 1. Open **Role Requests**, then select **Create Role Request**.
-2. Complete the role details: request type, department, employment type, job
-   title, number of vacancies, and target hiring date.
-3. Explain the need. For a replacement, name the employee or position being
-   replaced. For any request, explain why the role is needed.
-4. Optionally add HR interview and screening questions if you already have them.
-   These can be refined later by HR.
-5. Review and submit. Your name and email are filled in from your signed-in
-   account and cannot be changed in the form.
+2. Upload a PDF, DOC or DOCX, or paste the job description text, then choose
+   **Populate from a job description**. Smile fills in the role details, the reason,
+   the screening criteria, the scoring areas, the interview questions and the voice
+   instructions. Always read the result and correct anything that is wrong.
+3. Check the role details: request type, department, employment type, job title,
+   number of vacancies and target hiring date. For a replacement, name the employee
+   or position being replaced.
+4. Check the screening and interview section: the screening criteria (what Smile
+   should score or note), optional scoring areas, up to five interview questions and
+   Smile's voice instructions.
+5. Submit. Your name and email are filled in from your signed-in account and cannot
+   be changed in the form.
 
-Job description helper: if you have a job description file you can upload it or
-paste the text, then choose the option to fill in the form from it. Always check
-the suggested details before submitting.
+What you see depends on your access. HR users who can also approve see **Create &
+publish**, which approves the role and posts it to the channels they chose in one
+step, and **Save as draft**, which keeps it private so they can finish later. Other
+users see **Submit for HR approval**, and HR then approves or rejects the request.
 
-A saved draft is not a submitted request and does not publish a job. After you
-submit, the request goes to HR for discussion and you can follow it from Role
-Requests.
+Salary or budget, license requirements and whether a face-to-face interview is needed
+are not asked in the request form. HR sets them later in Recruitment Setup, where
+Smile also uses them when it scores applicants.
+
+The form saves a draft automatically while you work on a new request. When you edit
+an approved or submitted request, change what you need and select **Save role
+request**; that button is greyed out until something has changed. A saved draft is
+not a submitted request and does not publish a job. When a role is published, the
+organisation's owner receives a "new role posted" email.
 
 ---
 
@@ -163,10 +197,10 @@ the request changed since you opened it, refresh and review again before retryin
 the action — an "HTTP 409" or "someone else changed the record" message means
 exactly this.
 
-The current Pilot flow is: the requester submits → **Pending HR Discussion** →
+The current flow is: the requester submits → **Pending HR Discussion** →
 HR reviews the request and approves, returns, holds, or rejects it → HR completes
 Recruitment Setup and publishing. Historical records may still show a management
-approval status. In the Pilot, Management is view-only for operational recruitment
+approval status. Management is view-only for operational recruitment
 tools: it does not edit setup, screen resumes, schedule interviews, or change
 applicant records.
 
@@ -181,7 +215,7 @@ complete Recruitment Setup and publish the role before candidates can apply.
 - **Pending HR Discussion** — HR needs to review the request and discuss any
   changes.
 - **Pending Management Approval** — a historical or organisation-specific status
-  where Management must decide. If it appears unexpectedly in the Pilot, ask the
+  where Management must decide. If it appears unexpectedly, ask the
   administrator to confirm the workflow configuration.
 - **Returned for Revision** — more information or changes are needed from the
   requester or HR.
@@ -218,8 +252,24 @@ are asked as written, so keep them clear and fair. Suggested questions may be
 shown as a starting point — edit them as needed.
 
 Publishing checklist: choose at least one place the job will be posted; choose
-the salary visibility option; choose the license requirement; choose whether an
-HR interview is required.
+the salary visibility option; choose the license requirement; choose whether a
+face-to-face interview is required and, if it is, enter the venue and choose the
+interviewer.
+
+Choosing the interviewer: when a face-to-face interview is required, an
+**Interviewer** picker lists the people in your organisation who have connected
+their own Google Calendar. Choose one and that role's interviews are created on
+that person's calendar, with only their free times offered to candidates. If you
+leave it empty, or the person has not connected a calendar, the shared HR calendar
+is used, so booking never stops. People connect their own calendar from **Profile**
+(**My Google Calendar**).
+
+Everything you fill in is used: Smile uses every setup field when it screens resumes
+and when it interviews by phone or on video (screening criteria, keywords, minimum
+experience, transferable skills, license requirement, scoring areas and your
+interview questions). Salary is kept confidential unless you choose Disclosed. On
+an applicant's record, **How AI Graded This Applicant** shows exactly which settings
+were applied.
 
 Save and move the role forward:
 
@@ -231,17 +281,16 @@ Save and move the role forward:
 - **Publish Role** — the role is ready to appear for candidates.
 
 Read the script preview before saving — it shows the kind of conversation
-candidates will receive. A `RECRUITMENT_SETUP_INCOMPLETE` error means required
-fields for the requested stage are missing; the message lists them. Complete
-those fields, or choose the explicit "Not disclosed" / "Not required" option,
-then retry.
+candidates will receive. If a button says required fields are missing, the message lists them.
+Complete those fields, or choose the explicit "Not disclosed" / "Not required"
+option, then try again.
 
 ---
 
 ## How resume screening works
 
 When a candidate applies to a published role, the portal records the application
-with a new `APP-...` identity, extracts the resume text, runs an automated AI CV
+as a new application, extracts the resume text, runs an automated AI CV
 analysis against the role's screening criteria, and adds the candidate to the HR
 review list. The same email address may apply again, including for the same role;
 each submission is a separate application record.
@@ -277,11 +326,16 @@ charged. A successful screening is charged once; a failed or invalid file is not
 charged. Candidates can also submit one resume through an application page, but
 that is a separate candidate-intake route rather than a fourth HR bulk option.
 
-The single-resume form runs the billable CV screening when HR completes the form
-and selects **Start CV Analysis**. In legacy mode, 1 credit is deducted after the
-screening workflow accepts the application. In Postgres target mode, the
-application is queued first and 1 credit is deducted when the screening result is
-successfully committed. Failed or invalid screening is not charged.
+The single-resume form (**CV Analysis**, at the bottom of Resume Screening) runs the
+billing CV screening when HR completes the form and selects **Start CV Analysis**.
+The application is queued first and 1 credit is used when the screening result is
+successfully saved. Failed or invalid screening is not charged.
+
+Contact number: choose the candidate's country first. The box shows an example
+number for that country and how to type it (without the country code and without a
+leading 0). A leading 0 or a country code that is typed anyway is removed, and the
+number is checked before saving. The same applies when editing an applicant and when
+a candidate books a voice interview.
 
 ---
 
@@ -360,9 +414,12 @@ voice time is shared across roles and stays open until ten applicants are
 scheduled for that exact time; after that the time is hidden and further bookings
 for it are rejected.
 
-At the scheduled time an automated process places the AI voice call, then records
-the transcript and a structured interview result on the applicant's record for HR
-to review.
+At the scheduled time Smile places the AI voice call, then records the transcript
+and a structured interview result on the applicant's record for HR to review.
+
+Which number calls the candidate: candidates in the Philippines (+63) are called from
+a Philippine number and candidates in Malaysia (+60) from a Malaysian number, which
+they are more likely to answer. Everyone else is called from the Singapore number.
 
 ---
 
@@ -393,6 +450,22 @@ Review** for a Live Avatar interview. HR opens the applicant record and reviews
 the matching interview evidence alongside the resume and screening result; the
 Live Avatar evidence section is titled **Live Avatar Review**.
 
+The **Live Avatar Review** shows the transcript, the scores and strengths, and the
+recording. The **Interview with our Avatar now** interview costs 20 Smile Credits,
+reserved when the candidate starts it (released again if it cannot start), lasts up
+to about five minutes, and asks the role's interview questions. Candidates agree to
+the recording, camera and microphone first; if they do not agree the interview does
+not start. Recordings are deleted automatically 90 days after the interview; the
+transcript and review are kept.
+
+**How AI Graded This Applicant** on the applicant record explains a result in plain
+language: the score, the recommendation, **Strengths** and **Areas To Review**, and
+every role setting Smile applied (screening criteria, keywords, license
+requirement, minimum experience, transferable skills, salary handling, start
+availability). The interview review lists all of the role's interview questions with
+the candidate's answers. The Candidate Status History lists each change with who made
+it; steps the portal takes on its own show as **Automatic update**.
+
 HR then records an explicit decision. Approval moves the candidate to
 **Approved for Face-to-Face Interview** and generates the HR interview booking
 invitation. A rejection stops the candidate at this stage. As with resume
@@ -405,8 +478,10 @@ itself.
 
 When HR approves a candidate after the voice interview, the portal sends an HR
 interview booking invitation with a new private link. The candidate chooses from
-the available times, which come from the shared HR Google Calendar configured in
-Settings.
+the available times, which come from the calendar of the interviewer chosen for the
+role, or from the shared HR Google Calendar configured in Settings when no
+interviewer was chosen. The booking status on the applicant record updates by itself
+within moments of the candidate booking.
 
 A valid booking creates the appointment on the shared calendar, adds the
 candidate's email as an attendee, marks the booking link used, and stores the
@@ -423,6 +498,43 @@ interview start time, then confirm.
 If the calendar shows no times: check the role and interview-type filters, choose
 the correct month, and refresh. If there are still none, ask the person who
 manages Settings to check or reconnect the shared HR calendar.
+
+## How to edit the automated emails
+
+Users with the Edit settings permission open **Settings** and use **Automated Emails**.
+The emails that can be edited are the **AI Voice Interview Invitation**, the **AI Voice
+Interview Confirmation** and **New Role Posted**.
+
+1. Pick the email from the list on the left. "Edited" marks one that has been changed.
+2. Change the **Subject** and the **Message**. Use the **Insert** buttons to add
+   details such as the candidate name or company name where the cursor is; they are
+   filled in for each person when the email is sent. A line whose detail is empty
+   (for example the interview time on an invitation) is left out.
+3. Change the **Button text** for emails that have buttons. Where a button leads is set
+   by the portal and cannot be changed, so a link can never break. Leave the box empty
+   to keep the standard text.
+4. Optionally add a **Header image**: a public link that starts with https:// and ends
+   in .png, .jpg or .gif, about 600 pixels wide, with a short description that shows if
+   the image cannot load. The image is linked, not attached, so it must stay online.
+5. Check the preview (it uses sample details) and select **Save Email**. **Restore
+   Original** puts the standard wording back and **Discard Changes** drops edits that
+   have not been saved.
+
+Edits apply to emails sent from then on, usually within about five minutes; emails
+already sent do not change. The closing lines ("Kind regards, [organisation name]
+Recruitment Team") are added automatically using the organisation name from
+Organization branding. Keep the AI interview notice in the voice-interview emails:
+candidates must be told that an AI conducts the interview. The characters < and >
+cannot be used. Emails are sent from the portal's email account.
+
+## Privacy and how long information is kept
+
+Applicants tick a required box to agree to the Privacy Notice when they apply, and
+before a Live Avatar interview they agree to the recording, camera and microphone.
+Resume files are deleted automatically 30 days after upload. Interview recordings are
+deleted automatically 90 days after the interview (an administrator can set a
+different period). Application records, transcripts and results are kept until the
+application is deleted; deleting an applicant removes everything held about them.
 
 ---
 
@@ -461,6 +573,8 @@ Current usage costs are:
 - **10 credits** for a completed AI voice interview.
 - **8 credits** when an AI voice interview is connected but incomplete.
 - **5 credits** when the candidate does not answer.
+- **20 credits** for an Interview with Smile on video (the Live Avatar interview),
+  reserved when the interview starts.
 
 Booking a time, creating a role request, commenting, and ordinary portal actions
 do not consume credits. A duplicate resume for the same role is skipped and is
@@ -548,13 +662,22 @@ administrator to check the shared HR calendar.
 page, read the latest information, then try again. This prevents one person's
 changes from overwriting another's.
 
-**"The n8n webhook is not configured."** A server configuration value is missing.
-This is for the portal administrator to fix; it is never something the browser or
-an end user sets.
+**"Candidates are not receiving emails."** Look at the **Confirm email delivery** step on
+the Dashboard: it shows whether email is switched on and whether any failed. If email is
+off or failing, ask the portal administrator. Check that the candidate's address is right
+in Applicants. Emails go out within a few minutes.
 
-**"Unable to load role requests."** Usually a server-side spreadsheet access or
-configuration problem. Report it to the portal administrator with the time and
-what you were doing.
+**"I want to change the wording of an email."** Open Settings and use **Automated
+Emails**. If you do not see Settings, ask HR for the Edit settings permission.
+
+**"I cannot save a change to a role request."** Open the role, choose **Edit**, make the
+change and select **Save role request**. The button is greyed out until something has
+changed.
+
+**"Something says it is not available right now" or "Unable to load role requests."**
+This is a problem on the portal's side, not something you did. Try again in a minute; if
+it keeps happening, report it to the portal administrator with the time and what you were
+doing.
 
 **Booking link does not work.** Booking links are single-use and personal. If a
 link is expired or already used, generate or request a new invitation.

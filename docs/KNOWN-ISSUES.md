@@ -316,3 +316,51 @@ duplicated ("(Copy) (Copy)") generic scheduling-bot prompt.
   Interview)` defaults to `Pending`, which the summary read as "Awaiting Final
   Interview Scheduling" before the voice call had happened. The voice stage is
   now reported while the voice HR decision is still open.
+
+## Open items as of 2026-09-29
+
+Numbered separately from the 2026-08 entries above. None of these has been fixed yet.
+
+1. **Google OAuth app is External and in Testing.** Only listed test users can connect a
+   calendar, and Google expires each connection after 7 days, so calendar events and
+   availability checks stop until someone reconnects. Publish the app to production, and
+   complete Google's verification (Calendar scopes are sensitive) before other organisations
+   connect. See [DEPLOYMENT-CHECKLIST.md](DEPLOYMENT-CHECKLIST.md).
+2. **No Content Security Policy.** Add one in report-only mode first: the portal loads Google
+   sign-in, LiveAvatar, HitPay and Drive/Calendar, and a wrong policy would break them.
+3. **Scheduled jobs are daily** (Vercel Hobby). Queue reconciliation, voice-attempt
+   reconciliation and interview recovery therefore run once a day. A faster schedule needs
+   Vercel Pro or an external caller with the `CRON_SECRET` bearer token.
+4. **Legacy Google Sheets code remains** (about 6,000 lines behind
+   `isPostgresRecruitmentTarget()` branches). Production does not use it. Removal plan:
+   [LEGACY-SHEETS-REMOVAL.md](LEGACY-SHEETS-REMOVAL.md).
+5. **The face-to-face invitation email is not sent with the portal's wording**, so it cannot be
+   edited in Settings. Only the voice invitation, voice confirmation and new-role emails can.
+6. **A secret is written inside a workflow expression.** The n8n calling workflow
+   (`sJM0djTE8oIjpPvo`) carries the Vapi webhook secret in its request expression. Move it to
+   an n8n credential and rotate it.
+7. **Old Sheets-based n8n workflows are still active** (tag `recruitment-prod`). Confirm they
+   cannot send or call for events the portal queue now owns, or candidates may get duplicates.
+8. **Legal text needs review.** The public privacy notice (`/privacy`) is a draft. A full
+   Privacy Policy and Terms of Service, and organisation-level Gmail sending, are written but
+   parked on the local branch `wip/gmail-and-legal` until counsel and Google approve them.
+9. **The first health digest reported** 261 emails still queued after 24 hours, 16
+   failed voice calls and 1 failed recording. Not yet investigated. Queued emails are likely
+   held back by `PILOT_OUTBOUND_EMAIL_ENABLED` not being `true`.
+10. **No end-to-end run with real data** of booking, video interview, email and calendar event
+    has been completed since the move to Postgres.
+11. **Editing an email does not resend anything.** Edits apply to emails queued from then on,
+    within about five minutes, and only when migrations 0030 and 0031 have been applied.
+
+## Fixed since 2026-08-14 (summary)
+
+- Video interviews now cost 20 credits, reserved when the interview starts and released if it
+  cannot start; unauthenticated use of the avatar routes is refused.
+- The role edit page keeps its **Save role request** button (autosave now applies only to new
+  requests and drafts).
+- Contact numbers are guided and validated for every country, and a leading 0 no longer
+  produces an undialable number.
+- Calls to countries other than the Philippines, Singapore and Malaysia no longer fail; they use
+  the Singapore assistant and number.
+- Sign-in, registration and password reset are rate limited in the database.
+- Automatic history entries no longer show internal worker names.

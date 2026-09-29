@@ -3,11 +3,17 @@
 Run the automated checks from the project root:
 
 ```text
-npm.cmd test
-npx.cmd tsc --noEmit
-npm.cmd run build
-npm.cmd run test:browser
+npm run lint
+npx tsc --noEmit
+npm test
+npm run build
+npm run test:browser
 ```
+
+`npm test` needs no database, network or `.env.local`; GitHub Actions runs lint, type-check and
+the tests on Node 24 for every push. Most tests read the source and assert the contract
+(access checks, wording, validation, queue behaviour); pure logic such as email templates,
+phone-number guides, caller-number selection and the actor labels is tested by running it.
 
 `test:browser` uses Playwright Chromium, starts a local Next.js server, and
 tests signed fixture sessions for creator and settings-administrator users at

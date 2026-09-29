@@ -413,10 +413,17 @@ template instead of the raw `notificationEventType` / `newStage` values:**
 | `statusLabel` | `Voice Interview Review` | "Status" line (from `newStage`) |
 | `previousStatusLabel` | `Voice Interview Scheduled` | Optional "from" context (from `previousStage`) |
 | `summary` | `The AI voice interview is complete. Review the transcript and evaluation, then record the next-step decision.` | Body sentence — the reviewer's comment when present, otherwise a per-event default |
-| `email` | `{ subject, heading, message, cta, ctaLink, secondaryCta, secondaryCtaLink, includeRawBookingLink, signoff }` or `null` | Full candidate-facing email body. Render `cta`/`ctaLink` as the primary button and `secondaryCta`/`secondaryCtaLink` as a second button when non-empty. `includeRawBookingLink` is always `false`: never append either URL as plaintext. `null` means **do not send an email** for this event. |
+| `email` | `{ subject, heading, message, cta, ctaLink, secondaryCta, secondaryCtaLink, includeRawBookingLink, signoff, imageUrl, imageAlt }` or `null` | Full candidate-facing email body. Render `cta`/`ctaLink` as the primary button and `secondaryCta`/`secondaryCtaLink` as a second button when non-empty. `includeRawBookingLink` is always `false`: never append either URL as plaintext. `null` means **do not send an email** for this event. |
 
 `email.message` already contains the greeting and paragraphs (`\n\n`
-between them); append `email.signoff` after it. For booking invitations
+between them); append `email.signoff` after it. The subject, message, button
+labels (`cta`, `secondaryCta`) and header image are the organisation's own wording
+when it has edited the email in Settings > Automated Emails (see
+[EMAIL-TEMPLATES.md](EMAIL-TEMPLATES.md)); bind them as they arrive and never
+hard-code copy in the workflow. `email.imageUrl` is `""` or a public `https://`
+link that the portal has already validated (no spaces, quotes or markup); render
+it as an `<img>` above the message with `email.imageAlt` as its `alt`, and
+HTML-escape both. Do not render an image when `imageUrl` is empty. For booking invitations
 `email.ctaLink` is the secure call-booking URL and `email.secondaryCtaLink` is
 the one-time avatar interview URL. Render both as buttons when present; do
 not print either URL as a separate `Booking link:` line. For the AI voice confirmation the
