@@ -12,6 +12,7 @@ import type { LedgerAppend } from "@/lib/ella-credits-store";
 import { evaluationFieldPreferencesFromStored, evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { buildRoleRequirementsContext } from "@/lib/recruitment-prompt";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
+import { loadEmailContexts } from "@/lib/email-template-store";
 import { notificationEmail, notificationEventLabel, notificationStatusLabel, notificationSummary, roleNotificationEmail } from "@/lib/notification-labels";
 import type { ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 import { PORTAL_TIME_ZONE } from "@/lib/portal-time";
@@ -2812,6 +2813,8 @@ export async function notificationQueue(stage?: string) {
     .where(inArray(roleStatusHistory.id, roleIds))
     .orderBy(asc(roleStatusHistory.changedAt)).limit(LIMIT) : [];
   const rows = applicationRows;
+  // Each email uses its organization's name and any wording edits it has made.
+  const emailContexts = await loadEmailContexts([...rows.map(({ history }) => history.organizationId), ...roleRows.map(({ history }) => history.organizationId)]);
   const scheduledLabel = (startsAt: string, timezone: string) => {
     const parsed = new Date(startsAt);
     if (!startsAt || Number.isNaN(parsed.getTime())) return "";
@@ -2845,6 +2848,8 @@ export async function notificationQueue(stage?: string) {
       previousStatusLabel: notificationStatusLabel(history.previousStage, mode),
       summary: notificationSummary(history.notificationEventType, history.comments),
       email: notificationEmail(history.notificationEventType, {
+        companyName: emailContexts.get(history.organizationId)?.companyName,
+        template: emailContexts.get(history.organizationId)?.templates.get(String(history.notificationEventType)),
         candidateName: context.candidateName,
         roleTitle: context.roleTitle,
         bookingLink: context.notificationLink,
@@ -2863,6 +2868,8 @@ export async function notificationQueue(stage?: string) {
         eventType: history.action === "role_created" ? "role_request_created" : "role_status_transition",
         notificationDomain: "role",
         email: roleNotificationEmail(history.newStatus, {
+          companyName: emailContexts.get(history.organizationId)?.companyName,
+          template: emailContexts.get(history.organizationId)?.templates.get("job_posted"),
           recipientName: context.recipientName,
           roleTitle: context.roleTitle,
           roleExternalId: context.roleExternalId,

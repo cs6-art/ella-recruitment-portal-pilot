@@ -93,19 +93,22 @@ test("notification status wording follows the selected interview mode", () => {
 test("notification queue carries ready-to-send candidate email copy per booking event", () => {
   const labels = read("src/lib/notification-labels.ts");
   const query = read("src/lib/internal-recruitment-queries.ts");
-  assert.match(labels, /voice_booking_invitation: "Schedule your AI voice interview \| McLink Group"/);
-  assert.match(labels, /voice_booking_confirmation: "Your AI voice interview is confirmed \| McLink Group"/);
-  assert.match(labels, /Smile, McLink Group's AI interview assistant, will conduct the voice interview/);
-  assert.match(labels, /Smile, McLink Group's AI interview assistant, will call your preferred mobile number/);
-  assert.match(labels, /Please be available in a quiet location with a stable phone connection\./);
-  assert.match(labels, /AI Interview Notice: This interview will be conducted with the assistance of an AI interviewing system/);
-  assert.match(labels, /We look forward to speaking with you\.\\n\\n\$\{AI_INTERVIEW_NOTICE\}/);
+  // Subject and body wording lives in email-templates.ts (organizations can edit it);
+  // the default text still reads exactly as before once the company name is filled in.
+  const templates = read("src/lib/email-templates.ts");
+  assert.match(templates, /subject: "Schedule your AI voice interview \| \{\{company_name\}\}"/);
+  assert.match(templates, /subject: "Your AI voice interview is confirmed \| \{\{company_name\}\}"/);
+  assert.match(templates, /Smile, \{\{company_name\}\}'s AI interview assistant, will conduct the voice interview/);
+  assert.match(templates, /Smile, \{\{company_name\}\}'s AI interview assistant, will call your preferred mobile number/);
+  assert.match(templates, /Please be available in a quiet location with a stable phone connection\./);
+  assert.match(templates, /AI Interview Notice: This interview will be conducted with the assistance of an AI interviewing system/);
+  assert.match(templates, /We look forward to speaking with you\.\\n\\n\{\{ai_notice\}\}/);
+  assert.match(templates, /Please use the button below/);
+  assert.doesNotMatch(templates, /Please use the secure link below/);
   assert.match(labels, /cta: "Schedule a call"/);
   assert.match(labels, /secondaryCta: avatarLink \? "Interview with our Avatar now"/);
   assert.match(labels, /cta: "Schedule final interview"/);
   assert.match(labels, /includeRawBookingLink: false/);
-  assert.match(labels, /Please use the button below/);
-  assert.doesNotMatch(labels, /Please use the secure link below/);
   // Google Calendar delivers the face-to-face confirmation, so no email here.
   assert.match(labels, /if \(key === "final_booking_confirmation"\) return null/);
   assert.match(query, /email: notificationEmail\(history\.notificationEventType/);

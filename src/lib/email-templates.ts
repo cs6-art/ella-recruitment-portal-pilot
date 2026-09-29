@@ -1,0 +1,153 @@
+/**
+ * Wording of the automated emails. Each organization may override the subject
+ * and body of the emails it sends; everything else (buttons, links, layout)
+ * stays fixed so an edit can never break a booking link.
+ */
+
+export type EditableEmailEvent = "voice_booking_invitation" | "voice_booking_confirmation" | "final_booking_invitation" | "job_posted";
+
+export type EmailPlaceholder = "candidate_name" | "role_title" | "role_phrase" | "company_name" | "interview_time" | "ai_notice" | "recipient_name" | "role_id" | "department" | "requested_by";
+
+export const PLACEHOLDER_HELP: Record<EmailPlaceholder, string> = {
+  candidate_name: "The candidate's name",
+  role_title: "The role title",
+  role_phrase: 'The role as a phrase, e.g. "the Sales Manager position"',
+  company_name: "Your organization's display name",
+  interview_time: "The booked interview date and time (confirmations only)",
+  ai_notice: "The standard AI interview notice",
+  recipient_name: "The name of the person receiving the email",
+  role_id: "The role reference number",
+  department: "The role's department",
+  requested_by: "Who requested the role",
+};
+
+export type EmailEventDefinition = {
+  key: EditableEmailEvent;
+  label: string;
+  audience: string;
+  when: string;
+  /** False when no active sender uses the portal's wording for this email, so editing it would do nothing. */
+  editable: boolean;
+  placeholders: EmailPlaceholder[];
+  subject: string;
+  body: string;
+};
+
+/**
+ * The closing lines. The email senders add them after the message and buttons,
+ * so they are not part of the editable body.
+ */
+export function emailSignoff(companyName: string) {
+  return `Kind regards,\n${companyName.trim() || "McLink Group"} Recruitment Team`;
+}
+
+export const EMAIL_EVENTS: EmailEventDefinition[] = [
+  {
+    key: "voice_booking_invitation",
+    label: "AI Voice Interview Invitation",
+    audience: "Candidate",
+    when: "Sent when HR invites a candidate to book their AI voice interview. Contains the booking button.",
+    editable: true,
+    placeholders: ["candidate_name", "role_title", "role_phrase", "company_name", "ai_notice"],
+    subject: "Schedule your AI voice interview | {{company_name}}",
+    body: `Dear {{candidate_name}},\n\nWe are pleased to invite you to the next interview step for {{role_phrase}}. Please use one of the secure options below to choose a suitable time. Each link expires automatically and can be used once.\n\nSmile, {{company_name}}'s AI interview assistant, will conduct the voice interview and ask focused questions about your experience. We look forward to speaking with you.\n\n{{ai_notice}}`,
+  },
+  {
+    key: "voice_booking_confirmation",
+    label: "AI Voice Interview Confirmation",
+    audience: "Candidate",
+    when: "Sent when a candidate books their AI voice interview.",
+    editable: true,
+    placeholders: ["candidate_name", "role_title", "role_phrase", "company_name", "interview_time", "ai_notice"],
+    subject: "Your AI voice interview is confirmed | {{company_name}}",
+    body: `Dear {{candidate_name}},\n\nYour AI voice interview for {{role_phrase}} is confirmed.\n\nInterview time: {{interview_time}}\n\nSmile, {{company_name}}'s AI interview assistant, will call your preferred mobile number around the scheduled time. Please be available in a quiet location with a stable phone connection.\n\n{{ai_notice}}`,
+  },
+  {
+    key: "final_booking_invitation",
+    label: "Face-to-Face Interview Invitation",
+    audience: "Candidate",
+    when: "Sent when HR invites a candidate to book their final interview. Contains the booking button.",
+    editable: false,
+    placeholders: ["candidate_name", "role_title", "role_phrase", "company_name"],
+    subject: "Next step: schedule your final interview with {{company_name}}",
+    body: `Hi {{candidate_name}},\n\nThank you for completing your AI voice interview. We are pleased to invite you to the final interview stage for {{role_phrase}}. Please use the button below to select your preferred interview time. This invitation expires automatically.`,
+  },
+  {
+    key: "job_posted",
+    label: "New Role Posted",
+    audience: "Organization owner",
+    when: "Sent to the organization's owner when a role is published.",
+    editable: true,
+    placeholders: ["recipient_name", "role_title", "role_id", "department", "requested_by", "company_name"],
+    subject: "A new role has been posted | {{company_name}}",
+    body: `Hi {{recipient_name}},\n\n"{{role_title}}" {{role_id}} {{department}} has just been published and is now open for applications.\n\nRequested by: {{requested_by}}\n\nYou can review the role and its applicants in the recruitment portal.`,
+  },
+];
+
+export const AI_INTERVIEW_NOTICE = "AI Interview Notice: This interview will be conducted with the assistance of an AI interviewing system, which may record, transcribe and assess your responses against job-related criteria. Any information or responses generated by the AI should not be considered an official representation, commitment or offer by {{company_name}} unless confirmed in writing by an authorized representative.";
+
+export const MAX_SUBJECT_LENGTH = 200;
+export const MAX_BODY_LENGTH = 5000;
+
+export function emailEvent(key: string): EmailEventDefinition | undefined {
+  return EMAIL_EVENTS.find((event) => event.key === key);
+}
+
+/** The emails an organization may edit: those a sender actually delivers with the portal's wording. */
+export function editableEmailEvent(key: string): EmailEventDefinition | undefined {
+  const event = emailEvent(key);
+  return event?.editable ? event : undefined;
+}
+
+/** A value as it goes into the text: trimmed, with angle brackets removed so a name can never add markup. */
+function plainValue(value: string | undefined) {
+  return String(value ?? "").replace(/[<>]/g, "").trim();
+}
+
+const PLACEHOLDER_PATTERN = /\{\{\s*([a-z_]+)\s*\}\}/g;
+
+/** Returns an error message when the text cannot be saved, otherwise null. */
+export function validateEmailTemplate(eventKey: string, subject: string, body: string): string | null {
+  const event = editableEmailEvent(eventKey);
+  if (!event) return "Unknown email.";
+  if (!subject.trim()) return "Enter a subject.";
+  if (!body.trim()) return "Enter the email text.";
+  if (subject.length > MAX_SUBJECT_LENGTH) return `The subject must be at most ${MAX_SUBJECT_LENGTH} characters.`;
+  if (body.length > MAX_BODY_LENGTH) return `The email text must be at most ${MAX_BODY_LENGTH} characters.`;
+  if (/[\r\n]/.test(subject)) return "The subject must be a single line.";
+  // The senders put the text into an HTML email; keep markup out of it.
+  if (/[<>]/.test(subject + body)) return "Do not use the < or > characters in the email.";
+  for (const text of [subject, body]) {
+    for (const match of text.matchAll(PLACEHOLDER_PATTERN)) {
+      if (!event.placeholders.includes(match[1] as EmailPlaceholder)) return `{{${match[1]}}} cannot be used in this email. Available: ${event.placeholders.map((name) => `{{${name}}}`).join(", ")}.`;
+    }
+    if (/\{\{|\}\}/.test(text.replace(PLACEHOLDER_PATTERN, ""))) return "A placeholder is not closed. Write it as {{name}}.";
+  }
+  return null;
+}
+
+/**
+ * Fills placeholders. A line whose placeholders all came out empty is dropped
+ * (for example "Interview time: {{interview_time}}" on an email with no time),
+ * so a missing value never leaves a dangling label.
+ */
+export function renderEmailText(template: string, values: Partial<Record<EmailPlaceholder, string>>): string {
+  const lines = template.replace(/\r\n/g, "\n").split("\n").flatMap((line) => {
+    const names = [...line.matchAll(PLACEHOLDER_PATTERN)].map((match) => match[1] as EmailPlaceholder);
+    if (names.length && names.every((name) => !plainValue(values[name]))) return [];
+    return [line.replace(PLACEHOLDER_PATTERN, (_all, name: EmailPlaceholder) => plainValue(values[name])).replace(/ {2,}/g, " ")];
+  });
+  return lines.join("\n").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+export type EmailOverride = { subject: string; body: string };
+
+/** Subject and body for an event: the organization's edit when present, otherwise the default. */
+export function renderEventEmail(eventKey: EditableEmailEvent, values: Partial<Record<EmailPlaceholder, string>>, override?: EmailOverride | null) {
+  const event = emailEvent(eventKey);
+  if (!event) throw new Error(`Unknown email event: ${eventKey}`);
+  const withNotice = { ...values, ai_notice: renderEmailText(AI_INTERVIEW_NOTICE, values) };
+  const subject = renderEmailText(override?.subject.trim() ? override.subject : event.subject, withNotice).replace(/\s*\n\s*/g, " ");
+  const body = renderEmailText(override?.body.trim() ? override.body : event.body, withNotice);
+  return { subject, body };
+}

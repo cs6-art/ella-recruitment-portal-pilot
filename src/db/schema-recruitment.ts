@@ -60,6 +60,16 @@ export const oauthConnections = pgTable("oauth_connections", {
   updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [uniqueIndex("oauth_connections_org_provider_email_uidx").on(t.organizationId, t.provider, t.userEmail)]);
 
+/** Mirrors drizzle/0030_email_templates.sql — an organization's edits to the automated email wording. */
+export const emailTemplates = pgTable("email_templates", {
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  eventType: text("event_type").notNull(),
+  subject: text("subject").notNull().default(""),
+  body: text("body").notNull().default(""),
+  updatedBy: text("updated_by").notNull().default(""),
+  updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+}, (t) => [primaryKey({ name: "email_templates_pkey", columns: [t.organizationId, t.eventType] })]);
+
 export const portalSettings = pgTable("portal_settings", {
   key: text("key").notNull(),
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),
