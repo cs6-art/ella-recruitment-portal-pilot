@@ -54,10 +54,12 @@ See `.env.example` for the full list and comments:
   app.liveavatar.com → Developers → API Key. A key named
   "Ella AI Website - Apply Page Interview" already exists for this feature —
   reuse it, or revoke it and create a fresh one.
-- `LIVEAVATAR_AVATAR_ID` — defaults to `65f9e3c9-d48b-4118-b73a-4ae2e3cbb8f0`
-  ("June HR" preset avatar), the avatar already selected for Ella.
+- `LIVEAVATAR_AVATAR_ID` — defaults to
+  `998e5637-cfca-4700-891e-8a40ce33f562` ("Alessandra Sitting" avatar), the
+  avatar selected for the HR interviewer.
 - `LIVEAVATAR_VOICE_AGENT_ID` — defaults to
-  `c718a07d-f8eb-4682-8b70-1c1bf1f48291` ("McLink AI Interviewer").
+  `c718a07d-f8eb-4682-8b70-1c1bf1f48291` ("McLink AI Interviewer", configured
+  with the matching "Alessandra - IA" public voice).
 - `LIVEAVATAR_IS_SANDBOX` — set to `true` in non-production environments to
   avoid consuming LiveAvatar credits while testing.
 - `LIVEAVATAR_LANGUAGE` — optional, defaults to `en`.
