@@ -25,23 +25,35 @@ type Setting = {
 // Where the value in effect comes from. A blank field means "not overridden":
 // the portal uses the environment value or the built-in default shown here.
 const SOURCE_LABELS: Record<string, { label: string; className: string }> = {
-  sheet: { label: "Custom", className: "is-active" },
-  stored: { label: "Custom", className: "is-active" },
-  env: { label: "From environment", className: "is-muted" },
-  default: { label: "Default", className: "is-muted" },
+  sheet: { label: "Custom value", className: "is-active" },
+  stored: { label: "Custom value", className: "is-active" },
+  env: { label: "Environment value", className: "is-muted" },
+  default: { label: "Built-in default", className: "is-muted" },
 };
 
-const categories = ["Access & Security", "Booking & Interview", "Workflow Rules", "Notifications", "Smile Credits"];
+const categories = ["Booking & Interview", "Workflow Rules", "Notifications", "Smile Credits"];
 const categoryDescriptions: Record<string, string> = {
-  "Access & Security": "Live access controls for the connected recruitment portal.",
   "Booking & Interview": "Defaults for the calendar and candidate booking links.",
-  "Workflow Rules": "Live limits and timing rules used by recruitment automation.",
-  Notifications: "Live notification behaviour for recruitment operations.",
+  "Workflow Rules": "Settings that directly affect how new recruitment work is processed.",
+  Notifications: "Choose which operational notifications are sent.",
   "Smile Credits": "Published pricing is fixed at 1 credit per CV analysis and 10 credits per AI phone interview. The balance is managed in the Smile Credits panel below.",
 };
 
+const friendlyLabels: Record<string, string> = {
+  Final_Interview_Calendar_Email: "HR calendar account",
+  Final_Interview_Calendar_ID: "HR calendar ID",
+  Booking_Link_Expiry_Days: "Interview booking link expiry",
+  Resume_Screening_Link_Expiry_Days: "Application link expiry",
+  Bulk_Resume_Upload_Concurrency: "Resumes processed at once",
+  Bulk_Resume_Notify_On_Success: "Email HR when a resume batch finishes",
+  Voice_Call_Max_Attempts: "Maximum AI phone call attempts",
+  Voice_Call_Retry_Gap_Hours: "Wait between unanswered call attempts (hours)",
+  Ella_Credit_Discount_Threshold: "Top-up amount that qualifies for a bonus",
+  Ella_Credit_Discount_Percent: "Bonus percentage",
+};
+
 function labelFor(key: string) {
-  return key.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return friendlyLabels[key] || key.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function isChoice(setting: Setting) {
@@ -87,6 +99,7 @@ export default function SettingsEditor() {
       const response = await fetch("/api/settings", { method: "PUT", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ settings }) });
       const data = await response.json();
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to save settings.");
+      if (Array.isArray(data.settings)) setSettings(data.settings);
       setMessage(data.message || "Settings saved successfully.");
       router.refresh();
     } catch (caught) {
@@ -99,11 +112,11 @@ export default function SettingsEditor() {
   return (
     <main className="container page settings-page">
       <header className="hero-row settings-header">
-        <div><span className="eyebrow-dark">PORTAL CONFIGURATION</span><h1>Settings</h1><p>Shared defaults for every organization on this portal. Only the McLink administrator can change these.</p></div>
-        <div className="settings-header-note"><strong>Applies to everyone</strong><span>Leave a field blank to use the value shown. Secrets stay outside this page.</span></div>
+        <div><span className="eyebrow-dark">PORTAL CONFIGURATION</span><h1>Settings</h1><p>These working defaults apply across all organizations. Only a McLink platform administrator can change them.</p></div>
+        <div className="settings-header-note"><strong>Applies to every organization</strong><span>Clear a field to return to its built-in or environment value. Private credentials are managed securely elsewhere.</span></div>
       </header>
 
-      <section className="settings-guide"><span className="settings-guide-icon">i</span><div><strong>Only live settings are listed</strong><p>Each setting below is read by the portal or its automation. The badge shows whether the value in effect is your custom value, an environment value or the built-in default. Changes apply to new actions.</p></div></section>
+      <section className="settings-guide"><span className="settings-guide-icon">i</span><div><strong>When changes take effect</strong><p>Changes are saved immediately and apply to new actions after the portal refreshes its settings—usually within 20 seconds. Existing booking links and appointments are not changed. If settings are temporarily unavailable, an update may take longer to reach every action.</p></div></section>
 
       {loading && <div className="empty">Loading settings...</div>}
       {error && <ActionFeedback kind="error">{error}</ActionFeedback>}
@@ -129,7 +142,7 @@ export default function SettingsEditor() {
         })}</div>
       </section>)}
 
-      {!loading && !error && <div className="settings-actions"><span>Only important operational settings are shown here. Changes apply to new workflow actions.</span><button type="button" className="btn btn-primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save Settings"}</button></div>}
+      {!loading && !error && <div className="settings-actions"><span>The label beside each setting shows which value is currently in use.</span><button type="button" className="btn btn-primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save Settings"}</button></div>}
     </main>
   );
 }

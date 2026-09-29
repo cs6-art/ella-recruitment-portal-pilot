@@ -30,6 +30,36 @@ const editableSettingKeys = new Set([
   "Ella_Credit_Discount_Threshold",
   "Ella_Credit_Discount_Percent",
 ]);
+const secretKey = (key: string) => /(secret|password|token|private.?key|credential|api.?key)/i.test(key);
+
+function settingsForEditor(stored: Awaited<ReturnType<typeof getPortalSettings>>) {
+  const storedByKey = new Map(stored.map((setting) => [setting.key, setting]));
+  return [...defaultPortalSettings.map((setting) => storedByKey.get(setting.key) || setting), ...stored.filter((setting) => !defaultPortalSettings.some((defaultSetting) => defaultSetting.key === setting.key))]
+    .filter((setting) => !secretKey(setting.key) && editableSettingKeys.has(setting.key))
+    .map((setting) => {
+      const storedSetting = storedByKey.get(setting.key);
+      const entry = configByKey.get(setting.key);
+      if (entry) {
+        // Keep the editable value blank when it is not overridden; the effective
+        // value is still shown so clearing a field reliably restores its fallback.
+        const rawValue = storedSetting?.value?.trim() || "";
+        const resolved = resolvePortalConfigValue(setting.key, stored);
+        return { ...setting, value: rawValue, effectiveValue: resolved.value, source: resolved.source, type: entry.type, min: entry.min, max: entry.max };
+      }
+
+      // Calendar defaults are not part of the env-backed catalog, so resolve
+      // their displayed value and source from the stored row or built-in value.
+      const rawValue = storedSetting?.value?.trim() || "";
+      const fallback = defaultPortalSettings.find((defaultSetting) => defaultSetting.key === setting.key)?.value || "";
+      return {
+        ...setting,
+        value: storedSetting?.value?.trim() || "",
+        effectiveValue: rawValue || fallback,
+        source: rawValue ? "stored" as const : "default" as const,
+        type: "text" as const,
+      };
+    });
+}
 
 function validateConfigValue(key: string, rawValue: string): string | null {
   const entry = configByKey.get(key);
@@ -58,7 +88,6 @@ function validateConfigValue(key: string, rawValue: string): string | null {
 
 const settingSchema = z.object({ key: z.string().trim().min(1).max(200), value: z.string().max(10000), category: z.string().trim().max(100), description: z.string().max(1000), updatedAt: z.string().optional(), updatedBy: z.string().optional() });
 const settingsSchema = z.object({ settings: z.array(settingSchema).max(500) });
-const secretKey = (key: string) => /(secret|password|token|private.?key|credential|api.?key)/i.test(key);
 
 async function currentUser() {
   return verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
@@ -70,23 +99,7 @@ export async function GET() {
   if (user.canEditSettings !== true || !isPlatformAdmin(user)) return NextResponse.json({ success: false, error: "Only the McLink platform administrator can view shared portal settings." }, { status: 403 });
   try {
     const stored = await getPortalSettings();
-    const storedByKey = new Map(stored.map((setting) => [setting.key, setting]));
-    const settings = [...defaultPortalSettings.map((setting) => storedByKey.get(setting.key) || setting), ...stored.filter((setting) => !defaultPortalSettings.some((defaultSetting) => defaultSetting.key === setting.key))]
-      .filter((setting) => !secretKey(setting.key) && editableSettingKeys.has(setting.key))
-      .map((setting) => {
-        const base = { ...setting, connectionStatus: "active" as const };
-        // Config keys keep their raw sheet value (blank = not overridden) so a
-        // save never accidentally freezes the env value into the sheet. The
-        // resolved value is exposed separately for display, with `source`
-        // driving the UI badge.
-        const entry = configByKey.get(setting.key);
-        if (entry) {
-          const rawValue = storedByKey.get(setting.key)?.value?.trim() || "";
-          const resolved = resolvePortalConfigValue(setting.key, stored);
-          return { ...base, value: rawValue, effectiveValue: resolved.value, source: resolved.source, type: entry.type, min: entry.min, max: entry.max };
-        }
-        return { ...base, source: "stored" as const };
-      });
+    const settings = settingsForEditor(stored).map((setting) => ({ ...setting, connectionStatus: "active" as const }));
     return NextResponse.json({ success: true, settings }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API Settings] GET failed:", error);
@@ -106,10 +119,10 @@ export async function PUT(request: Request) {
       if (!editableSettingKeys.has(setting.key) || secretKey(setting.key)) {
         return NextResponse.json({ success: false, error: `${setting.key} is not editable from the portal.` }, { status: 400 });
       }
-      if (setting.key === "Final_Interview_Calendar_Email" && !z.string().email().safeParse(setting.value.trim()).success) {
+      if (setting.key === "Final_Interview_Calendar_Email" && setting.value.trim() && !z.string().email().safeParse(setting.value.trim()).success) {
         return NextResponse.json({ success: false, error: "HR interview calendar email must be a valid email address." }, { status: 400 });
       }
-      if (setting.key === "Final_Interview_Calendar_ID" && !/^[A-Za-z0-9._@-]+$/.test(setting.value.trim())) {
+      if (setting.key === "Final_Interview_Calendar_ID" && setting.value.trim() && !/^[A-Za-z0-9._@-]+$/.test(setting.value.trim())) {
         return NextResponse.json({ success: false, error: "HR interview calendar ID contains invalid characters." }, { status: 400 });
       }
       const configError = validateConfigValue(setting.key, setting.value);
@@ -117,10 +130,23 @@ export async function PUT(request: Request) {
     }
     const existing = await getPortalSettings();
     const submitted = new Map(input.settings.map((setting) => [setting.key, setting]));
-    const merged = existing.map((setting) => secretKey(setting.key) ? setting : (submitted.get(setting.key) || setting));
-    for (const setting of input.settings) if (!existing.some((current) => current.key === setting.key) && !secretKey(setting.key)) merged.push({ ...setting, updatedAt: new Date().toISOString(), updatedBy: user.name });
-    await upsertPortalSettings(merged.map((setting) => ({ ...setting, updatedAt: new Date().toISOString(), updatedBy: user.name })));
-    return NextResponse.json({ success: true, message: "Settings saved successfully." });
+    const updatedAt = new Date().toISOString();
+    const merged = existing.map((setting) => {
+      const incoming = submitted.get(setting.key);
+      if (!incoming || secretKey(setting.key)) return setting;
+      return { ...setting, value: incoming.value, updatedAt, updatedBy: user.name };
+    });
+    for (const setting of input.settings) {
+      if (existing.some((current) => current.key === setting.key) || secretKey(setting.key)) continue;
+      const defaults = defaultPortalSettings.find((current) => current.key === setting.key);
+      merged.push({ ...(defaults || setting), value: setting.value, updatedAt, updatedBy: user.name });
+    }
+    await upsertPortalSettings(merged);
+    return NextResponse.json({
+      success: true,
+      message: "Settings saved successfully.",
+      settings: settingsForEditor(merged).map((setting) => ({ ...setting, connectionStatus: "active" as const })),
+    });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ success: false, error: "Invalid settings payload." }, { status: 400 });
     console.error("[API Settings] PUT failed:", error);

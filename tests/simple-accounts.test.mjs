@@ -89,6 +89,14 @@ test("shared portal settings are platform-administrator only and show what is in
   assert.match(page, /isPlatformAdmin\(user\)/);
   assert.match(editor, /effectiveValue/);
   assert.match(editor, /type="number"/);
+  const editableKeys = api.match(/const editableSettingKeys = new Set\(\[([\s\S]*?)\]\);/)?.[1] || "";
+  assert.match(editableKeys, /"Voice_Call_Max_Attempts"/);
+  assert.match(editableKeys, /"Voice_Call_Retry_Gap_Hours"/);
+  assert.match(editor, /Maximum AI phone call attempts/);
+  assert.match(editor, /Wait between unanswered call attempts \(hours\)/);
+  assert.match(api, /settingsForEditor\(merged\)/);
+  assert.match(editor, /usually within 20 seconds/);
+  assert.match(editor, /Existing booking links and appointments are not changed/);
 });
 
 test("the dashboard guides a new organization with a self-completing checklist", () => {

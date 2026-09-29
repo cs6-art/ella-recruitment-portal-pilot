@@ -1381,10 +1381,10 @@ a { color: inherit; text-decoration: none; }
 .applicants-table th { white-space: nowrap; }
 .applicants-table td { vertical-align: middle; }
 .applicants-table td:first-child { min-width: 210px; }
-.applicant-name-link, .applicants-table td:nth-child(2) { display: grid; gap: 4px; }
-.applicant-name-link strong, .applicants-table td:nth-child(2) strong { color: var(--navy); font-size: 13px; }
-.applicant-name-link span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; }
-.applicant-subtext { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
+.applicant-name-link, .applicants-table td:nth-child(2) { display: grid; gap: 4px; min-width: 0; }
+.applicant-name-link strong, .applicants-table td:nth-child(2) strong { overflow: hidden; color: var(--navy); font-size: 13px; text-overflow: ellipsis; }
+.applicant-name-link span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.applicant-subtext { display: block; overflow: hidden; margin-top: 4px; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .applicant-score { color: var(--navy); }
 .applicant-stage { display: inline-flex; max-width: 220px; padding: 5px 8px; border-radius: 999px; color: #536b84; background: #edf3f8; font-size: 10px; font-weight: 800; line-height: 1.25; }
 .applicant-stage-approved-for-ai-voice-interview, .applicant-stage-ai-voice-interview-scheduled { color: #075a87; background: #e4f4fd; }
