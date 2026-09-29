@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { canAdministerAccess } from "@/lib/access-control";
 import { syncOrganizationMembership } from "@/lib/organization-accounts";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { findCredential, isPlausibleEmail, loadDirectoryUser, normalizeEmail, recordLogin, verifyAgainstDummyHash, verifyPassword } from "@/lib/registration";
+import { ensureDirectoryUserForLogin, findCredential, isPlausibleEmail, loadDirectoryUser, normalizeEmail, recordLogin, resolveLoginOrganization, verifyAgainstDummyHash, verifyPassword } from "@/lib/registration";
 import { COOKIE_NAME, createSessionToken } from "@/lib/session";
 
 const INVALID = "Incorrect email or password.";
@@ -31,19 +31,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Please verify your email first. Check your inbox for the verification link.", needsVerification: true }, { status: 403 });
     }
 
-    const directory = await loadDirectoryUser(email, credential.organizationId);
+    const organizationId = await resolveLoginOrganization(email, credential.organizationId);
+    if (organizationId !== credential.organizationId) {
+      // An existing verified identity may now be explicitly eligible for a
+      // different tenant; provision only that tenant and preserve any row it
+      // already has so its administrator-controlled permissions stay intact.
+      await ensureDirectoryUserForLogin(organizationId, email, credential.fullName);
+    }
+
+    const directory = await loadDirectoryUser(email, organizationId);
     const directoryUser = directory?.user;
     if (!directoryUser) return NextResponse.json({ error: "Your account is not set up in this organization's directory. Contact your HR administrator." }, { status: 403 });
     if (directoryUser.active !== true) return NextResponse.json({ error: "Your recruitment portal account is inactive." }, { status: 403 });
 
-    await syncOrganizationMembership({ organizationId: credential.organizationId, email, active: true });
+    await syncOrganizationMembership({ organizationId, email, active: true });
     await recordLogin(credential.id);
 
     const token = createSessionToken({
       sub: credential.id,
       name: directoryUser.fullName || credential.fullName || email,
       email,
-      organizationId: credential.organizationId,
+      organizationId,
       active: directoryUser.active,
       accessRole: directoryUser.accessRole,
       department: directoryUser.department,

@@ -86,6 +86,38 @@ export async function resolveRegistrationOrganization(email: string): Promise<st
   return matchRegistrationOrganization(email, rows);
 }
 
+/**
+ * Select the tenant context for an already-verified identity. A unique
+ * current registration match takes precedence over the credential's original
+ * tenant; active McLink staff entries remain authoritative when present.
+ */
+export function selectLoginOrganization(
+  registrationOrganizationId: string | null,
+  credentialOrganizationId: string,
+  hasActiveDefaultDirectoryUser: boolean,
+) {
+  if (hasActiveDefaultDirectoryUser) return DEFAULT_ORGANIZATION_ID;
+  return registrationOrganizationId || credentialOrganizationId;
+}
+
+export async function resolveLoginOrganization(email: string, credentialOrganizationId: string) {
+  const registrationOrganizationId = await resolveRegistrationOrganization(email);
+  if (!registrationOrganizationId || registrationOrganizationId === credentialOrganizationId) return credentialOrganizationId;
+
+  // Preserve the established McLink staff path for identities also present
+  // in its legacy directory, even if they are invited into a client tenant.
+  let hasActiveDefaultDirectoryUser = false;
+  try {
+    hasActiveDefaultDirectoryUser = (await findDirectoryUser(email))?.active === true;
+  } catch (error) {
+    // A temporary Sheets outage should not prevent an otherwise eligible
+    // client-organization login from continuing through its own directory.
+    console.error("[Login] Default organization lookup unavailable:", error instanceof Error ? error.message : error);
+  }
+
+  return selectLoginOrganization(registrationOrganizationId, credentialOrganizationId, hasActiveDefaultDirectoryUser);
+}
+
 // --- Registration + verification -------------------------------------------
 
 function hashToken(token: string) {
@@ -181,6 +213,11 @@ async function ensureDirectoryUser(organizationId: string, email: string, fullNa
       active: true,
     });
   });
+}
+
+/** Provision a newly eligible tenant after login has verified the existing identity. */
+export async function ensureDirectoryUserForLogin(organizationId: string, email: string, fullName: string) {
+  return ensureDirectoryUser(organizationId, email, fullName);
 }
 
 // --- Password reset ---------------------------------------------------------

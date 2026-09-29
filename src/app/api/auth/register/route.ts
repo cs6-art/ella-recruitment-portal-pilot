@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "A verification request is already pending for this email. The link is valid for 24 hours. Check your inbox or choose Resend verification email.", needsVerification: true }, { status: 409 });
     }
     if (result.status === "already_registered") {
-      return NextResponse.json({ error: "An account already exists for this email. Log in instead." }, { status: 409 });
+      return NextResponse.json({ error: "This email already has an account. Log in with your existing password; eligible organization access is applied automatically." }, { status: 409 });
     }
 
     const link = `${getPublicAppBaseUrl(request)}/api/auth/verify?token=${encodeURIComponent(result.token)}`;

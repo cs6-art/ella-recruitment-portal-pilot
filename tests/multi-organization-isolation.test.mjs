@@ -32,10 +32,23 @@ test("sessions and login resolve an organization before tenant-scoped requests",
   const auth = read("src/app/api/auth/login/route.ts");
   const target = read("src/lib/recruitment-target-portal.ts");
   assert.match(session, /!user\.organizationId/);
-  assert.match(auth, /credential\.organizationId/);
-  assert.match(auth, /organizationId: credential\.organizationId/);
+  assert.match(auth, /resolveLoginOrganization\(email, credential\.organizationId\)/);
+  assert.match(auth, /\n\s+organizationId,\n/);
+  assert.doesNotMatch(auth, /organizationId: credential\.organizationId/);
   assert.match(target, /listApplications\(undefined, undefined, organizationId, \{/);
   assert.match(target, /targetPublicRoleDetails/);
+});
+
+test("a uniquely allow-listed existing identity follows its current tenant unless active McLink staff takes precedence", () => {
+  const registration = read("src/lib/registration.ts");
+  const login = registration.match(/export function selectLoginOrganization[\s\S]*?\n}\r?\n/)[0]
+    .replace("export function", "function")
+    .replace(/\(\s*registrationOrganizationId: string \| null,\s*credentialOrganizationId: string,\s*hasActiveDefaultDirectoryUser: boolean,\s*\)/, "(registrationOrganizationId, credentialOrganizationId, hasActiveDefaultDirectoryUser)")
+    .replace(/\)\s*:\s*string\s*\{/, ") {");
+  const selectLoginOrganization = new Function(`const DEFAULT_ORGANIZATION_ID = "mclink"; ${login}; return selectLoginOrganization;`)();
+  assert.equal(selectLoginOrganization("mctest", "mcprint", false), "mctest");
+  assert.equal(selectLoginOrganization("mctest", "mcprint", true), "mclink");
+  assert.equal(selectLoginOrganization(null, "mcprint", false), "mcprint");
 });
 
 test("directory provisioning cannot grant a user access to another tenant", () => {
