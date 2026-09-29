@@ -27,6 +27,12 @@ export type LiveAvatarRoleContext = {
   candidateName?: string;
   resumeSummary?: string;
   screeningQuestion?: string;
+  // HR-configured grading context from the role request. The LiveAvatar
+  // context must reference ${role_requirements}, ${interview_questions} and
+  // ${evaluation_fields} for Smile to use them (LiveAvatar dashboard > Contexts).
+  roleRequirements?: string;
+  interviewQuestions?: string;
+  evaluationFields?: string;
 };
 
 export type LiveAvatarSessionResult = {
@@ -88,6 +94,9 @@ export async function createLiveAvatarSession(
   }
   if (role.resumeSummary) dynamicVariables.resume_summary = clampVariable(role.resumeSummary);
   if (role.screeningQuestion) dynamicVariables.screening_question = clampVariable(role.screeningQuestion, 500);
+  if (role.roleRequirements) dynamicVariables.role_requirements = clampVariable(role.roleRequirements);
+  if (role.interviewQuestions) dynamicVariables.interview_questions = clampVariable(role.interviewQuestions);
+  if (role.evaluationFields) dynamicVariables.evaluation_fields = clampVariable(role.evaluationFields);
 
   const response = await fetch(`${LIVEAVATAR_API_URL}/v1/sessions/token`, {
     method: "POST",

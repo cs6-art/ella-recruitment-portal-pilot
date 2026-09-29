@@ -10,6 +10,7 @@ import { appendAccountLedgerEntryOnExecutor, organizationCreditsEnabled } from "
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import type { LedgerAppend } from "@/lib/ella-credits-store";
 import { evaluationFieldPreferencesFromStored, evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
+import { buildRoleRequirementsContext } from "@/lib/recruitment-prompt";
 import { pilotEmailRecipient } from "@/lib/pilot-test-safety";
 import { notificationEmail, notificationEventLabel, notificationStatusLabel, notificationSummary, roleNotificationEmail } from "@/lib/notification-labels";
 import type { ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
@@ -865,6 +866,9 @@ export type AvatarInterviewContext = {
   roleDescription: string;
   resumeSummary: string;
   screeningQuestion: string;
+  roleRequirements: string;
+  interviewQuestions: string;
+  evaluationFields: string;
   expiresAt: string;
   tokenStatus: string;
 };
@@ -902,6 +906,7 @@ async function avatarInterviewContextByHash(tokenHash: string, allowedStatuses: 
   const screeningQuestion = firstInterviewQuestion(screening?.interviewQuestions)
     || String(roleSetup.requiredInterviewQuestion1 || "").trim()
     || "Please tell us about the experience that best prepares you for this role and the outcome you achieved.";
+  const grading = buildRoleRequirementsContext(roleSetup, row.roleTitle);
   return {
     applicationId: row.application.externalId,
     candidateName: row.application.candidateName,
@@ -910,6 +915,9 @@ async function avatarInterviewContextByHash(tokenHash: string, allowedStatuses: 
     roleDescription: String(roleSetup.jobDescription || "").trim(),
     resumeSummary: String(screening?.summary || screening?.strengths || "").trim(),
     screeningQuestion,
+    roleRequirements: grading.requirements,
+    interviewQuestions: grading.interviewQuestions,
+    evaluationFields: grading.evaluationFields,
     expiresAt: row.token.expiresAt?.toISOString() || "",
     tokenStatus: row.token.status,
   } satisfies AvatarInterviewContext;

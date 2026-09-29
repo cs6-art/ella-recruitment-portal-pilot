@@ -33,6 +33,7 @@ import {
 } from "@/db/schema-recruitment";
 import { completeAvatarInterviewByHash, getAvatarInterviewContext } from "@/lib/internal-recruitment-queries";
 import { recordLiveAvatarInterviewDeduction } from "@/lib/ella-credits";
+import { buildRoleRequirementsContext } from "@/lib/recruitment-prompt";
 import {
   beginRecordingUpload,
   isAllowedRecordingMimeType,
@@ -397,7 +398,11 @@ async function storedTurns(sessionId: string): Promise<TranscriptTurn[]> {
 async function roleContext(session: SessionRow) {
   const [row] = await getDb().select({ title: roles.title, setup: roles.setup }).from(roles).where(eq(roles.id, session.roleId)).limit(1);
   const setup = row?.setup && typeof row.setup === "object" ? row.setup as Record<string, unknown> : {};
-  return { roleTitle: row?.title || "", jobDescription: String(setup.jobDescription || "").trim() };
+  return {
+    roleTitle: row?.title || "",
+    jobDescription: String(setup.jobDescription || "").trim(),
+    roleRequirements: buildRoleRequirementsContext(setup, row?.title || "").requirements,
+  };
 }
 
 /** Same reference for the log line and the HR page, derived from the stored failure time. */

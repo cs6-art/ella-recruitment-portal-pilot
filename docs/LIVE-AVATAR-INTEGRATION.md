@@ -136,3 +136,19 @@ Apply `drizzle/0026_live_interview_sessions.sql` before deploying this code
   description via dynamic variables.
 - `max_session_duration` is capped at the configured provider-safe limit
   server-side to bound LiveAvatar credit usage from an abandoned tab.
+
+## Role-request grading context
+
+Each session also passes the role's HR-configured settings as dynamic
+variables (each capped at 1000 characters by LiveAvatar):
+
+- `role_requirements` — screening criteria, license (with required/preferred
+  status), keywords, minimum experience, transferable skills, salary range
+  (marked shareable or confidential) and start availability.
+- `interview_questions` — the numbered approved questions (Q1..Q5).
+- `evaluation_fields` — the scored fields HR selected for the role.
+
+They only take effect once the LiveAvatar context (dashboard > Contexts >
+McLink AI Interviewer) references `${role_requirements}`,
+`${interview_questions}` and `${evaluation_fields}`. The post-interview AI
+analysis receives the same requirements text automatically.

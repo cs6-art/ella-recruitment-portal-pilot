@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       }
       const context = await startAvatarInterview(avatarToken);
       if (!context) return NextResponse.json({ success: false, error: "This avatar interview link has already been used, expired, or is no longer available." }, { status: 410 });
-      const session = await createLiveAvatarSession({ roleTitle: context.roleTitle, jobDescription: context.roleDescription, candidateName: context.candidateName, resumeSummary: context.resumeSummary, screeningQuestion: context.screeningQuestion });
+      const session = await createLiveAvatarSession({ roleTitle: context.roleTitle, jobDescription: context.roleDescription, candidateName: context.candidateName, resumeSummary: context.resumeSummary, screeningQuestion: context.screeningQuestion, roleRequirements: context.roleRequirements, interviewQuestions: context.interviewQuestions, evaluationFields: context.evaluationFields });
       sessionCreated = true;
       try {
         await finalizeAvatarInterviewStart(avatarToken);

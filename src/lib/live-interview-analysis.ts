@@ -156,7 +156,7 @@ export const INTERVIEW_ANALYSIS_TEXT_FORMAT = {
   schema: INTERVIEW_ANALYSIS_JSON_SCHEMA,
 } as const;
 
-export function buildAnalysisInput(input: { roleTitle: string; jobDescription: string; turns: TranscriptTurn[]; pairs: QuestionPair[] }) {
+export function buildAnalysisInput(input: { roleTitle: string; jobDescription: string; roleRequirements?: string; turns: TranscriptTurn[]; pairs: QuestionPair[] }) {
   const transcript = input.turns
     .map((turn) => `[${turn.seq}] ${turn.speaker === "ai_interviewer" ? "AI Interviewer" : "Applicant"}: ${turn.text}`)
     .join("\n");
@@ -166,6 +166,7 @@ export function buildAnalysisInput(input: { roleTitle: string; jobDescription: s
   return [
     `ROLE TITLE: ${input.roleTitle || "Not provided"}`,
     `JOB DESCRIPTION:\n${(input.jobDescription || "Not provided").slice(0, 6000)}`,
+    ...(input.roleRequirements ? [`HR ROLE REQUIREMENTS (assess only job-related evidence against these):\n${input.roleRequirements.slice(0, 4000)}`] : []),
     `QUESTIONS:\n${questions || "(none detected)"}`,
     `TRANSCRIPT:\n${transcript}`,
     "Respond with the JSON object only.",
@@ -193,7 +194,7 @@ export function isInterviewAnalysisConfigured() {
   return Boolean(interviewAnalysisApiKey());
 }
 
-export function buildAnalysisRequest(model: string, input: { roleTitle: string; jobDescription: string; turns: TranscriptTurn[]; pairs: QuestionPair[] }) {
+export function buildAnalysisRequest(model: string, input: { roleTitle: string; jobDescription: string; roleRequirements?: string; turns: TranscriptTurn[]; pairs: QuestionPair[] }) {
   return {
     model,
     instructions: INTERVIEW_ANALYSIS_INSTRUCTIONS,
@@ -206,7 +207,7 @@ export function buildAnalysisRequest(model: string, input: { roleTitle: string; 
 /** Throws a classified `InterviewAnalysisError` on provider errors, timeouts, or invalid output. */
 export async function analyzeInterviewTranscript(
   client: AnalysisClient,
-  input: { roleTitle: string; jobDescription: string; turns: TranscriptTurn[]; pairs: QuestionPair[] },
+  input: { roleTitle: string; jobDescription: string; roleRequirements?: string; turns: TranscriptTurn[]; pairs: QuestionPair[] },
   options: { timeoutMs?: number } = {},
 ): Promise<{ analysis: InterviewAnalysis; model: string }> {
   if (input.turns.length === 0) throw new InterviewAnalysisError("There is no transcript to analyse.", "no_transcript");
