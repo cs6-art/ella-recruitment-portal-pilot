@@ -14,6 +14,12 @@
 // generic script. See docs/LIVE-AVATAR-INTEGRATION.md for setup details.
 
 const LIVEAVATAR_API_URL = process.env.LIVEAVATAR_API_URL || "https://api.liveavatar.com";
+const DEFAULT_MAX_SESSION_DURATION_SECONDS = 10 * 60;
+
+function maxSessionDurationSeconds(): number {
+  const configured = Number.parseInt(process.env.LIVEAVATAR_MAX_SESSION_DURATION_SECONDS || "", 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_SESSION_DURATION_SECONDS;
+}
 
 export type LiveAvatarRoleContext = {
   roleTitle: string;
@@ -99,12 +105,11 @@ export async function createLiveAvatarSession(
         dynamic_variables: dynamicVariables,
       },
       interactivity_type: "CONVERSATIONAL",
-      // Hard stop so an abandoned browser tab cannot run up LiveAvatar
-      // credits indefinitely.
-      // LiveAvatar sandbox keys currently enforce a 60-second maximum.
-      // Staying at the provider limit prevents the session request from being
-      // rejected before a room is created.
-      max_session_duration: 60,
+      // Keep an abandoned browser tab from running up LiveAvatar credits
+      // indefinitely, while allowing a normal interview to run for 10 minutes
+      // by default. LiveAvatar enforces the maximum allowed by the account's
+      // subscription tier.
+      max_session_duration: maxSessionDurationSeconds(),
     }),
   });
 
