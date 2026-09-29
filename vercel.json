@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/live-interview-recovery",
       "schedule": "47 3 * * *"
+    },
+    {
+      "path": "/api/cron/health-alerts",
+      "schedule": "0 1 * * *"
     }
   ]
 }
