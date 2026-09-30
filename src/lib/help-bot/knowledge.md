@@ -29,25 +29,42 @@ depends on their assigned access. The short version of the process:
 3. HR reviews the request and makes the recruitment decision according to the
    organisation's access rules.
 4. HR prepares the hiring details in Recruitment Setup and publishes the role.
-5. Candidates are screened by resume and, when enabled, an AI voice interview;
-   HR reviews the evidence and makes the hiring decisions.
+5. Candidates are screened by resume and then either an AI voice call or a Live
+   Avatar video interview with Smile; HR reviews the evidence and makes the
+   hiring decisions, including any face-to-face interview.
 
 The main menu items are Dashboard, Role Requests, Resume Screening, Applicants,
-Bookings, Settings, User Accounts, and Profile. Menu items you are not allowed to
-use do not appear for you.
+Bookings, Settings, Credits, User Accounts, and Profile (opened from your name at
+the bottom of the menu). Menu items you are not allowed to use do not appear for
+you. The Smile assistant (this chat) is available from every page.
 
 ## Quick answers for common portal questions
 
-**Where do I add a user?** Open **User Accounts**, choose **Add user account**,
-complete the name, email, access role, department, and permissions, then save.
-McLink platform administrators can first choose the organization in **Manage
-users for**. Organization administrators manage users in their own organization.
+**Where do I add a user?** Colleagues normally join by themselves: they create an
+account with an email address the organisation allows and verify it. The
+organisation's **owner** can also open **User Accounts**, use **Invite a teammate**,
+and enter the person's email address; when that person registers with that address
+and verifies it, they join the organisation automatically. An invitation can be
+withdrawn before it is used. McLink platform administrators can additionally add a
+user directly: open **User Accounts**, choose the organization in **Manage users
+for**, choose **Add user account**, complete the details, and save.
 
 **How do I add an organization?** A McLink platform administrator opens **User
-Accounts**, uses **Add organization**, enters the organization name and lowercase
-slug, and saves. The new organization can then be selected in **Manage users for**
-so its user directory can be created. Editing an organization changes its
-directory metadata; it does not move or delete recruitment records.
+Accounts**, chooses **Add organization**, and enters the organization name, its
+web address (a short lowercase name), and who may register: an allowed email
+domain (for example company.com), individual email addresses, or both. At least
+one is needed. There is no owner to enter: the first person who registers with an
+allowed email and verifies it becomes the organization's owner automatically. Only
+one organization can own a given domain or email address. Editing an organization
+changes its details and registration rules; it does not move or delete
+recruitment records.
+
+**Who becomes the organization owner?** The first person to register into a client
+organization and verify their email. The owner can invite teammates and is the
+only person (besides a McLink platform administrator) who can deactivate or
+reactivate colleagues. The owner cannot be deactivated by anyone except McLink,
+and the last active account of an organization is protected. A McLink platform
+administrator can hand ownership to another account.
 
 **Are client records mixed together?** No. Each organization's users,
 departments, roles, applicants, interview records, and Smile Credits are separated
@@ -72,34 +89,53 @@ and OneDrive import.
 Sign in with your email address and password. The first time, choose **Create
 account**, enter your name, your organisation email address, and a password of at
 least 10 characters. Your account is placed in your organisation automatically,
-based on your email address. We email you a link; select it within 24 hours to
-confirm your address, then **Log in**.
+based on your email address and the organisation's registration rules. We email you
+a link; select it within 24 hours to confirm your address, then **Log in**.
 
 - **Forgot your password?** Choose **Forgot your password?** on the sign-in page and
   follow the link we email you. The link works once and expires after an hour.
 - **"Verify your email":** choose **Resend verification email** and use the newest link.
-- **Your email is not accepted when creating an account:** only addresses that belong
-  to an organisation on the portal can register. Ask HR to add you in User Accounts.
+- **Your email is not accepted when creating an account:** only addresses that an
+  organisation allows can register (its email domain, or addresses it has invited).
+  Ask your organisation's owner to invite you from User Accounts, or contact McLink
+  to add your domain.
 - **Too many attempts:** wait a few minutes and try again.
 - **"Limited access" after signing in:** your account is active but has not been given
   recruitment permissions yet. Contact HR.
 
-A person who creates their own account with an organisation email starts with HR
-access for that organisation (create, review and approve roles, edit settings,
-manage accounts). They do not get Manage Smile Credits. HR can change any account
-in User Accounts.
+A person who creates their own account with an allowed organisation email starts with
+HR access for that organisation (create, review and approve roles, edit settings,
+recruit). They do not get manual credit top-ups, and they are not McLink platform
+administrators. The first person to register becomes the organization owner (see
+User Accounts and organizations). Other HR accounts can view the team; only the owner (or McLink) can invite people and
+deactivate or reactivate accounts.
 
 ## Getting started checklist for a new organisation
 
-When a new organisation first signs in, HR users see a **Getting Started** card on
-the Dashboard. Its steps: create and publish your first role (paste a job description
-and Smile fills in the screening questions); add Smile credits (a new organisation
-starts with none); get your first candidates (share the role's application link or
-upload a batch of resumes); confirm email delivery (shows whether candidate and HR
-emails are going out and whether any failed); invite your team (colleagues join by
-creating an account with your organisation email); and connect Google Calendar (only
-needed for face-to-face interviews). Each step shows whether it is done and has a
-button that goes straight there.
+HR users see a **Getting Started** card on the Dashboard until setup is done. It
+shows "x of y required" and updates by itself every 30 seconds. Its steps:
+
+- **Review organization name and branding** (optional) — the name and subtitle
+  shown across the portal, changed in Settings.
+- **Add Smile Credits** (required) — a new organisation starts with none. Opens the
+  Credits page.
+- **Configure Google Drive for Live Avatar recordings** (needed once you use Live
+  Avatar interviews) — connect your organisation's Google account and choose a
+  recording folder in Settings.
+- **Connect Google Calendar** (needed only when a role requires a face-to-face
+  interview).
+- **Create and publish your first role** (required) — paste a job description and
+  Smile fills in the screening questions.
+- **Add candidates** (after setup) — share the role's application link or upload a
+  batch of resumes.
+- **Invite teammates** (optional) — the owner invites colleagues by email, or they
+  register with the organisation's email.
+- **Customize automated emails** (optional) — in Settings under Automated Emails.
+
+Each step shows whether it is done and has a button that goes straight there.
+McLink platform administrators also see each organization's setup status (Setup
+required, Partially configured, Ready to recruit) and whether its owner has
+registered in the Organizations table in User Accounts.
 
 ---
 
@@ -119,6 +155,16 @@ has its own users, departments, roles, applicants, interview records, and Smile
 Credits. Users cannot manage or view another organization's recruitment records.
 The McLink organization remains the existing organization; adding a client does
 not copy McLink's recruitment records into that client.
+
+Ownership and team rules: the first person to register into a client organization
+becomes its **owner**. The owner invites teammates by email (they join when they
+register with that address and verify it), and is the only person besides a McLink
+platform administrator who can deactivate or reactivate accounts. The owner cannot
+be deactivated by other users, and the organization's last active account is
+protected. Deactivated accounts record who deactivated them and when, and the
+account list shows each person's last sign-in. A McLink platform administrator
+decides who may register into each organization (allowed domains and emails) and
+can transfer ownership. McLink's own organization has no owner concept.
 
 The organization and user setup is informationally separate from candidate
 records: an organization administrator can manage users and access, while HR
@@ -193,14 +239,18 @@ step; search by job title, role number, department, or requester; use sort
 options for the newest request or the nearest target date; select **Refresh** if
 someone else may have updated it.
 
-Making a decision: choose the action that matches the decision (approve, return
-for revision, hold, or reject), add a clear comment when useful, and confirm. If
+Making a decision: choose approve or reject, add a comment (required when
+rejecting), and confirm. The old "return for revision" and "hold" actions are no
+longer offered; older requests that are still in those statuses can be approved or
+rejected. If
 the request changed since you opened it, refresh and review again before retrying
 the action — an "HTTP 409" or "someone else changed the record" message means
 exactly this.
 
 The usual request flow is: the requester submits → **Pending HR Discussion** →
-HR reviews the request and approves, returns, holds, or rejects it. When an HR
+HR approves or rejects it. Approving needs no comment; **rejecting requires a
+reason**, which the requester can read. A request submitted by someone who can
+already approve is approved automatically. When an HR
 approver creates a role with the full Create Role form, Smile saves its setup and
 publishes the application link in that same action. Other requesters may need HR
 to complete the role details and publish it after approval. Historical records
@@ -221,9 +271,9 @@ candidates to apply through the portal.
 - **Pending Management Approval** — a historical or organisation-specific status
   where Management must decide. If it appears unexpectedly, ask the
   administrator to confirm the workflow configuration.
-- **Returned for Revision** — more information or changes are needed from the
-  requester or HR.
-- **On Hold** — the request is paused; resume it when the business is ready.
+- **Returned for Revision** and **On Hold** — older statuses that may still appear
+  on historical requests. These requests can be approved or rejected; new
+  requests no longer move into them.
 - **Approved** — the role has approval to move forward; HR completes the hiring
   setup.
 - **Recruitment Setup** — HR is preparing screening and interview details.
@@ -285,6 +335,14 @@ Save and move the role forward:
 - **Mark as Ready for Publishing** — the publishing checklist is complete and HR
   has reviewed it.
 - **Publish Role** — the role is ready to appear for candidates.
+
+Smile Avatar script: for roles that use Live Avatar interviews, Recruitment Setup
+has a **Smile Avatar system prompt** section that shows the script Smile follows on
+video (identity, tone, languages, greeting, the approved questions asked in order,
+closing, and fairness rules). It uses the standard script by default, which is
+improved automatically over time. HR can edit it for one role, and **Restore
+standard script** goes back to the standard. Salary is only shared if the screening
+criteria allow it. Do not remove the fairness rules.
 
 Read the script preview before saving — it shows the kind of conversation
 candidates will receive. If a button says required fields are missing, the message lists them.
@@ -447,36 +505,112 @@ candidate should contact the recruitment team for a new invitation.
 
 ---
 
+## How the Live Avatar interview works for candidates
+
+After HR approves a resume, the candidate can choose a call or the **Live Avatar
+Interview** with Smile. The Live Avatar link is private and can be used once; it
+expires automatically on the date shown on the page. No calendar slot is needed:
+the candidate starts when ready.
+
+1. The candidate opens their link and reads the Privacy Notice and the recording
+   consent. If they do not agree, the interview does not start.
+2. A camera and microphone check runs first.
+3. Smile greets them, confirms who they are, and asks the role's approved interview
+   questions one at a time, in order, exactly as written. The whole session lasts up
+   to 5 minutes, so not every question may be reached if answers are long.
+4. Smile closes politely. The interview is recorded (audio, video and responses)
+   and transcribed, and the recruitment team reviews it. It is not an automated
+   hiring decision.
+
+Smile can answer in English, Filipino/Tagalog, Taglish or Mandarin, following the
+candidate's language. The interview costs 20 Smile Credits, reserved when the
+candidate starts it and released again if it cannot start.
+
+If the organisation has not connected its Google Drive recording folder, or the
+folder is not ready, the interview cannot start and the candidate sees a message
+that Live Avatar interviews are temporarily unavailable. See "Recording storage for
+Live Avatar interviews".
+
+## Recording storage for Live Avatar interviews
+
+Each organisation stores its own Live Avatar recordings in its own Google Drive. In
+**Settings**, under **Google Drive for Live Avatar recordings**, an HR user connects
+the organisation's Google account and chooses a folder. The folder chooser has three
+tabs: **My Drive** (the account's own folders, including subfolders), **Shared with
+me**, and **Shared drives**. Any folder where that account can add files works, so a
+user can simply pick or create their own Drive folder. The folder is saved once for
+the whole organisation: every HR user shares it, and all Live Avatar recordings go
+there. Use **Change folder** to switch. The connection uses a narrow permission
+that only touches files Smile creates or the chosen folder, and it belongs to that
+organisation only. Recordings stay private and can only be played inside the portal
+by authorised HR reviewers. Smile checks the folder before every interview, so an
+interview never starts without somewhere to save the recording. Use **Change Google
+account** to reconnect or switch accounts.
+
 ## How HR reviews voice and Live Avatar interview results
 
-Candidates can choose **Schedule a Call** for a voice interview or choose the
-**Live Avatar Interview** link. When an interview result is ready, the applicant
-record shows **Voice Interview Review** for a call or **Avatar Interview
-Review** for a Live Avatar interview. HR opens the applicant record and reviews
-the matching interview evidence alongside the resume and screening result; the
-Live Avatar evidence section is titled **Live Avatar Review**.
+Candidates can choose **Schedule a Call** for a voice interview or the **Live
+Avatar Interview** link. When a result is ready, the applicant record shows **Voice
+Interview Review** for a call or **Avatar Interview Review** for a Live Avatar
+interview. HR opens the applicant record and reviews the evidence alongside the
+resume and screening result.
 
-The **Live Avatar Review** shows the transcript, the scores and strengths, and the
-recording. The **Interview with our Avatar now** interview costs 20 Smile Credits,
-reserved when the candidate starts it (released again if it cannot start), lasts up
-to about five minutes, and asks the role's interview questions. Candidates agree to
-the recording, camera and microphone first; if they do not agree the interview does
-not start. Recordings are deleted automatically 90 days after the interview; the
-transcript and review are kept.
+The applicant page has buttons for **View Role**, **Role Applicants**, **Edit
+Applicant** and **Delete Applicant**. Under **AI Screening Evidence**, **AI CV
+Analysis** shows the CV recommendation, summary, strengths and gaps. The **Live
+Avatar Review** shows, in order:
 
-**How AI Graded This Applicant** on the applicant record explains a result in plain
-language: the score, the recommendation, **Strengths** and **Areas To Review**, and
-every role setting Smile applied (screening criteria, keywords, license
-requirement, minimum experience, transferable skills, salary handling, start
-availability). The interview review lists all of the role's interview questions with
-the candidate's answers. The Candidate Status History lists each change with who made
-it; steps the portal takes on its own show as **Automatic update**.
+- **Interview Overview** — applicant, role, interview date and duration, interview and
+  AI review status, consent, and where the transcript came from.
+- **Items Flagged for HR Attention** — only when something needs a look, such as an
+  interview that ended early or a transcript that could not be retrieved.
+- **Live Avatar Assessment** — a score with a band (strong, good, partial, limited)
+  and a suggested next step, or **Not Scored — Manual HR Review**. **How this is
+  scored** explains the rubric.
+- **Live Avatar Summary** — interview summary, relevant experience, skills, strengths
+  and areas HR may want to clarify, each with quotes and a link to that point in
+  the transcript. Empty parts are hidden.
+- **Question-by-Question Review** — each question, the answer, the evidence rating
+  and analysis, shown when questions were detected.
+- **Full Interview Transcript** — searchable, with jump-to-question, expand and
+  copy.
+- **Live Avatar Recording** — plays inside the portal, or says why it is not
+  available.
+- **Session Review Indicators** — shown only when there was a technical event such
+  as a disconnect or a page reload. Window or tab focus is not tracked.
 
-HR then records an explicit decision. Approval moves the candidate to
-**Approved for Face-to-Face Interview** and generates the HR interview booking
-invitation. A rejection stops the candidate at this stage. As with resume
-screening, the AI result is evidence for a human decision, not the decision
-itself.
+How the score works: the score is calculated by the portal from a 0–4 evidence
+rating for each question, using only the applicant's job-related words, and it is
+shown as a percentage (75+ strong, 55–74 good, 35–54 partial, under 35 limited).
+Answer length, accent and language style are not scored. **Not Scored — Manual HR
+Review** appears, instead of a low score, when fewer than 2 answers could be
+assessed, the interview ended early, or the official transcript was not available.
+It is not a rejection and does not mean the applicant did badly: HR should read
+the transcript and decide. If the AI review fails, HR can use **Retry analysis**;
+the transcript and recording are kept.
+
+The transcript comes from the Live Avatar provider. When an applicant speaks over
+Smile, Smile's line can appear cut off, because only the part already spoken is
+recorded. The applicant's own words are not affected.
+
+**How AI Graded This Applicant** explains a result in plain language: the score,
+the recommendation, **Strengths** and **Areas To Review** (for a Live Avatar
+interview these come from that interview's own review), and every role setting
+Smile applied (screening criteria, keywords, license requirement, minimum
+experience, transferable skills, salary handling, start availability). The
+**Interview Questions** section lists the role's prepared questions. The Candidate
+Status History lists each change with who made it; steps the portal takes on its
+own show as **Automatic update**.
+
+**HR Decisions** are recorded separately for the AI CV analysis and for the
+interview review. Each has **Approve** or **Reject**, and a comment is required.
+Approval moves the candidate to **Approved for Face-to-Face Interview** and
+generates the HR interview booking invitation. A rejection stops the candidate at
+that stage. As with resume screening, the AI result is evidence for a human
+decision, not the decision itself.
+
+Recordings are deleted automatically 90 days after the interview; the transcript
+and review are kept.
 
 ---
 
@@ -539,10 +673,41 @@ Applicants tick a required box to agree to the Privacy Notice when they apply, a
 before a Live Avatar interview they agree to the recording, camera and microphone.
 Resume files are deleted automatically 30 days after upload. Interview recordings are
 deleted automatically 90 days after the interview (an administrator can set a
-different period). Application records, transcripts and results are kept until the
+different period). Live Avatar recordings are kept in the organisation's own Google
+Drive folder and can only be played in the portal by authorised HR reviewers. Application records, transcripts and results are kept until the
 application is deleted; deleting an applicant removes everything held about them.
 
 ---
+
+## The Dashboard
+
+The Dashboard greets you and shows what needs attention today. It refreshes by
+itself every 30 seconds (or use the refresh control). It has:
+
+- Summary tiles such as **Role Requests Waiting for HR Review**, **Approved Hiring
+  Requests** and **Open Positions**.
+- **Upcoming interviews** and **recent activity**.
+- A **needs attention** list, shown to HR users, that flags things to act on:
+  applicants who have not moved in 5 or more days; call interviews scheduled for a
+  past time with no outcome; Smile Credits that are low or used up; no HR Google
+  Calendar connected; resumes that could not be screened; emails that have not been
+  delivered; and approved roles that are not published yet (after about 3 days).
+  Each alert opens the place to fix it and disappears once the problem is resolved.
+- The **Getting Started** card for new organisations.
+
+A bell at the top shows new applicants that arrived since you last looked.
+
+## What is in Settings
+
+Settings is for users with the Edit settings permission. For your organisation it
+has: **Organization Branding** (the name and subtitle shown to your team and
+candidates); **Google Calendar Connection** (the shared HR calendar used for
+face-to-face interviews); **Google Drive for Live Avatar recordings** (see
+"Recording storage for Live Avatar interviews"); and **Automated Emails** (see "How
+to edit the automated emails"). The shared portal defaults (such as calendar and
+booking defaults and workflow rules) are managed by McLink platform administrators
+only, because they apply to every organisation. Your own calendar for being chosen
+as an interviewer is connected from **Profile** under **My Google Calendar**.
 
 ## What the applicant stages mean
 
@@ -583,8 +748,19 @@ Current usage costs are:
   reserved when the interview starts.
 
 Booking a time, creating a role request, commenting, and ordinary portal actions
-do not consume credits. A duplicate resume for the same role is skipped and is
+do not consume credits. The credit balance is shared by everyone in the
+organisation, and each charge records who or what triggered it (for a Live Avatar
+interview, the applicant). A duplicate resume for the same role is skipped and is
 not charged. Failed or invalid resume screening is not charged.
+
+Buying credits: open **Credits** in the menu, choose a pack under **Buy Smile
+Credits**, and continue to the secure checkout. Credits are added as soon as the
+payment is confirmed, and each purchase appears in the credit history. Packs are
+priced at S$0.40 per credit, for example Starter (10 credits), Standard (50
+credits) and Bulk (100 credits). If purchases show as unavailable, contact an
+administrator. Only people with the Manage Smile Credits permission (McLink) can
+add credits manually. The Credits page also shows the history of every charge and
+top-up for the organisation.
 
 Each AI-assisted action draws down the balance — for example screening a resume or
 running an AI voice interview consumes credits. When the balance runs low, ask
@@ -619,6 +795,9 @@ decisions; edit portal settings; manage user accounts; and manage Smile Credits.
   scoped to their own department. May also be given the ability to create
   requests. Does not manage the company-wide pipeline unless HR grants more
   access.
+- **Organization owner** — the first person to register into a client organisation.
+  Has HR access plus the ability to invite teammates and to deactivate or
+  reactivate accounts.
 - **Administrator / HR access administrator** — manages user accounts and
   permissions and, where authorized, shared settings and the interview calendar
   connection. The Admin starting preset is for Smile Credits only; HR grants any
@@ -639,8 +818,8 @@ ask HR or the portal administrator to review your access.
 **"I cannot see a role or applicant."** Your access may limit you to your own
 requests or your department. Ask HR to confirm you have the right access.
 
-**"My request is not moving."** Check the status and the latest comment. It may be
-waiting for HR or Management, returned for more information, or on hold.
+**"My request is not moving."** Check the status and the latest comment. It is
+usually waiting for HR to approve or reject it.
 
 **"The role was approved but candidates cannot apply."** Check that the role
 status is **Job Posted** and that its Smile application link is available. HR can
@@ -670,9 +849,9 @@ administrator to check the shared HR calendar.
 page, read the latest information, then try again. This prevents one person's
 changes from overwriting another's.
 
-**"Candidates are not receiving emails."** Look at the **Confirm email delivery** step on
-the Dashboard: it shows whether email is switched on and whether any failed. If email is
-off or failing, ask the portal administrator. Check that the candidate's address is right
+**"Candidates are not receiving emails."** Look at the Dashboard **needs attention** list:
+it shows when emails have not been delivered. If email is failing, ask the portal
+administrator. Check that the candidate's address is right
 in Applicants. Emails go out within a few minutes.
 
 **"I want to change the wording of an email."** Open Settings and use **Automated
@@ -686,6 +865,30 @@ changed.
 This is a problem on the portal's side, not something you did. Try again in a minute; if
 it keeps happening, report it to the portal administrator with the time and what you were
 doing.
+
+**"Unable to start the avatar interview" or "Live Avatar interviews are temporarily
+unavailable" (candidate).** The link has not been used up: the candidate can try
+again. The usual causes are that the organisation has not connected its Google Drive
+recording folder, the folder connection needs renewing, the organisation is out of
+Smile Credits, or the Live Avatar service had a problem. HR should check Settings
+→ Google Drive for Live Avatar recordings, then the Credits balance, and contact the
+portal administrator if it continues.
+
+**"Not Scored — Manual HR Review" on a Live Avatar interview.** Too little could be
+assessed to score (fewer than 2 answers, an interview that ended early, or no
+official transcript). It is not a rejection. Read the transcript and decide.
+
+**"The recording could not be saved and is not available."** The recording did not
+reach the organisation's Google Drive folder. The transcript and review are still
+available. Check the Drive connection in Settings before the next interview.
+
+**"Smile's lines in the transcript are cut off."** Smile was interrupted while
+speaking; only what was already said is recorded. The applicant's answers are
+complete.
+
+**"I cannot deactivate a user."** Only the organisation owner (or McLink) can
+deactivate or reactivate accounts, the owner cannot be deactivated, and the last
+active account is protected.
 
 **Booking link does not work.** Booking links are single-use and personal. If a
 link is expired or already used, generate or request a new invitation.
