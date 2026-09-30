@@ -1,0 +1,106 @@
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+
+import { getDb } from "@/db/client";
+import { organizations } from "@/db/schema";
+import { users } from "@/db/schema-recruitment";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
+import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
+import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const MAX_INVITES = 100;
+const inviteSchema = z.object({ email: z.string().trim().toLowerCase().email("Enter a valid email address.").max(200) });
+
+function fail(error: string, status: number, headers?: HeadersInit) {
+  return NextResponse.json({ success: false, error }, { status, headers: { "Cache-Control": "no-store", ...(headers || {}) } });
+}
+
+/**
+ * The owner of a client organization can invite teammates by email address.
+ * Whole email domains stay a McLink administrator decision: an owner adding a
+ * common domain such as gmail.com would let anyone register into the workspace.
+ */
+async function requireOwner() {
+  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  if (!user) return { error: fail("Authentication required.", 401) } as const;
+  if (user.organizationId === DEFAULT_ORGANIZATION_ID) return { error: fail("McLink accounts are managed by a platform administrator.", 403) } as const;
+  const [owner] = await getDb().select({ id: users.id }).from(users)
+    .where(and(eq(users.organizationId, user.organizationId), eq(users.email, user.email.trim().toLowerCase()), eq(users.isOrganizationOwner, true), eq(users.active, true))).limit(1);
+  if (!owner) return { error: fail("Only the organization owner can invite teammates.", 403) } as const;
+  return { user } as const;
+}
+
+async function loadOrganization(organizationId: string) {
+  const [organization] = await getDb().select({ allowedEmails: organizations.allowedEmails, allowedDomains: organizations.allowedDomains }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+  return organization;
+}
+
+export async function GET() {
+  const access = await requireOwner();
+  if ("error" in access) return access.error;
+  try {
+    const organization = await loadOrganization(access.user.organizationId);
+    if (!organization) return fail("Organization not found.", 404);
+    const registered = new Set((await getDb().select({ email: users.email }).from(users).where(eq(users.organizationId, access.user.organizationId))).map((row) => row.email.trim().toLowerCase()));
+    return NextResponse.json({
+      success: true,
+      domains: organization.allowedDomains,
+      invites: organization.allowedEmails.map((email) => ({ email, registered: registered.has(email) })),
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    console.error("[API Team Invites] GET failed:", error);
+    return fail("Unable to load invitations.", 500);
+  }
+}
+
+export async function POST(request: Request) {
+  const access = await requireOwner();
+  if ("error" in access) return access.error;
+  const rate = consumeRateLimit(`team-invite:${access.user.email}:${requestClientKey(request)}`, 30, 15 * 60 * 1000);
+  if (!rate.allowed) return fail("Too many invitations. Try again later.", 429, rateLimitHeaders(rate));
+  try {
+    const { email } = inviteSchema.parse(await request.json());
+    const organizationId = access.user.organizationId;
+    const organization = await loadOrganization(organizationId);
+    if (!organization) return fail("Organization not found.", 404);
+    if (organization.allowedEmails.includes(email)) return fail("That email address is already invited.", 409);
+    if (organization.allowedEmails.length >= MAX_INVITES) return fail(`You can invite up to ${MAX_INVITES} addresses.`, 400);
+    // An address may register into only one organization.
+    const others = await getDb().select({ id: organizations.id, name: organizations.name, allowedEmails: organizations.allowedEmails, allowedDomains: organizations.allowedDomains }).from(organizations);
+    const domain = email.split("@")[1] || "";
+    const conflict = others.find((other) => other.id !== organizationId && (other.allowedEmails.includes(email) || other.allowedDomains.includes(domain)));
+    if (conflict) return fail("That email address already belongs to another organization.", 409);
+    await getDb().update(organizations).set({ allowedEmails: [...organization.allowedEmails, email], updatedAt: new Date() }).where(eq(organizations.id, organizationId));
+    return NextResponse.json({ success: true, message: `${email} can now register with that address and will join your organization.` });
+  } catch (error) {
+    if (error instanceof z.ZodError) return fail(error.issues[0]?.message || "Enter a valid email address.", 400);
+    console.error("[API Team Invites] POST failed:", error);
+    return fail("Unable to send the invitation.", 500);
+  }
+}
+
+/** Withdraws an invitation that has not been used. People who already registered are deactivated from the team list instead. */
+export async function DELETE(request: Request) {
+  const access = await requireOwner();
+  if ("error" in access) return access.error;
+  const email = (new URL(request.url).searchParams.get("email") || "").trim().toLowerCase();
+  if (!email) return fail("The email address is required.", 400);
+  try {
+    const organizationId = access.user.organizationId;
+    const organization = await loadOrganization(organizationId);
+    if (!organization) return fail("Organization not found.", 404);
+    if (email === access.user.email.trim().toLowerCase()) return fail("You cannot remove your own address.", 400);
+    const [registered] = await getDb().select({ id: users.id }).from(users).where(and(eq(users.organizationId, organizationId), eq(users.email, email))).limit(1);
+    if (registered) return fail("This person has already registered. Deactivate them from the team list instead.", 409);
+    await getDb().update(organizations).set({ allowedEmails: organization.allowedEmails.filter((value) => value !== email), updatedAt: new Date() }).where(eq(organizations.id, organizationId));
+    return NextResponse.json({ success: true, message: "Invitation withdrawn." });
+  } catch (error) {
+    console.error("[API Team Invites] DELETE failed:", error);
+    return fail("Unable to withdraw the invitation.", 500);
+  }
+}

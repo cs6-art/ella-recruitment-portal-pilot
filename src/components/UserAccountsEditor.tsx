@@ -110,6 +110,14 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
   const [users, setUsers] = useState<DirectoryUser[]>([]);
   // Owners (and McLink platform administrators) manage the team; other HR accounts can only view it.
   const [canManageTeam, setCanManageTeam] = useState(false);
+  // Owners of a client organization invite teammates by email address.
+  const [invites, setInvites] = useState<Array<{ email: string; registered: boolean }>>([]);
+  const [inviteDomains, setInviteDomains] = useState<string[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteSaving, setInviteSaving] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteMessage, setInviteMessage] = useState("");
+  const [inviteAvailable, setInviteAvailable] = useState(false);
   const [form, setForm] = useState<AccountForm>(emptyForm);
   const [originalEmail, setOriginalEmail] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -146,6 +154,54 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
     }
   }
 
+  async function loadInvites() {
+    try {
+      const response = await fetch("/api/organizations/team-invites", { credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) { setInviteAvailable(false); return; }
+      const data = await response.json();
+      setInvites(data.invites || []);
+      setInviteDomains(data.domains || []);
+      setInviteAvailable(true);
+    } catch {
+      setInviteAvailable(false);
+    }
+  }
+
+  async function sendInvite(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setInviteError("");
+    setInviteMessage("");
+    const email = inviteEmail.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email)) { setInviteError("Enter a valid email address."); return; }
+    setInviteSaving(true);
+    try {
+      const response = await fetch("/api/organizations/team-invites", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+      const data = await response.json();
+      if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to send the invitation.");
+      setInviteMessage(data.message || "Invitation saved.");
+      setInviteEmail("");
+      await loadInvites();
+    } catch (caught) {
+      setInviteError(clientErrorMessage(caught, "Unable to send the invitation."));
+    } finally {
+      setInviteSaving(false);
+    }
+  }
+
+  async function withdrawInvite(email: string) {
+    setInviteError("");
+    setInviteMessage("");
+    try {
+      const response = await fetch(`/api/organizations/team-invites?email=${encodeURIComponent(email)}`, { method: "DELETE", credentials: "same-origin" });
+      const data = await response.json();
+      if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to withdraw the invitation.");
+      setInviteMessage(data.message || "Invitation withdrawn.");
+      await loadInvites();
+    } catch (caught) {
+      setInviteError(clientErrorMessage(caught, "Unable to withdraw the invitation."));
+    }
+  }
+
   async function loadOrganizations() {
     setOrganizationLoading(true);
     try {
@@ -170,8 +226,9 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
 
   // These loaders intentionally run once on mount; later organization changes
   // invoke loadUsers with the selected organization explicitly.
-  useEffect(() => { void loadUsers(); void loadOrganizations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadUsers(); void loadOrganizations(); void loadInvites(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const showDepartment = canManageOrganizations || users.some((user) => user.department.trim() !== "");
   const activeCount = useMemo(() => users.filter((user) => user.active).length, [users]);
   const adminCount = useMemo(() => users.filter((user) => user.canEditSettings && user.active).length, [users]);
   const editingOrganization = useMemo(() => organizations.find((organization) => organization.id === organizationForm.id), [organizations, organizationForm.id]);
@@ -418,6 +475,18 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
         <p className="field-hint organization-card-note">Data, credits and users are isolated per organization. A new organization starts empty as soon as its first person registers.</p>
       </section>}
 
+      {inviteAvailable && !canManageOrganizations && <section className="card organization-admin-card" aria-labelledby="team-invite-title">
+        <div className="card-header"><div><h2 id="team-invite-title">Invite a teammate</h2><p>Enter their email address. When they register with that address and verify it, they join your organization automatically.</p></div></div>
+        {inviteError && <ActionFeedback kind="error">{inviteError}</ActionFeedback>}
+        {inviteMessage && <ActionFeedback kind="success">{inviteMessage}</ActionFeedback>}
+        <form className="user-account-form" noValidate onSubmit={(event) => void sendInvite(event)}>
+          <div className="field"><label htmlFor="invite-email">Email address</label><input id="invite-email" type="email" value={inviteEmail} onChange={(event) => { setInviteEmail(event.target.value); setInviteError(""); }} placeholder="name@company.com" /></div>
+          <div className="user-account-form-actions"><button type="submit" className="btn btn-primary" disabled={inviteSaving}>{inviteSaving ? "Inviting…" : "Invite teammate"}</button></div>
+        </form>
+        {inviteDomains.length > 0 && <p className="field-hint organization-card-note">Anyone with an email at {inviteDomains.map((domain) => `@${domain}`).join(", ")} can already register without an invitation.</p>}
+        {invites.some((invite) => !invite.registered) && <div className="table-wrap"><table className="user-account-table"><thead><tr><th>Invited, not registered yet</th><th>Actions</th></tr></thead><tbody>{invites.filter((invite) => !invite.registered).map((invite) => <tr key={invite.email}><td>{invite.email}</td><td><button type="button" className="btn btn-secondary btn-small" onClick={() => void withdrawInvite(invite.email)}>Withdraw</button></td></tr>)}</tbody></table></div>}
+      </section>}
+
       <section className="user-account-stats" aria-label="Account summary">
         <div className="stat-card"><span>Total accounts</span><strong>{users.length}</strong></div>
         <div className="stat-card"><span>Active accounts</span><strong>{activeCount}</strong></div>
@@ -442,7 +511,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
 
       <section className="card user-account-list-card">
         <div className="card-header directory-card-header"><div className="directory-card-heading"><h2>Directory Accounts</h2><p>{canManageOrganizations ? `Manage accounts for ${organizations.find((organization) => organization.id === selectedOrganizationId)?.name || "the selected organization"}.` : "Manage accounts for your organization."}</p></div><div className="directory-card-actions">{canManageOrganizations && organizations.length > 0 && <div className="field user-account-organization-picker"><label htmlFor="user-account-organization">Manage users for</label><select id="user-account-organization" value={selectedOrganizationId} onChange={(event) => { const organizationId = event.target.value; setSelectedOrganizationId(organizationId); setShowForm(false); void loadUsers(organizationId); }}><option value={DEFAULT_ORG_ID}>McLink</option>{organizations.filter((organization) => organization.id !== DEFAULT_ORG_ID).map((organization) => <option key={organization.id} value={organization.id} disabled={!organization.active}>{organization.name}{organization.active ? "" : " (inactive)"}</option>)}</select></div>}<button type="button" className="btn btn-secondary directory-refresh-button" onClick={() => void loadUsers(selectedOrganizationId)} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button></div></div>
-        {loading ? <div className="empty">Loading user accounts…</div> : users.length === 0 ? <div className="empty">No user accounts were found.</div> : <div className="table-wrap user-account-table-wrap"><table className="user-account-table"><thead><tr><th>User</th>{canManageOrganizations && <th>Access role</th>}<th>Department</th><th>Status</th><th>Last sign-in</th>{canManageOrganizations && <th>Permissions</th>}<th>Actions</th></tr></thead><tbody>{users.map((user) => <tr key={user.email}><td><strong>{user.fullName || "Unnamed user"}{user.isOrganizationOwner && <span className="rule-chip">Owner</span>}</strong><span>{user.email}</span></td>{canManageOrganizations && <td>{user.accessRole || "—"}</td>}<td>{user.department || "—"}</td><td><span className={`user-account-status ${user.active ? "is-active" : "is-inactive"}`}>{user.active ? "Active" : "Inactive"}</span>{!user.active && user.deactivatedAt && <span className="field-hint">Deactivated{user.deactivatedBy ? ` by ${user.deactivatedBy}` : ""} on {formatWhen(user.deactivatedAt)}</span>}</td><td>{formatWhen(user.lastLoginAt) || "Never"}</td>{canManageOrganizations && <td>{permissionLabels(user)}</td>}<td><div className="user-account-actions">{canManageOrganizations && <button type="button" className="btn btn-secondary btn-small" onClick={() => openEditForm(user)}>Edit</button>}{canManageOrganizations && <button type="button" className="btn btn-secondary btn-small" onClick={() => void resetRegistration(user)} disabled={user.email === currentEmail.trim().toLowerCase()} title="Clear the sign-in credential so this email can register again">Reset registration</button>}{canManageTeam && <button type="button" className={`btn btn-small ${user.active ? "btn-danger-outline" : "btn-secondary"}`} onClick={() => void toggleActive(user)} disabled={user.email === currentEmail.trim().toLowerCase() || (user.isOrganizationOwner === true && !canManageOrganizations)} title={user.isOrganizationOwner && !canManageOrganizations ? "The organization owner cannot be deactivated" : undefined}>{user.active ? "Deactivate" : "Reactivate"}</button>}</div></td></tr>)}</tbody></table></div>}
+        {loading ? <div className="empty">Loading user accounts…</div> : users.length === 0 ? <div className="empty">No user accounts were found.</div> : <div className="table-wrap user-account-table-wrap"><table className="user-account-table"><thead><tr><th>User</th>{canManageOrganizations && <th>Access role</th>}{showDepartment && <th>Department</th>}<th>Status</th><th>Last sign-in</th>{canManageOrganizations && <th>Permissions</th>}<th>Actions</th></tr></thead><tbody>{users.map((user) => <tr key={user.email}><td><strong>{user.fullName || "Unnamed user"}{user.isOrganizationOwner && <span className="rule-chip">Owner</span>}</strong><span>{user.email}</span></td>{canManageOrganizations && <td>{user.accessRole || "—"}</td>}{showDepartment && <td>{user.department || "—"}</td>}<td><span className={`user-account-status ${user.active ? "is-active" : "is-inactive"}`}>{user.active ? "Active" : "Inactive"}</span>{!user.active && user.deactivatedAt && <span className="field-hint">Deactivated{user.deactivatedBy ? ` by ${user.deactivatedBy}` : ""} on {formatWhen(user.deactivatedAt)}</span>}</td><td>{formatWhen(user.lastLoginAt) || "Never"}</td>{canManageOrganizations && <td>{permissionLabels(user)}</td>}<td><div className="user-account-actions">{canManageOrganizations && <button type="button" className="btn btn-secondary btn-small" onClick={() => openEditForm(user)}>Edit</button>}{canManageOrganizations && <button type="button" className="btn btn-secondary btn-small" onClick={() => void resetRegistration(user)} disabled={user.email === currentEmail.trim().toLowerCase()} title="Clear the sign-in credential so this email can register again">Reset registration</button>}{canManageTeam && <button type="button" className={`btn btn-small ${user.active ? "btn-danger-outline" : "btn-secondary"}`} onClick={() => void toggleActive(user)} disabled={user.email === currentEmail.trim().toLowerCase() || (user.isOrganizationOwner === true && !canManageOrganizations)} title={user.isOrganizationOwner && !canManageOrganizations ? "The organization owner cannot be deactivated" : undefined}>{user.active ? "Deactivate" : "Reactivate"}</button>}</div></td></tr>)}</tbody></table></div>}
       </section>
     </main>
   );

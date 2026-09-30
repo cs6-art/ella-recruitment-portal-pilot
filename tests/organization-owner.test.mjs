@@ -22,3 +22,12 @@ test("team management is limited to the owner, the owner is protected, and the l
   assert.match(api, /You cannot deactivate the last active account\./);
   assert.match(api, /platformAdmin && user\.isOrganizationOwner === true/);
 });
+
+test("owners invite teammates by individual email only; domains stay with platform administrators", () => {
+  const api = read("src/app/api/organizations/team-invites/route.ts");
+  assert.match(api, /Only the organization owner can invite teammates\./);
+  assert.match(api, /isOrganizationOwner, true/);
+  assert.match(api, /already belongs to another organization/);
+  assert.doesNotMatch(api, /allowedDomains: \[/, "an owner must never be able to write domains");
+  assert.match(api, /Deactivate them from the team list instead/);
+});
