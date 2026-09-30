@@ -13,7 +13,6 @@ type StorageStatus = {
 };
 
 type PickerConfig = { clientId: string; apiKey: string; projectNumber: string };
-type TokenResponse = { access_token?: string; scope?: string; error?: string; error_description?: string };
 type PickerDocument = { id?: string; name?: string; mimeType?: string };
 type PickerInstance = { setVisible(visible: boolean): void };
 type PickerDocsView = {
@@ -30,13 +29,6 @@ type PickerBuilder = {
   setCallback(callback: (data: Record<string, unknown>) => void): PickerBuilder;
   build(): PickerInstance;
 };
-type TokenClient = { requestAccessToken(options?: { login_hint?: string }): void };
-type TokenClientConfig = {
-  client_id: string;
-  scope: string;
-  callback: (response: TokenResponse) => void;
-  error_callback?: (error: { type?: string }) => void;
-};
 type PickerApi = {
   DocsView: new (viewId: string) => PickerDocsView;
   PickerBuilder: new () => PickerBuilder;
@@ -44,14 +36,10 @@ type PickerApi = {
 };
 type PickerWindow = Window & {
   gapi?: { load(name: string, options: { callback: () => void; onerror?: () => void }): void };
-  google?: {
-    picker?: PickerApi;
-    accounts?: { oauth2?: { initTokenClient(config: TokenClientConfig): TokenClient } };
-  };
+  google?: { picker?: PickerApi };
 };
 
 const EMPTY_STATUS: StorageStatus = { connected: false, accountEmail: "", folderConfigured: false, folderName: "" };
-const PICKER_SCOPE = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email";
 const googleScriptLoads = new Map<string, Promise<void>>();
 
 function loadGoogleScript(src: string, marker: string) {
@@ -88,10 +76,7 @@ function loadGoogleScript(src: string, marker: string) {
 }
 
 async function ensurePickerLoaded() {
-  await Promise.all([
-    loadGoogleScript("https://apis.google.com/js/api.js", "data-google-picker-loader"),
-    loadGoogleScript("https://accounts.google.com/gsi/client", "data-google-identity-loader"),
-  ]);
+  await loadGoogleScript("https://apis.google.com/js/api.js", "data-google-picker-loader");
 
   const loadedWindow = window as PickerWindow;
   if (!loadedWindow.gapi) throw new Error("Google Drive folder picker is unavailable.");
@@ -104,9 +89,8 @@ async function ensurePickerLoaded() {
     });
   }
   const picker = loadedWindow.google?.picker;
-  const oauth2 = loadedWindow.google?.accounts?.oauth2;
-  if (!picker || !oauth2) throw new Error("Google Drive folder picker is unavailable.");
-  return { picker, oauth2 };
+  if (!picker) throw new Error("Google Drive folder picker is unavailable.");
+  return picker;
 }
 
 export default function RecordingDriveConnect() {
@@ -121,9 +105,6 @@ export default function RecordingDriveConnect() {
   const [message, setMessage] = useState("");
   const pickerApiRef = useRef<PickerApi | null>(null);
   const pickerConfigRef = useRef<PickerConfig | null>(null);
-  const tokenClientRef = useRef<TokenClient | null>(null);
-  const tokenResponseHandlerRef = useRef<((response: TokenResponse) => void) | null>(null);
-  const tokenErrorHandlerRef = useRef<((error: { type?: string }) => void) | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -157,7 +138,6 @@ export default function RecordingDriveConnect() {
     if (loading || !status.connected) {
       setPickerReady(false);
       pickerConfigRef.current = null;
-      tokenClientRef.current = null;
       pickerApiRef.current = null;
       return;
     }
@@ -177,26 +157,10 @@ export default function RecordingDriveConnect() {
         return { config, apis: ensurePickerLoaded() };
       })
       .then(async ({ config, apis }) => {
-        const { picker, oauth2 } = await apis;
+        const picker = await apis;
         if (!active) return;
         pickerApiRef.current = picker;
         pickerConfigRef.current = config;
-        tokenClientRef.current = oauth2.initTokenClient({
-          client_id: config.clientId,
-          scope: PICKER_SCOPE,
-          callback: (response) => {
-            const handler = tokenResponseHandlerRef.current;
-            tokenResponseHandlerRef.current = null;
-            tokenErrorHandlerRef.current = null;
-            handler?.(response);
-          },
-          error_callback: (pickerError) => {
-            const handler = tokenErrorHandlerRef.current;
-            tokenResponseHandlerRef.current = null;
-            tokenErrorHandlerRef.current = null;
-            handler?.(pickerError);
-          },
-        });
         setPickerReady(true);
       })
       .catch((caught) => {
@@ -208,102 +172,68 @@ export default function RecordingDriveConnect() {
 
     return () => {
       active = false;
-      tokenResponseHandlerRef.current = null;
-      tokenErrorHandlerRef.current = null;
     };
   }, [loading, pickerSetupAttempt, status.connected]);
 
-  function showFolderPicker(response: TokenResponse) {
-    const accessToken = response.access_token;
-    if (response.error || !accessToken) {
-      setError(response.error_description || "Google Drive access was not granted. Try again and allow file access.");
-      setOpeningPicker(false);
-      return;
-    }
-    if (!response.scope?.split(/\s+/).includes("https://www.googleapis.com/auth/drive.file")) {
-      setError("Google Drive file access was not granted. Reconnect Google Drive and try again.");
-      setOpeningPicker(false);
-      return;
-    }
+  function showFolderPicker(accessToken: string) {
+    try {
+      const pickerApi = pickerApiRef.current;
+      const pickerConfig = pickerConfigRef.current;
+      if (!pickerApi || !pickerConfig) throw new Error("Google Drive folder picker is unavailable. Try again.");
 
-    // This short-lived token comes directly from Google Identity Services after
-    // the user's click; it is held only in memory and passed only to Google
-    // Picker, never to a Smile API or persistent browser storage.
-    void (async () => {
-      try {
-        const identityResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          cache: "no-store",
-        });
-        if (!identityResponse.ok) throw new Error("Google could not verify the selected account.");
-        const identity = await identityResponse.json() as { email?: string };
-        if ((identity.email || "").trim().toLowerCase() !== status.accountEmail.trim().toLowerCase()) {
-          throw new Error(`Select the connected Google account (${status.accountEmail}) to choose this organization's folder.`);
-        }
-
-        const pickerApi = pickerApiRef.current;
-        const pickerConfig = pickerConfigRef.current;
-        if (!pickerApi || !pickerConfig) throw new Error("Google Drive folder picker is unavailable. Try again.");
-
-        const view = new pickerApi.DocsView(pickerApi.ViewId.DOCS)
-          .setIncludeFolders(true)
-          .setSelectFolderEnabled(true)
-          .setEnableDrives(true)
-          .setMode("list");
-        const picker = new pickerApi.PickerBuilder()
-          .addView(view)
-          .setOAuthToken(accessToken)
-          .setDeveloperKey(pickerConfig.apiKey)
-          .setAppId(pickerConfig.projectNumber)
-          .setCallback((data) => {
-            if (data.action !== "picked") {
-              picker.setVisible(false);
-              setOpeningPicker(false);
-              return;
-            }
-            const docs = Array.isArray(data.docs) ? data.docs as PickerDocument[] : [];
-            const selected = docs[0];
+      const view = new pickerApi.DocsView(pickerApi.ViewId.DOCS)
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(true)
+        .setEnableDrives(true)
+        .setMode("list");
+      const picker = new pickerApi.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(accessToken)
+        .setDeveloperKey(pickerConfig.apiKey)
+        .setAppId(pickerConfig.projectNumber)
+        .setCallback((data) => {
+          if (data.action !== "picked") {
             picker.setVisible(false);
-            if (!selected?.id) {
-              setError("Choose a Google Drive folder to continue.");
-              setOpeningPicker(false);
-              return;
-            }
-            void saveFolder(selected.id);
-          })
-          .build();
-        picker.setVisible(true);
-      } catch (caught) {
-        setError(clientErrorMessage(caught, "Unable to open Google Drive. Please try again."));
-        setOpeningPicker(false);
-      }
-    })();
+            setOpeningPicker(false);
+            return;
+          }
+          const docs = Array.isArray(data.docs) ? data.docs as PickerDocument[] : [];
+          const selected = docs[0];
+          picker.setVisible(false);
+          if (!selected?.id) {
+            setError("Choose a Google Drive folder to continue.");
+            setOpeningPicker(false);
+            return;
+          }
+          void saveFolder(selected.id);
+        })
+        .build();
+      picker.setVisible(true);
+    } catch (caught) {
+      setError(clientErrorMessage(caught, "Unable to open Google Drive. Please try again."));
+      setOpeningPicker(false);
+    }
   }
 
   function chooseFolder() {
     setError("");
     setMessage("");
-    const tokenClient = tokenClientRef.current;
-    if (!pickerReady || !tokenClient) {
+    if (!pickerReady) {
       setError("The folder chooser is still getting ready. Try again in a moment.");
       return;
     }
     setOpeningPicker(true);
-    tokenResponseHandlerRef.current = showFolderPicker;
-    tokenErrorHandlerRef.current = (pickerError) => {
-      setError(pickerError.type === "popup_closed" ? "Google Drive connection was cancelled." : "Google could not open the account approval window. Allow pop-ups and try again.");
-      setOpeningPicker(false);
-    };
-    try {
-      // Invoke Google's token dialog synchronously from the user's click so
-      // browser popup protections recognize this as an intentional action.
-      tokenClient.requestAccessToken({ login_hint: status.accountEmail });
-    } catch (caught) {
-      tokenResponseHandlerRef.current = null;
-      tokenErrorHandlerRef.current = null;
-      setError(clientErrorMessage(caught, "Unable to request Google Drive access."));
-      setOpeningPicker(false);
-    }
+    void (async () => {
+      try {
+        const response = await fetch("/api/organization/recording-drive/picker-token", { cache: "no-store" });
+        const data = await response.json() as { success?: boolean; accessToken?: string; error?: string };
+        if (!response.ok || data.success !== true || !data.accessToken) throw new Error(data.error || "Unable to authorize Google Drive folder selection.");
+        showFolderPicker(data.accessToken);
+      } catch (caught) {
+        setError(clientErrorMessage(caught, "Unable to authorize Google Drive folder selection."));
+        setOpeningPicker(false);
+      }
+    })();
   }
 
   async function saveFolder(folderId: string) {

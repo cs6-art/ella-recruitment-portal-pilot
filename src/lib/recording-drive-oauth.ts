@@ -160,11 +160,7 @@ export async function getRecordingDriveClient(organizationId: string, accountEma
   return { drive: google.drive({ version: "v3", auth: client }), accessToken };
 }
 
-/**
- * Google Picker's browser integration needs public project configuration plus a
- * short-lived token acquired directly by Google Identity Services in the
- * browser. Keep this endpoint's configuration separate from server tokens.
- */
+/** Google Picker's browser integration needs public project configuration. */
 export function getRecordingDrivePickerConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const apiKey = process.env.GOOGLE_PICKER_API_KEY?.trim();
