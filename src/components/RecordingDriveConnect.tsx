@@ -26,6 +26,8 @@ type PickerBuilder = {
   setOAuthToken(token: string): PickerBuilder;
   setDeveloperKey(key: string): PickerBuilder;
   setAppId(projectNumber: string): PickerBuilder;
+  setOrigin(origin: string): PickerBuilder;
+  setSize(width: number, height: number): PickerBuilder;
   setCallback(callback: (data: Record<string, unknown>) => void): PickerBuilder;
   build(): PickerInstance;
 };
@@ -191,6 +193,8 @@ export default function RecordingDriveConnect() {
         .setOAuthToken(accessToken)
         .setDeveloperKey(pickerConfig.apiKey)
         .setAppId(pickerConfig.projectNumber)
+        .setOrigin(window.location.origin)
+        .setSize(900, 600)
         .setCallback((data) => {
           if (data.action !== "picked") {
             picker.setVisible(false);
