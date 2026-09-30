@@ -19,6 +19,7 @@ import "./live-interview.css";
 type Props = { applicationId: string; initialReview: Review; canRetry: boolean };
 
 const PROCESSING = new Set(["INTERVIEW_IN_PROGRESS", "INTERVIEW_COMPLETED", "TRANSCRIPTION_PROCESSING", "ANALYSIS_PROCESSING"]);
+const NON_REVIEW_EVENTS = new Set(["tab_hidden", "tab_visible", "window_blur", "network_online"]);
 const POLL_MS = 5_000;
 const POLL_LIMIT_MS = 4 * 60 * 1000;
 // Fixed wording only: raw server/provider errors are never rendered here.
@@ -193,7 +194,10 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
   const refs = (turnRefs: number[]) => turnRefs.length > 0 && <button type="button" className="live-review-ref" onClick={() => jumpTo(turnRefs[0])}>View in transcript (turn {turnRefs.join(", ")})</button>;
   const failed = review.analysisState === "failed" && !processing;
   const analysisLabel = processing && retriedByHr ? "Retrying analysis…" : ANALYSIS_STATE_LABELS[review.analysisState];
-  const integrity = review.integrityEvents.filter((event) => event.type !== "tab_visible" && event.type !== "network_online");
+  // Window focus and tab visibility are ordinary browsing behaviour, not review evidence, so only technical faults are listed.
+  const integrity = review.integrityEvents.filter((event) => !NON_REVIEW_EVENTS.has(event.type));
+  // The score card and the recording section already state these, so do not repeat them as flags.
+  const flags = review.reviewFlags.filter((flag) => flag.code !== "not_scored" && !flag.code.startsWith("recording_"));
 
   return <div className="live-review">
     <p className="live-review-disclaimer">{HR_REVIEW_DISCLAIMER}</p>
@@ -209,7 +213,6 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
         <div className="applicant-detail-field"><span>Live Avatar Interview Status</span><strong>{INTERVIEW_STATE_LABELS[review.interviewState] || "Status not available"}</strong></div>
         <div className="applicant-detail-field"><span>AI Review Status</span><strong>{review.interviewState === "completed" ? analysisLabel : "Not started"}</strong></div>
         <div className="applicant-detail-field"><span>Consent Status</span><strong>{review.consent.given ? `Given ${formatDate(review.consent.at)} · notice ${review.consent.version}` : "Not given"}</strong></div>
-        <div className="applicant-detail-field"><span>Recording Storage</span><strong>{recordingLabel(review)}</strong></div>
         <div className="applicant-detail-field"><span>Transcript Source</span><strong>{review.transcriptSource === "provider" ? "Live Avatar (HeyGen) session transcript" : review.transcriptSource === "client_capture" ? "Browser capture — provider transcript unavailable" : review.transcriptSource === "none" ? "Could not be retrieved" : "Not yet available"}</strong></div>
       </div>
     </div>
@@ -222,9 +225,9 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
     </div>}
     {actionError && <p className="error-box" role="alert">{actionError}</p>}
 
-    {review.reviewFlags.length > 0 && <div className="live-review-block">
+    {flags.length > 0 && <div className="live-review-block">
       <h4>Items Flagged for HR Attention</h4>
-      <ul className="live-review-flags">{review.reviewFlags.map((flag) => <li key={flag.code}>{flag.message}</li>)}</ul>
+      <ul className="live-review-flags">{flags.map((flag) => <li key={flag.code}>{flag.message}</li>)}</ul>
     </div>}
 
     <div className="live-review-block">
@@ -251,22 +254,21 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
       <h4>Live Avatar Summary</h4>
       {analysis ? <>
         <div className="applicant-copy-block"><span>Interview Summary</span><p>{analysis.interviewSummary || "No summary was produced."}</p></div>
-        <div className="applicant-copy-columns">
-          <div><span>Relevant Experience</span>{analysis.relevantExperience.length ? <ul className="live-review-evidence">{analysis.relevantExperience.map((item, index) => <li key={index}><strong>{item.point}</strong>{item.evidence && <q>{item.evidence}</q>}{refs(item.turnRefs)}</li>)}</ul> : <p>None identified in the answers.</p>}</div>
-          <div><span>Skills Mentioned</span>{analysis.skillsMentioned.length ? <ul className="live-review-evidence">{analysis.skillsMentioned.map((item, index) => <li key={index}><strong>{item.skill}</strong>{item.evidence && <q>{item.evidence}</q>}{refs(item.turnRefs)}</li>)}</ul> : <p>No specific skills were discussed.</p>}</div>
-        </div>
-        <div className="applicant-copy-columns">
-          <div><span>Key Strengths Evidenced in Answers</span>{analysis.strengthsEvidenced.length ? <ul className="live-review-evidence">{analysis.strengthsEvidenced.map((item, index) => <li key={index}><strong>{item.strength}</strong><q>{item.evidence}</q>{refs(item.turnRefs)}</li>)}</ul> : <p>No strengths were supported by specific statements.</p>}</div>
-          <div><span>Areas HR May Want to Clarify</span>{analysis.areasToClarify.length ? <ul className="live-review-evidence">{analysis.areasToClarify.map((item, index) => <li key={index}><strong>{item.topic}</strong>{item.reason && <span>{item.reason}</span>}{refs(item.turnRefs)}</li>)}</ul> : <p>None identified.</p>}</div>
-        </div>
+        {(analysis.relevantExperience.length > 0 || analysis.skillsMentioned.length > 0) && <div className="applicant-copy-columns">
+          {analysis.relevantExperience.length > 0 && <div><span>Relevant Experience</span><ul className="live-review-evidence">{analysis.relevantExperience.map((item, index) => <li key={index}><strong>{item.point}</strong>{item.evidence && <q>{item.evidence}</q>}{refs(item.turnRefs)}</li>)}</ul></div>}
+          {analysis.skillsMentioned.length > 0 && <div><span>Skills Mentioned</span><ul className="live-review-evidence">{analysis.skillsMentioned.map((item, index) => <li key={index}><strong>{item.skill}</strong>{item.evidence && <q>{item.evidence}</q>}{refs(item.turnRefs)}</li>)}</ul></div>}
+        </div>}
+        {(analysis.strengthsEvidenced.length > 0 || analysis.areasToClarify.length > 0) && <div className="applicant-copy-columns">
+          {analysis.strengthsEvidenced.length > 0 && <div><span>Key Strengths Evidenced in Answers</span><ul className="live-review-evidence">{analysis.strengthsEvidenced.map((item, index) => <li key={index}><strong>{item.strength}</strong><q>{item.evidence}</q>{refs(item.turnRefs)}</li>)}</ul></div>}
+          {analysis.areasToClarify.length > 0 && <div><span>Areas HR May Want to Clarify</span><ul className="live-review-evidence">{analysis.areasToClarify.map((item, index) => <li key={index}><strong>{item.topic}</strong>{item.reason && <span>{item.reason}</span>}{refs(item.turnRefs)}</li>)}</ul></div>}
+        </div>}
         {analysis.notableResponses.length > 0 && <div className="applicant-copy-block"><span>Notable Responses</span><ul className="live-review-evidence">{analysis.notableResponses.map((item, index) => <li key={index}><strong>{item.title}</strong>{item.quote && <q>{item.quote}</q>}{refs(item.turnRefs)}</li>)}</ul></div>}
       </> : <p className="live-review-loading">{processing ? "The AI summary is being prepared from the transcript." : failed ? "The AI summary is unavailable until the analysis is retried." : "No AI summary is available for this interview."}</p>}
     </div>
 
-    <div className="live-review-block">
+    {review.questions.length > 0 && <div className="live-review-block">
       <h4>Question-by-Question Review</h4>
-      {review.questions.length === 0 ? <p className="live-review-loading">{review.turns.length ? "No substantive interview questions were detected in the transcript." : "Questions appear here once the transcript is available."}</p>
-        : review.questions.map((pair, index) => {
+      {review.questions.map((pair, index) => {
           const item = questionReview.get(pair.questionIndex);
           return <article key={pair.questionIndex} className="live-review-question" id={`live-question-${review.sessionId}-${pair.questionIndex}`}>
             <h5>Question {index + 1}</h5>
@@ -281,7 +283,7 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
             <button type="button" className="live-review-ref" onClick={() => jumpTo(pair.turnSeqs[0])}>Jump to this question in the transcript</button>
           </article>;
         })}
-    </div>
+    </div>}
 
     <div className="live-review-block">
       <h4>Full Interview Transcript</h4>
@@ -312,11 +314,10 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
         : <p className="live-review-loading" role="status" aria-live="polite">{recordingLabel(review)}</p>}
     </div>
 
-    <div className="live-review-block">
+    {integrity.length > 0 && <div className="live-review-block">
       <h4>Session Review Indicators</h4>
       <p className="live-review-loading">Objective technical events recorded during the session. They are prompts for HR review only, are not evidence of misconduct, and are never used to accept or reject an applicant.</p>
-      {integrity.length === 0 ? <p className="live-review-loading">No session events were recorded.</p>
-        : <ul className="live-review-integrity">{integrity.map((event, index) => <li key={`${event.type}-${index}`}>{formatDate(event.at)} — {INTEGRITY_EVENT_LABELS[event.type as IntegrityEventType] || event.type}{event.detail ? ` (${event.detail})` : ""}</li>)}</ul>}
-    </div>
+      <ul className="live-review-integrity">{integrity.map((event, index) => <li key={`${event.type}-${index}`}>{formatDate(event.at)} — {INTEGRITY_EVENT_LABELS[event.type as IntegrityEventType] || event.type}{event.detail ? ` (${event.detail})` : ""}</li>)}</ul>
+    </div>}
   </div>;
 }

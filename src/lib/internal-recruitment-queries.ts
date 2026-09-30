@@ -1701,7 +1701,8 @@ export async function applicationVoiceReview(externalId: string) {
     const { message, artifact } = rawVoiceArtifact(result.raw);
     const variableValues = objectValue(artifact.variableValues || message.variableValues);
     const setup = objectValue(application.roleSetup);
-    const derived = result.transcript
+    // The phone-call heuristic reads "avatar:" lines as candidate speech, so it must never run on Live Avatar results.
+    const derived = result.transcript && result.providerEventType !== "live_avatar_interview"
       ? evaluateVoiceInterview({
           roleTitle: application.roleTitle,
           roleDescription: firstText(setup.jobDescription, setup.screeningCriteria),

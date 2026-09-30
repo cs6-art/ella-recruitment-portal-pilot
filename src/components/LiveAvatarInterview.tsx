@@ -135,8 +135,6 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
   useEffect(() => {
     if (!accessToken || !liveForCheckpoints) return;
     const timer = window.setInterval(() => void checkpoint(), PROGRESS_INTERVAL_MS);
-    const onVisibility = () => logIntegrityEvent(document.visibilityState === "hidden" ? "tab_hidden" : "tab_visible");
-    const onBlur = () => logIntegrityEvent("window_blur");
     const onOffline = () => logIntegrityEvent("network_offline");
     const onOnline = () => logIntegrityEvent("network_online");
     const onPageHide = () => {
@@ -146,15 +144,11 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
       const transcript = capturedTurnsRef.current.slice(-80);
       void postInterview("/api/live-avatar/complete", { sessionId: sessionIdRef.current, transcript, integrityEvents: integrityEventsRef.current, interrupted: true }, true).catch(() => {});
     };
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("blur", onBlur);
     window.addEventListener("offline", onOffline);
     window.addEventListener("online", onOnline);
     window.addEventListener("pagehide", onPageHide);
     return () => {
       window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("blur", onBlur);
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("pagehide", onPageHide);
