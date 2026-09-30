@@ -196,6 +196,7 @@ export default function RecordingDriveConnect() {
         .setOrigin(window.location.origin)
         .setSize(900, 600)
         .setCallback((data) => {
+          if (data.action === "loaded") return;
           if (data.action !== "picked") {
             picker.setVisible(false);
             setOpeningPicker(false);
