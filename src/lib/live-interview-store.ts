@@ -34,6 +34,7 @@ import {
 import { completeAvatarInterviewByHash, getAvatarInterviewContext } from "@/lib/internal-recruitment-queries";
 import { recordLiveAvatarInterviewDeduction } from "@/lib/ella-credits";
 import { buildRoleRequirementsContext } from "@/lib/recruitment-prompt";
+import { deleteRecordingDriveConnectionIfUnused } from "@/lib/recording-drive-oauth";
 import {
   beginRecordingUpload,
   deleteInterviewRecording,
@@ -790,8 +791,8 @@ export async function receiveRecordingChunk(input: { rawToken: string; offset: n
   const db = getDb();
   if (!session.recordingUploadUrl) {
     if (!isAllowedRecordingMimeType(input.mimeType)) throw new LiveInterviewError("Unsupported recording format.", 415, "unsupported_media");
-    const uploadUrl = await beginRecordingUpload({ organizationId: session.organizationId, sessionId: session.id, mimeType: input.mimeType });
-    const [claimed] = await db.update(liveInterviewSessions).set({ recordingUploadUrl: uploadUrl, recordingStatus: "uploading", recordingMimeType: input.mimeType.split(";")[0].trim(), updatedAt: new Date() })
+    const upload = await beginRecordingUpload({ organizationId: session.organizationId, sessionId: session.id, mimeType: input.mimeType });
+    const [claimed] = await db.update(liveInterviewSessions).set({ recordingUploadUrl: upload.uploadUrl, recordingStorageAccountEmail: upload.accountEmail, recordingStatus: "uploading", recordingMimeType: input.mimeType.split(";")[0].trim(), updatedAt: new Date() })
       .where(and(eq(liveInterviewSessions.id, session.id), eq(liveInterviewSessions.recordingUploadUrl, ""))).returning();
     session = claimed ?? (await getSessionById(session.id)) ?? session;
   }
@@ -951,14 +952,14 @@ export async function getLiveInterviewReview(applicationExternalId: string, orga
 
 /** Recording reference for authenticated HR playback, scoped to the organization. */
 export async function getLiveInterviewRecordingRef(applicationExternalId: string, organizationId: string) {
-  const [row] = await getDb().select({ ref: liveInterviewSessions.recordingStorageRef, status: liveInterviewSessions.recordingStatus, mimeType: liveInterviewSessions.recordingMimeType })
+  const [row] = await getDb().select({ ref: liveInterviewSessions.recordingStorageRef, status: liveInterviewSessions.recordingStatus, mimeType: liveInterviewSessions.recordingMimeType, organizationId: liveInterviewSessions.organizationId, accountEmail: liveInterviewSessions.recordingStorageAccountEmail })
     .from(liveInterviewSessions)
     .innerJoin(applications, eq(applications.id, liveInterviewSessions.applicationId))
     .where(and(eq(applications.externalId, applicationExternalId), eq(liveInterviewSessions.organizationId, organizationId || DEFAULT_ORGANIZATION_ID)))
     .orderBy(desc(liveInterviewSessions.createdAt))
     .limit(1);
   if (!row || row.status !== "available" || !row.ref) return null;
-  return { fileId: row.ref, mimeType: row.mimeType || "video/webm" };
+  return { fileId: row.ref, mimeType: row.mimeType || "video/webm", organizationId: row.organizationId, accountEmail: row.accountEmail };
 }
 
 /** Candidate-safe status for the invitation page (no transcript, no analysis). */
@@ -986,7 +987,7 @@ export async function purgeExpiredInterviewRecordings(options: { limit?: number 
   if (days === 0) return { purged: 0, failed: 0, skipped: "retention_disabled" as const };
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const db = getDb();
-  const expired = await db.select({ id: liveInterviewSessions.id, ref: liveInterviewSessions.recordingStorageRef }).from(liveInterviewSessions).where(and(
+  const expired = await db.select({ id: liveInterviewSessions.id, ref: liveInterviewSessions.recordingStorageRef, organizationId: liveInterviewSessions.organizationId, accountEmail: liveInterviewSessions.recordingStorageAccountEmail }).from(liveInterviewSessions).where(and(
     eq(liveInterviewSessions.recordingStatus, "available"),
     lt(liveInterviewSessions.interviewCompletedAt, cutoff),
     sql`${liveInterviewSessions.recordingStorageRef} <> ''`,
@@ -995,8 +996,9 @@ export async function purgeExpiredInterviewRecordings(options: { limit?: number 
   let failed = 0;
   for (const row of expired) {
     try {
-      await deleteInterviewRecording(row.ref);
+      await deleteInterviewRecording(row.ref, row.organizationId, row.accountEmail);
       await db.update(liveInterviewSessions).set({ recordingStatus: "deleted", recordingStorageRef: "", recordingUploadUrl: "", recordingError: "", updatedAt: new Date() }).where(eq(liveInterviewSessions.id, row.id));
+      if (row.accountEmail) await deleteRecordingDriveConnectionIfUnused(row.organizationId, row.accountEmail);
       purged += 1;
     } catch (error) {
       failed += 1;

@@ -6,8 +6,10 @@ import { z } from "zod";
 
 import { getDb } from "@/db/client";
 import { organizations } from "@/db/schema";
+import { portalSettings } from "@/db/schema-recruitment";
 import { isPlatformAdmin } from "@/lib/access-control";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
+import { getOrganizationReadiness } from "@/lib/organization-readiness";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -17,22 +19,11 @@ const organizationSchema = z.object({
   name: z.string().trim().min(2).max(160),
   slug: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9-]{1,62}$/, "Use 2–63 lowercase letters, numbers, or hyphens."),
   active: z.boolean().default(true),
-  // Who may self-register into this organization: whole email domains
-  // ("mcasia.com") and/or individual addresses of any domain.
+  // Domain access is intentionally optional; each domain grants HR access to
+  // every person who registers with an address at that domain.
   allowedDomains: z.array(z.string().trim().toLowerCase().regex(/^(?:@)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/, "Enter domains like mcasia.com.")).max(20).default([]),
   allowedEmails: z.array(z.string().trim().toLowerCase().email("Enter valid email addresses.")).max(100).default([]),
 });
-
-const organizationColumns = {
-  id: organizations.id,
-  name: organizations.name,
-  slug: organizations.slug,
-  databaseKey: organizations.databaseKey,
-  databaseStatus: organizations.databaseStatus,
-  active: organizations.active,
-  allowedDomains: organizations.allowedDomains,
-  allowedEmails: organizations.allowedEmails,
-};
 
 function cleanRules(input: z.infer<typeof organizationSchema>) {
   return {
@@ -41,15 +32,29 @@ function cleanRules(input: z.infer<typeof organizationSchema>) {
   };
 }
 
-/** A domain or address may register into only one organization, or its users would be ambiguous. */
+function normalizeDomain(value: string) {
+  return value.trim().toLowerCase().replace(/^@/, "");
+}
+
+/** Reject registrations that would match more than one organization's explicit invite rules. */
 async function ruleConflict(rules: ReturnType<typeof cleanRules>, ownId: string) {
   const all = await getDb().select({ id: organizations.id, name: organizations.name, allowedDomains: organizations.allowedDomains, allowedEmails: organizations.allowedEmails }).from(organizations);
-  const rows = all.filter((row) => row.id !== ownId);
-  for (const other of rows) {
-    const domain = rules.allowedDomains.find((value) => other.allowedDomains.includes(value));
-    if (domain) return `${domain} already belongs to ${other.name}.`;
-    const email = rules.allowedEmails.find((value) => other.allowedEmails.includes(value));
-    if (email) return `${email} already belongs to ${other.name}.`;
+  for (const other of all.filter((row) => row.id !== ownId)) {
+    const otherDomains = other.allowedDomains.map(normalizeDomain);
+    const otherEmails = other.allowedEmails.map((email) => email.trim().toLowerCase());
+    const duplicateDomain = rules.allowedDomains.find((value) => otherDomains.includes(normalizeDomain(value)));
+    if (duplicateDomain) return `The @${duplicateDomain} domain already belongs to ${other.name}.`;
+    const duplicateEmail = rules.allowedEmails.find((value) =>
+      otherEmails.includes(value.trim().toLowerCase()),
+    );
+    if (duplicateEmail) return `${duplicateEmail} is already assigned to ${other.name}.`;
+    const domainWithExistingInvite = rules.allowedDomains.find((domain) => otherEmails.some((email) => normalizeDomain(email.split("@")[1] || "") === normalizeDomain(domain)));
+    if (domainWithExistingInvite) return `The @${domainWithExistingInvite} domain includes an email already invited to ${other.name}. Invite people individually instead.`;
+    const directEmailMatchingOtherDomain = rules.allowedEmails.find((email) => {
+      const domain = normalizeDomain(email.split("@")[1] || "");
+      return otherDomains.includes(domain);
+    });
+    if (directEmailMatchingOtherDomain) return `${directEmailMatchingOtherDomain} is covered by the @${normalizeDomain(directEmailMatchingOtherDomain.split("@")[1] || "")} domain already assigned to ${other.name}.`;
   }
   return "";
 }
@@ -67,11 +72,50 @@ async function requirePlatformAdmin() {
   return { user } as const;
 }
 
+function publicOrganization(row: {
+  id: string;
+  name: string;
+  slug: string;
+  databaseStatus: string;
+  active: boolean;
+  allowedDomains: string[];
+  allowedEmails: string[];
+  createdAt?: Date;
+  updatedAt?: Date;
+}) {
+  // The internal tenant ID and database key stay server-side. Slugs are the
+  // public, stable selector used by platform-admin UI requests.
+  return {
+    name: row.name,
+    slug: row.slug,
+    canEditSlug: row.databaseStatus === "pending",
+    active: row.active,
+    allowedDomains: row.allowedDomains,
+    allowedEmails: row.allowedEmails,
+    ...(row.createdAt ? { createdAt: row.createdAt.toISOString() } : {}),
+    ...(row.updatedAt ? { updatedAt: row.updatedAt.toISOString() } : {}),
+  };
+}
+
 export async function GET() {
   const access = await requirePlatformAdmin();
   if ("error" in access) return access.error;
   try {
-    const items = await getDb().select({ ...organizationColumns, createdAt: organizations.createdAt, updatedAt: organizations.updatedAt }).from(organizations).orderBy(organizations.name);
+    const rows = await getDb().select({
+      id: organizations.id,
+      name: organizations.name,
+      slug: organizations.slug,
+      databaseStatus: organizations.databaseStatus,
+      active: organizations.active,
+      allowedDomains: organizations.allowedDomains,
+      allowedEmails: organizations.allowedEmails,
+      createdAt: organizations.createdAt,
+      updatedAt: organizations.updatedAt,
+    }).from(organizations).orderBy(organizations.name);
+    const items = await Promise.all(rows.map(async (row) => ({
+      ...publicOrganization(row),
+      readiness: await getOrganizationReadiness(row.id),
+    })));
     return NextResponse.json({ success: true, organizations: items }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API Organizations] GET failed:", error);
@@ -85,11 +129,38 @@ export async function POST(request: Request) {
   try {
     const input = organizationSchema.parse(await request.json());
     if (input.slug === "mclinkgroup") return errorResponse("The McLink organization already exists.", 409);
+    // Ownership is automatic (the first verified registrant), so someone must be allowed to register.
     const rules = cleanRules(input);
+    if (rules.allowedDomains.length === 0 && rules.allowedEmails.length === 0) return errorResponse("Add an allowed email domain or at least one email address so the first person can register and become the owner.", 400);
     const conflict = await ruleConflict(rules, "");
     if (conflict) return errorResponse(conflict, 409);
-    const [organization] = await getDb().insert(organizations).values({ id: randomUUID(), name: input.name, slug: input.slug, databaseKey: input.slug, databaseStatus: "shared", active: input.active, ...rules }).returning(organizationColumns);
-    return NextResponse.json({ success: true, organization, message: "Organization created. People with an allowed email can now register and will land in this organization's empty, isolated workspace." }, { status: 201, headers: { "Cache-Control": "no-store" } });
+
+    const db = getDb();
+    const id = randomUUID();
+    const now = new Date();
+    const [created] = await db.transaction(async (tx) => {
+      const [organization] = await tx.insert(organizations).values({
+        id,
+        name: input.name,
+        slug: input.slug,
+        databaseKey: input.slug,
+        databaseStatus: "shared",
+        active: true,
+        onboardingStartedAt: now,
+        ...rules,
+      }).returning({ id: organizations.id, name: organizations.name, slug: organizations.slug, databaseStatus: organizations.databaseStatus, active: organizations.active, allowedDomains: organizations.allowedDomains, allowedEmails: organizations.allowedEmails });
+      await tx.insert(portalSettings).values([
+        { organizationId: id, key: "Organization_Display_Name", value: input.name, category: "Branding", updatedBy: access.user.email },
+        { organizationId: id, key: "Organization_Display_Subtitle", value: "Recruitment Portal", category: "Branding", updatedBy: access.user.email },
+      ]);
+      return [organization];
+    });
+
+    return NextResponse.json({
+      success: true,
+      organization: publicOrganization(created),
+      message: "Organization created. The first person to register with an allowed email and verify it becomes the organization owner.",
+    }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof z.ZodError) return errorResponse(error.issues[0]?.message || "Enter a valid organization name and slug.", 400);
     if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "23505") return errorResponse("An organization with that slug already exists.", 409);
@@ -101,19 +172,19 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const access = await requirePlatformAdmin();
   if ("error" in access) return access.error;
-  const id = new URL(request.url).searchParams.get("id")?.trim() || "";
-  if (!id) return errorResponse("The organization ID is required.", 400);
+  const slug = new URL(request.url).searchParams.get("slug")?.trim().toLowerCase() || "";
+  if (!slug) return errorResponse("The organization slug is required.", 400);
   try {
     const input = organizationSchema.parse(await request.json());
-    const [existing] = await getDb().select({ id: organizations.id, slug: organizations.slug, databaseKey: organizations.databaseKey, databaseStatus: organizations.databaseStatus }).from(organizations).where(eq(organizations.id, id)).limit(1);
+    const [existing] = await getDb().select({ id: organizations.id, slug: organizations.slug, databaseKey: organizations.databaseKey, databaseStatus: organizations.databaseStatus }).from(organizations).where(eq(organizations.slug, slug)).limit(1);
     if (!existing) return errorResponse("Organization not found.", 404);
-    if (id === DEFAULT_ORGANIZATION_ID && (!input.active || input.slug !== existing.slug)) return errorResponse("The McLink organization cannot be deactivated or renamed.", 400);
+    if (existing.id === DEFAULT_ORGANIZATION_ID && (!input.active || input.slug !== existing.slug)) return errorResponse("The McLink organization cannot be deactivated or renamed.", 400);
     if (input.slug !== existing.slug && existing.databaseStatus !== "pending") return errorResponse("A provisioned organization cannot change its slug.", 409);
     const rules = cleanRules(input);
-    const conflict = await ruleConflict(rules, id);
+    const conflict = await ruleConflict(rules, existing.id);
     if (conflict) return errorResponse(conflict, 409);
-    const [organization] = await getDb().update(organizations).set({ name: input.name, slug: input.slug, databaseKey: existing.databaseStatus === "pending" ? input.slug : existing.databaseKey, active: input.active, ...rules, updatedAt: new Date() }).where(and(eq(organizations.id, id), eq(organizations.databaseStatus, existing.databaseStatus))).returning(organizationColumns);
-    return NextResponse.json({ success: true, organization, message: "Organization updated." }, { headers: { "Cache-Control": "no-store" } });
+    const [organization] = await getDb().update(organizations).set({ name: input.name, slug: input.slug, databaseKey: existing.databaseStatus === "pending" ? input.slug : existing.databaseKey, active: input.active, ...rules, updatedAt: new Date() }).where(and(eq(organizations.id, existing.id), eq(organizations.databaseStatus, existing.databaseStatus))).returning({ id: organizations.id, name: organizations.name, slug: organizations.slug, databaseStatus: organizations.databaseStatus, active: organizations.active, allowedDomains: organizations.allowedDomains, allowedEmails: organizations.allowedEmails });
+    return NextResponse.json({ success: true, organization: publicOrganization(organization), message: "Organization updated." }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof z.ZodError) return errorResponse(error.issues[0]?.message || "Enter valid organization details.", 400);
     if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "23505") return errorResponse("An organization with that slug already exists.", 409);

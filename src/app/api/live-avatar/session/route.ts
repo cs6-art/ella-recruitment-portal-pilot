@@ -7,7 +7,7 @@ import { consumeDurableRateLimit } from "@/lib/durable-rate-limit";
 import { rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { createLiveAvatarSession, isLiveAvatarConfigured } from "@/lib/live-avatar";
-import { isRecordingStorageConfigured } from "@/lib/interview-recording-storage";
+import { assertRecordingStorageReady, isRecordingStorageConfigured } from "@/lib/interview-recording-storage";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { finalizeAvatarInterviewStart, getAvatarInterviewContext, releaseAvatarInterviewStart, startAvatarInterview } from "@/lib/internal-recruitment-queries";
 import { assertReadyToStart, LiveInterviewError, markInterviewStarted, stopProviderSession } from "@/lib/live-interview-store";
@@ -59,15 +59,24 @@ export async function POST(request: NextRequest) {
         if (gateError instanceof LiveInterviewError) return NextResponse.json({ success: false, error: gateError.message, code: gateError.code }, { status: gateError.status });
         throw gateError;
       }
+      const preview = await getAvatarInterviewContext(avatarToken);
+      if (!preview) return NextResponse.json({ success: false, error: "This avatar interview link has already been used, expired, or is no longer available." }, { status: 410 });
       // Do not consume the invitation or open a provider room unless the
       // private Drive recording path is ready for this interview.
       if (!isRecordingStorageConfigured()) {
         return NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable because private recording storage is not configured. Please contact the recruitment team.", code: "recording_storage_unavailable" }, { status: 503 });
       }
+      try {
+        await assertRecordingStorageReady(preview.organizationId);
+      } catch (storageError) {
+        // Fail before consuming the one-time invitation or opening a paid
+        // provider session when the Drive destination cannot accept recordings.
+        console.error("[API Live Avatar Candidate Session] Recording storage preflight failed:", storageError);
+        return NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable because secure recording storage is not ready. Please contact the recruitment team.", code: "recording_storage_unavailable" }, { status: 503 });
+      }
       // Do not consume the one-time link, or open a paid provider room, for an
       // organization that cannot cover the interview. The message is neutral
       // because the candidate cannot act on it.
-      const preview = await getAvatarInterviewContext(avatarToken);
       if (preview) {
         const unavailable = () => NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable. Please contact the recruitment team.", code: "interview_unavailable" }, { status: 503 });
         try {

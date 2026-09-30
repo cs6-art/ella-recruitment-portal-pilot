@@ -41,9 +41,14 @@ test("any HR reviewer can connect only their own calendar; the shared one stays 
   assert.match(disconnect, /self \? \{ email: user\.email\.trim\(\)\.toLowerCase\(\) \}/);
 });
 
-test("setup checklist checks email delivery and team invites", () => {
+test("onboarding does not wait for emails or optional teammates, and email failures become dashboard alerts", () => {
   const steps = read("src/components/GettingStarted.tsx");
-  assert.match(steps, /key: "email"/);
-  assert.match(steps, /key: "team"/);
+  assert.match(steps, /key: "emails"/);
+  assert.match(steps, /key: "teammates"/);
+  assert.match(steps, /required: false/);
+  assert.doesNotMatch(steps, /notifications\/health/);
+  const metrics = read("src/app/api/dashboard/metrics/route.ts");
+  assert.match(metrics, /email-delivery/);
+  assert.match(metrics, /notificationStatus/);
   assert.match(read("src/app/api/notifications/health/route.ts"), /pilotOutboundEmailEnabled\(\)/);
 });

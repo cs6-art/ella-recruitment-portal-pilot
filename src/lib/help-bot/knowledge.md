@@ -164,14 +164,16 @@ Steps:
 5. Submit. Your name and email are filled in from your signed-in account and cannot
    be changed in the form.
 
-What you see depends on your access. HR users who can also approve see **Create &
-publish**, which approves the role and posts it to the channels they chose in one
-step, and **Save as draft**, which keeps it private so they can finish later. Other
-users see **Submit for HR approval**, and HR then approves or rejects the request.
+What you see depends on your access. HR users who can create and approve see
+**Create role**, which saves the screening and interview setup, approves the role,
+and makes its Smile application link available in one action. **Save as draft**
+keeps it private so it can be finished later. Other users see **Submit for HR
+approval**, and HR then reviews the request.
 
-Salary or budget, license requirements and whether a face-to-face interview is needed
-are not asked in the request form. HR sets them later in Recruitment Setup, where
-Smile also uses them when it scores applicants.
+HR sets salary visibility (and the range if it will be disclosed), license or
+certificate requirements, and the face-to-face interview and venue in the same
+Create Role form. Selecting LinkedIn, Facebook, or JobStreet is no longer
+required; the role can be shared using its Smile application link.
 
 The form saves a draft automatically while you work on a new request. When you edit
 an approved or submitted request, change what you need and select **Save role
@@ -197,15 +199,17 @@ the request changed since you opened it, refresh and review again before retryin
 the action — an "HTTP 409" or "someone else changed the record" message means
 exactly this.
 
-The current flow is: the requester submits → **Pending HR Discussion** →
-HR reviews the request and approves, returns, holds, or rejects it → HR completes
-Recruitment Setup and publishing. Historical records may still show a management
-approval status. Management is view-only for operational recruitment
-tools: it does not edit setup, screen resumes, schedule interviews, or change
-applicant records.
+The usual request flow is: the requester submits → **Pending HR Discussion** →
+HR reviews the request and approves, returns, holds, or rejects it. When an HR
+approver creates a role with the full Create Role form, Smile saves its setup and
+publishes the application link in that same action. Other requesters may need HR
+to complete the role details and publish it after approval. Historical records
+may still show a management approval status. Management is view-only for
+operational recruitment tools: it does not edit setup, screen resumes, schedule
+interviews, or change applicant records.
 
-Important: approving a role is not the same as publishing a job. HR still has to
-complete Recruitment Setup and publish the role before candidates can apply.
+External job-board choices are optional. The Smile application link is enough for
+candidates to apply through the portal.
 
 ---
 
@@ -230,10 +234,11 @@ complete Recruitment Setup and publish the role before candidates can apply.
 
 ---
 
-## How Recruitment Setup works
+## How to review role setup after creation
 
-Recruitment Setup is where HR tells the portal what to look for in resumes and
-interviews for an approved role. It is normally available only to HR reviewers.
+HR-created roles are configured in the Create Role form. The role details page
+remains available to HR reviewers for updating screening and interview settings
+after creation; it is not a separate required publishing step.
 
 Screening instructions to complete:
 
@@ -251,10 +256,11 @@ and up to three custom items, plus three to five interview questions. Questions
 are asked as written, so keep them clear and fair. Suggested questions may be
 shown as a starting point — edit them as needed.
 
-Publishing checklist: choose at least one place the job will be posted; choose
-the salary visibility option; choose the license requirement; choose whether a
-face-to-face interview is required and, if it is, enter the venue and choose the
-interviewer.
+Optional external posting channels: LinkedIn, Facebook, and JobStreet are
+optional. The role's Smile application link remains available without selecting
+an external job board. Set salary visibility, license requirements, and
+face-to-face interview details in Create Role; HR can update them from role
+details later.
 
 Choosing the interviewer: when a face-to-face interview is required, an
 **Interviewer** picker lists the people in your organisation who have connected
@@ -636,8 +642,10 @@ requests or your department. Ask HR to confirm you have the right access.
 **"My request is not moving."** Check the status and the latest comment. It may be
 waiting for HR or Management, returned for more information, or on hold.
 
-**"The role was approved but candidates cannot apply."** Approval is only one
-step. HR must complete the Recruitment Setup checklist and publish the role.
+**"The role was approved but candidates cannot apply."** Check that the role
+status is **Job Posted** and that its Smile application link is available. HR can
+finish publishing from the role details page if it was submitted for approval
+without the full Create Role form.
 
 **"A resume failed to screen."** Make sure it is a readable, unlocked PDF, DOC, or
 DOCX no larger than 10 MB, then use the retry option. If it still fails, ask HR to

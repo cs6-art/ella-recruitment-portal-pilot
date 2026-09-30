@@ -1110,7 +1110,7 @@ export async function deleteApplication(externalId: string) {
   const cleanExternalId = externalId.trim();
   if (!cleanExternalId) return { deleted: false, error: "invalid_application" as const };
 
-  const recordingRefs: string[] = [];
+  const recordingRefs: Array<{ ref: string; organizationId: string; accountEmail: string }> = [];
   const result = await db.transaction(async (tx) => {
     const [current] = await tx.select({ id: applications.id, applicantId: applications.applicantId })
       .from(applications)
@@ -1136,8 +1136,16 @@ export async function deleteApplication(externalId: string) {
     // Live avatar interview sessions reference the application, its booking
     // token, and its voice result; their transcript turns and integrity
     // events cascade. Private recordings are removed after the commit.
-    const liveSessions = await tx.delete(liveInterviewSessions).where(eq(liveInterviewSessions.applicationId, current.id)).returning({ recordingStorageRef: liveInterviewSessions.recordingStorageRef });
-    recordingRefs.push(...liveSessions.map((session) => session.recordingStorageRef).filter(Boolean));
+    const liveSessions = await tx.delete(liveInterviewSessions).where(eq(liveInterviewSessions.applicationId, current.id)).returning({
+      recordingStorageRef: liveInterviewSessions.recordingStorageRef,
+      organizationId: liveInterviewSessions.organizationId,
+      accountEmail: liveInterviewSessions.recordingStorageAccountEmail,
+    });
+    recordingRefs.push(...liveSessions.filter((session) => session.recordingStorageRef).map((session) => ({
+      ref: session.recordingStorageRef,
+      organizationId: session.organizationId,
+      accountEmail: session.accountEmail,
+    })));
     await tx.delete(voiceCallLogs).where(eq(voiceCallLogs.applicationId, current.id));
     await tx.delete(voiceInterviewResults).where(eq(voiceInterviewResults.applicationId, current.id));
     await tx.delete(voiceCallAttempts).where(eq(voiceCallAttempts.applicationId, current.id));
@@ -1160,10 +1168,18 @@ export async function deleteApplication(externalId: string) {
     return { deleted: true, error: null } as const;
   });
   if (result.deleted && recordingRefs.length > 0) {
-    const { deleteInterviewRecording } = await import("@/lib/interview-recording-storage");
-    await Promise.all(recordingRefs.map((ref) => deleteInterviewRecording(ref).catch((error) => {
-      console.error("[Applicant Delete] Failed to delete interview recording:", { ref, error: error instanceof Error ? error.message : String(error) });
-    })));
+    const [{ deleteInterviewRecording }, { deleteRecordingDriveConnectionIfUnused }] = await Promise.all([
+      import("@/lib/interview-recording-storage"),
+      import("@/lib/recording-drive-oauth"),
+    ]);
+    await Promise.all(recordingRefs.map(async ({ ref, organizationId, accountEmail }) => {
+      try {
+        await deleteInterviewRecording(ref, organizationId, accountEmail);
+        if (accountEmail) await deleteRecordingDriveConnectionIfUnused(organizationId, accountEmail);
+      } catch (error) {
+        console.error("[Applicant Delete] Failed to delete interview recording:", { ref, organizationId, error: error instanceof Error ? error.message : String(error) });
+      }
+    }));
   }
   return result;
 }

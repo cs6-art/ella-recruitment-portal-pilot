@@ -56,14 +56,17 @@ async function requireAdmin(request: Request) {
 
 async function resolveTargetOrganization(request: Request, user: Awaited<ReturnType<typeof currentUser>>) {
   if (!user) return { error: responseError("Authentication required.", 401) } as const;
-  const requestedOrganizationId = new URL(request.url).searchParams.get("organizationId")?.trim() || "";
+  const requestedOrganizationSlug = new URL(request.url).searchParams.get("organizationSlug")?.trim().toLowerCase() || "";
   const platformAdmin = isPlatformAdmin(user);
-  const organizationId = requestedOrganizationId || user.organizationId;
-  if (!platformAdmin && organizationId !== user.organizationId) {
+  if (!platformAdmin && requestedOrganizationSlug) {
     return { error: responseError("You can only manage users in your own organization.", 403) } as const;
   }
-  if (organizationId === DEFAULT_ORGANIZATION_ID) return { organizationId } as const;
-  const [organization] = await getDb().select({ id: organizations.id, active: organizations.active }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+  const organizationId = requestedOrganizationSlug ? "" : user.organizationId;
+  const [organization] = requestedOrganizationSlug
+    ? await getDb().select({ id: organizations.id, active: organizations.active }).from(organizations).where(eq(organizations.slug, requestedOrganizationSlug)).limit(1)
+    : organizationId === DEFAULT_ORGANIZATION_ID
+      ? [{ id: organizationId, active: true }]
+      : await getDb().select({ id: organizations.id, active: organizations.active }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
   if (!organization) return { error: responseError("Organization not found.", 404) } as const;
   if (!organization.active) return { error: responseError("This organization is inactive.", 409) } as const;
   return { organizationId } as const;

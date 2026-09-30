@@ -9,7 +9,6 @@ export type SetupReadinessInput = {
   requiredInterviewQuestion3?: string;
   requiredInterviewQuestion4?: string;
   requiredInterviewQuestion5?: string;
-  postingChannels?: string[] | string;
   initialInterviewBookingLink?: string;
   hodInterviewBookingLink?: string;
   salaryOrBudgetRange?: string;
@@ -26,7 +25,6 @@ export type MissingReadinessField = { key: string; label: string };
 export type ReadinessResult = { valid: boolean; missingFields: MissingReadinessField[] };
 
 const text = (value: unknown) => String(value ?? "").trim();
-const channels = (value: string[] | string | undefined) => Array.isArray(value) ? value.filter(Boolean) : text(value).split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
 const present = (value: unknown) => text(value) !== "";
 
 export function getSetupReadiness(input: SetupReadinessInput, level: SetupReadinessLevel): ReadinessResult {
@@ -42,11 +40,12 @@ export function getSetupReadiness(input: SetupReadinessInput, level: SetupReadin
   requireField("Required_Interview_Question_1", "Required Interview Question 1", input.requiredInterviewQuestion1);
   requireField("Required_Interview_Question_2", "Required Interview Question 2", input.requiredInterviewQuestion2);
   requireField("Required_Interview_Question_3", "Required Interview Question 3", input.requiredInterviewQuestion3);
-  if (channels(input.postingChannels).length === 0) missingFields.push({ key: "Posting_Channels", label: "At least one Posting Channel" });
-
+  // A completed role is publishable through its Smile application link; an
+  // external job-board choice is optional and must not block candidate intake.
   if (level === "recruitment-ready") return { valid: missingFields.length === 0, missingFields };
 
   if (!['Disclosed', 'Not disclosed'].includes(text(input.salaryDisclosureStatus))) missingFields.push({ key: "Salary_Disclosure_Status", label: "Salary visibility (Disclosed or Not disclosed)" });
+  else if (text(input.salaryDisclosureStatus) === "Disclosed") requireField("Salary_or_Budget_Range", "Salary or Budget Range", input.salaryOrBudgetRange);
   if (!["Required", "Not required"].includes(text(input.hodInterviewRequired))) missingFields.push({ key: "HOD_Interview_Required", label: "HR interview requirement" });
   else if (text(input.hodInterviewRequired) === "Required") requireField("Final_Interview_Venue", "Face-to-Face Interview Venue", input.finalInterviewVenue);
   if (!["Required", "Preferred", "Not required"].includes(text(input.licenseRequirementStatus))) missingFields.push({ key: "License_Requirement_Status", label: "License or certificate requirement" });

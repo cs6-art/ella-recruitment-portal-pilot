@@ -892,8 +892,8 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
         <summary><span><strong>Publishing checklist</strong><small>Complete the missing items below before publishing.</small></span><span className="vapi-status-badge">{setupStatus}</span></summary>
         <div className="vapi-publishing-content">
           <fieldset id="vapi-posting-channels" className="vapi-channel-fieldset">
-            <legend>Posting channels *</legend>
-            {normalizeChannels(values.postingChannels).length === 0 && <small className="vapi-required-help">Choose at least one place to publish this role.</small>}
+            <legend>External posting channels (optional)</legend>
+            {normalizeChannels(values.postingChannels).length === 0 && <small className="vapi-required-help">Optional. The role's Smile application link can still be shared without selecting an external job board.</small>}
             <div className="vapi-channel-options">
               {channels.map((channel) => (
                 <label key={channel} className="vapi-channel-option">

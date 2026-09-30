@@ -12,6 +12,8 @@ export const organizations = pgTable("organizations", {
   allowedDomains: text("allowed_domains").array().notNull().default(sql`'{}'::text[]`),
   /** Individual addresses (any domain) that may self-register into this organization. */
   allowedEmails: text("allowed_emails").array().notNull().default(sql`'{}'::text[]`),
+  /** Null for organizations that existed before the guided onboarding flow. */
+  onboardingStartedAt: timestamp("onboarding_started_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -236,17 +236,15 @@ export async function findPostgresDirectoryUserByEmail(email: string): Promise<{
   }
 }
 
-/**
- * Makes this account the organization's owner when the organization has none
- * yet (the first registrant). Safe to call repeatedly and under a race: the
- * partial unique index allows only one owner, so a losing update is ignored.
- */
+/** The first registrant to verify their email claims initial ownership. */
 export async function claimOrganizationOwnershipIfNone(organizationId: string, email: string): Promise<void> {
   const db = getTenantDb();
   const normalizedEmail = email.trim().toLowerCase();
   const [owner] = await db.select({ id: users.id }).from(users).where(and(eq(users.organizationId, organizationId), eq(users.isOrganizationOwner, true))).limit(1);
   if (owner) return;
   try {
+    // Verification runs before this helper; the unique owner index resolves
+    // simultaneous registrations so only one account can claim ownership.
     await db.update(users).set({ isOrganizationOwner: true }).where(and(eq(users.organizationId, organizationId), eq(users.email, normalizedEmail)));
   } catch (error) {
     // Another registration claimed ownership at the same moment.

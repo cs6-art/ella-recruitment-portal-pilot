@@ -1,7 +1,10 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 
+import { getDb } from "@/db/client";
+import { organizations } from "@/db/schema";
 import AppShell from "@/components/AppShell";
 import DashboardMetrics from "@/components/DashboardMetrics";
 import UiIcon from "@/components/UiIcon";
@@ -27,6 +30,15 @@ export default async function DashboardPage() {
   if (!user) redirect("/");
 
   const userName = String(user.name ?? "").trim().split(/\s+/)[0] || "there";
+  let showGettingStarted = false;
+  try {
+    const [organization] = await getDb().select({ onboardingStartedAt: organizations.onboardingStartedAt }).from(organizations).where(eq(organizations.id, user.organizationId)).limit(1);
+    showGettingStarted = Boolean(organization?.onboardingStartedAt);
+  } catch (error) {
+    // Existing organizations keep loading if the optional onboarding
+    // migration has not been applied to this deployment yet.
+    console.error("[Dashboard] Organization onboarding status is unavailable:", error instanceof Error ? error.message : error);
+  }
   const hasRecruitmentAccess = user.canCreateRole === true || user.canReviewRole === true || user.canApproveRole === true || user.canReviewDepartmentRole === true;
   const creatorOnly = user.canCreateRole === true && user.canReviewRole !== true && user.canApproveRole !== true;
 
@@ -39,6 +51,7 @@ export default async function DashboardPage() {
           canCreateRole={user.canCreateRole}
           canReviewRole={user.canReviewRole}
           canApproveRole={user.canApproveRole}
+          showGettingStarted={showGettingStarted}
         />
       : <main className="container page dashboard-page">
           <header className="dashboard-welcome dashboard-welcome-limited"><div><h1>Hello, {userName}</h1><p>Here’s what needs your attention today.</p></div></header>

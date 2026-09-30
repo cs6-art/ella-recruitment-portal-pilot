@@ -11,9 +11,8 @@ import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Lets the setup checklist show whether candidate/HR emails are actually
-// leaving the system: the deployment switch plus the organization's own
-// notification outcomes. Counts only; no recipients or message content.
+// Exposes only the current organization's delivery counts for operational
+// follow-up. It never returns recipients or message content.
 export async function GET() {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });

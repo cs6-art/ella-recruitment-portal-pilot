@@ -168,7 +168,7 @@ export default function EmailTemplatesEditor() {
   const secondaryLabel = selected?.buttons.secondary ? draft?.secondaryCtaLabel.trim() || selected.buttons.secondary : "";
 
   return (
-    <section className="card settings-section email-editor-section" aria-labelledby="email-templates-title">
+    <section id="automated-emails" className="card settings-section email-editor-section" aria-labelledby="email-templates-title">
       <div className="settings-section-header">
         <div>
           <h2 id="email-templates-title">Automated Emails</h2>

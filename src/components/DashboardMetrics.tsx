@@ -105,6 +105,7 @@ export default function DashboardMetrics({
   canCreateRole = false,
   canReviewRole = false,
   canApproveRole = false,
+  showGettingStarted = false,
 }: {
   scope?: "personal" | "organization";
   organizationId?: string;
@@ -112,6 +113,7 @@ export default function DashboardMetrics({
   canCreateRole?: boolean;
   canReviewRole?: boolean;
   canApproveRole?: boolean;
+  showGettingStarted?: boolean;
 }) {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -241,7 +243,7 @@ export default function DashboardMetrics({
     {slowMessage && <p className="dashboard-slow-message" role="status">This is taking longer than expected. You can continue viewing the dashboard.</p>}
     <p className="sr-only" role="status" aria-live="polite">{refreshing ? "Refreshing dashboard information." : ""}</p>
 
-    {canReviewRole && organizationId && !personalScope && applicantMetrics && <GettingStarted organizationId={organizationId} metrics={metrics} />}
+    {canReviewRole && showGettingStarted && organizationId && !personalScope && <GettingStarted organizationId={organizationId} />}
 
     <section className="dashboard-section dashboard-attention" aria-labelledby="dashboard-attention-title" aria-busy={refreshing}>
       <div className="dashboard-section-heading">
@@ -276,7 +278,7 @@ export default function DashboardMetrics({
 
     {canReviewRole && <section className="dashboard-section dashboard-alerts" aria-labelledby="dashboard-alerts-title" aria-busy={refreshing}>
       <div className="dashboard-section-heading"><div><h2 id="dashboard-alerts-title">Actionable Alerts</h2><p>Issues that need someone to follow up.</p></div>{alerts.length > 0 && <span className="dashboard-alert-count">{alerts.length} to resolve</span>}</div>
-      {sectionErrors.alerts && <div className="dashboard-section-message" role="status">We couldn’t check all interview and recording issues. Try refreshing.</div>}
+      {sectionErrors.alerts && <div className="dashboard-section-message" role="status">We couldn’t check all interview, recording, or email delivery issues. Try refreshing.</div>}
       {alerts.length === 0 && !sectionErrors.alerts ? <div className="dashboard-empty-state"><UiIcon name="check-circle" size={20} /><p>No issues need your attention right now.</p></div> : alerts.length > 0 ? <ul className="dashboard-alert-list">{alerts.map((alert) => <li key={alert.id}><article className="dashboard-alert-row"><span className="dashboard-alert-icon" aria-hidden="true"><UiIcon name="alert" size={19} /></span><div className="dashboard-alert-copy"><strong>{alert.title}</strong><p>{alert.description}</p><small>{alert.savedMessage}</small></div><Link className="dashboard-alert-action" href={alert.href}>{alert.actionLabel}<span aria-hidden="true">→</span></Link></article></li>)}</ul> : null}
     </section>}
 

@@ -16,17 +16,19 @@ test("draft readiness keeps the two minimum fields", () => {
   assert.match(readiness, /level === "draft"/);
 });
 
-test("higher readiness requires the VAPI prompt, three questions, and a posting channel", () => {
+test("higher readiness requires the VAPI prompt and three questions, but no external job-board choice", () => {
   assert.match(readiness, /AI_System_Prompt/);
   assert.match(readiness, /Required_Interview_Question_1/);
   assert.match(readiness, /Required_Interview_Question_2/);
   assert.match(readiness, /Required_Interview_Question_3/);
   assert.doesNotMatch(readiness, /Interview_Behavior/);
-  assert.match(readiness, /Posting_Channels/);
+  assert.doesNotMatch(readiness, /Posting_Channels/);
 });
 
 test("publishing uses explicit conditional requirements", () => {
   assert.match(readiness, /Salary_Disclosure_Status/);
+  assert.match(readiness, /Salary_or_Budget_Range/);
+  assert.match(readiness, /salaryDisclosureStatus\) === "Disclosed"/);
   assert.doesNotMatch(readiness, /Experience_Requirement_Status/);
   assert.match(readiness, /HOD_Interview_Required/);
   assert.match(readiness, /HR interview requirement/);
@@ -158,7 +160,8 @@ test("recruitment setup uses one guided editor with simple HR-facing fields", ()
 
 test("required publishing fields stay visible and checklist opens by default", () => {
   assert.match(editor, /className="vapi-publishing" open/);
-  assert.match(editor, /Posting channels \*/);
+  assert.match(editor, /External posting channels \(optional\)/);
+  assert.match(editor, /Smile application link can still be shared without selecting an external job board/);
   assert.match(editor, /Salary visibility \*/);
   assert.match(editor, /License requirement \*/);
   assert.match(editor, /Face-to-Face interview \*/);

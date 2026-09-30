@@ -64,21 +64,35 @@ test("forms flow in a single column", () => {
   assert.doesNotMatch(form, /className="grid-2"/);
 });
 
-test("the single role form fills the setup and publishes in one pass", () => {
+test("the single Create Role form captures setup details without a separate Publishing section", () => {
   const form = read("src/components/RoleRequestForm.tsx");
   const newPage = read("src/app/roles/new/page.tsx");
   const editPage = read("src/app/roles/[roleId]/edit/page.tsx");
   assert.match(form, /unified\?: boolean/);
-  assert.match(form, /Create & publish/);
+  assert.match(form, /Create role saves these settings/);
+  assert.match(form, /"Create role"/);
   assert.match(form, /Save as draft/);
   assert.match(form, /setupAction: "publish_role"|setupPayload\("publish_role"\)/);
   assert.match(form, /recruitment-setup`/);
+  assert.match(form, /id="setup_salaryDisclosureStatus"/);
+  assert.match(form, /id="setup_minimumYearsOfExperience"/);
+  assert.match(form, /id="setup_keywordsToLookFor"/);
+  assert.match(form, /id="setup_transferableSkillsAccepted"/);
+  assert.match(form, /id="setup_earliestAvailabilityRule"/);
+  assert.match(form, /id="setup_licenseRequirementStatus"/);
+  assert.match(form, /id="setup_hodInterviewRequired"/);
+  assert.match(form, /salaryRangeMissing/);
+  assert.match(form, /const effectiveLicenseStatus = licenseStatus/);
+  assert.match(form, /const effectiveInterviewStatus = interviewStatus/);
+  assert.doesNotMatch(form, /<h2>Publishing<\/h2>/);
+  assert.doesNotMatch(form, /POSTING CHANNELS|setup_channels/);
+  assert.doesNotMatch(form, /adjusted later in Recruitment Setup/);
   // Publishing only proceeds once the role is approved.
   assert.match(form, /finalStatus !== "Approved"/);
   assert.match(newPage, /unified=\{user\.canReviewRole === true && user\.canApproveRole === true\}/);
   assert.match(editPage, /role\.status === "Draft"/);
-  // Sections run top to bottom: role, screening and interview, publishing.
-  assert.ok(form.indexOf("Screening and Interview") < form.indexOf("<h2>Publishing</h2>"));
+  // Role, screening, and interview requirements are collected before one create action.
+  assert.ok(form.indexOf("Screening and Interview") < form.indexOf("Create role saves these settings"));
 });
 
 test("shared portal settings are platform-administrator only and show what is in effect", () => {
@@ -99,18 +113,21 @@ test("shared portal settings are platform-administrator only and show what is in
   assert.match(editor, /Existing booking links and appointments are not changed/);
 });
 
-test("the dashboard guides a new organization with a self-completing checklist", () => {
+test("the dashboard shows the database-backed setup checklist only for newly created organizations", () => {
   const card = read("src/components/GettingStarted.tsx");
   const metrics = read("src/components/DashboardMetrics.tsx");
   const dashboard = read("src/app/dashboard/page.tsx");
   const lib = read("src/lib/dashboard-metrics.ts");
-  for (const step of ["Create and publish your first role", "Add Smile credits", "Get your first candidates", "Connect Google Calendar"]) assert.match(card, new RegExp(step));
-  assert.match(card, /jobPosted/);
-  assert.match(card, /\/api\/ella-credits/);
-  assert.match(card, /google-calendar\/status/);
-  assert.match(card, /completed === steps\.length/);
+  for (const step of ["Review organization name and branding", "Add Smile Credits", "Configure Google Drive for Live Avatar recordings", "Connect Google Calendar", "Create and publish your first role", "Add candidates", "Invite teammates", "Customize automated emails"]) assert.match(card, new RegExp(step));
+  assert.match(card, /\/api\/organization\/readiness/);
+  assert.match(card, /requiredSteps\.filter\(\(step\) => step\.done\)/);
+  assert.match(card, /Ready to recruit/);
+  assert.match(card, /Open setup checklist/);
+  assert.doesNotMatch(card, /notifications\/health/);
+  assert.match(dashboard, /organizations\.onboardingStartedAt/);
   assert.match(metrics, /<GettingStarted/);
   assert.ok(metrics.indexOf("<GettingStarted organizationId=") < metrics.indexOf('className="dashboard-section dashboard-attention"'), "the onboarding checklist appears before the dashboard action queues");
+  assert.match(metrics, /showGettingStarted/);
   assert.match(dashboard, /organizationId=\{user\.organizationId\}/);
   assert.match(lib, /jobPosted: count\("Job Posted"\)/);
   assert.doesNotMatch(dashboard, /approves, returns, rejects/);

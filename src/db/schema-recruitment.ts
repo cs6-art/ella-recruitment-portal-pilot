@@ -64,6 +64,17 @@ export const oauthConnections = pgTable("oauth_connections", {
   updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [uniqueIndex("oauth_connections_org_provider_email_uidx").on(t.organizationId, t.provider, t.userEmail)]);
 
+/** The single Google Drive destination currently used for new recordings by an organization. */
+export const organizationRecordingDrive = pgTable("organization_recording_drive", {
+  organizationId: uuid("organization_id").primaryKey().references(() => organizations.id),
+  googleAccountEmail: text("google_account_email").notNull().default(""),
+  folderId: text("folder_id").notNull().default(""),
+  folderName: text("folder_name").notNull().default(""),
+  connectedByEmail: text("connected_by_email").notNull().default(""),
+  updatedByEmail: text("updated_by_email").notNull().default(""),
+  updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
 /** Mirrors drizzle/0030_email_templates.sql and 0031_email_template_buttons_image.sql — an organization's edits to the automated email wording. */
 export const emailTemplates = pgTable("email_templates", {
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),
@@ -540,6 +551,9 @@ export const liveInterviewSessions = pgTable(
     lastErrorAt: ts("last_error_at"),
     recordingStatus: text("recording_status").notNull().default("not_requested"),
     recordingStorageRef: text("recording_storage_ref").notNull().default(""),
+    // Empty for older service-account recordings; new recordings pin the
+    // connected Google account so playback survives a later account change.
+    recordingStorageAccountEmail: text("recording_storage_account_email").notNull().default(""),
     recordingUploadUrl: text("recording_upload_url").notNull().default(""),
     recordingBytes: bigint("recording_bytes", { mode: "number" }).notNull().default(0),
     recordingMimeType: text("recording_mime_type").notNull().default(""),

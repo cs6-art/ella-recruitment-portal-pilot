@@ -127,7 +127,7 @@ test("HR interviewer identity is explicit while final availability comes from Go
   assert.match(formSource, /id=\"hodEmail\"/);
   assert.match(formSource, /Shared HR Calendar Account/);
   assert.match(formSource, /connected HR Google Calendar/);
-  assert.match(formSource, /AI-generated questions appear below for HR guidance/);
+  assert.match(formSource, /AI-generated screening questions for HR review/);
   assert.match(formSource, /Generate AI questions/);
   assert.match(formSource, /HR Screening Question 1/);
   assert.match(formSource, /HR Screening Question 2/);

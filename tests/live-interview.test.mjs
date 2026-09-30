@@ -282,6 +282,19 @@ test("HR review endpoints enforce RBAC, organization scope, and private recordin
   assert.match(recordingRoute, /"Cache-Control": "private, no-store"/);
 });
 
+test("Live Avatar startup verifies the organization's connected Drive folder before using the invitation", () => {
+  const storage = read("src/lib/interview-recording-storage.ts");
+  const session = read("src/app/api/live-avatar/session/route.ts");
+  const oauth = read("src/lib/recording-drive-oauth.ts");
+  assert.match(oauth, /https:\/\/www\.googleapis\.com\/auth\/drive\.file/);
+  assert.doesNotMatch(oauth, /auth\/drive\.readonly|auth\/drive"/);
+  assert.match(oauth, /fields: "id,name,mimeType,driveId,capabilities\(canAddChildren\)"/);
+  assert.match(oauth, /data\.capabilities\?\.canAddChildren !== true/);
+  assert.match(storage, /getOrganizationRecordingDrive\(organizationId\)/);
+  assert.ok(session.indexOf("await assertRecordingStorageReady(preview.organizationId)") < session.indexOf("startAvatarInterview(avatarToken)"));
+  assert.match(session, /Recording storage preflight failed/);
+});
+
 test("applicant-facing pages never receive transcripts, analysis, or HR notes", () => {
   const notice = read("src/components/InterviewStatusNotice.tsx");
   assert.doesNotMatch(notice, /\/api\/applicants\/|live-interview-store/, "the candidate notice never calls HR review endpoints");

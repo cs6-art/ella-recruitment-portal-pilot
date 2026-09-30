@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
@@ -32,18 +32,33 @@ type DirectoryUser = {
 type AccountForm = DirectoryUser;
 
 type Organization = {
-  id: string;
   name: string;
   slug: string;
-  databaseKey: string;
-  databaseStatus: string;
+  canEditSlug: boolean;
   active: boolean;
   allowedDomains: string[];
   allowedEmails: string[];
+  readiness: {
+    ownerEmail: string;
+    ownerStatus: "Registered" | "Awaiting registration";
+    creditsAdded: boolean;
+    recordingStorageApplicable: boolean;
+    recordingStorageReady: boolean;
+    googleCalendarApplicable: boolean;
+    googleCalendarReady: boolean;
+    firstRolePublished: boolean;
+    hasRoles: boolean;
+    overallStatus: "Setup required" | "Partially configured" | "Ready to recruit";
+    onboardingEnabled: boolean;
+    brandingConfigured: boolean;
+    hasCandidates: boolean;
+    hasTeammates: boolean;
+    automatedEmailsCustomized: boolean;
+  } | null;
 };
 
 type OrganizationForm = {
-  id?: string;
+  originalSlug?: string;
   name: string;
   slug: string;
   active: boolean;
@@ -72,7 +87,7 @@ const emptyForm: AccountForm = {
 };
 
 const emptyOrganizationForm: OrganizationForm = { name: "", slug: "", active: true, allowedDomains: "", allowedEmails: "" };
-const DEFAULT_ORG_ID = "00000000-0000-4000-8000-000000000001";
+const DEFAULT_ORG_SLUG = "mclinkgroup";
 
 const accountFieldLabels: Record<string, string> = {
   fullName: "Full name",
@@ -102,6 +117,10 @@ function permissionLabels(user: DirectoryUser) {
     user.canManageUsers && "Manage users",
     user.canManageCredits && "Manage Smile Credits",
   ].filter(Boolean).join(" · ") || "No elevated permissions";
+}
+
+function StatusChip({ label, value, done }: { label: string; value: string; done: boolean }) {
+  return <div className="organization-readiness-detail"><span>{label}</span><strong className={`organization-readiness-badge ${done ? "is-ready" : "is-missing"}`}>{value}</strong></div>;
 }
 
 export default function UserAccountsEditor({ currentEmail }: { currentEmail: string }) {
@@ -135,13 +154,15 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
   const [organizationSaving, setOrganizationSaving] = useState(false);
   const [organizationError, setOrganizationError] = useState("");
   const [organizationMessage, setOrganizationMessage] = useState("");
-  const [selectedOrganizationId, setSelectedOrganizationId] = useState(DEFAULT_ORG_ID);
+  const [selectedOrganizationSlug, setSelectedOrganizationSlug] = useState(DEFAULT_ORG_SLUG);
+  const [expandedOrganizationSlug, setExpandedOrganizationSlug] = useState("");
+  const [organizationMessageKind, setOrganizationMessageKind] = useState<"success" | "warning">("success");
 
-  async function loadUsers(organizationId = selectedOrganizationId) {
+  async function loadUsers(organizationSlug = selectedOrganizationSlug) {
     setLoading(true);
     setError("");
     try {
-      const query = canManageOrganizations && organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
+      const query = canManageOrganizations && organizationSlug ? `?organizationSlug=${encodeURIComponent(organizationSlug)}` : "";
       const response = await fetch(`/api/user-directory${query}`, { credentials: "same-origin", cache: "no-store" });
       const data = await response.json();
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to load user accounts.");
@@ -214,7 +235,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to load organizations.");
       setOrganizations(data.organizations || []);
       setCanManageOrganizations(true);
-      if (!data.organizations?.some((organization: Organization) => organization.id === selectedOrganizationId)) setSelectedOrganizationId(data.organizations?.[0]?.id || DEFAULT_ORG_ID);
+      if (!data.organizations?.some((organization: Organization) => organization.slug === selectedOrganizationSlug)) setSelectedOrganizationSlug(data.organizations?.[0]?.slug || DEFAULT_ORG_SLUG);
       setOrganizationError("");
     } catch (loadError) {
       setCanManageOrganizations(false);
@@ -227,12 +248,13 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
   // These loaders intentionally run once on mount; later organization changes
   // invoke loadUsers with the selected organization explicitly.
   useEffect(() => { void loadUsers(); void loadOrganizations(); void loadInvites(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (canManageOrganizations) void loadUsers(selectedOrganizationSlug); }, [canManageOrganizations, selectedOrganizationSlug]);
 
   const showDepartment = canManageOrganizations || users.some((user) => user.department.trim() !== "");
   const activeCount = useMemo(() => users.filter((user) => user.active).length, [users]);
   const adminCount = useMemo(() => users.filter((user) => user.canEditSettings && user.active).length, [users]);
-  const editingOrganization = useMemo(() => organizations.find((organization) => organization.id === organizationForm.id), [organizations, organizationForm.id]);
-  const organizationSlugLocked = Boolean(editingOrganization && editingOrganization.databaseStatus !== "pending");
+  const editingOrganization = useMemo(() => organizations.find((organization) => organization.slug === organizationForm.originalSlug), [organizations, organizationForm.originalSlug]);
+  const organizationSlugLocked = Boolean(editingOrganization && !editingOrganization.canEditSlug);
 
   function openNewForm() {
     setOriginalEmail("");
@@ -252,7 +274,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
   }
 
   function openEditOrganizationForm(organization: Organization) {
-    setOrganizationForm({ id: organization.id, name: organization.name, slug: organization.slug, active: organization.active, allowedDomains: organization.allowedDomains.join("\n"), allowedEmails: organization.allowedEmails.join("\n") });
+    setOrganizationForm({ originalSlug: organization.slug, name: organization.name, slug: organization.slug, active: organization.active, allowedDomains: organization.allowedDomains.join("\n"), allowedEmails: organization.allowedEmails.join("\n") });
     setOrganizationError("");
     setOrganizationMessage("");
     setShowOrganizationForm(true);
@@ -341,7 +363,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
     try {
       const params = new URLSearchParams();
       if (originalEmail) params.set("originalEmail", originalEmail);
-      if (canManageOrganizations) params.set("organizationId", selectedOrganizationId);
+      if (canManageOrganizations) params.set("organizationSlug", selectedOrganizationSlug);
       const endpoint = `/api/user-directory${params.toString() ? `?${params.toString()}` : ""}`;
       const response = await fetch(endpoint, {
         method: originalEmail ? "PATCH" : "POST",
@@ -353,7 +375,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to save the user account.");
       setMessage(data.message || "User account saved successfully.");
       setShowForm(false);
-      await loadUsers(selectedOrganizationId);
+      await loadUsers(selectedOrganizationSlug);
       router.refresh();
     } catch (caught) {
       setSaveError(clientErrorMessage(caught, "Unable to save the user account."));
@@ -370,12 +392,16 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       setOrganizationError("Enter a name and a slug using 2–63 lowercase letters, numbers, or hyphens.");
       return;
     }
+    if (!organizationForm.originalSlug && splitLines(organizationForm.allowedDomains).length === 0 && splitLines(organizationForm.allowedEmails).length === 0) {
+      setOrganizationError("Add an allowed email domain or at least one email address so the first person can register and become the owner.");
+      return;
+    }
     setOrganizationSaving(true);
     setOrganizationError("");
     setOrganizationMessage("");
     try {
-      const response = await fetch(organizationForm.id ? `/api/organizations?id=${encodeURIComponent(organizationForm.id)}` : "/api/organizations", {
-        method: organizationForm.id ? "PATCH" : "POST",
+      const response = await fetch(organizationForm.originalSlug ? `/api/organizations?slug=${encodeURIComponent(organizationForm.originalSlug)}` : "/api/organizations", {
+        method: organizationForm.originalSlug ? "PATCH" : "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, slug, active: organizationForm.active, allowedDomains: splitLines(organizationForm.allowedDomains), allowedEmails: splitLines(organizationForm.allowedEmails) }),
@@ -383,6 +409,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       const data = await response.json();
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to save the organization.");
       setOrganizationMessage(data.message || "Organization saved.");
+      setOrganizationMessageKind("success");
       setShowOrganizationForm(false);
       await loadOrganizations();
       router.refresh();
@@ -401,7 +428,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
     setMessage("");
     try {
       const params = new URLSearchParams({ originalEmail: user.email });
-      if (canManageOrganizations) params.set("organizationId", selectedOrganizationId);
+      if (canManageOrganizations) params.set("organizationSlug", selectedOrganizationSlug);
       const response = await fetch(`/api/user-directory?${params.toString()}`, {
         method: "PATCH",
         credentials: "same-origin",
@@ -411,7 +438,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       const data = await response.json();
       if (!response.ok || data.success !== true) throw new Error(data.error || `Unable to ${action} the account.`);
       setMessage(user.active ? "User account deactivated." : "User account reactivated.");
-      await loadUsers(selectedOrganizationId);
+      await loadUsers(selectedOrganizationSlug);
       router.refresh();
     } catch (toggleError) {
       setError(toggleError instanceof Error ? toggleError.message : `Unable to ${action} the account.`);
@@ -424,12 +451,12 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
     setError("");
     setMessage("");
     try {
-      const params = new URLSearchParams({ originalEmail: user.email, organizationId: selectedOrganizationId });
+      const params = new URLSearchParams({ originalEmail: user.email, organizationSlug: selectedOrganizationSlug });
       const response = await fetch(`/api/user-directory?${params.toString()}`, { method: "DELETE", credentials: "same-origin" });
       const data = await response.json();
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to reset the registration.");
       setMessage(data.message || "Registration reset. The user can register again.");
-      await loadUsers(selectedOrganizationId);
+      await loadUsers(selectedOrganizationSlug);
       router.refresh();
     } catch (resetError) {
       setError(resetError instanceof Error ? resetError.message : "Unable to reset the registration.");
@@ -460,19 +487,44 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       {message && <ActionFeedback kind="success">{message}</ActionFeedback>}
 
       {canManageOrganizations && <section className="card organization-admin-card">
-        <div className="card-header organization-card-header"><div className="organization-card-heading"><h2>Organizations</h2><p>Each organization has its own isolated workspace. Choose which email domains or addresses may register into it. Registered users join it automatically as HR.</p></div><button type="button" className="btn btn-primary" onClick={openNewOrganizationForm}>Add organization</button></div>
+        <div className="card-header organization-card-header"><div className="organization-card-heading"><h2>Organizations</h2><p>Each organization has its own isolated workspace. Invite people by email for the safest access control, and review setup progress here.</p></div><button type="button" className="btn btn-primary" onClick={openNewOrganizationForm}>Add organization</button></div>
         {organizationError && <ActionFeedback kind="error">{organizationError}</ActionFeedback>}
-        {organizationMessage && <ActionFeedback kind="success">{organizationMessage}</ActionFeedback>}
+        {organizationMessage && <ActionFeedback kind={organizationMessageKind}>{organizationMessage}</ActionFeedback>}
         {showOrganizationForm && <form className="user-account-form organization-form" noValidate onSubmit={(event) => void saveOrganization(event)}>
           <div className="field"><label htmlFor="organization-name">Organization name</label><input id="organization-name" value={organizationForm.name} onChange={(event) => setOrganizationForm((current) => ({ ...current, name: event.target.value }))} required /></div>
-          <div className="field"><label htmlFor="organization-slug">Organization slug</label><input id="organization-slug" value={organizationForm.slug} onChange={(event) => setOrganizationForm((current) => ({ ...current, slug: event.target.value }))} disabled={organizationSlugLocked} required /><small className="field-hint">Used as the database key. A provisioned organization cannot change its slug.</small></div>
-          <div className="field"><label htmlFor="organization-domains">Allowed email domains <span className="field-optional">(optional)</span></label><textarea id="organization-domains" rows={3} value={organizationForm.allowedDomains} onChange={(event) => setOrganizationForm((current) => ({ ...current, allowedDomains: event.target.value }))} placeholder={"mcasia.com"} /><small className="field-hint">One per line. Anyone with an email at these domains can register into this organization.</small></div>
-          <div className="field"><label htmlFor="organization-emails">Allowed individual emails <span className="field-optional">(optional)</span></label><textarea id="organization-emails" rows={3} value={organizationForm.allowedEmails} onChange={(event) => setOrganizationForm((current) => ({ ...current, allowedEmails: event.target.value }))} placeholder={"name@gmail.com"} /><small className="field-hint">One per line. For people who use a personal address, such as Gmail.</small></div>
-          <label className="user-account-active"><input type="checkbox" checked={organizationForm.active} onChange={(event) => setOrganizationForm((current) => ({ ...current, active: event.target.checked }))} disabled={organizationForm.id === "00000000-0000-4000-8000-000000000001"} /> Organization is active</label>
-          <div className="user-account-form-actions"><button type="button" className="btn btn-secondary" onClick={closeOrganizationForm}>Cancel</button><button type="submit" className="btn btn-primary" disabled={organizationSaving}>{organizationSaving ? "Saving…" : "Save organization"}</button></div>
+          <div className="field"><label htmlFor="organization-slug">Organization web address</label><input id="organization-slug" value={organizationForm.slug} onChange={(event) => setOrganizationForm((current) => ({ ...current, slug: event.target.value }))} disabled={organizationSlugLocked} required /><small className="field-hint">A short name used in links. Once an organization is set up, it cannot be changed.</small></div>
+          <div className="field"><label htmlFor="organization-domains">Allowed email domains </label><textarea id="organization-domains" rows={2} value={organizationForm.allowedDomains} onChange={(event) => setOrganizationForm((current) => ({ ...current, allowedDomains: event.target.value }))} placeholder="company.com" /><small className="field-hint">Anyone registering with an email at these domains gets HR recruitment access. Add a domain, individual emails, or both.</small></div>
+          <div className="organization-domain-warning" role="note"><strong>Owner is automatic:</strong> the first person to register with an allowed email and verify it becomes the organization owner. Domain access gives every person using that domain HR access.</div>
+          <div className="field"><label htmlFor="organization-emails">Allowed individual emails</label><textarea id="organization-emails" rows={2} value={organizationForm.allowedEmails} onChange={(event) => setOrganizationForm((current) => ({ ...current, allowedEmails: event.target.value }))} placeholder="name@gmail.com" /><small className="field-hint">One address per line. Inviting a person individually is safer than allowing an entire email domain.</small></div>
+          {organizationForm.originalSlug && <label className="user-account-active"><input type="checkbox" checked={organizationForm.active} onChange={(event) => setOrganizationForm((current) => ({ ...current, active: event.target.checked }))} disabled={organizationForm.originalSlug === DEFAULT_ORG_SLUG} /> Organization is active</label>}
+          <div className="user-account-form-actions"><button type="button" className="btn btn-secondary" onClick={closeOrganizationForm}>Cancel</button><button type="submit" className="btn btn-primary" disabled={organizationSaving}>{organizationSaving ? "Creating…" : organizationForm.originalSlug ? "Save organization" : "Create organization"}</button></div>
         </form>}
-        {organizationLoading ? <div className="empty">Loading organizations…</div> : organizations.length === 0 ? <div className="empty">No organizations found.</div> : <div className="table-wrap"><table className="user-account-table"><thead><tr><th>Organization</th><th>Who can register</th><th>Status</th><th>Actions</th></tr></thead><tbody>{organizations.map((organization) => <tr key={organization.id}><td><strong>{organization.name}</strong><span>{organization.slug}</span></td><td>{organization.allowedDomains.length + organization.allowedEmails.length === 0 ? <span className="field-hint">No one yet</span> : <>{organization.allowedDomains.map((domain) => <span key={domain} className="rule-chip">@{domain}</span>)}{organization.allowedEmails.map((email) => <span key={email} className="rule-chip">{email}</span>)}</>}</td><td><span className={`user-account-status ${organization.active ? "is-active" : "is-inactive"}`}>{organization.active ? "Active" : "Inactive"}</span></td><td><button type="button" className="btn btn-secondary btn-small" onClick={() => openEditOrganizationForm(organization)}>Edit</button></td></tr>)}</tbody></table></div>}
-        <p className="field-hint organization-card-note">Data, credits and users are isolated per organization. A new organization starts empty as soon as its first person registers.</p>
+        {organizationLoading ? <div className="empty">Loading organizations…</div> : organizations.length === 0 ? <div className="empty">No organizations found.</div> : <div className="table-wrap"><table className="user-account-table organization-readiness-table"><thead><tr><th>Organization</th><th>Owner</th><th>Setup status</th><th>Actions</th></tr></thead><tbody>{organizations.map((organization) => {
+          const readiness = organization.readiness;
+          const expanded = expandedOrganizationSlug === organization.slug;
+          const ready = readiness?.overallStatus === "Ready to recruit";
+          return <Fragment key={organization.slug}>
+            <tr key={organization.slug}>
+              <td><strong>{organization.name}</strong><span>{organization.slug}{!organization.active ? " · Inactive" : ""}</span></td>
+              <td><span className={`organization-readiness-badge ${readiness?.ownerStatus === "Registered" ? "is-ready" : "is-pending"}`}>{readiness?.ownerStatus || "Checking…"}</span><span>{readiness?.ownerEmail || "First registrant becomes owner"}</span></td>
+              <td><span className={`organization-readiness-badge ${ready ? "is-ready" : readiness?.overallStatus === "Partially configured" ? "is-pending" : "is-missing"}`}>{readiness?.overallStatus || "Unavailable"}</span></td>
+              <td><div className="organization-readiness-actions"><button type="button" className="btn btn-secondary btn-small" aria-expanded={expanded} onClick={() => setExpandedOrganizationSlug(expanded ? "" : organization.slug)}>{expanded ? "Close setup" : ready ? "View setup" : "Continue setup"}</button><button type="button" className="btn btn-secondary btn-small" onClick={() => openEditOrganizationForm(organization)}>Edit</button></div></td>
+            </tr>
+            {expanded && <tr key={`${organization.slug}-details`}><td colSpan={4}><div className="organization-readiness-details">
+              <StatusChip label="Organization owner" value={readiness?.ownerStatus || "Status unavailable"} done={readiness?.ownerStatus === "Registered"} />
+              <StatusChip label="Smile Credits" value={readiness?.creditsAdded ? "Added" : "Not added"} done={readiness?.creditsAdded === true} />
+              <StatusChip label="Live Avatar recording storage" value={readiness?.recordingStorageApplicable ? readiness.recordingStorageReady ? "Connected" : "Required" : "Not needed yet"} done={!readiness?.recordingStorageApplicable || readiness?.recordingStorageReady === true} />
+              <StatusChip label="Google Calendar" value={readiness?.googleCalendarApplicable ? readiness.googleCalendarReady ? "Connected" : "Required" : "Not needed yet"} done={!readiness?.googleCalendarApplicable || readiness?.googleCalendarReady === true} />
+              <StatusChip label="First role" value={readiness?.firstRolePublished ? "Published" : "Not published"} done={readiness?.firstRolePublished === true} />
+              {readiness?.brandingConfigured && <StatusChip label="Organization branding" value="Configured" done />}
+              {readiness?.hasCandidates && <StatusChip label="Candidates" value="Added" done />}
+              {readiness?.hasTeammates && <StatusChip label="Teammates" value="Invited" done />}
+              {readiness?.automatedEmailsCustomized && <StatusChip label="Email wording" value="Customized" done />}
+              {organization.allowedDomains.length > 0 && <p className="field-hint organization-card-note">Domain access: {organization.allowedDomains.map((domain) => `@${domain}`).join(", ")} — anyone with an address at these domains can register with HR access.</p>}
+            </div></td></tr>}
+          </Fragment>;
+        })}</tbody></table></div>}
+        <p className="field-hint organization-card-note">All organizations use the same organization-scoped database. Their users, candidates, credits, settings, and connected accounts remain separated by organization.</p>
       </section>}
 
       {inviteAvailable && !canManageOrganizations && <section className="card organization-admin-card" aria-labelledby="team-invite-title">
@@ -503,14 +555,14 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
             <div className="field"><label htmlFor="user-department">Department</label><select id="user-department" value={form.department} onChange={(event) => updateForm("department", event.target.value)}><option value="">Select a department</option>{form.department && !isKnownDepartment(form.department) && <option value={form.department}>{form.department} (existing)</option>}{DEPARTMENT_OPTIONS.map((department) => <option key={department} value={department}>{department}</option>)}</select></div>
             <fieldset className="user-account-permissions"><legend>Permissions</legend><p className="field-hint">HR is the only access administrator. Accounts named HR with recruitment review access can manage this list.</p><label><input type="checkbox" checked={form.canCreateRole} onChange={(event) => updateForm("canCreateRole", event.target.checked)} /> Create role requests</label><label><input type="checkbox" checked={form.canReviewRole} onChange={(event) => updateForm("canReviewRole", event.target.checked)} /> Review recruitment (company-wide: setup, applicants, bookings)</label><label><input type="checkbox" checked={form.canReviewDepartmentRole} onChange={(event) => updateForm("canReviewDepartmentRole", event.target.checked)} /> Review own department only</label><label><input type="checkbox" checked={form.canApproveRole} onChange={(event) => updateForm("canApproveRole", event.target.checked)} /> Approve role requests and hiring decisions</label><label><input type="checkbox" checked={form.canManageCredits} onChange={(event) => updateForm("canManageCredits", event.target.checked)} /> Manage Smile Credits</label><label><input type="checkbox" checked={form.canEditSettings} onChange={(event) => updateForm("canEditSettings", event.target.checked)} /> Edit settings</label></fieldset>
             <label className="user-account-active"><input type="checkbox" checked={form.active} onChange={(event) => updateForm("active", event.target.checked)} /> Account is active</label>
-            {canManageOrganizations && originalEmail && selectedOrganizationId !== DEFAULT_ORG_ID && <label className="user-account-active"><input type="checkbox" checked={form.isOrganizationOwner === true} onChange={(event) => updateForm("isOrganizationOwner", event.target.checked)} /> Organization owner (manages the team; only one per organization)</label>}
+            {canManageOrganizations && originalEmail && selectedOrganizationSlug !== DEFAULT_ORG_SLUG && <label className="user-account-active"><input type="checkbox" checked={form.isOrganizationOwner === true} onChange={(event) => updateForm("isOrganizationOwner", event.target.checked)} /> Organization owner (manages the team; only one per organization)</label>}
             <div className="user-account-form-actions"><button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : "Save account"}</button></div>
           </form>
         </section>
       </div>}
 
       <section className="card user-account-list-card">
-        <div className="card-header directory-card-header"><div className="directory-card-heading"><h2>Directory Accounts</h2><p>{canManageOrganizations ? `Manage accounts for ${organizations.find((organization) => organization.id === selectedOrganizationId)?.name || "the selected organization"}.` : "Manage accounts for your organization."}</p></div><div className="directory-card-actions">{canManageOrganizations && organizations.length > 0 && <div className="field user-account-organization-picker"><label htmlFor="user-account-organization">Manage users for</label><select id="user-account-organization" value={selectedOrganizationId} onChange={(event) => { const organizationId = event.target.value; setSelectedOrganizationId(organizationId); setShowForm(false); void loadUsers(organizationId); }}><option value={DEFAULT_ORG_ID}>McLink</option>{organizations.filter((organization) => organization.id !== DEFAULT_ORG_ID).map((organization) => <option key={organization.id} value={organization.id} disabled={!organization.active}>{organization.name}{organization.active ? "" : " (inactive)"}</option>)}</select></div>}<button type="button" className="btn btn-secondary directory-refresh-button" onClick={() => void loadUsers(selectedOrganizationId)} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button></div></div>
+        <div className="card-header directory-card-header"><div className="directory-card-heading"><h2>Directory Accounts</h2><p>{canManageOrganizations ? `Manage accounts for ${organizations.find((organization) => organization.slug === selectedOrganizationSlug)?.name || "the selected organization"}.` : "Manage accounts for your organization."}</p></div><div className="directory-card-actions">{canManageOrganizations && organizations.length > 0 && <div className="field user-account-organization-picker"><label htmlFor="user-account-organization">Manage users for</label><select id="user-account-organization" value={selectedOrganizationSlug} onChange={(event) => { setSelectedOrganizationSlug(event.target.value); setShowForm(false); }}><option value={DEFAULT_ORG_SLUG}>McLink</option>{organizations.filter((organization) => organization.slug !== DEFAULT_ORG_SLUG).map((organization) => <option key={organization.slug} value={organization.slug} disabled={!organization.active}>{organization.name}{organization.active ? "" : " (inactive)"}</option>)}</select></div>}<button type="button" className="btn btn-secondary directory-refresh-button" onClick={() => void loadUsers(selectedOrganizationSlug)} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button></div></div>
         {loading ? <div className="empty">Loading user accounts…</div> : users.length === 0 ? <div className="empty">No user accounts were found.</div> : <div className="table-wrap user-account-table-wrap"><table className="user-account-table"><thead><tr><th>User</th>{canManageOrganizations && <th>Access role</th>}{showDepartment && <th>Department</th>}<th>Status</th><th>Last sign-in</th>{canManageOrganizations && <th>Permissions</th>}<th>Actions</th></tr></thead><tbody>{users.map((user) => <tr key={user.email}><td><strong>{user.fullName || "Unnamed user"}{user.isOrganizationOwner && <span className="rule-chip">Owner</span>}</strong><span>{user.email}</span></td>{canManageOrganizations && <td>{user.accessRole || "—"}</td>}{showDepartment && <td>{user.department || "—"}</td>}<td><span className={`user-account-status ${user.active ? "is-active" : "is-inactive"}`}>{user.active ? "Active" : "Inactive"}</span>{!user.active && user.deactivatedAt && <span className="field-hint">Deactivated{user.deactivatedBy ? ` by ${user.deactivatedBy}` : ""} on {formatWhen(user.deactivatedAt)}</span>}</td><td>{formatWhen(user.lastLoginAt) || "Never"}</td>{canManageOrganizations && <td>{permissionLabels(user)}</td>}<td><div className="user-account-actions">{canManageOrganizations && <button type="button" className="btn btn-secondary btn-small" onClick={() => openEditForm(user)}>Edit</button>}{canManageOrganizations && <button type="button" className="btn btn-secondary btn-small" onClick={() => void resetRegistration(user)} disabled={user.email === currentEmail.trim().toLowerCase()} title="Clear the sign-in credential so this email can register again">Reset registration</button>}{canManageTeam && <button type="button" className={`btn btn-small ${user.active ? "btn-danger-outline" : "btn-secondary"}`} onClick={() => void toggleActive(user)} disabled={user.email === currentEmail.trim().toLowerCase() || (user.isOrganizationOwner === true && !canManageOrganizations)} title={user.isOrganizationOwner && !canManageOrganizations ? "The organization owner cannot be deactivated" : undefined}>{user.active ? "Deactivate" : "Reactivate"}</button>}</div></td></tr>)}</tbody></table></div>}
       </section>
     </main>

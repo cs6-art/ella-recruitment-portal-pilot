@@ -1,33 +1,69 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-type StartMetrics = { total?: number; jobPosted?: number; applicantMetrics?: { total: number } };
+type Readiness = {
+  ownerStatus: "Registered" | "Awaiting registration";
+  creditsAdded: boolean;
+  recordingStorageApplicable: boolean;
+  recordingStorageReady: boolean;
+  googleCalendarApplicable: boolean;
+  googleCalendarReady: boolean;
+  firstRolePublished: boolean;
+  hasRoles: boolean;
+  overallStatus: "Setup required" | "Partially configured" | "Ready to recruit";
+  onboardingEnabled: boolean;
+  brandingConfigured: boolean;
+  hasCandidates: boolean;
+  hasTeammates: boolean;
+  automatedEmailsCustomized: boolean;
+};
 
 type Step = {
   key: string;
   title: string;
   detail: string;
   done: boolean;
-  optional?: boolean;
+  required: boolean;
+  marker: "conditional" | "optional" | "after setup" | "";
+  status: string;
   href: string;
   action: string;
 };
 
 const storageKey = (organizationId: string) => `getting-started-hidden:${organizationId}`;
 
-/**
- * First-run checklist for a new organization. Every step completes itself from
- * real data (a published role, credits, an applicant, a connected calendar),
- * so nobody has to tick anything, and the card disappears once all are done.
- */
-export default function GettingStarted({ organizationId, metrics }: { organizationId: string; metrics: StartMetrics }) {
-  const [hidden, setHidden] = useState(true);
-  const [hasCredits, setHasCredits] = useState<boolean | null>(null);
-  const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null);
-  const [email, setEmail] = useState<{ enabled: boolean; sent: number; pending: number; failed: number } | null>(null);
-  const [hasTeammates, setHasTeammates] = useState<boolean | null>(null);
+function LoadingChecklist() {
+  return <section className="getting-started getting-started-loading" aria-busy="true" aria-label="Checking workspace setup">
+    <div className="getting-started-header"><div><span className="dashboard-eyebrow">GETTING STARTED</span><div className="getting-started-loading-title" /></div><div className="getting-started-loading-progress" /></div>
+    <div className="getting-started-loading-rows" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <div key={index} />)}</div>
+    <p className="sr-only" role="status">Checking your organization setup.</p>
+  </section>;
+}
+
+export default function GettingStarted({ organizationId }: { organizationId: string }) {
+  const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [hidden, setHidden] = useState<boolean | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refresh = useCallback(async (manual = false) => {
+    if (manual) setRefreshing(true);
+    try {
+      const response = await fetch("/api/organization/readiness", { credentials: "same-origin", cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || data.success !== true || !data.readiness) throw new Error(data.error || "Unable to check workspace setup.");
+      setReadiness(data.readiness as Readiness);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "We couldn’t check workspace setup. Please try again.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -38,129 +74,195 @@ export default function GettingStarted({ organizationId, metrics }: { organizati
   }, [organizationId]);
 
   useEffect(() => {
-    let active = true;
-    fetch("/api/ella-credits", { credentials: "same-origin", cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => { if (active && data?.success === true) setHasCredits(Number(data.balance) > 0 || (Array.isArray(data.entries) && data.entries.length > 0)); })
-      .catch(() => { if (active) setHasCredits(false); });
-    fetch("/api/auth/google-calendar/status", { credentials: "same-origin", cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => { if (active && data?.success === true) setCalendarConnected(data.connected === true); })
-      .catch(() => { if (active) setCalendarConnected(false); });
-    fetch("/api/notifications/health", { credentials: "same-origin", cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => { if (active && data?.success === true) setEmail({ enabled: data.enabled === true, sent: Number(data.sent) || 0, pending: Number(data.pending) || 0, failed: Number(data.failed) || 0 }); else if (active) setEmail({ enabled: false, sent: 0, pending: 0, failed: 0 }); })
-      .catch(() => { if (active) setEmail({ enabled: false, sent: 0, pending: 0, failed: 0 }); });
-    fetch("/api/user-directory", { credentials: "same-origin", cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => { if (active) setHasTeammates(Array.isArray(data?.users) ? data.users.length > 1 : false); })
-      .catch(() => { if (active) setHasTeammates(false); });
-    return () => { active = false; };
-  }, []);
+    if (hidden === true) return;
+    void refresh();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [refresh, hidden]);
 
   const steps = useMemo<Step[]>(() => {
-    const total = metrics.total ?? 0;
-    const published = (metrics.jobPosted ?? 0) > 0;
+    if (!readiness) return [];
+    const roleAction = readiness.hasRoles ? "/roles" : "/roles/new";
     return [
       {
-        key: "role",
-        title: "Create and publish your first role",
-        detail: total > 0 && !published ? "You have a role that is not published yet. Open it and publish it so candidates can apply." : "Paste a job description and Smile fills in the screening questions for you. It takes about two minutes.",
-        done: published,
-        href: total > 0 && !published ? "/roles" : "/roles/new",
-        action: total > 0 && !published ? "Open your roles" : "Create a role",
+        key: "branding",
+        title: "Review organization name and branding",
+        detail: readiness.brandingConfigured
+          ? "The organization name and portal subtitle are saved. Change them any time in Settings."
+          : "Smile’s default branding will keep the workspace working until you choose a name and subtitle.",
+        done: readiness.brandingConfigured,
+        required: false,
+        marker: "optional",
+        status: readiness.brandingConfigured ? "Ready" : "Using defaults",
+        href: "/settings",
+        action: "Review branding",
       },
       {
         key: "credits",
-        title: "Add Smile credits",
-        detail: "Credits pay for screening each resume and for AI phone interviews. Your organization starts with none.",
-        done: hasCredits === true,
+        title: "Add Smile Credits",
+        detail: readiness.creditsAdded
+          ? "Your organization has credits available for resume screening and interviews."
+          : "Credits cover resume screening and AI interviews. Add credits before using those services.",
+        done: readiness.creditsAdded,
+        required: true,
+        marker: "",
+        status: readiness.creditsAdded ? "Added" : "Not added",
         href: "/credits",
         action: "Add credits",
       },
       {
-        key: "candidates",
-        title: "Get your first candidates",
-        detail: "Candidates apply through your role's link, or upload a batch of resumes to have them screened right away.",
-        done: (metrics.applicantMetrics?.total ?? 0) > 0,
-        href: "/resume-screening",
-        action: "Add candidates",
-      },
-      {
-        key: "email",
-        title: "Confirm email delivery",
-        detail: !email ? "Checking whether candidate and HR emails are being sent."
-          : !email.enabled ? "Email sending is switched off, so no candidate or HR emails will be sent. Ask your administrator to turn it on."
-          : email.failed > 0 ? `${email.failed} email${email.failed === 1 ? "" : "s"} failed to send. Ask your administrator to check the email connection.`
-          : email.sent > 0 ? "Emails are being sent."
-          : email.pending > 0 ? `${email.pending} email${email.pending === 1 ? " is" : "s are"} waiting to be sent. If they stay queued, the email connection may not be running.`
-          : "Emails go out automatically when a candidate applies or moves forward. This completes after the first one is sent.",
-        done: email !== null && email.enabled && email.failed === 0 && email.sent > 0,
-        href: "/applicants",
-        action: "View applicants",
-      },
-      {
-        key: "team",
-        title: "Invite your team",
-        detail: "Colleagues join by registering with your organization email. Add teammates so reviews and interviews are not tied to one person.",
-        done: hasTeammates === true,
-        optional: true,
-        href: "/user-accounts",
-        action: "Manage team",
+        key: "recording-storage",
+        title: "Configure Google Drive for Live Avatar recordings",
+        detail: !readiness.recordingStorageApplicable
+          ? "This is only needed if your organization uses Live Avatar interviews."
+          : readiness.recordingStorageReady
+            ? "Live Avatar recordings have an organization-owned Google Drive destination."
+            : "Live Avatar is in use, so connect this organization’s Google account and choose a Drive folder before the next interview.",
+        done: !readiness.recordingStorageApplicable || readiness.recordingStorageReady,
+        required: readiness.recordingStorageApplicable,
+        marker: "conditional",
+        status: !readiness.recordingStorageApplicable ? "Not needed yet" : readiness.recordingStorageReady ? "Connected" : "Required",
+        href: "/settings#recording-drive-settings-title",
+        action: "Set up Drive",
       },
       {
         key: "calendar",
         title: "Connect Google Calendar",
-        detail: "Only needed for face-to-face interviews. It lets candidates book a time when your HR calendar is free.",
-        done: calendarConnected === true,
-        optional: true,
-        href: "/settings",
+        detail: !readiness.googleCalendarApplicable
+          ? "This is only needed when a role is set up for Face-to-Face Interviews."
+          : readiness.googleCalendarReady
+            ? "Your organization’s interview calendar is connected."
+            : "A role requires Face-to-Face Interviews. Connect the calendar so candidates can book an available time.",
+        done: !readiness.googleCalendarApplicable || readiness.googleCalendarReady,
+        required: readiness.googleCalendarApplicable,
+        marker: "conditional",
+        status: !readiness.googleCalendarApplicable ? "Not needed yet" : readiness.googleCalendarReady ? "Connected" : "Required",
+        href: "/settings#calendar-settings-title",
         action: "Connect calendar",
       },
+      {
+        key: "role",
+        title: "Create and publish your first role",
+        detail: readiness.firstRolePublished
+          ? "Your first role is published and ready to receive candidates."
+          : readiness.hasRoles
+            ? "You have a role in progress. Finish any remaining details, then publish it to accept candidates."
+            : "Add the job details and screening questions. Smile can suggest questions from the job description.",
+        done: readiness.firstRolePublished,
+        required: true,
+        marker: "",
+        status: readiness.firstRolePublished ? "Published" : "Not published",
+        href: roleAction,
+        action: readiness.hasRoles ? "Open roles" : "Create a role",
+      },
+      {
+        key: "candidates",
+        title: "Add candidates",
+        detail: readiness.hasCandidates
+          ? "Candidates have started applying to or been added to your roles."
+          : "Share your role’s application link or upload resumes for screening. This is the next step once setup is ready.",
+        done: readiness.hasCandidates,
+        required: false,
+        marker: "after setup",
+        status: readiness.hasCandidates ? "Added" : "After setup",
+        href: "/resume-screening",
+        action: "Add candidates",
+      },
+      {
+        key: "teammates",
+        title: "Invite teammates",
+        detail: readiness.hasTeammates
+          ? "More than one active team member is set up."
+          : "Invite colleagues by their individual email addresses when you are ready to share access.",
+        done: readiness.hasTeammates,
+        required: false,
+        marker: "optional",
+        status: readiness.hasTeammates ? "Team added" : "Optional",
+        href: "/user-accounts",
+        action: "Manage team",
+      },
+      {
+        key: "emails",
+        title: "Customize automated emails",
+        detail: readiness.automatedEmailsCustomized
+          ? "Your organization has saved its own email wording."
+          : "Smile’s standard email wording is ready to use. Customize it only if you want different wording.",
+        done: readiness.automatedEmailsCustomized,
+        required: false,
+        marker: "optional",
+        status: readiness.automatedEmailsCustomized ? "Customized" : "Optional",
+        href: "/settings#automated-emails",
+        action: "Review emails",
+      },
     ];
-  }, [metrics, hasCredits, calendarConnected, email, hasTeammates]);
+  }, [readiness]);
 
-  const loaded = hasCredits !== null && calendarConnected !== null && email !== null && hasTeammates !== null;
-  const completed = steps.filter((step) => step.done).length;
-  const nextKey = steps.find((step) => !step.done)?.key;
+  if (hidden === null || (loading && hidden === false)) return <LoadingChecklist />;
+  if (readiness && !readiness.onboardingEnabled) return null;
 
-  if (hidden || !loaded || completed === steps.length) return null;
+  const requiredSteps = steps.filter((step) => step.required);
+  const completedRequired = requiredSteps.filter((step) => step.done).length;
+  const ready = requiredSteps.length > 0 && completedRequired === requiredSteps.length;
 
-  function dismiss() {
+  function hideChecklist() {
     try {
       window.localStorage.setItem(storageKey(organizationId), "1");
     } catch {
-      // The card just returns on the next visit if storage is unavailable.
+      // The checklist remains available if local browser storage is disabled.
     }
     setHidden(true);
   }
 
-  return (
-    <section className="getting-started" aria-labelledby="getting-started-title">
-      <div className="getting-started-header">
-        <div>
-          <span className="dashboard-eyebrow">GETTING STARTED</span>
-          <h2 id="getting-started-title">Set up your workspace in {steps.length} steps</h2>
-          <p>Follow these in order. Each one checks itself off when it is done.</p>
-        </div>
-        <div className="getting-started-progress" aria-label={`${completed} of ${steps.length} steps done`}>
-          <strong>{completed} of {steps.length}</strong>
-          <span className="getting-started-bar"><span style={{ width: `${(completed / steps.length) * 100}%` }} /></span>
-        </div>
+  function reopenChecklist() {
+    try {
+      window.localStorage.removeItem(storageKey(organizationId));
+    } catch {
+      // Keep the page usable even if local browser storage is disabled.
+    }
+    setHidden(false);
+  }
+
+  if (hidden) return <section className="getting-started-reopen" aria-label="Workspace setup">
+    {ready && <strong>Ready to recruit</strong>}
+    <button type="button" className="btn btn-secondary" onClick={reopenChecklist}>Open setup checklist</button>
+  </section>;
+
+  if (loadError || !readiness) return <section className="getting-started getting-started-error" aria-labelledby="getting-started-title">
+    <div className="getting-started-header"><div><span className="dashboard-eyebrow">GETTING STARTED</span><h2 id="getting-started-title">Set up your organization</h2><p>We couldn’t check the latest setup information. Your saved progress is safe.</p></div></div>
+    <div className="getting-started-error-actions"><p role="alert">{loadError || "Workspace setup is temporarily unavailable."}</p><button type="button" className="btn btn-secondary" onClick={() => void refresh(true)} disabled={refreshing}>{refreshing ? "Checking…" : "Try again"}</button></div>
+    <button type="button" className="getting-started-hide" onClick={hideChecklist}>Hide this checklist</button>
+  </section>;
+
+  const nextStep = steps.find((step) => step.required && !step.done);
+
+  return <section className={`getting-started${ready ? " is-ready" : ""}`} aria-labelledby="getting-started-title" aria-busy={refreshing}>
+    <div className="getting-started-header">
+      <div>
+        <span className="dashboard-eyebrow">GETTING STARTED</span>
+        <h2 id="getting-started-title">{ready ? "Ready to recruit" : "Set up your organization"}</h2>
+        <p>{ready ? "All required setup is complete. You can now welcome candidates and continue refining your workspace." : "Follow these steps in order. Setup status is checked from your organization’s saved information."}</p>
       </div>
-      <ol className="getting-started-steps">
-        {steps.map((step, index) => (
-          <li key={step.key} className={`getting-started-step${step.done ? " is-done" : ""}${step.key === nextKey ? " is-next" : ""}`}>
-            <span className="getting-started-marker" aria-hidden="true">{step.done ? "✓" : index + 1}</span>
-            <div className="getting-started-copy">
-              <strong>{step.title}{step.optional && <span className="getting-started-optional">Optional</span>}</strong>
-              <p>{step.done ? "Done." : step.detail}</p>
-            </div>
-            {!step.done && <Link className={`btn ${step.key === nextKey ? "btn-primary" : "btn-secondary"}`} href={step.href}>{step.action}</Link>}
-          </li>
-        ))}
-      </ol>
-      <button type="button" className="getting-started-hide" onClick={dismiss}>Hide this checklist</button>
-    </section>
-  );
+      <div className="getting-started-progress" aria-label={`${completedRequired} of ${requiredSteps.length} required setup steps complete`}>
+        <strong>{completedRequired} of {requiredSteps.length} required</strong>
+        <span className="getting-started-bar"><span style={{ width: `${(completedRequired / requiredSteps.length) * 100}%` }} /></span>
+        <small>{refreshing ? "Updating…" : "Updates automatically"}</small>
+      </div>
+    </div>
+    <ol className="getting-started-steps">
+      {steps.map((step, index) => (
+        <li key={step.key} className={`getting-started-step${step.done ? " is-done" : ""}${step.key === nextStep?.key ? " is-next" : ""}${step.marker ? " is-marked" : ""}`}>
+          <span className="getting-started-marker" aria-hidden="true">{step.done ? "✓" : index + 1}</span>
+          <div className="getting-started-copy">
+            <strong>{step.title}{step.marker && <span className="getting-started-optional">{step.marker === "after setup" ? "After setup" : step.marker === "conditional" ? "Conditional" : "Optional"}</span>}</strong>
+            <p>{step.detail}</p>
+            <small className={`getting-started-status ${step.done ? "is-done" : step.required ? "is-pending" : "is-optional"}`}>{step.status}</small>
+          </div>
+          {(!step.done || step.marker === "optional" || step.key === "branding") && <Link className={`btn ${step.key === nextStep?.key ? "btn-primary" : "btn-secondary"}`} href={step.href}>{step.action}</Link>}
+        </li>
+      ))}
+    </ol>
+    <div className="getting-started-footer"><button type="button" className="getting-started-hide" onClick={hideChecklist}>Hide this checklist</button><button type="button" className="getting-started-refresh" onClick={() => void refresh(true)} disabled={refreshing}>{refreshing ? "Checking…" : "Refresh setup status"}</button></div>
+  </section>;
 }

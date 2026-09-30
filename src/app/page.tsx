@@ -11,6 +11,8 @@ type HomePageProps = {
     invite?: string | string[];
     verify?: string | string[];
     reset?: string | string[];
+    register?: string | string[];
+    email?: string | string[];
   }>;
 };
 
@@ -39,6 +41,8 @@ export default async function Home({ searchParams }: HomePageProps) {
 
   const verifyValue = Array.isArray(query?.verify) ? query.verify[0] : query?.verify;
   const resetToken = (Array.isArray(query?.reset) ? query.reset[0] : query?.reset) || "";
+  const registerValue = Array.isArray(query?.register) ? query.register[0] : query?.register;
+  const invitedEmail = registerValue === "1" ? (Array.isArray(query?.email) ? query.email[0] : query?.email) || "" : "";
   const verifyNotice = ({
     verified: "Your email is verified. You can now log in.",
     expired: "That verification link has expired. Log in and choose “Resend verification email”.",
@@ -60,10 +64,10 @@ export default async function Home({ searchParams }: HomePageProps) {
           </div>
         </div>
         <div className="login-panel">
-          <h2>Welcome</h2>
-          <p>New here? Register with your organization email, then click the verification link we send you. Already verified? Log in.</p>
+          <h2>{invitedEmail ? "You’re invited" : "Welcome"}</h2>
+          <p>{invitedEmail ? "Register with this invited email and verify it to join the organization. The first person to register and verify becomes the organization owner." : "New here? Register with your organization email, then click the verification link we send you. Already verified? Log in."}</p>
           {verifyNotice ? <div className="notice" role="status">{verifyNotice}</div> : null}
-          <AuthForm redirectTo={redirectTo} resetToken={resetToken} />
+          <AuthForm redirectTo={redirectTo} resetToken={resetToken} initialEmail={invitedEmail} startInRegistration={Boolean(invitedEmail)} />
           <div className="notice"><strong>Organization members only.</strong><br />Your account is created in your organization automatically, based on your email address.</div>
         </div>
       </section>

@@ -21,7 +21,7 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const ref = await getLiveInterviewRecordingRef(applicationId, access.user.organizationId);
     if (!ref) return NextResponse.json({ success: false, error: "No recording is available for this interview." }, { status: 404 });
-    const upstream = await fetchInterviewRecording(ref.fileId, request.headers.get("range"));
+    const upstream = await fetchInterviewRecording(ref.fileId, request.headers.get("range"), ref.organizationId, ref.accountEmail);
     if (!upstream.ok || !upstream.body) {
       console.error("[API Live Interview Recording] Drive fetch failed:", { status: upstream.status });
       return NextResponse.json({ success: false, error: "The recording could not be loaded." }, { status: upstream.status === 416 ? 416 : 502 });

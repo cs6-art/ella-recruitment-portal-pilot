@@ -96,7 +96,8 @@ test("consent is a visible required checkbox on both candidate apply forms, and 
 test("interview recordings are deleted after the retention period without touching the transcript", () => {
   const store = read("src/lib/live-interview-store.ts");
   const purge = store.slice(store.indexOf("export async function purgeExpiredInterviewRecordings"));
-  assert.match(purge, /deleteInterviewRecording\(row\.ref\)/);
+  assert.match(purge, /deleteInterviewRecording\(row\.ref, row\.organizationId, row\.accountEmail\)/);
+  assert.match(purge, /deleteRecordingDriveConnectionIfUnused\(row\.organizationId, row\.accountEmail\)/);
   assert.match(purge, /recordingStatus: "deleted"/);
   assert.doesNotMatch(purge, /clientTranscript|analysis:/);
   assert.match(read("src/app/api/cron/interview-retention/route.ts"), /suppliedSecret\(request\) !== expected/);

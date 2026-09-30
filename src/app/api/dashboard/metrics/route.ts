@@ -1,6 +1,9 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { and, eq, ne, sql } from "drizzle-orm";
 
+import { getDb } from "@/db/client";
+import { applicationStatusHistory } from "@/db/schema-recruitment";
 import { filterVisibleApplicants, filterVisibleRoles } from "@/lib/access-control";
 import { getApplicants, getApplicantMetrics, getInterviewBookings, type ApplicantSummary, type InterviewBooking } from "@/lib/candidate-applications";
 import { calculateDashboardMetrics } from "@/lib/dashboard-metrics";
@@ -95,7 +98,14 @@ export async function GET() {
     ? collectAttentionAlerts(user.organizationId, { ownerEmail: user.email })
     : Promise.resolve([] as Awaited<ReturnType<typeof collectAttentionAlerts>>);
 
-  const [rolesResult, metricsResult, bookingsResult, applicantsResult, recordingsResult, processingResult, overdueResult, attentionResult] = await Promise.allSettled([
+  const notificationHealthPromise = canViewInterviews && postgresTarget
+    ? getDb().select({ status: applicationStatusHistory.notificationStatus, count: sql<number>`count(*)::int` })
+      .from(applicationStatusHistory)
+      .where(and(eq(applicationStatusHistory.organizationId, user.organizationId), ne(applicationStatusHistory.notificationStatus, "")))
+      .groupBy(applicationStatusHistory.notificationStatus)
+    : Promise.resolve([] as { status: string; count: number }[]);
+
+  const [rolesResult, metricsResult, bookingsResult, applicantsResult, recordingsResult, processingResult, overdueResult, attentionResult, notificationHealthResult] = await Promise.allSettled([
     roleRequestsPromise,
     applicantMetricsPromise,
     interviewBookingsPromise,
@@ -104,12 +114,13 @@ export async function GET() {
     processingFailuresPromise,
     overdueInterviewsPromise,
     attentionPromise,
+    notificationHealthPromise,
   ]);
 
   const sectionErrors = {
     overview: rolesResult.status === "rejected" || (canViewApplicants && metricsResult.status === "rejected"),
     upcomingInterviews: canViewInterviews && bookingsResult.status === "rejected",
-    alerts: canViewInterviews && (bookingsResult.status === "rejected" || recordingsResult.status === "rejected" || processingResult.status === "rejected" || overdueResult.status === "rejected"),
+    alerts: canViewInterviews && (bookingsResult.status === "rejected" || recordingsResult.status === "rejected" || processingResult.status === "rejected" || overdueResult.status === "rejected" || notificationHealthResult.status === "rejected"),
     recentActivity: rolesResult.status === "rejected" && applicantsResult.status === "rejected",
     activityPartial: rolesResult.status === "rejected" || applicantsResult.status === "rejected",
   };
@@ -119,6 +130,7 @@ export async function GET() {
   if (bookingsResult.status === "rejected") console.error("[API Dashboard Metrics] interview data unavailable:", bookingsResult.reason);
   if (applicantsResult.status === "rejected") console.error("[API Dashboard Metrics] recent applicant data unavailable:", applicantsResult.reason);
   if (recordingsResult.status === "rejected") console.error("[API Dashboard Metrics] recording alerts unavailable:", recordingsResult.reason);
+  if (notificationHealthResult.status === "rejected") console.error("[API Dashboard Metrics] email delivery alerts unavailable:", notificationHealthResult.reason);
 
   const visibleRoles = rolesResult.status === "fulfilled" ? filterVisibleRoles(rolesResult.value, user) : [];
   const roleMetrics = rolesResult.status === "fulfilled" ? calculateDashboardMetrics(visibleRoles) : null;
@@ -209,6 +221,19 @@ export async function GET() {
   }));
 
   if (attentionResult.status === "fulfilled") alerts.push(...attentionResult.value);
+  if (notificationHealthResult.status === "fulfilled") {
+    const emailIssues = notificationHealthResult.value
+      .filter((row) => ["failed", "not_configured"].includes(row.status.trim().toLowerCase()))
+      .reduce((total, row) => total + Number(row.count || 0), 0);
+    if (emailIssues > 0) alerts.push({
+      id: "email-delivery",
+      title: `${emailIssues} candidate or team email${emailIssues === 1 ? " needs" : "s need"} attention.`,
+      description: "The related recruitment update is saved, but some emails may not have been delivered. Review the email delivery setup.",
+      savedMessage: "Candidate and interview records remain saved.",
+      href: "/settings#automated-emails",
+      actionLabel: "Review email delivery",
+    });
+  }
 
   const recentActivity = createRecentActivity(roleMetrics?.recentRequests, visibleApplicants);
   return NextResponse.json({
