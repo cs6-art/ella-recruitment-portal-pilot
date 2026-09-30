@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import UiIcon from "@/components/UiIcon";
 import { useConfirmation } from "@/components/ConfirmationModal";
 import type { ApplicantMetrics, ApplicantSummary } from "@/lib/candidate-applications";
 import Pagination from "@/components/Pagination";
@@ -474,6 +475,11 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
     });
   }
 
+  function clearApplicantFilters() {
+    setSearch(""); setRoleFilter("All Roles"); setStageFilter("All Stages"); setResumeFilter("All resume statuses"); setInterviewTypeFilter("All interview types"); setInterviewStatusFilter("All interview statuses"); setDateFrom(""); setDateTo(""); setPage(1);
+    writeListUrl({ search: "", role: "All Roles", stage: "All Stages", resume: "All resume statuses", interview: "All interview types", interviewStatus: "All interview statuses", from: "", to: "", page: 1 });
+  }
+
   function toggleAllVisibleApplicants() {
     clearActionFeedback();
     setSelectedIds((current) => {
@@ -491,10 +497,10 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
         <div>
           <h1>{title}</h1>
           <p>{description}</p>
-          <div className="applicants-refresh-controls">
-            <span className="live-data-note">Applicant records{lastUpdated ? ` · updated ${formatPortalDateTime(lastUpdated)}` : ""}</span>
-            <button type="button" className="btn btn-secondary" disabled={refreshing} aria-busy={refreshing} onClick={refreshApplicants}>{refreshing ? "Refreshing applicants…" : "Refresh applicants"}</button>
-          </div>
+          <span className="live-data-note">Applicant records{lastUpdated ? ` · updated ${formatPortalDateTime(lastUpdated)}` : ""}</span>
+        </div>
+        <div className="hero-actions">
+          <button type="button" className="btn btn-secondary" aria-label="Refresh applicants" disabled={refreshing} aria-busy={refreshing} onClick={refreshApplicants}><UiIcon name="refresh" size={16} />{refreshing ? "Refreshing..." : "Refresh"}</button>
         </div>
       </div>
 
@@ -512,39 +518,37 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
       </div>
 
       <section className="card applicants-card" aria-busy={recordsLoading}>
-        <div className="applicants-toolbar">
-          <div><h2>Applicant Pipeline</h2><span>{matchingApplicantCount} matching applicant{matchingApplicantCount === 1 ? "" : "s"}</span></div>
-          {canManageApplicants && <div className="bulk-selection-toolbar"><span>{selectedApplicants.length} selected</span><button type="button" className="btn btn-danger-outline" disabled={selectedApplicants.length === 0 || deletingId !== ""} onClick={() => void deleteApplicants(selectedApplicants)}>Delete selected</button></div>}
-          <div className="applicants-filters">
-            <input aria-label="Search applicants" placeholder="Search candidate, email, role, or application reference" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); writeListUrl({ search: event.target.value, page: 1 }); }} />
-            <select aria-label="Filter by role" value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value); setPage(1); writeListUrl({ role: event.target.value, page: 1 }); }}><option>All Roles</option>{roleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select>
-            <select aria-label="Filter by application status" value={stageFilter} onChange={(event) => { setStageFilter(event.target.value); setPage(1); writeListUrl({ stage: event.target.value, page: 1 }); }}><option>All Stages</option>{stages.map((stage) => <option key={stage}>{stage}</option>)}</select>
-            <select aria-label="Filter by resume screening status" value={resumeFilter} onChange={(event) => { setResumeFilter(event.target.value); setPage(1); writeListUrl({ resume: event.target.value, page: 1 }); }}><option>All resume statuses</option><option>Screened</option><option>Awaiting screening</option></select>
-            <select aria-label="Filter by interview type" value={interviewTypeFilter} onChange={(event) => { setInterviewTypeFilter(event.target.value); setPage(1); writeListUrl({ interview: event.target.value, page: 1 }); }}><option>All interview types</option><option>Voice Interview</option><option>Live Avatar Interview</option><option>Not selected</option></select>
-            <select aria-label="Filter by interview status" value={interviewStatusFilter} onChange={(event) => { setInterviewStatusFilter(event.target.value); setPage(1); writeListUrl({ interviewStatus: event.target.value, page: 1 }); }}><option>All interview statuses</option><option value="not_started">Not started</option><option value="scheduled">Scheduled</option><option value="in_progress">In progress</option><option value="awaiting_review">Awaiting review</option><option value="review_complete">Review complete</option></select>
-            <select aria-label="Sort applicants" value={sortFilter} onChange={(event) => { setSortFilter(event.target.value); setPage(1); writeListUrl({ sort: event.target.value, page: 1 }); }}><option>Newest first</option><option>Oldest first</option><option>Highest match</option></select>
-            <label className="field applicant-date-filter"><span>Applied from</span><input aria-label="Applied from date" type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); writeListUrl({ from: event.target.value, page: 1 }); }} /></label>
-            <label className="field applicant-date-filter"><span>Applied to</span><input aria-label="Applied to date" type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); writeListUrl({ to: event.target.value, page: 1 }); }} /></label>
-            <label className="pagination-size-control">Rows
-              <select aria-label="Applicants per page" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
-                <option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>
-              </select>
-            </label>
+        <div className="list-toolbar-header">
+          <div className="list-toolbar-title">
+            <h2>Applicant Pipeline</h2>
+            <span className="list-result-count" aria-live="polite">{matchingApplicantCount} matching applicant{matchingApplicantCount === 1 ? "" : "s"}</span>
+            {recordsLoading && <span className="list-refreshing" role="status">Updating…</span>}
           </div>
+          {canManageApplicants && <div className="bulk-selection-toolbar"><span>{selectedApplicants.length} selected</span><button type="button" className="btn btn-small btn-danger-outline" disabled={selectedApplicants.length === 0 || deletingId !== ""} onClick={() => void deleteApplicants(selectedApplicants)}>Delete selected</button></div>}
+          {hasApplicantFilters && <button type="button" className="btn btn-secondary list-clear-button" onClick={clearApplicantFilters}><UiIcon name="filter" size={16} />Clear all filters</button>}
         </div>
 
-        {hasApplicantFilters && <div className="applicants-active-filters" aria-label="Active filters">
-          {search.trim() && <span>Search: {search.trim()}</span>}
-          {roleFilter !== "All Roles" && <span>Role: {roleOptions.find((role) => role.value === roleFilter)?.label || roleFilter}</span>}
-          {stageFilter !== "All Stages" && <span>Stage: {stageFilter}</span>}
-          {resumeFilter !== "All resume statuses" && <span>Resume: {resumeFilter}</span>}
-          {interviewTypeFilter !== "All interview types" && <span>Interview: {interviewTypeFilter}</span>}
-          {interviewStatusFilter !== "All interview statuses" && <span>Interview status: {INTERVIEW_STATUS_LABELS[interviewStatusFilter] || interviewStatusFilter}</span>}
-          {dateFrom && <span>From: {dateFrom}</span>}{dateTo && <span>To: {dateTo}</span>}
-          <button type="button" className="bulk-screening-link-button" onClick={() => {
-            setSearch(""); setRoleFilter("All Roles"); setStageFilter("All Stages"); setResumeFilter("All resume statuses"); setInterviewTypeFilter("All interview types"); setInterviewStatusFilter("All interview statuses"); setDateFrom(""); setDateTo(""); setPage(1);
-            writeListUrl({ search: "", role: "All Roles", stage: "All Stages", resume: "All resume statuses", interview: "All interview types", interviewStatus: "All interview statuses", from: "", to: "", page: 1 });
-          }}>Clear all filters</button>
+        <div className="list-filter-grid">
+          <div className="list-filter-field is-wide"><label htmlFor="applicant-search">Search</label><input id="applicant-search" placeholder="Candidate, email, role or application reference" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); writeListUrl({ search: event.target.value, page: 1 }); }} /></div>
+          <div className="list-filter-field"><label htmlFor="applicant-role">Role</label><select id="applicant-role" value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value); setPage(1); writeListUrl({ role: event.target.value, page: 1 }); }}><option>All Roles</option>{roleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select></div>
+          <div className="list-filter-field"><label htmlFor="applicant-stage">Stage</label><select id="applicant-stage" value={stageFilter} onChange={(event) => { setStageFilter(event.target.value); setPage(1); writeListUrl({ stage: event.target.value, page: 1 }); }}><option>All Stages</option>{stages.map((stage) => <option key={stage}>{stage}</option>)}</select></div>
+          <div className="list-filter-field"><label htmlFor="applicant-resume">Resume status</label><select id="applicant-resume" value={resumeFilter} onChange={(event) => { setResumeFilter(event.target.value); setPage(1); writeListUrl({ resume: event.target.value, page: 1 }); }}><option>All resume statuses</option><option>Screened</option><option>Awaiting screening</option></select></div>
+          <div className="list-filter-field"><label htmlFor="applicant-interview-type">Interview type</label><select id="applicant-interview-type" value={interviewTypeFilter} onChange={(event) => { setInterviewTypeFilter(event.target.value); setPage(1); writeListUrl({ interview: event.target.value, page: 1 }); }}><option>All interview types</option><option>Voice Interview</option><option>Live Avatar Interview</option><option>Not selected</option></select></div>
+          <div className="list-filter-field"><label htmlFor="applicant-interview-status">Interview status</label><select id="applicant-interview-status" value={interviewStatusFilter} onChange={(event) => { setInterviewStatusFilter(event.target.value); setPage(1); writeListUrl({ interviewStatus: event.target.value, page: 1 }); }}><option>All interview statuses</option><option value="not_started">Not started</option><option value="scheduled">Scheduled</option><option value="in_progress">In progress</option><option value="awaiting_review">Awaiting review</option><option value="review_complete">Review complete</option></select></div>
+          <div className="list-filter-field"><label htmlFor="applicant-sort">Sort by</label><select id="applicant-sort" value={sortFilter} onChange={(event) => { setSortFilter(event.target.value); setPage(1); writeListUrl({ sort: event.target.value, page: 1 }); }}><option>Newest first</option><option>Oldest first</option><option>Highest match</option></select></div>
+          <div className="list-filter-field"><label htmlFor="applicant-from">Applied from</label><input id="applicant-from" type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); writeListUrl({ from: event.target.value, page: 1 }); }} /></div>
+          <div className="list-filter-field"><label htmlFor="applicant-to">Applied to</label><input id="applicant-to" type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); writeListUrl({ to: event.target.value, page: 1 }); }} /></div>
+        </div>
+
+        {hasApplicantFilters && <div className="list-active-filters" role="group" aria-label="Active filters">
+          <span>Filters:</span>
+          {search.trim() && <span className="list-filter-chip">Search: {search.trim()}</span>}
+          {roleFilter !== "All Roles" && <span className="list-filter-chip">Role: {roleOptions.find((role) => role.value === roleFilter)?.label || roleFilter}</span>}
+          {stageFilter !== "All Stages" && <span className="list-filter-chip">Stage: {stageFilter}</span>}
+          {resumeFilter !== "All resume statuses" && <span className="list-filter-chip">Resume: {resumeFilter}</span>}
+          {interviewTypeFilter !== "All interview types" && <span className="list-filter-chip">Interview: {interviewTypeFilter}</span>}
+          {interviewStatusFilter !== "All interview statuses" && <span className="list-filter-chip">Interview status: {INTERVIEW_STATUS_LABELS[interviewStatusFilter] || interviewStatusFilter}</span>}
+          {dateFrom && <span className="list-filter-chip">From: {dateFrom}</span>}{dateTo && <span className="list-filter-chip">To: {dateTo}</span>}
         </div>}
 
         {recordsLoading && <p className="applicants-loading-note" role="status" aria-live="polite">Refreshing applicant records…</p>}

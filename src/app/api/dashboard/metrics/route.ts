@@ -6,7 +6,9 @@ import { getApplicants, getApplicantMetrics, getInterviewBookings, type Applican
 import { calculateDashboardMetrics } from "@/lib/dashboard-metrics";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { getRoleRequests } from "@/lib/google-sheets";
-import { listDashboardRecordingFailures } from "@/lib/live-interview-store";
+import { listDashboardProcessingFailures, listDashboardRecordingFailures } from "@/lib/live-interview-store";
+import { listOverdueFinalInterviews } from "@/lib/internal-recruitment-queries";
+import { collectAttentionAlerts } from "@/lib/dashboard-attention";
 import { scheduledInstant } from "@/lib/interview-time";
 import { targetRecentApplicantSummaries, targetRoleSummaries, targetUpcomingBookings } from "@/lib/recruitment-target-portal";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
@@ -82,18 +84,32 @@ export async function GET() {
     ? listDashboardRecordingFailures(user.organizationId)
     : Promise.resolve([] as Awaited<ReturnType<typeof listDashboardRecordingFailures>>);
 
-  const [rolesResult, metricsResult, bookingsResult, applicantsResult, recordingsResult] = await Promise.allSettled([
+  const processingFailuresPromise = canViewInterviews && postgresTarget
+    ? listDashboardProcessingFailures(user.organizationId)
+    : Promise.resolve([] as Awaited<ReturnType<typeof listDashboardProcessingFailures>>);
+  const overdueInterviewsPromise = canViewInterviews && postgresTarget
+    ? listOverdueFinalInterviews(user.organizationId)
+    : Promise.resolve([] as Awaited<ReturnType<typeof listOverdueFinalInterviews>>);
+
+  const attentionPromise = canViewInterviews && postgresTarget
+    ? collectAttentionAlerts(user.organizationId, { ownerEmail: user.email })
+    : Promise.resolve([] as Awaited<ReturnType<typeof collectAttentionAlerts>>);
+
+  const [rolesResult, metricsResult, bookingsResult, applicantsResult, recordingsResult, processingResult, overdueResult, attentionResult] = await Promise.allSettled([
     roleRequestsPromise,
     applicantMetricsPromise,
     interviewBookingsPromise,
     recentApplicantsPromise,
     recordingFailuresPromise,
+    processingFailuresPromise,
+    overdueInterviewsPromise,
+    attentionPromise,
   ]);
 
   const sectionErrors = {
     overview: rolesResult.status === "rejected" || (canViewApplicants && metricsResult.status === "rejected"),
     upcomingInterviews: canViewInterviews && bookingsResult.status === "rejected",
-    alerts: canViewInterviews && (bookingsResult.status === "rejected" || recordingsResult.status === "rejected"),
+    alerts: canViewInterviews && (bookingsResult.status === "rejected" || recordingsResult.status === "rejected" || processingResult.status === "rejected" || overdueResult.status === "rejected"),
     recentActivity: rolesResult.status === "rejected" && applicantsResult.status === "rejected",
     activityPartial: rolesResult.status === "rejected" || applicantsResult.status === "rejected",
   };
@@ -172,6 +188,28 @@ export async function GET() {
     }));
   }
 
+  if (processingResult.status === "fulfilled") {
+    processingResult.value.forEach((failure) => alerts.push({
+      id: `processing:${failure.applicationId}:${failure.updatedAt}`,
+      title: `The Live Avatar interview for ${failure.candidateName || "a candidate"} could not be analyzed.`,
+      description: "The interview was saved, but the transcript or analysis failed. Open the applicant and retry processing.",
+      savedMessage: "The interview itself was saved.",
+      href: `/applicants/${encodeURIComponent(failure.applicationId)}`,
+      actionLabel: "Retry processing",
+    }));
+  }
+  const overdueInterviews = overdueResult.status === "fulfilled" ? overdueResult.value : [];
+  overdueInterviews.slice(0, 5).forEach((interview) => alerts.unshift({
+    id: `overdue-final:${interview.applicationId}`,
+    title: `The face-to-face interview for ${interview.candidateName || "a candidate"} was on ${new Date(interview.endedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} and has no recorded outcome.`,
+    description: "HR needs to review the applicant and record whether the interview took place.",
+    savedMessage: "The interview booking is saved.",
+    href: `/applicants/${encodeURIComponent(interview.applicationId)}`,
+    actionLabel: "Review applicant",
+  }));
+
+  if (attentionResult.status === "fulfilled") alerts.push(...attentionResult.value);
+
   const recentActivity = createRecentActivity(roleMetrics?.recentRequests, visibleApplicants);
   return NextResponse.json({
     success: true,
@@ -179,7 +217,8 @@ export async function GET() {
       ...roleMetrics,
       applicantMetrics,
       upcomingInterviews,
-      alerts: alerts.slice(0, 8),
+      alerts: alerts.slice(0, 12),
+      overdueFinalInterviews: overdueInterviews.length,
       recentActivity,
       sectionErrors,
       lastUpdatedAt: new Date().toISOString(),

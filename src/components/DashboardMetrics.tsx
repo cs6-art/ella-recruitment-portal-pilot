@@ -53,6 +53,7 @@ type Metrics = {
   applicantMetrics?: ApplicantMetrics;
   upcomingInterviews?: DashboardInterview[];
   alerts?: DashboardAlert[];
+  overdueFinalInterviews?: number;
   recentActivity?: DashboardActivity[];
   sectionErrors?: SectionErrors;
   lastUpdatedAt?: string;
@@ -199,6 +200,7 @@ export default function DashboardMetrics({
   if (canReviewRole && applicantMetrics) task("live-avatar-review", applicantMetrics.liveAvatarReviewPending, "Avatar Interview Review is waiting", "Avatar Interview Reviews are waiting", "A completed Live Avatar interview is ready for HR review.", "Review Live Avatar interviews", "/applicants?stage=Avatar%20Interview%20Review");
   if (canReviewRole && applicantMetrics) task("voice-scheduling", applicantMetrics.voiceBookingPending, "Voice Interview needs scheduling", "Voice Interviews need scheduling", "These candidates are ready to choose a time for their call.", "Manage call schedule", "/applicants?stage=Voice%20Interview%20Booking%20Pending");
   if (canReviewRole && applicantMetrics) task("face-to-face-scheduling", applicantMetrics.approvedForFinal, "face-to-face interview needs scheduling", "face-to-face interviews need scheduling", "These candidates are ready for a face-to-face interview.", "Review candidates", "/applicants?stage=Approved%20for%20Face-to-Face%20Interview");
+  if (canReviewRole) task("final-overdue", metrics.overdueFinalInterviews || 0, "face-to-face interview is past its date and needs HR review", "face-to-face interviews are past their date and need HR review", "The interview date has passed and no outcome was recorded. Review the applicant.", "Review applicants", "/applicants?stage=Face-to-Face%20Interview%20Scheduled");
   if ((canReviewRole || canApproveRole) && applicantMetrics) task("final-decision", applicantMetrics.finalDecisionPending, "hiring decision needs review", "hiring decisions need review", "A face-to-face interview is complete and needs a decision.", "Review decisions", "/applicants?stage=Face-to-Face%20Decision%20Pending");
 
   const pipeline = applicantMetrics ? [

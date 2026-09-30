@@ -2,7 +2,7 @@ import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { applicationStatusHistory, interviewSlots, liveInterviewSessions, voiceCallAttempts } from "@/db/schema-recruitment";
+import { applicationStatusHistory, bulkScreeningQueueItems, interviewSlots, liveInterviewSessions, voiceCallAttempts } from "@/db/schema-recruitment";
 
 export type HealthIssue = { key: string; label: string; count: number; hint: string };
 
@@ -22,13 +22,15 @@ export async function collectHealthIssues(now = new Date()): Promise<HealthIssue
   const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
   const n = sql<number>`count(*)::int`;
 
-  const [failedEmails, staleEmails, failedRecordings, stuckInterviews, failedCalendar, failedCalls] = await Promise.all([
+  const [failedEmails, staleEmails, failedRecordings, stuckInterviews, failedCalendar, failedCalls, failedScreenings, failedAnalysis] = await Promise.all([
     countOf(db.select({ n }).from(applicationStatusHistory).where(and(eq(applicationStatusHistory.notificationStatus, "failed"), gte(applicationStatusHistory.changedAt, weekAgo)))),
     countOf(db.select({ n }).from(applicationStatusHistory).where(and(eq(applicationStatusHistory.notificationStatus, "pending"), lt(applicationStatusHistory.changedAt, dayAgo)))),
     countOf(db.select({ n }).from(liveInterviewSessions).where(and(eq(liveInterviewSessions.recordingStatus, "failed"), gte(liveInterviewSessions.updatedAt, weekAgo)))),
     countOf(db.select({ n }).from(liveInterviewSessions).where(and(inArray(liveInterviewSessions.status, STUCK_STATUSES), lt(liveInterviewSessions.updatedAt, twoHoursAgo)))),
     countOf(db.select({ n }).from(interviewSlots).where(and(eq(interviewSlots.calendarEventStatus, "failed"), gte(interviewSlots.updatedAt, weekAgo)))),
     countOf(db.select({ n }).from(voiceCallAttempts).where(and(eq(voiceCallAttempts.status, "failed"), gte(voiceCallAttempts.updatedAt, weekAgo)))),
+    countOf(db.select({ n }).from(bulkScreeningQueueItems).where(and(eq(bulkScreeningQueueItems.status, "failed"), gte(bulkScreeningQueueItems.updatedAt, weekAgo)))),
+    countOf(db.select({ n }).from(liveInterviewSessions).where(and(eq(liveInterviewSessions.status, "FAILED"), gte(liveInterviewSessions.updatedAt, weekAgo)))),
   ]);
 
   const issues: HealthIssue[] = [
@@ -38,6 +40,8 @@ export async function collectHealthIssues(now = new Date()): Promise<HealthIssue
     { key: "interviews_stuck", label: "Live interviews stuck in processing for over 2 hours", count: stuckInterviews, hint: "Open the applicant and retry the review, or wait for the daily recovery job." },
     { key: "calendar_failed", label: "Calendar events that failed to create (7 days)", count: failedCalendar, hint: "The interviewer's or the shared HR calendar may need to be reconnected." },
     { key: "voice_failed", label: "Voice interview calls that failed (7 days)", count: failedCalls, hint: "Check the voice workflow and provider status." },
+    { key: "screenings_failed", label: "Resume screenings that failed (7 days)", count: failedScreenings, hint: "Check the resume screening worker and the AI provider quota." },
+    { key: "analysis_failed", label: "Live interviews whose analysis failed after every retry (7 days)", count: failedAnalysis, hint: "Check the AI provider quota, then retry from the applicant page." },
   ];
   // The Google Sheets recruitment path is legacy. Production must run on Postgres.
   if (process.env.NODE_ENV === "production" && !isPostgresRecruitmentTarget()) {

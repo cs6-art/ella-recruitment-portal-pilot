@@ -2640,8 +2640,8 @@ html { scroll-behavior: smooth; }
 .roles-back-button:focus-visible,
 .roles-page-actions .btn-secondary:hover,
 .roles-page-actions .btn-secondary:focus-visible,
-.roles-clear-button:hover,
-.roles-clear-button:focus-visible {
+.list-clear-button:hover,
+.list-clear-button:focus-visible {
   border-color: #0e4471;
   background: #edf4f9;
   text-decoration: none;
@@ -2652,7 +2652,7 @@ html { scroll-behavior: smooth; }
   min-width: 0;
 }
 
-.roles-toolbar-header {
+.list-toolbar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2660,7 +2660,7 @@ html { scroll-behavior: smooth; }
   padding: 22px 24px 16px;
 }
 
-.roles-toolbar-title {
+.list-toolbar-title {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -2668,7 +2668,7 @@ html { scroll-behavior: smooth; }
   min-width: 0;
 }
 
-.roles-toolbar-header h2 {
+.list-toolbar-header h2 {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2677,7 +2677,7 @@ html { scroll-behavior: smooth; }
   font-size: 20px;
 }
 
-.roles-result-count {
+.list-result-count {
   display: inline-flex;
   margin-top: 0;
   align-self: center;
@@ -2696,7 +2696,7 @@ html { scroll-behavior: smooth; }
   font-weight: 700;
 }
 
-.roles-active-filters {
+.list-active-filters {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -2707,7 +2707,7 @@ html { scroll-behavior: smooth; }
   font-weight: 700;
 }
 
-.roles-filter-chip {
+.list-filter-chip {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -2722,20 +2722,20 @@ html { scroll-behavior: smooth; }
   cursor: pointer;
 }
 
-.roles-filter-chip:hover,
-.roles-filter-chip:focus-visible {
+.list-filter-chip:hover,
+.list-filter-chip:focus-visible {
   border-color: var(--blue);
   background: #edf6ff;
   outline: none;
 }
 
-.roles-filter-chip span {
+.list-filter-chip span {
   color: var(--muted);
   font-size: 16px;
   line-height: 1;
 }
 
-.roles-filter-grid {
+.list-filter-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
@@ -2743,20 +2743,20 @@ html { scroll-behavior: smooth; }
   border-bottom: 1px solid var(--line);
 }
 
-.roles-filter-field {
+.list-filter-field {
   display: grid;
   min-width: 0;
   gap: 7px;
 }
 
-.roles-filter-field label {
+.list-filter-field label {
   color: #44516a;
   font-size: 12px;
   font-weight: 700;
 }
 
-.roles-filter-field input,
-.roles-filter-field select {
+.list-filter-field input,
+.list-filter-field select {
   box-sizing: border-box;
   width: 100%;
   height: 44px;
@@ -2769,18 +2769,18 @@ html { scroll-behavior: smooth; }
   outline: none;
 }
 
-.roles-filter-field input::placeholder {
+.list-filter-field input::placeholder {
   color: #8390a0;
 }
 
-.roles-filter-field input:focus,
-.roles-filter-field select:focus,
-.roles-input-with-icon:focus-within {
+.list-filter-field input:focus,
+.list-filter-field select:focus,
+.list-input-with-icon:focus-within {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(0, 113, 247, .1);
 }
 
-.roles-input-with-icon {
+.list-input-with-icon {
   display: flex;
   align-items: center;
   min-width: 0;
@@ -2793,7 +2793,7 @@ html { scroll-behavior: smooth; }
   gap: 8px;
 }
 
-.roles-input-with-icon span {
+.list-input-with-icon span {
   flex: 0 0 auto;
   padding-left: 12px;
   color: #718096;
@@ -2801,7 +2801,7 @@ html { scroll-behavior: smooth; }
   line-height: 1;
 }
 
-.roles-input-with-icon input {
+.list-input-with-icon input {
   flex: 1 1 auto;
   min-width: 0;
   height: 42px;
@@ -2810,7 +2810,7 @@ html { scroll-behavior: smooth; }
   box-shadow: none;
 }
 
-.roles-clear-button {
+.list-clear-button {
   flex: 0 0 auto;
   padding: 9px 13px;
   font-size: 13px;
@@ -3074,7 +3074,7 @@ html { scroll-behavior: smooth; }
 }
 
 @media (max-width: 1050px) {
-  .roles-filter-grid {
+  .list-filter-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
@@ -3089,13 +3089,13 @@ html { scroll-behavior: smooth; }
     justify-content: flex-start;
   }
 
-  .roles-toolbar-header {
+  .list-toolbar-header {
     align-items: flex-start;
     flex-direction: column;
     padding: 18px 16px 14px;
   }
 
-  .roles-filter-grid {
+  .list-filter-grid {
     grid-template-columns: 1fr;
     padding: 0 16px 16px;
   }
@@ -3104,7 +3104,7 @@ html { scroll-behavior: smooth; }
     padding: 0 16px 16px;
   }
 
-  .roles-active-filters {
+  .list-active-filters {
     padding: 0 16px 16px;
   }
 
@@ -4405,11 +4405,11 @@ textarea:focus {
   background: #edf5fb;
 }
 
-.roles-input-with-icon > span {
+.list-input-with-icon > span {
   display: none;
 }
 
-.roles-input-with-icon > svg {
+.list-input-with-icon > svg {
   flex: 0 0 auto;
   color: #7890a5;
   margin-left: 0;
@@ -6403,4 +6403,52 @@ textarea:focus-visible {
 @media (max-width: 760px) {
   .email-editor { grid-template-columns: 1fr; }
   .email-editor-list { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+}
+
+
+/* ---------------------------------------------------------------------------
+   Shared list-page pattern (Role Requests, Applicants, Interview Calendars).
+   The title/count/filter-grid rules above are the single source of truth; the
+   pieces below only add what the Applicants and Bookings pages need on top.
+   Control sizing tokens keep every button, input and select the same height.
+   --------------------------------------------------------------------------- */
+:root {
+  --control-height: 44px;
+  --control-height-sm: 36px;
+  --control-radius: 10px;
+  --control-border: #cfd9e6;
+}
+
+.btn { min-height: var(--control-height); }
+.btn-small, .bulk-selection-toolbar .btn { min-height: var(--control-height-sm); padding: 6px 12px; font-size: 13px; }
+
+.list-toolbar-header .bulk-selection-toolbar { margin-left: auto; }
+.list-toolbar-header .list-clear-button { min-height: var(--control-height-sm); }
+.list-filter-field.is-wide { grid-column: span 2; }
+.list-filter-field input[type="date"] { font: inherit; }
+.list-refreshing { color: var(--muted); font-size: 12px; font-weight: 700; }
+.list-active-filters .list-filter-chip { cursor: default; }
+.list-active-filters .list-filter-chip:hover { border-color: #c7d9e8; background: #f5faff; }
+.applicants-page .list-filter-grid, .bookings-page .list-filter-grid { border-bottom: 1px solid var(--line); }
+.applicants-page .list-active-filters { padding-top: 14px; }
+
+/* Standalone selects and inputs elsewhere use the same height, radius and border. */
+.pagination-size-control select,
+.calendar-role-filter select,
+.settings-field input, .settings-field select,
+.user-account-organization-picker select,
+.availability-form input, .availability-form select,
+.booking-drawer-body input, .booking-drawer-body select {
+  min-height: var(--control-height);
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+}
+
+@media (max-width: 1050px) {
+  .list-filter-field.is-wide { grid-column: span 3; }
+}
+
+@media (max-width: 700px) {
+  .list-filter-field.is-wide { grid-column: auto; }
+  .list-toolbar-header .bulk-selection-toolbar { width: 100%; margin-left: 0; justify-content: space-between; }
 }

@@ -99,11 +99,11 @@ const DECISIONS = ["", "approve", "reject", "manual_review", "pending"] as const
 // used route (or a saved session/appointment) proves which option the
 // candidate chose; an unused Live Avatar link must not relabel every applicant.
 function hasAvatarInterviewSql() {
-  return sql<boolean>`exists (select 1 from ${liveInterviewSessions} where ${liveInterviewSessions.applicationId} = ${applications.id}) or exists (select 1 from ${bookingTokens} where ${bookingTokens.applicationId} = ${applications.id} and ${bookingTokens.kind} = 'avatar' and ${bookingTokens.status} in ('booked', 'used'))`;
+  return sql<boolean>`(exists (select 1 from ${liveInterviewSessions} where ${liveInterviewSessions.applicationId} = ${applications.id}) or exists (select 1 from ${bookingTokens} where ${bookingTokens.applicationId} = ${applications.id} and ${bookingTokens.kind} = 'avatar' and ${bookingTokens.status} in ('booked', 'used')))`;
 }
 
 function hasVoiceInterviewChoiceSql() {
-  return sql<boolean>`exists (select 1 from ${interviewSlots} where ${interviewSlots.applicationId} = ${applications.id} and ${interviewSlots.interviewType} = 'voice') or exists (select 1 from ${bookingTokens} where ${bookingTokens.applicationId} = ${applications.id} and ${bookingTokens.kind} = 'voice' and ${bookingTokens.status} = 'used')`;
+  return sql<boolean>`(exists (select 1 from ${interviewSlots} where ${interviewSlots.applicationId} = ${applications.id} and ${interviewSlots.interviewType} = 'voice') or exists (select 1 from ${bookingTokens} where ${bookingTokens.applicationId} = ${applications.id} and ${bookingTokens.kind} = 'voice' and ${bookingTokens.status} = 'used'))`;
 }
 const STAGE_TRANSITIONS: Record<string, readonly string[]> = {
   resume_review: ["resume_approved", "rejected", "withdrawn"],
@@ -613,7 +613,7 @@ function applicationListConditions(organizationId: string, filters: ApplicationL
   if (filters.interviewMode === "voice") conditions.push(and(not(avatarSelected), or(voiceSelected, not(inArray(applications.currentStage, ["resume_review", "resume_approved", "voice_booking_pending"]))))!);
   if (filters.interviewMode === "pending") conditions.push(and(not(avatarSelected), not(voiceSelected), inArray(applications.currentStage, ["resume_review", "resume_approved", "voice_booking_pending"]))!);
   if (filters.interviewStatus) {
-    const interviewInProgress = sql<boolean>`exists (
+    const interviewInProgress = sql<boolean>`(exists (
       select 1 from ${voiceCallAttempts}
       where ${voiceCallAttempts.applicationId} = ${applications.id}
         and ${voiceCallAttempts.status} = 'in_progress'
@@ -621,7 +621,7 @@ function applicationListConditions(organizationId: string, filters: ApplicationL
       select 1 from ${liveInterviewSessions}
       where ${liveInterviewSessions.applicationId} = ${applications.id}
         and ${liveInterviewSessions.status} = 'INTERVIEW_IN_PROGRESS'
-    )`;
+    ))`;
     const statusStages: Record<Exclude<NonNullable<ApplicationListFilters["interviewStatus"]>, "review_complete">, string[]> = {
       not_started: ["resume_review", "resume_approved", "voice_booking_pending"],
       scheduled: ["voice_scheduled", "final_scheduled"],
@@ -633,8 +633,8 @@ function applicationListConditions(organizationId: string, filters: ApplicationL
     } else if (filters.interviewStatus === "review_complete") {
       // Rejection is a shared terminal stage; only count it as interview
       // review complete when the voice or final-stage decision was recorded.
-      const reviewedRejection = sql<boolean>`lower(trim(${applications.voiceHrDecision})) in ('approve', 'reject')
-        or lower(trim(${applications.finalHrDecision})) in ('approve', 'reject')`;
+      const reviewedRejection = sql<boolean>`(lower(trim(${applications.voiceHrDecision})) in ('approve', 'reject')
+        or lower(trim(${applications.finalHrDecision})) in ('approve', 'reject'))`;
       conditions.push(or(
         inArray(applications.currentStage, ["approved_for_final", "passed_final"]),
         and(eq(applications.currentStage, "rejected"), reviewedRejection),
@@ -2966,4 +2966,39 @@ export async function markNotification(input: { historyId: string; status: "sent
     : and(eq(roleStatusHistory.id, input.historyId), not(eq(roleStatusHistory.notificationStatus, "sent")));
   const [roleRow] = await db.update(roleStatusHistory).set({ notificationStatus: input.status, notificationError: input.error || "", notificationAttemptedAt: new Date() }).where(roleWhere).returning({ id: roleStatusHistory.id });
   return { updated: Boolean(roleRow) };
+}
+
+/** How long after a face-to-face interview ends before HR is asked to record what happened. */
+export const OVERDUE_FINAL_INTERVIEW_GRACE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Face-to-face interviews that ended at least a day ago while the applicant is
+ * still "Face-to-Face Interview Scheduled": nobody has recorded the outcome, so
+ * nothing else in the workflow will move the applicant forward.
+ */
+export async function listOverdueFinalInterviews(organizationId: string, limit = 50) {
+  const cutoff = new Date(Date.now() - OVERDUE_FINAL_INTERVIEW_GRACE_MS);
+  const rows = await getDb().select({
+    applicationId: applications.externalId,
+    candidateName: applications.candidateName,
+    roleTitle: roles.title,
+    endsAt: interviewSlots.endsAt,
+  }).from(interviewSlots)
+    .innerJoin(applications, eq(applications.id, interviewSlots.applicationId))
+    .innerJoin(roles, eq(roles.id, applications.roleId))
+    .where(and(
+      eq(applications.organizationId, organizationId.trim()),
+      eq(interviewSlots.organizationId, organizationId.trim()),
+      eq(interviewSlots.interviewType, "final"),
+      eq(interviewSlots.status, "booked"),
+      eq(applications.currentStage, "final_scheduled"),
+      eq(applications.withdrawn, false),
+      lt(interviewSlots.endsAt, cutoff),
+    ))
+    .orderBy(asc(interviewSlots.endsAt))
+    .limit(Math.min(Math.max(limit, 1), 200));
+  const seen = new Set<string>();
+  return rows
+    .filter((row) => (seen.has(row.applicationId) ? false : (seen.add(row.applicationId), true)))
+    .map((row) => ({ applicationId: row.applicationId, candidateName: row.candidateName, roleTitle: row.roleTitle, endedAt: row.endsAt.toISOString() }));
 }

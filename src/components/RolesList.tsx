@@ -456,10 +456,10 @@ export default function RolesList({
       </div>
 
       <section className="card">
-        <div className="roles-toolbar-header">
-          <div className="roles-toolbar-title">
+        <div className="list-toolbar-header">
+          <div className="list-toolbar-title">
             <h2>Submitted Requests</h2>
-            <span className="roles-result-count" aria-live="polite">
+            <span className="list-result-count" aria-live="polite">
               {initialLoading
                 ? "Loading requests…"
                 : `${totalRoles} ${totalRoles === 1 ? "request" : "requests"}`}
@@ -470,7 +470,7 @@ export default function RolesList({
           {selectableRoles.length > 0 && <div className="bulk-selection-toolbar"><span>{selectedRoles.length} selected</span><button type="button" className="btn btn-danger-outline" disabled={selectedRoles.length === 0 || deletingRoleId !== ""} onClick={() => void deleteRoles(selectedRoles)}>Delete selected</button></div>}
 
           {filtersActive && (
-            <button type="button" className="btn btn-secondary roles-clear-button" onClick={clearFilters}>
+            <button type="button" className="btn btn-secondary list-clear-button" onClick={clearFilters}>
               <UiIcon name="filter" size={16} />Clear all filters
             </button>
           )}
@@ -480,18 +480,18 @@ export default function RolesList({
         {actionError && <ActionFeedback kind="error" className="roles-action-feedback">{actionError}</ActionFeedback>}
 
         {activeFilterChips.length > 0 && (
-          <div className="roles-active-filters" role="group" aria-label="Active filters">
+          <div className="list-active-filters" role="group" aria-label="Active filters">
             <span>Filters:</span>
             {activeFilterChips.map((filter) => (
-              <button key={filter.key} type="button" className="roles-filter-chip" onClick={() => clearFilter(filter.key)}>
+              <button key={filter.key} type="button" className="list-filter-chip" onClick={() => clearFilter(filter.key)}>
                 {filter.label}<span aria-hidden="true">×</span>
               </button>
             ))}
           </div>
         )}
 
-        <div className="roles-filter-grid" role="group" aria-label="Role request filters">
-          <div className="roles-filter-field">
+        <div className="list-filter-grid" role="group" aria-label="Role request filters">
+          <div className="list-filter-field">
             <label htmlFor="status-filter">Status</label>
             <select
               id="status-filter"
@@ -506,31 +506,31 @@ export default function RolesList({
             </select>
           </div>
 
-          <div className="roles-filter-field">
+          <div className="list-filter-field">
             <label htmlFor="job-title-filter">Job title or role ID</label>
-            <div className="roles-input-with-icon">
+            <div className="list-input-with-icon">
               <UiIcon name="search" size={16} />
               <input id="job-title-filter" aria-label="Search by job title or role ID" placeholder="Search job title or role ID" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} />
             </div>
           </div>
 
-          <div className="roles-filter-field">
+          <div className="list-filter-field">
             <label htmlFor="department-filter">Department</label>
-            <div className="roles-input-with-icon">
+            <div className="list-input-with-icon">
               <UiIcon name="search" size={16} />
               <input id="department-filter" aria-label="Filter by department" placeholder="Search department" value={departmentDraft} onChange={(event) => setDepartmentDraft(event.target.value)} />
             </div>
           </div>
 
-          <div className="roles-filter-field">
+          <div className="list-filter-field">
             <label htmlFor="requester-filter">Requester</label>
-            <div className="roles-input-with-icon">
+            <div className="list-input-with-icon">
               <UiIcon name="search" size={16} />
               <input id="requester-filter" aria-label="Filter by requester" placeholder="Search requester" value={requesterDraft} onChange={(event) => setRequesterDraft(event.target.value)} />
             </div>
           </div>
 
-          <div className="roles-filter-field">
+          <div className="list-filter-field">
             <label htmlFor="sort-filter">Sort by</label>
             <select id="sort-filter" aria-label="Sort role requests" value={sort} onChange={(event) => updateQuery({ sort: event.target.value as SortOption, page: 1 })}>
               <option value="newest">Newest first</option>

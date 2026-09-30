@@ -155,7 +155,7 @@ test("interview status wording follows the applicant's selected interview mode",
   assert.match(queries, /voiceCallAttempts\.status\} = 'in_progress'/);
   assert.match(queries, /liveInterviewSessions\.status\} = 'INTERVIEW_IN_PROGRESS'/);
   assert.match(queries, /if \(filters\.interviewStatus === "not_started"\) conditions\.push\(not\(interviewInProgress\)\)/);
-  assert.match(queries, /reviewedRejection = sql<boolean>`lower\(trim\(\$\{applications\.voiceHrDecision\}\)\) in \('approve', 'reject'\)/);
+  assert.match(queries, /reviewedRejection = sql<boolean>`\(lower\(trim\(\$\{applications\.voiceHrDecision\}\)\) in \('approve', 'reject'\)/);
   assert.match(queries, /inArray\(applications\.currentStage, \["approved_for_final", "passed_final"\]\)/);
   assert.match(queries, /PORTAL_TIME_ZONE/);
   assert.match(queries, /date_trunc\('day', now\(\) at time zone \$\{portalTimeZone\}\) at time zone \$\{portalTimeZone\}/);

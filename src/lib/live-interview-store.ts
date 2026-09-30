@@ -875,6 +875,24 @@ export async function listDashboardRecordingFailures(organizationId: string, lim
   return rows.map((row) => ({ applicationId: row.applicationId, candidateName: row.candidateName, updatedAt: row.updatedAt?.toISOString() || "" }));
 }
 
+/** Live Avatar interviews whose transcript or analysis gave up after every retry; HR must retry them. */
+export async function listDashboardProcessingFailures(organizationId: string, limit = 6) {
+  const rows = await getDb().select({
+    applicationId: applications.externalId,
+    candidateName: applications.candidateName,
+    updatedAt: liveInterviewSessions.updatedAt,
+  }).from(liveInterviewSessions)
+    .innerJoin(applications, eq(applications.id, liveInterviewSessions.applicationId))
+    .where(and(
+      eq(liveInterviewSessions.organizationId, organizationId.trim()),
+      eq(liveInterviewSessions.status, "FAILED"),
+      eq(applications.withdrawn, false),
+    ))
+    .orderBy(desc(liveInterviewSessions.updatedAt))
+    .limit(Math.min(Math.max(limit, 1), 20));
+  return rows.map((row) => ({ applicationId: row.applicationId, candidateName: row.candidateName, updatedAt: row.updatedAt?.toISOString() || "" }));
+}
+
 /** Loads the latest live interview for an application in the caller's organization. */
 export async function getLiveInterviewReview(applicationExternalId: string, organizationId: string): Promise<LiveInterviewReview | null> {
   const db = getDb();
