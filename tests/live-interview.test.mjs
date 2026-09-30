@@ -295,6 +295,26 @@ test("Live Avatar startup verifies the organization's connected Drive folder bef
   assert.match(session, /Recording storage preflight failed/);
 });
 
+test("Live Avatar startup failures preserve a stage and diagnostic code", () => {
+  const session = read("src/app/api/live-avatar/session/route.ts");
+  for (const code of [
+    "organization_credit_hold_failed",
+    "invitation_claim_failed",
+    "liveavatar_session_failed",
+    "interview_start_tracking_failed",
+  ]) {
+    assert.match(session, new RegExp(code), code);
+  }
+  assert.match(session, /POST failed:\", \{\s*reference,\s*stage,/);
+  assert.match(session, /organization_credit_insufficient/);
+  assert.ok(session.indexOf('startupStage = "organization_credit_hold"') < session.indexOf("await placeAvatarInterviewHold"));
+  assert.ok(session.indexOf('startupStage = "invitation_claim"') < session.indexOf("startAvatarInterview(avatarToken)"));
+  assert.ok(session.indexOf('startupStage = "liveavatar_session"') < session.indexOf("const session = await createLiveAvatarSession({"));
+  const component = read("src/components/LiveAvatarInterview.tsx");
+  assert.match(component, /code: \$\{tokenBody\.code\}/);
+  assert.match(component, /reference: \$\{tokenBody\.reference\}/);
+});
+
 test("applicant-facing pages never receive transcripts, analysis, or HR notes", () => {
   const notice = read("src/components/InterviewStatusNotice.tsx");
   assert.doesNotMatch(notice, /\/api\/applicants\/|live-interview-store/, "the candidate notice never calls HR review endpoints");

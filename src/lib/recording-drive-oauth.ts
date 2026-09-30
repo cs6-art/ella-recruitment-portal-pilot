@@ -160,13 +160,17 @@ export async function getRecordingDriveClient(organizationId: string, accountEma
   return { drive: google.drive({ version: "v3", auth: client }), accessToken };
 }
 
-export async function getRecordingDrivePickerAccess(organizationId: string, accountEmail: string) {
+/**
+ * Google Picker's browser integration needs public project configuration plus a
+ * short-lived token acquired directly by Google Identity Services in the
+ * browser. Keep this endpoint's configuration separate from server tokens.
+ */
+export function getRecordingDrivePickerConfig() {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const apiKey = process.env.GOOGLE_PICKER_API_KEY?.trim();
   const projectNumber = process.env.GOOGLE_CLOUD_PROJECT_NUMBER?.trim();
-  if (!apiKey || !projectNumber) throw new Error("Google Picker is not configured.");
-  const authorized = await getRecordingDriveClient(organizationId, accountEmail);
-  if (!authorized) throw new Error("Connect the organization's Google Drive account first.");
-  return { accessToken: authorized.accessToken, apiKey, projectNumber };
+  if (!clientId || !apiKey || !projectNumber) throw new Error("Google Picker is not configured.");
+  return { clientId, apiKey, projectNumber };
 }
 
 export async function validateRecordingDriveFolder(organizationId: string, accountEmail: string, folderId: string): Promise<RecordingDriveFolder> {

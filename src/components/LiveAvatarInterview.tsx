@@ -343,7 +343,13 @@ export default function LiveAvatarInterview({ roleId, candidateName, preparation
         body: JSON.stringify({ roleId, candidateName, resumeSummary: preparation.resumeSummary, screeningQuestion: preparation.screeningQuestion, avatarToken: accessToken || undefined }),
       });
       const tokenBody = await tokenResponse.json().catch(() => ({}));
-      if (!tokenResponse.ok || !tokenBody?.success) throw new Error(tokenBody?.error || "Smile isn't available right now.");
+      if (!tokenResponse.ok || !tokenBody?.success) {
+        const diagnostic = [
+          typeof tokenBody?.code === "string" ? `code: ${tokenBody.code}` : "",
+          typeof tokenBody?.reference === "string" ? `reference: ${tokenBody.reference}` : "",
+        ].filter(Boolean).join(", ");
+        throw new Error(`${tokenBody?.error || "Smile isn't available right now."}${diagnostic ? ` (${diagnostic})` : ""}`);
+      }
       setSessionIssued(true);
       sessionIdRef.current = typeof tokenBody.sessionId === "string" ? tokenBody.sessionId : "";
       if (accessToken && tokenBody.recordingEnabled === true && devicesRef.current) {

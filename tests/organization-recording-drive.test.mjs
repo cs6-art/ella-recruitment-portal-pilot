@@ -47,15 +47,29 @@ test("recording sessions pin their Google account so playback and retention use 
   assert.match(storage, /parents: \[config\.folderId\]/);
 });
 
-test("Settings gives organization admins a Drive connection and a Google Picker folder chooser", () => {
+test("Settings gives organization admins a Drive connection and keeps OAuth tokens out of Smile API responses", () => {
   const settings = read("src/app/settings/page.tsx");
   const component = read("src/components/RecordingDriveConnect.tsx");
   const connect = read("src/app/api/auth/google-recording-drive/connect/route.ts");
   const callback = read("src/app/api/auth/google-recording-drive/callback/route.ts");
+  const pickerConfig = read("src/app/api/organization/recording-drive/picker-config/route.ts");
+  const pickerOAuth = read("src/lib/recording-drive-oauth.ts");
   assert.match(settings, /<RecordingDriveConnect\s*\/>/);
+  assert.match(component, /id="recording-drive-settings-title"/);
+  assert.match(component, /requestAccessToken\(\{ login_hint: status\.accountEmail \}\)/);
   assert.match(component, /setSelectFolderEnabled\(true\)/);
   assert.match(component, /setEnableDrives\(true\)/);
   assert.match(component, /Choose recording folder/);
+  assert.match(component, /https:\/\/www\.googleapis\.com\/oauth2\/v2\/userinfo/);
+  assert.doesNotMatch(component, /picker-token/);
+  assert.match(pickerConfig, /user\.canEditSettings !== true/);
+  assert.match(pickerConfig, /getRecordingDrivePickerConfig\(\)/);
+  const successPayload = pickerConfig.match(/return NextResponse\.json\((\{ success: true, \.\.\.getRecordingDrivePickerConfig\(\) \})/)?.[1] || "";
+  assert.notEqual(successPayload, "", "Picker configuration route must have a recognizable success payload.");
+  assert.doesNotMatch(successPayload, /accessToken|refreshToken|access_token|refresh_token/);
+  assert.match(pickerOAuth, /return \{ clientId, apiKey, projectNumber \}/);
+  assert.doesNotMatch(pickerOAuth, /getRecordingDrivePickerAccess/);
+  assert.equal(fs.existsSync("src/app/api/organization/recording-drive/picker-token/route.ts"), false);
   assert.match(connect, /user\.canEditSettings !== true/);
   assert.match(callback, /user\.organizationId !== payload\.organizationId/);
   assert.match(callback, /user\.email\.trim\(\)\.toLowerCase\(\) !== payload\.actorEmail/);
