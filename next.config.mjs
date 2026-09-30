@@ -34,6 +34,15 @@ const nextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         ],
       },
+      // Google Identity Services uses a popup for the Drive folder picker.
+      // Allow that popup to communicate back to the settings page while
+      // retaining cross-origin isolation for other windows.
+      {
+        source: "/settings",
+        headers: [
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+        ],
+      },
       // The live avatar interview captures the candidate's microphone (and
       // camera, for avatar video) in-page. The blanket Permissions-Policy
       // above disables both at the origin level, which makes getUserMedia
