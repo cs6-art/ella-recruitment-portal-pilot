@@ -82,6 +82,8 @@ export async function POST(request: Request, context: Context) {
       requiredInterviewQuestion4: parsedSetup.requiredInterviewQuestion4 || role.requiredInterviewQuestion4 || "",
       requiredInterviewQuestion5: parsedSetup.requiredInterviewQuestion5 || role.requiredInterviewQuestion5 || "",
       aiSystemPrompt: parsedSetup.aiSystemPrompt || role.aiSystemPrompt || "",
+      // An explicit empty value means HR reset to the standard script.
+      avatarSystemPrompt: hasField("avatarSystemPrompt") ? parsedSetup.avatarSystemPrompt : role.avatarSystemPrompt || "",
       postingChannels: hasField("postingChannels")
         ? parsedSetup.postingChannels
         : (role.postingChannels || "").split(",").map((channel) => channel.trim()).filter(Boolean),
@@ -308,6 +310,7 @@ export async function POST(request: Request, context: Context) {
       Required_Interview_Question_4: setup.requiredInterviewQuestion4,
       Required_Interview_Question_5: setup.requiredInterviewQuestion5,
       AI_System_Prompt: setup.aiSystemPrompt,
+      ...(isPostgresRecruitmentTarget() ? { Avatar_System_Prompt: setup.avatarSystemPrompt } : {}),
       Evaluation_Field_Toggles: setup.evaluationFieldToggles.join(","),
       Evaluation_Fields: JSON.stringify(evaluationFieldsForSetup(setup.evaluationFieldToggles, setup.customEvaluationFields)),
       Posting_Channels: setup.postingChannels.join(", "),

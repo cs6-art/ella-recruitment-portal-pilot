@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
         await releaseHold();
         return NextResponse.json({ success: false, error: "This avatar interview link has already been used, expired, or is no longer available." }, { status: 410 });
       }
-      const session = await createLiveAvatarSession({ roleTitle: context.roleTitle, jobDescription: context.roleDescription, candidateName: context.candidateName, resumeSummary: context.resumeSummary, screeningQuestion: context.screeningQuestion, roleRequirements: context.roleRequirements, interviewQuestions: context.interviewQuestions, evaluationFields: context.evaluationFields });
+      const session = await createLiveAvatarSession({ roleTitle: context.roleTitle, jobDescription: context.roleDescription, candidateName: context.candidateName, resumeSummary: context.resumeSummary, screeningQuestion: context.screeningQuestion, roleRequirements: context.roleRequirements, interviewQuestions: context.interviewQuestions, evaluationFields: context.evaluationFields, avatarSystemPrompt: context.avatarSystemPrompt });
       sessionCreated = true;
       try {
         await finalizeAvatarInterviewStart(avatarToken);

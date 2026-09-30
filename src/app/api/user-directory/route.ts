@@ -7,7 +7,7 @@ import { getDb } from "@/db/client";
 import { organizations, userCredentials } from "@/db/schema";
 import { getDirectoryUsers, updateDirectoryUser, upsertDirectoryUser, type DirectoryUser } from "@/lib/google-sheets";
 import { DEFAULT_ORGANIZATION_ID, syncOrganizationMembership } from "@/lib/organization-accounts";
-import { getPostgresDirectoryUsers, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
+import { getPostgresDirectoryUsers, setOrganizationOwner, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
 import { canAdministerAccess, isPlatformAdmin } from "@/lib/access-control";
 import { applyAccessRolePolicy } from "@/lib/access-roles";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
@@ -31,6 +31,8 @@ const userSchema = z.object({
   canManageCredits: z.boolean().default(false),
   canReviewDepartmentRole: z.boolean().default(false),
   active: z.boolean(),
+  // Only honored for platform administrators (ownership hand-over).
+  isOrganizationOwner: z.boolean().optional(),
 });
 
 async function currentUser() {
@@ -70,10 +72,34 @@ async function resolveTargetOrganization(request: Request, user: Awaited<ReturnT
 /** McLink's directory is the staff Sheet plus accounts that registered themselves in the database. */
 async function listOrganizationUsers(organizationId: string): Promise<DirectoryUser[]> {
   const registered = await runWithTenantDatabase(organizationId, () => getPostgresDirectoryUsers(organizationId));
-  if (organizationId !== DEFAULT_ORGANIZATION_ID) return registered;
-  const sheetUsers = await getDirectoryUsers();
-  const sheetEmails = new Set(sheetUsers.map((user) => user.email));
-  return [...sheetUsers, ...registered.filter((user) => !sheetEmails.has(user.email))];
+  const all = organizationId !== DEFAULT_ORGANIZATION_ID
+    ? registered
+    : await getDirectoryUsers().then((sheetUsers) => {
+        const sheetEmails = new Set(sheetUsers.map((user) => user.email));
+        return [...sheetUsers, ...registered.filter((user) => !sheetEmails.has(user.email))];
+      });
+  return withLastSignIn(organizationId, all);
+}
+
+/** Adds each person's most recent sign-in, so HR can tell who is actually using the portal. */
+async function withLastSignIn(organizationId: string, list: DirectoryUser[]): Promise<DirectoryUser[]> {
+  try {
+    const rows = await getDb().select({ email: userCredentials.email, lastLoginAt: userCredentials.lastLoginAt }).from(userCredentials).where(eq(userCredentials.organizationId, organizationId));
+    const byEmail = new Map(rows.map((row) => [row.email.trim().toLowerCase(), row.lastLoginAt ? row.lastLoginAt.toISOString() : ""]));
+    return list.map((user) => ({ ...user, lastLoginAt: byEmail.get(user.email) || "" }));
+  } catch (error) {
+    console.error("[API User Directory] Could not load last sign-in times:", error);
+    return list;
+  }
+}
+
+/**
+ * In a client organization the owner (its first registrant) manages the team.
+ * McLink's own organization is run by platform administrators instead.
+ */
+function canManageTeam(organizationId: string, actor: { email: string }, platformAdmin: boolean, users: DirectoryUser[]) {
+  if (platformAdmin || organizationId === DEFAULT_ORGANIZATION_ID) return true;
+  return users.some((user) => user.email === actor.email.trim().toLowerCase() && user.isOrganizationOwner === true && user.active);
 }
 
 export async function GET(request: Request) {
@@ -84,7 +110,8 @@ export async function GET(request: Request) {
     const target = await resolveTargetOrganization(request, access.user);
     if ("error" in target) return target.error;
     const users = await listOrganizationUsers(target.organizationId);
-    return NextResponse.json({ success: true, users, platformAdmin: isPlatformAdmin(access.user) }, { headers: { "Cache-Control": "no-store" } });
+    const platformAdmin = isPlatformAdmin(access.user);
+    return NextResponse.json({ success: true, users, platformAdmin, canManageTeam: canManageTeam(target.organizationId, access.user, platformAdmin, users) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API User Directory] GET failed:", error);
     return responseError("Unable to load user accounts.", 500);
@@ -144,6 +171,14 @@ async function saveAccount(request: Request, originalEmail?: string) {
       if (!current) return responseError("The account being edited no longer exists.", 404);
       Object.assign(normalizedUser, current, { email: current.email, fullName: normalizedUser.fullName, department: normalizedUser.department, active: normalizedUser.active });
     }
+    if (!canManageTeam(target.organizationId, access.user, platformAdmin, users)) {
+      return responseError("Only the organization owner can manage team members.", 403);
+    }
+    const current = users.find((existing) => existing.email === normalizedOriginalEmail);
+    if (current && current.active && !normalizedUser.active) {
+      if (current.isOrganizationOwner && !platformAdmin) return responseError("The organization owner cannot be deactivated. Contact McLink to transfer ownership first.", 400);
+      if (users.filter((existing) => existing.active && existing.email !== current.email).length === 0) return responseError("You cannot deactivate the last active account.", 400);
+    }
     const duplicate = users.some((existing) => existing.email === normalizedEmail && existing.email !== normalizedOriginalEmail);
     if (duplicate) return responseError("An account already exists for that email address.", 409);
 
@@ -159,7 +194,11 @@ async function saveAccount(request: Request, originalEmail?: string) {
       if (normalizedOriginalEmail) await updateDirectoryUser(normalizedOriginalEmail, normalizedUser);
       else await upsertDirectoryUser(normalizedUser);
     } else {
-      await runWithTenantDatabase(target.organizationId, () => upsertPostgresDirectoryUser(target.organizationId, normalizedUser, normalizedOriginalEmail));
+      await runWithTenantDatabase(target.organizationId, () => upsertPostgresDirectoryUser(target.organizationId, normalizedUser, normalizedOriginalEmail, access.user.name || access.user.email));
+      // Platform administrators can hand the organization to another account.
+      if (platformAdmin && user.isOrganizationOwner === true && !isDefaultOrganization) {
+        await runWithTenantDatabase(target.organizationId, () => setOrganizationOwner(target.organizationId, normalizedUser.email));
+      }
     }
     await syncOrganizationMembership({ organizationId: target.organizationId, email: normalizedUser.email, active: normalizedUser.active, previousEmail: normalizedOriginalEmail });
 

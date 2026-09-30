@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import { STANDARD_AVATAR_SYSTEM_PROMPT_TEMPLATE } from "@/lib/avatar-prompt";
 import RoleInterviewerPicker from "@/components/RoleInterviewerPicker";
 import ValidationSummary, { type ValidationIssue } from "@/components/ValidationSummary";
 import { notificationPresentation } from "@/lib/notification-status";
@@ -42,6 +43,7 @@ type Setup = {
   hodScreeningQuestion2?: string;
   aiGeneratedScreeningQuestions?: string | string[];
   aiSystemPrompt: string;
+  avatarSystemPrompt?: string;
   resolvedAiSystemPrompt?: string;
   initialInterviewBookingLink: string;
   hodInterviewBookingLink: string;
@@ -132,6 +134,7 @@ const templateReplacedFields: SetupField[] = [
   "requiredInterviewQuestion4",
   "requiredInterviewQuestion5",
   "aiSystemPrompt",
+  "avatarSystemPrompt",
   "evaluationFieldToggles",
   "customEvaluationFields",
   "licenseOrCertificateRequired",
@@ -862,6 +865,27 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
             <pre>{generatedSample}</pre>
           </details>
         )}
+      </div>
+
+      <div id="avatar-prompt" className="vapi-preview">
+        <div className="vapi-section-heading">
+          <div>
+            <span className="vapi-kicker">ADVANCED</span>
+            <h3>Smile Avatar system prompt</h3>
+            <p>What Smile follows in the live video interview. Your interview questions, screening criteria and evaluation fields are inserted automatically, so keep the markers in curly braces (for example {"{{interview_questions}}"}) where they are.</p>
+          </div>
+          <div className="vapi-preview-actions">
+            <button type="button" className="btn btn-secondary" disabled={!editable || saving || !valueText(values.avatarSystemPrompt)} onClick={() => update("avatarSystemPrompt", "")}>Restore standard script</button>
+          </div>
+        </div>
+        <textarea
+          className="vapi-full-prompt"
+          aria-label="Smile Avatar system prompt"
+          value={valueText(values.avatarSystemPrompt) || STANDARD_AVATAR_SYSTEM_PROMPT_TEMPLATE}
+          disabled={!editable || saving}
+          onChange={(event) => update("avatarSystemPrompt", event.target.value.trim() === STANDARD_AVATAR_SYSTEM_PROMPT_TEMPLATE.trim() ? "" : event.target.value)}
+        />
+        <small>{valueText(values.avatarSystemPrompt) ? "Custom script for this role." : "Using the standard script, which updates automatically when the standard is improved."}</small>
       </div>
 
       <details id="vapi-publishing-checklist" className="vapi-publishing" open>

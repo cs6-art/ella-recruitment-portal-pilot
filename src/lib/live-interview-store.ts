@@ -300,8 +300,10 @@ export async function completeInterviewSession(input: { rawToken: string; provid
   if (!updated) return { session: (await getSessionById(session.id)) ?? session, alreadyCompleted: true };
   await stopProviderSession(updated.providerSessionId);
   try {
-    const [application] = await getDb().select({ externalId: applications.externalId }).from(applications).where(eq(applications.id, updated.applicationId)).limit(1);
+    const [application] = await getDb().select({ externalId: applications.externalId, candidateName: applications.candidateName }).from(applications).where(eq(applications.id, updated.applicationId)).limit(1);
     await recordLiveAvatarInterviewDeduction({
+      // The applicant who completed the interview is the actor on the ledger.
+      actorName: application?.candidateName ? `${application.candidateName} (Applicant)` : "",
       applicationId: application?.externalId || updated.applicationId,
       sessionId: updated.id,
       organizationId: updated.organizationId,

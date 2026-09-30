@@ -73,6 +73,11 @@ export type DirectoryUser = {
   // HOD-tier: read-only visibility scoped to the user's own department.
   // Stored in column K; missing on legacy rows (defaults false).
   canReviewDepartmentRole: boolean;
+  // Database-backed organizations only (never set for McLink's staff Sheet rows).
+  isOrganizationOwner?: boolean;
+  deactivatedAt?: string;
+  deactivatedBy?: string;
+  lastLoginAt?: string;
 };
 
 export type RoleRequestSummary = {
@@ -165,6 +170,7 @@ export type RoleRequestDetails = {
   requiredInterviewQuestion4?: string;
   requiredInterviewQuestion5?: string;
   aiSystemPrompt: string;
+  avatarSystemPrompt?: string;
   initialInterviewBookingLink: string;
   hodInterviewBookingLink: string;
   postingChannels: string;

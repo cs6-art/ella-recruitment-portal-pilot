@@ -23,6 +23,10 @@ type DirectoryUser = {
   canManageCredits: boolean;
   canReviewDepartmentRole: boolean;
   active: boolean;
+  isOrganizationOwner?: boolean;
+  deactivatedAt?: string;
+  deactivatedBy?: string;
+  lastLoginAt?: string;
 };
 
 type AccountForm = DirectoryUser;
@@ -82,6 +86,12 @@ const accountFieldAnchors: Record<string, string> = {
   accessRole: "#user-access-role",
 };
 
+function formatWhen(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
 function permissionLabels(user: DirectoryUser) {
   return [
     user.canCreateRole && "Create roles",
@@ -98,6 +108,8 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
   const router = useRouter();
   const { confirm } = useConfirmation();
   const [users, setUsers] = useState<DirectoryUser[]>([]);
+  // Owners (and McLink platform administrators) manage the team; other HR accounts can only view it.
+  const [canManageTeam, setCanManageTeam] = useState(false);
   const [form, setForm] = useState<AccountForm>(emptyForm);
   const [originalEmail, setOriginalEmail] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -126,6 +138,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       const data = await response.json();
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to load user accounts.");
       setUsers(data.users || []);
+      setCanManageTeam(data.canManageTeam === true);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load user accounts.");
     } finally {
@@ -372,7 +385,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
         <div>
           <span className="eyebrow-dark">{canManageOrganizations ? "ACCESS ADMINISTRATION" : "YOUR TEAM"}</span>
           <h1>{canManageOrganizations ? "User Accounts & Organizations" : "Team Members"}</h1>
-          <p>{canManageOrganizations ? "Manage organizations, who may register into each one, and their accounts." : "Everyone in your organization has full access. Deactivate someone here when they should no longer sign in."}</p>
+          <p>{canManageOrganizations ? "Manage organizations, who may register into each one, and their accounts." : canManageTeam ? "Everyone in your organization has full access. As the organization owner, you can deactivate someone here when they should no longer sign in." : "Everyone in your organization has full access. Only the organization owner can deactivate or reactivate accounts."}</p>
         </div>
         {canManageOrganizations && <button type="button" className="btn btn-primary" onClick={openNewForm}>Add user account</button>}
       </header>
@@ -421,6 +434,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
             <div className="field"><label htmlFor="user-department">Department</label><select id="user-department" value={form.department} onChange={(event) => updateForm("department", event.target.value)}><option value="">Select a department</option>{form.department && !isKnownDepartment(form.department) && <option value={form.department}>{form.department} (existing)</option>}{DEPARTMENT_OPTIONS.map((department) => <option key={department} value={department}>{department}</option>)}</select></div>
             <fieldset className="user-account-permissions"><legend>Permissions</legend><p className="field-hint">HR is the only access administrator. Accounts named HR with recruitment review access can manage this list.</p><label><input type="checkbox" checked={form.canCreateRole} onChange={(event) => updateForm("canCreateRole", event.target.checked)} /> Create role requests</label><label><input type="checkbox" checked={form.canReviewRole} onChange={(event) => updateForm("canReviewRole", event.target.checked)} /> Review recruitment (company-wide: setup, applicants, bookings)</label><label><input type="checkbox" checked={form.canReviewDepartmentRole} onChange={(event) => updateForm("canReviewDepartmentRole", event.target.checked)} /> Review own department only</label><label><input type="checkbox" checked={form.canApproveRole} onChange={(event) => updateForm("canApproveRole", event.target.checked)} /> Approve role requests and hiring decisions</label><label><input type="checkbox" checked={form.canManageCredits} onChange={(event) => updateForm("canManageCredits", event.target.checked)} /> Manage Smile Credits</label><label><input type="checkbox" checked={form.canEditSettings} onChange={(event) => updateForm("canEditSettings", event.target.checked)} /> Edit settings</label></fieldset>
             <label className="user-account-active"><input type="checkbox" checked={form.active} onChange={(event) => updateForm("active", event.target.checked)} /> Account is active</label>
+            {canManageOrganizations && originalEmail && selectedOrganizationId !== DEFAULT_ORG_ID && <label className="user-account-active"><input type="checkbox" checked={form.isOrganizationOwner === true} onChange={(event) => updateForm("isOrganizationOwner", event.target.checked)} /> Organization owner (manages the team; only one per organization)</label>}
             <div className="user-account-form-actions"><button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : "Save account"}</button></div>
           </form>
         </section>
@@ -428,7 +442,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
 
       <section className="card user-account-list-card">
         <div className="card-header directory-card-header"><div className="directory-card-heading"><h2>Directory Accounts</h2><p>{canManageOrganizations ? `Manage accounts for ${organizations.find((organization) => organization.id === selectedOrganizationId)?.name || "the selected organization"}.` : "Manage accounts for your organization."}</p></div><div className="directory-card-actions">{canManageOrganizations && organizations.length > 0 && <div className="field user-account-organization-picker"><label htmlFor="user-account-organization">Manage users for</label><select id="user-account-organization" value={selectedOrganizationId} onChange={(event) => { const organizationId = event.target.value; setSelectedOrganizationId(organizationId); setShowForm(false); void loadUsers(organizationId); }}><option value={DEFAULT_ORG_ID}>McLink</option>{organizations.filter((organization) => organization.id !== DEFAULT_ORG_ID).map((organization) => <option key={organization.id} value={organization.id} disabled={!organization.active}>{organization.name}{organization.active ? "" : " (inactive)"}</option>)}</select></div>}<button type="button" className="btn btn-secondary directory-refresh-button" onClick={() => void loadUsers(selectedOrganizationId)} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button></div></div>
-        {loading ? <div className="empty">Loading user accounts…</div> : users.length === 0 ? <div className="empty">No user accounts were found.</div> : <div className="table-wrap user-account-table-wrap"><table className="user-account-table"><thead><tr><th>User</th>{canManageOrganizations && <th>Access role</th>}<th>Department</th><th>Status</th>{canManageOrganizations && <th>Permissions</th>}<th>Actions</th></tr></thead><tbody>{users.map((user) => <tr key={user.email}><td><strong>{user.fullName || "Unnamed user"}</strong><span>{user.email}</span></td>{canManageOrganizations && <td>{user.accessRole || "—"}</td>}<td>{user.department || "—"}</td><td><span className={`user-account-status ${user.active ? "is-active" : "is-inactive"}`}>{user.active ? "Active" : "Inactive"}</span></td>{canManageOrganizations && <td>{permissionLabels(user)}</td>}<td><div className="user-account-actions">{canManageOrganizations && <button type="button" className="btn btn-secondary btn-small" onClick={() => openEditForm(user)}>Edit</button>}{canManageOrganizations && <button type="button" className="btn btn-secondary btn-small" onClick={() => void resetRegistration(user)} disabled={user.email === currentEmail.trim().toLowerCase()} title="Clear the sign-in credential so this email can register again">Reset registration</button>}<button type="button" className={`btn btn-small ${user.active ? "btn-danger-outline" : "btn-secondary"}`} onClick={() => void toggleActive(user)} disabled={user.email === currentEmail.trim().toLowerCase()}>{user.active ? "Deactivate" : "Reactivate"}</button></div></td></tr>)}</tbody></table></div>}
+        {loading ? <div className="empty">Loading user accounts…</div> : users.length === 0 ? <div className="empty">No user accounts were found.</div> : <div className="table-wrap user-account-table-wrap"><table className="user-account-table"><thead><tr><th>User</th>{canManageOrganizations && <th>Access role</th>}<th>Department</th><th>Status</th><th>Last sign-in</th>{canManageOrganizations && <th>Permissions</th>}<th>Actions</th></tr></thead><tbody>{users.map((user) => <tr key={user.email}><td><strong>{user.fullName || "Unnamed user"}{user.isOrganizationOwner && <span className="rule-chip">Owner</span>}</strong><span>{user.email}</span></td>{canManageOrganizations && <td>{user.accessRole || "—"}</td>}<td>{user.department || "—"}</td><td><span className={`user-account-status ${user.active ? "is-active" : "is-inactive"}`}>{user.active ? "Active" : "Inactive"}</span>{!user.active && user.deactivatedAt && <span className="field-hint">Deactivated{user.deactivatedBy ? ` by ${user.deactivatedBy}` : ""} on {formatWhen(user.deactivatedAt)}</span>}</td><td>{formatWhen(user.lastLoginAt) || "Never"}</td>{canManageOrganizations && <td>{permissionLabels(user)}</td>}<td><div className="user-account-actions">{canManageOrganizations && <button type="button" className="btn btn-secondary btn-small" onClick={() => openEditForm(user)}>Edit</button>}{canManageOrganizations && <button type="button" className="btn btn-secondary btn-small" onClick={() => void resetRegistration(user)} disabled={user.email === currentEmail.trim().toLowerCase()} title="Clear the sign-in credential so this email can register again">Reset registration</button>}{canManageTeam && <button type="button" className={`btn btn-small ${user.active ? "btn-danger-outline" : "btn-secondary"}`} onClick={() => void toggleActive(user)} disabled={user.email === currentEmail.trim().toLowerCase() || (user.isOrganizationOwner === true && !canManageOrganizations)} title={user.isOrganizationOwner && !canManageOrganizations ? "The organization owner cannot be deactivated" : undefined}>{user.active ? "Deactivate" : "Reactivate"}</button>}</div></td></tr>)}</tbody></table></div>}
       </section>
     </main>
   );

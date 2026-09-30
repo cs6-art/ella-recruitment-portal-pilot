@@ -6,7 +6,7 @@ import { organizations, userCredentials } from "@/db/schema";
 import { HR_FULL_ACCESS } from "@/lib/access-roles";
 import { findDirectoryUser, type DirectoryUser } from "@/lib/google-sheets";
 import { DEFAULT_ORGANIZATION_ID, syncOrganizationMembership } from "@/lib/organization-accounts";
-import { findPostgresDirectoryUser, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
+import { claimOrganizationOwnershipIfNone, findPostgresDirectoryUser, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
 import { runWithTenantDatabase } from "@/lib/tenant-database";
 import { fetchWithTimeout, timeoutFromEnv } from "@/lib/fetch-with-timeout";
 
@@ -212,6 +212,8 @@ async function ensureDirectoryUser(organizationId: string, email: string, fullNa
       ...HR_FULL_ACCESS,
       active: true,
     });
+    // The first person to register into a client organization owns it.
+    if (organizationId !== DEFAULT_ORGANIZATION_ID) await claimOrganizationOwnershipIfNone(organizationId, email);
   });
 }
 

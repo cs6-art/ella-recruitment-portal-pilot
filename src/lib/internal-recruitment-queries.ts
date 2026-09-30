@@ -890,6 +890,7 @@ export type AvatarInterviewContext = {
   roleRequirements: string;
   interviewQuestions: string;
   evaluationFields: string;
+  avatarSystemPrompt: string;
   organizationId: string;
   creditOwnerEmail: string;
   expiresAt: string;
@@ -941,6 +942,7 @@ async function avatarInterviewContextByHash(tokenHash: string, allowedStatuses: 
     roleRequirements: grading.requirements,
     interviewQuestions: grading.interviewQuestions,
     evaluationFields: grading.evaluationFields,
+    avatarSystemPrompt: String(roleSetup.avatarSystemPrompt || "").trim(),
     organizationId: row.application.organizationId,
     creditOwnerEmail: row.application.creditOwnerEmail,
     expiresAt: row.token.expiresAt?.toISOString() || "",

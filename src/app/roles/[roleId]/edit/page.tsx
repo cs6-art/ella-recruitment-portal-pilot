@@ -99,6 +99,7 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
     screeningCriteria: role.screeningCriteria,
     initialInterviewQuestions: [role.requiredInterviewQuestion1, role.requiredInterviewQuestion2, role.requiredInterviewQuestion3, role.requiredInterviewQuestion4, role.requiredInterviewQuestion5].filter(Boolean).join("\n"),
     aiSystemPrompt: role.aiSystemPrompt,
+    avatarSystemPrompt: role.avatarSystemPrompt || "",
     initialInterviewBookingLink: role.initialInterviewBookingLink,
     hodInterviewBookingLink: role.hodInterviewBookingLink,
     postingChannels: setupChannels(role.postingChannels),

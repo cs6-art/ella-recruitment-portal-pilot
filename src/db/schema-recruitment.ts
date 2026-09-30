@@ -40,6 +40,10 @@ export const users = pgTable(
     canManageCredits: boolean("can_manage_credits").notNull().default(false),
     canReviewDepartmentRole: boolean("can_review_department_role").notNull().default(false),
     active: boolean("active").notNull().default(true),
+    // The first person to register into a client organization; manages its team.
+    isOrganizationOwner: boolean("is_organization_owner").notNull().default(false),
+    deactivatedAt: ts("deactivated_at"),
+    deactivatedBy: text("deactivated_by").notNull().default(""),
     createdAt: ts("created_at").notNull().defaultNow(),
     updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
   },

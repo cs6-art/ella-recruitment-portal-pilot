@@ -119,6 +119,8 @@ export const recruitmentSetupSchema = z.object({
   requiredInterviewQuestion4: z.string().trim().max(2000).default(""),
   requiredInterviewQuestion5: z.string().trim().max(2000).default(""),
   aiSystemPrompt: z.string().trim().max(50000),
+  // Editable script for the live video (Avatar) interviewer; empty = the standard script.
+  avatarSystemPrompt: z.string().trim().max(50000).optional().default(""),
   resolvedAiSystemPrompt: z.string().trim().max(50000).optional().default(""),
   initialInterviewBookingLink: optionalUrl,
   hodInterviewBookingLink: optionalUrl,

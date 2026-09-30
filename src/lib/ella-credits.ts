@@ -334,6 +334,8 @@ export async function recordVoiceInterviewDeduction(input: {
 export async function recordLiveAvatarInterviewDeduction(input: {
   applicationId: string;
   sessionId: string;
+  /** Display name for the ledger "By" column (the applicant). Name only: the email would select a credit owner. */
+  actorName?: string;
   actorEmail?: string;
   organizationId?: string;
 }): Promise<number> {
@@ -343,6 +345,7 @@ export async function recordLiveAvatarInterviewDeduction(input: {
     units: 1,
     reference: input.applicationId,
     idempotencyKey: `live-avatar-session:${input.sessionId}`,
+    actorName: input.actorName,
     actorEmail: input.actorEmail,
     organizationId: input.organizationId,
     note: "Live avatar interview completed",

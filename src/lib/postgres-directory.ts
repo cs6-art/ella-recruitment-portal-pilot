@@ -19,6 +19,9 @@ function directoryUserFromRow(row: {
   canManageCredits: boolean;
   canReviewDepartmentRole: boolean;
   active: boolean;
+  isOrganizationOwner?: boolean;
+  deactivatedAt?: Date | null;
+  deactivatedBy?: string | null;
 }): DirectoryUser {
   return applyAccessRolePolicy({
     email: row.email.trim().toLowerCase(),
@@ -33,6 +36,9 @@ function directoryUserFromRow(row: {
     canManageCredits: row.canManageCredits,
     canReviewDepartmentRole: row.canReviewDepartmentRole,
     active: row.active,
+    isOrganizationOwner: row.isOrganizationOwner === true,
+    deactivatedAt: row.deactivatedAt ? row.deactivatedAt.toISOString() : "",
+    deactivatedBy: row.deactivatedBy || "",
   });
 }
 
@@ -69,6 +75,9 @@ export async function findPostgresDirectoryUser(email: string, organizationId: s
         canManageCredits: users.canManageCredits,
         canReviewDepartmentRole: users.canReviewDepartmentRole,
         active: users.active,
+        isOrganizationOwner: users.isOrganizationOwner,
+        deactivatedAt: users.deactivatedAt,
+        deactivatedBy: users.deactivatedBy,
       })
       .from(users)
       .leftJoin(departments, and(eq(departments.id, users.departmentId), eq(departments.organizationId, users.organizationId)))
@@ -101,6 +110,9 @@ export async function getPostgresDirectoryUsers(organizationId: string): Promise
       canManageCredits: users.canManageCredits,
       canReviewDepartmentRole: users.canReviewDepartmentRole,
       active: users.active,
+      isOrganizationOwner: users.isOrganizationOwner,
+      deactivatedAt: users.deactivatedAt,
+      deactivatedBy: users.deactivatedBy,
     })
     .from(users)
     .leftJoin(departments, and(eq(departments.id, users.departmentId), eq(departments.organizationId, users.organizationId)))
@@ -109,14 +121,14 @@ export async function getPostgresDirectoryUsers(organizationId: string): Promise
   return rows.map(directoryUserFromRow);
 }
 
-export async function upsertPostgresDirectoryUser(organizationId: string, user: DirectoryUser, originalEmail?: string): Promise<void> {
+export async function upsertPostgresDirectoryUser(organizationId: string, user: DirectoryUser, originalEmail?: string, actorName = ""): Promise<void> {
   if (!isDatabaseConfigured()) throw new Error("Database is not configured.");
   const db = getTenantDb();
   const email = user.email.trim().toLowerCase();
   const previousEmail = originalEmail?.trim().toLowerCase();
   const [existingEmail] = await db.select({ id: users.id, organizationId: users.organizationId }).from(users).where(and(eq(users.email, email), eq(users.organizationId, organizationId))).limit(1);
   const [existing] = previousEmail
-    ? await db.select({ id: users.id, organizationId: users.organizationId }).from(users).where(and(eq(users.email, previousEmail), eq(users.organizationId, organizationId))).limit(1)
+    ? await db.select({ id: users.id, organizationId: users.organizationId, active: users.active }).from(users).where(and(eq(users.email, previousEmail), eq(users.organizationId, organizationId))).limit(1)
     : [];
   if (previousEmail && (!existing || existing.organizationId !== organizationId)) throw new Error("The account being edited no longer exists.");
   if (!previousEmail && existingEmail) throw new Error("An account already exists for that email address.");
@@ -150,6 +162,9 @@ export async function upsertPostgresDirectoryUser(organizationId: string, user: 
     canManageCredits: user.canManageCredits,
     canReviewDepartmentRole: user.canReviewDepartmentRole,
     active: user.active,
+    // Stamp who deactivated the account; reactivating clears the stamp.
+    ...(existing && existing.active && !user.active ? { deactivatedAt: new Date(), deactivatedBy: actorName } : {}),
+    ...(user.active ? { deactivatedAt: null, deactivatedBy: "" } : {}),
     updatedAt: new Date(),
   };
   if (existing) {
@@ -219,4 +234,30 @@ export async function findPostgresDirectoryUserByEmail(email: string): Promise<{
     console.error("[Postgres Directory] Cross-organization lookup unavailable:", error instanceof Error ? error.message : error);
     return null;
   }
+}
+
+/**
+ * Makes this account the organization's owner when the organization has none
+ * yet (the first registrant). Safe to call repeatedly and under a race: the
+ * partial unique index allows only one owner, so a losing update is ignored.
+ */
+export async function claimOrganizationOwnershipIfNone(organizationId: string, email: string): Promise<void> {
+  const db = getTenantDb();
+  const normalizedEmail = email.trim().toLowerCase();
+  const [owner] = await db.select({ id: users.id }).from(users).where(and(eq(users.organizationId, organizationId), eq(users.isOrganizationOwner, true))).limit(1);
+  if (owner) return;
+  try {
+    await db.update(users).set({ isOrganizationOwner: true }).where(and(eq(users.organizationId, organizationId), eq(users.email, normalizedEmail)));
+  } catch (error) {
+    // Another registration claimed ownership at the same moment.
+    console.error("[Postgres Directory] Ownership already claimed:", error instanceof Error ? error.message : error);
+  }
+}
+
+/** Platform administrators can hand ownership to another account of the organization. */
+export async function setOrganizationOwner(organizationId: string, email: string): Promise<void> {
+  const db = getTenantDb();
+  const normalizedEmail = email.trim().toLowerCase();
+  await db.update(users).set({ isOrganizationOwner: false }).where(and(eq(users.organizationId, organizationId), eq(users.isOrganizationOwner, true)));
+  await db.update(users).set({ isOrganizationOwner: true, active: true }).where(and(eq(users.organizationId, organizationId), eq(users.email, normalizedEmail)));
 }
