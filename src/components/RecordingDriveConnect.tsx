@@ -19,6 +19,10 @@ type PickerDocsView = {
   setIncludeFolders(include: boolean): PickerDocsView;
   setSelectFolderEnabled(enabled: boolean): PickerDocsView;
   setEnableDrives(enabled: boolean): PickerDocsView;
+  setMimeTypes(mimeTypes: string): PickerDocsView;
+  setParent(parentId: string): PickerDocsView;
+  setOwnedByMe(ownedByMe: boolean): PickerDocsView;
+  setLabel(label: string): PickerDocsView;
   setMode(mode: string): PickerDocsView;
 };
 type PickerBuilder = {
@@ -41,6 +45,7 @@ type PickerWindow = Window & {
   google?: { picker?: PickerApi };
 };
 
+const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
 const EMPTY_STATUS: StorageStatus = { connected: false, accountEmail: "", folderConfigured: false, folderName: "" };
 const googleScriptLoads = new Map<string, Promise<void>>();
 
@@ -183,13 +188,21 @@ export default function RecordingDriveConnect() {
       const pickerConfig = pickerConfigRef.current;
       if (!pickerApi || !pickerConfig) throw new Error("Google Drive folder picker is unavailable. Try again.");
 
-      const view = new pickerApi.DocsView(pickerApi.ViewId.DOCS)
+      // setEnableDrives turns a view into a Shared-drives-only view, so My Drive
+      // and folders shared with the account each need their own tab.
+      const folderView = (label: string) => new pickerApi.DocsView(pickerApi.ViewId.DOCS)
         .setIncludeFolders(true)
         .setSelectFolderEnabled(true)
-        .setEnableDrives(true)
+        .setMimeTypes(FOLDER_MIME_TYPE)
+        .setLabel(label)
         .setMode("list");
+      const myDriveView = folderView("My Drive").setParent("root");
+      const sharedWithMeView = folderView("Shared with me").setOwnedByMe(false);
+      const sharedDrivesView = folderView("Shared drives").setEnableDrives(true);
       const picker = new pickerApi.PickerBuilder()
-        .addView(view)
+        .addView(myDriveView)
+        .addView(sharedWithMeView)
+        .addView(sharedDrivesView)
         .setOAuthToken(accessToken)
         .setDeveloperKey(pickerConfig.apiKey)
         .setAppId(pickerConfig.projectNumber)
