@@ -99,6 +99,7 @@ const QUERY_ALIASES: Array<[RegExp, string]> = [
   [/\b(?:f2f|face to face|in person)\b/, "face-to-face"],
   [/\b(?:credit|credits|balance|charge|charged|deduct|deduction)\b/, "credits"],
   [/\b(?:permission|permissions|account|accounts|user|users)\b/, "access"],
+  [/\b(?:separat\w*|isolat\w*|mixed|tenants?|clients?|compan(?:y|ies))\b/, "organizations separate mixed"],
 ];
 
 function tokenize(value: string): string[] {

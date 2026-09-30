@@ -129,3 +129,24 @@ test("user prompt includes only safe account context for account questions", () 
 test("starter questions are defined", () => {
   assert.ok(HELP_BOT_STARTER_QUESTIONS.length >= 4);
 });
+
+test("organization separation questions are answered from the guide, not a canned yes/no", () => {
+  for (const question of ["How are organizations separated?", "Are client records mixed together?", "how is our data isolated from other companies"]) {
+    assert.equal(directHelpAnswer(question), null);
+    const context = retrieveContext(question);
+    assert.ok(context.sections.some((s) => s.heading === "Quick answers for common portal questions"), question);
+  }
+  const context = retrieveContext("How are organizations separated?");
+  assert.match(context.text, /Every record is stored under the organization/);
+  assert.match(context.text, /own shared Smile Credits balance/);
+});
+
+test("stale canned how-to answers are left to the knowledge guide", () => {
+  assert.equal(directHelpAnswer("How do I add a user?"), null);
+  assert.equal(directHelpAnswer("How do I add an organization?"), null);
+});
+
+test("Smile is told to match the question form instead of opening with yes/no", async () => {
+  const { HELP_BOT_SYSTEM_PROMPT } = await import("../src/lib/help-bot/prompt.ts");
+  assert.match(HELP_BOT_SYSTEM_PROMPT, /Only start with "Yes" or "No" when the user\s+asked a yes\/no question/);
+});

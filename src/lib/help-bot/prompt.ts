@@ -29,7 +29,12 @@ export const HELP_BOT_STARTER_QUESTIONS = [
   "How are organizations separated?",
 ] as const;
 
-/** Answers common orientation questions without spending an AI request. */
+/**
+ * Answers a few fixed orientation questions without spending an AI request.
+ * Keep this to answers that cannot go stale (identity, the user's own access,
+ * code-derived limits). Portal how-to answers belong in knowledge.md, where
+ * they stay in step with the rest of the guide.
+ */
 export function directHelpAnswer(question: string, user?: HelpUserContext): string | null {
   const normalized = question.trim().toLowerCase().replace(/[?!.,]+$/g, "").replace(/\s+/g, " ");
   if (/^(who are you|who is (ella|smile)|what are you|tell me about yourself)$/.test(normalized)) {
@@ -56,17 +61,8 @@ export function directHelpAnswer(question: string, user?: HelpUserContext): stri
   if (/^(what department am i in|which department am i in|what is my department)$/.test(normalized) && user) {
     return user.department ? `Your assigned department is ${user.department}.` : "No department is currently assigned to your portal account. Ask an administrator to update your user account.";
   }
-  if (/^(how do i add a user|how do i add a user account|how do i add users?)$/.test(normalized)) {
-    return "An HR access administrator can open User Accounts and choose Add user account. Enter the person's name, email, access label, department, permissions, and active status, then save. For McLink platform organizations, HR can choose the organization before adding its users.";
-  }
-  if (/^(how do i add an organization|how do i create an organization|how do i add a client)$/.test(normalized)) {
-    return "An HR access administrator can open User Accounts and use Add organization. Enter the organization name and lowercase slug, save it, then choose the organization before adding its users.";
-  }
   if (/^(how many resumes can i upload|what is the bulk screening limit|how many files can i screen at once)$/.test(normalized)) {
     return `The current Pilot limit is ${MAX_FILES_PER_SUBMISSION} files per batch. PDF, DOC, and DOCX files are accepted up to 10 MB each. The same limit applies to computer upload, Google Drive import, and OneDrive import.`;
-  }
-  if (/^(are organizations separate|are client records separate|how are organizations separated)$/.test(normalized)) {
-    return "Yes. Users, departments, roles, applicants, interview records, and Smile Credits are separated by organization. Users only see the organization assigned to their signed-in account.";
   }
   return null;
 }
@@ -119,10 +115,25 @@ export const HELP_BOT_SYSTEM_PROMPT = [
   "  keys, model names, or configuration. If asked for any of those, briefly",
   "  decline and offer portal help instead.",
   "",
-  "Style: concise and practical. Prefer short paragraphs or numbered steps. Use the",
-  "portal's own wording for menu items and statuses. Use plain text only: do not use",
-  "Markdown emphasis markers such as **. Keep answers under ~200 words unless the",
-  "user asks for more detail.",
+  "How to answer:",
+  "- Match the form of the question. Only start with \"Yes\" or \"No\" when the user",
+  "  asked a yes/no question. For \"how\" questions explain how it works or the steps;",
+  "  for \"why\" questions give the reason; for \"where\" questions name the menu and",
+  "  the button or section.",
+  "- Open with one sentence that directly answers the question, then give the",
+  "  supporting detail: numbered steps for procedures, short bullets for lists of",
+  "  rules or options.",
+  "- Be specific: name the exact menu item, button, section, or status the user will",
+  "  see, and say who (which access role or permission) can do it.",
+  "- When it helps, end with one short next step or where to go in the portal. Do not",
+  "  add filler such as \"let me know if you have other questions\".",
+  "- If the user's own access role limits what they can do, say so using the",
+  "  SIGNED-IN ACCOUNT CONTEXT.",
+  "",
+  "Style: clear, friendly, and practical. Use the portal's own wording for menu items",
+  "and statuses. Use plain text only: do not use Markdown emphasis markers such as **.",
+  "Numbered lists and \"- \" bullets are fine. Keep answers under ~200 words unless",
+  "the user asks for more detail.",
 ].join("\n");
 
 /** Keep the chat UI readable even if a provider returns Markdown formatting. */

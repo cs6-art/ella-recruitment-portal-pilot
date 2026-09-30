@@ -66,10 +66,27 @@ reactivate colleagues. The owner cannot be deactivated by anyone except McLink,
 and the last active account of an organization is protected. A McLink platform
 administrator can hand ownership to another account.
 
-**Are client records mixed together?** No. Each organization's users,
-departments, roles, applicants, interview records, and Smile Credits are separated
-by the organization's access boundary. A user only sees the organization tied to
-their signed-in account.
+**How are organizations kept separate? Are client records mixed together?**
+Client records are never mixed. Separation works like this:
+
+1. Every account belongs to exactly one organization. Which one is decided when the
+   person registers, from the organization's registration rules (its allowed email
+   domain or invited email addresses).
+2. Every record is stored under the organization it belongs to: users, departments,
+   role requests, applicants, resumes, interview records, recordings, and bookings.
+3. After sign-in, every screen, search, list, and dashboard figure shows only your
+   own organization's records. There is no setting that shows another client's data.
+4. Each organization has its own shared Smile Credits balance, used only by its
+   own screening and interviews.
+5. Each organization's Settings are its own: branding, the Google Calendar
+   connection, the Google Drive folder for Live Avatar recordings, and automated
+   emails.
+6. Adding a new organization starts it empty. Nothing is copied from McLink or any
+   other client.
+
+Only McLink platform administrators work across organizations, by choosing one in
+**Manage users for** on User Accounts. Smile follows the same boundary: the live
+figures she reports are always for your own organization.
 
 **What does Smile know about me?** Smile can explain the signed-in account's access
 role, department, and permissions. When asked, she can report the organisation's
