@@ -182,7 +182,7 @@ test("HR booking cards expose invitation delivery separately from booking state"
   const page = read("src/app/applicants/[applicationId]/page.tsx");
   const target = read("src/lib/recruitment-target-portal.ts");
   const query = read("src/lib/internal-recruitment-queries.ts");
-  assert.match(page, /Invitation status/);
+  assert.match(page, /Invitation Status/);
   assert.match(page, /Email sent — inbox delivery not confirmed/);
   assert.match(page, /Invitation queued to send/);
   assert.match(page, /Not sent — retry available/);

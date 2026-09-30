@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   if (!isLiveAvatarConfigured()) {
     return NextResponse.json(
-      { success: false, error: "The live avatar interview is not configured yet." },
+      { success: false, error: "The Live Avatar interview is not configured yet." },
       { status: 503 },
     );
   }
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error("[API Live Avatar Session] POST failed:", error);
-    return NextResponse.json({ success: false, error: "Unable to start the live avatar session." }, { status: 502 });
+    return NextResponse.json({ success: false, error: "Unable to start the Live Avatar session." }, { status: 502 });
   }
 }
 

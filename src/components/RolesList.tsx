@@ -619,7 +619,7 @@ export default function RolesList({
                       <td data-label="Department">
                         {role.department || "Not provided"}
                       </td>
-                      <td data-label="Request type">
+                      <td data-label="Request Type">
                         {role.requestType || "Not provided"}
                       </td>
                       <td data-label="Vacancies">{role.numberOfVacancies}</td>
@@ -629,7 +629,7 @@ export default function RolesList({
                       <td data-label="Created">
                         {formatDate(role.createdAt, true)}
                       </td>
-                      <td data-label="Target date">
+                      <td data-label="Target Date">
                         {(() => { const target = targetDateMeta(role.targetHiringDate); return <span className={`role-target-date role-target-date-${target.tone}`}><strong>{target.label}</strong>{target.date && <span>{target.date}</span>}</span>; })()}
                       </td>
                       <td data-label="Status">

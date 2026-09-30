@@ -217,7 +217,7 @@ test("incomplete voice calls expose a reschedule action for HR", () => {
   const panel = read("src/components/ApplicantDecisionPanel.tsx");
   assert.match(detail, /incomplete/);
   assert.match(detail, /voiceRetryEligible/);
-  assert.match(panel, /Send reschedule link/);
+  assert.match(panel, /Send Reschedule Link/);
   assert.match(panel, /No call will be placed until the candidate books a new time/);
 });
 
@@ -342,11 +342,34 @@ test("Pilot detail pages expose live voice-attempt status and refresh active cal
   assert.match(target, /\["calling", "dispatching"\]\.includes\(voiceAttemptStatus\)/);
   assert.match(target, /\["initiated", "in_progress"\]\.includes\(voiceAttemptStatus\)/);
   assert.match(target, /\["scheduled", "queued", "retry_scheduled"\]\.includes\(voiceAttemptStatus\)/);
-  // Face-to-Face booking-link-sent and scheduled stages also fast-poll, so HR
-  // sees a booking update without waiting on the slow 5-minute fallback.
-  assert.match(detail, /\["voice_scheduled", "approved_for_final", "final_scheduled"\]\.includes\(applicant\.currentStage\.trim\(\)\.toLowerCase\(\)\) \? 30_000 : undefined/);
+  // Interview choice, call/avatar progress, review, and final scheduling all
+  // refresh promptly while unrelated stages retain the slower fallback.
+  assert.match(detail, /const INTERVIEW_REFRESH_STAGES = new Set\(\[/);
+  assert.match(detail, /"resume_approved"/);
+  assert.match(detail, /"voice_booking_pending"/);
+  assert.match(detail, /"voice_scheduled"/);
+  assert.match(detail, /"voice_review_pending"/);
+  assert.match(detail, /INTERVIEW_REFRESH_STAGES\.has\(currentStageKey\) \? 30_000 : undefined/);
   assert.match(refresh, /intervalMs = 5 \* 60_000/);
   assert.match(refresh, /window\.setInterval\(refresh, intervalMs \|\| REFRESH_MS\)/);
+});
+
+test("Live Avatar detail hides call-only links and reports stale or failed updates", () => {
+  const detail = read("src/app/applicants/[applicationId]/page.tsx");
+  const decisions = read("src/components/ApplicantDecisionPanel.tsx");
+  const review = read("src/components/LiveInterviewReview.tsx");
+
+  assert.match(detail, /!isAvatarInterview && !isInterviewFormatPending && voiceBookingLink/);
+  assert.match(detail, /voiceBookingLink=\{interviewMode === "voice" \? externalUrl\(applicant\.voiceBookingLink\) : ""\}/);
+  assert.match(detail, /Live Avatar interview details could not be loaded/);
+  assert.match(detail, /avatarInvitationStatus/);
+  assert.match(detail, /interviewMode === "avatar" \? "Avatar Interview Review"/);
+  assert.match(detail, /liveReview \? "avatar" : applicant\.interviewMode/);
+  assert.match(decisions, /const voiceBookingLink = props\.interviewMode === "voice" \? props\.voiceBookingLink : ""/);
+  assert.match(decisions, /const voiceRetryEligible = props\.interviewMode === "voice" && props\.voiceRetryEligible/);
+  assert.match(review, /const POLL_MS = 5_000/);
+  assert.match(review, /The latest interview update could not be loaded/);
+  assert.match(review, /Showing the last saved details; we’ll try again automatically/);
 });
 
 test("applicants are reachable from the reviewer shell and role detail", () => {

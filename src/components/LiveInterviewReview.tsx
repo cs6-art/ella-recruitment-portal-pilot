@@ -82,6 +82,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 export default function LiveInterviewReview({ applicationId, initialReview, canRetry }: Props) {
   const [review, setReview] = useState(initialReview);
   const [pollExpired, setPollExpired] = useState(false);
+  const [pollError, setPollError] = useState("");
   const [retrying, setRetrying] = useState(false);
   // Set once HR retries in this view, so a repeat failure gets the
   // "temporarily unavailable" wording instead of "please retry".
@@ -112,9 +113,14 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
       try {
         const response = await fetch(endpoint, { cache: "no-store" });
         const body = await response.json() as { success?: boolean; review?: Review | null };
-        if (!cancelled && body.success && body.review) setReview(body.review);
+        if (!response.ok || !body.success) throw new Error("Interview refresh failed");
+        if (!cancelled) {
+          setPollError("");
+          if (body.review) setReview(body.review);
+        }
       } catch {
-        // Keep the last known state; the next tick retries.
+        // Keep the last known state, explain that it may be stale, and retry.
+        if (!cancelled) setPollError("The latest interview update could not be loaded. Showing the last saved details; we’ll try again automatically.");
       }
       if (!cancelled && document.visibilityState === "visible") timer = window.setTimeout(poll, POLL_MS);
     };
@@ -191,6 +197,7 @@ export default function LiveInterviewReview({ applicationId, initialReview, canR
 
   return <div className="live-review">
     <p className="live-review-disclaimer">{HR_REVIEW_DISCLAIMER}</p>
+    {pollError && <div className="live-review-status is-failed" role="status" aria-live="polite">{pollError}</div>}
 
     <div className="live-review-block">
       <h4>Interview Overview</h4>

@@ -5166,7 +5166,7 @@ textarea:focus-visible {
 .applicants-page .applicants-table tbody tr { height: 76px; }
 .applicants-page .applicants-table tbody td { height: 76px; box-sizing: border-box; overflow: hidden; vertical-align: middle; }
 .applicants-page .applicants-table td[data-label="Role"] strong,
-.applicants-page .applicants-table td[data-label="Next action"] {
+.applicants-page .applicants-table td[data-label="Next Action"] {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -5880,7 +5880,7 @@ textarea:focus-visible {
 .applicant-date-filter { display: grid; gap: 4px; min-width: 145px; }
 .applicant-date-filter > span { color: var(--muted); font-size: 11px; font-weight: 700; }
 .applicants-filters .applicant-date-filter input { width: 100%; min-width: 0; }
-.applicants-table td[data-label="Interview type"] { min-width: 145px; color: #315779; font-size: 12px; font-weight: 700; }
+.applicants-table td[data-label="Interview Type"] { min-width: 145px; color: #315779; font-size: 12px; font-weight: 700; }
 .resume-screening-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 14px 28px 0; list-style: none; }
 .resume-screening-steps li { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 10px 12px; border: 1px solid #dce8f1; border-radius: 9px; color: #51677c; background: #fbfdff; font-size: 12px; }
 .resume-screening-steps li > span { display: grid; flex: 0 0 24px; width: 24px; height: 24px; place-items: center; border-radius: 50%; color: #315779; background: #e8f0f7; font-size: 11px; font-weight: 800; }

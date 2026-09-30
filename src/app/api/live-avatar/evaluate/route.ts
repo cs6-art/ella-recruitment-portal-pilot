@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const avatarToken = typeof body.avatarToken === "string" ? body.avatarToken.trim() : "";
   if (!sessionId || (!avatarToken && (!roleId || !question))) return NextResponse.json({ success: false, error: avatarToken ? "sessionId is required." : "sessionId, roleId, and screeningQuestion are required." }, { status: 422 });
   const apiKey = process.env.LIVEAVATAR_API_KEY?.trim();
-  if (!apiKey) return NextResponse.json({ success: false, error: "The live avatar interview is not configured yet." }, { status: 503 });
+  if (!apiKey) return NextResponse.json({ success: false, error: "The Live Avatar interview is not configured yet." }, { status: 503 });
   try {
     if (avatarToken) {
       if (!isPostgresRecruitmentTarget()) return NextResponse.json({ success: false, error: "This avatar interview link is not available." }, { status: 404 });

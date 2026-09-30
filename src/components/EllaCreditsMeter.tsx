@@ -100,7 +100,7 @@ export default function EllaCreditsMeter({ variant = "inline", collapsed = false
   return (
     <div
       className={`${styles.meter} ${variantClass} ${estimateClass} ${tone} ${flash ? styles.changed : ""} ${balance === null ? styles.loading : ""}`}
-      title={pricing ? `Credits — ${formatCredits(pricing.cvAnalysis)} per AI CV analysis, AI voice interview: ${formatCredits(pricing.phoneInterview)} complete, ${formatCredits(pricing.phoneInterviewIncomplete)} incomplete, ${formatCredits(pricing.phoneInterviewNoAnswer)} no answer, live avatar interview: ${formatCredits(pricing.liveAvatarInterview)}` : "Credits"}
+      title={pricing ? `Credits — ${formatCredits(pricing.cvAnalysis)} per AI CV analysis, AI Voice Interview: ${formatCredits(pricing.phoneInterview)} complete, ${formatCredits(pricing.phoneInterviewIncomplete)} incomplete, ${formatCredits(pricing.phoneInterviewNoAnswer)} no answer, Live Avatar Interview: ${formatCredits(pricing.liveAvatarInterview)}` : "Credits"}
       aria-live="polite"
       aria-label={`Credits remaining: ${balance === null ? "loading" : formatCredits(shown)}`}
     >

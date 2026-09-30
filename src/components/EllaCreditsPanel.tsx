@@ -63,7 +63,7 @@ const eventLabels: Record<string, string> = {
   phone_interview: "Voice interview",
   phone_interview_no_answer: "Voice interview",
   phone_interview_incomplete: "Voice interview",
-  live_avatar_interview: "Live avatar interview",
+  live_avatar_interview: "Live Avatar Interview",
 };
 
 const nf = new Intl.NumberFormat("en-US");
@@ -183,7 +183,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
       <div className={styles.header}>
         <div>
           <h2>Credit Balance</h2>
-          <p>All signed-in users in this organization share one Smile Credits balance — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer; live avatar interviews cost ${nf.format(pricing.liveAvatarInterview)} when completed.` : "pricing is loaded from the active credit settings"}. AI actions are blocked when the balance runs out.</p>
+          <p>All signed-in users in this organization share one Smile Credits balance — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer; Live Avatar interviews cost ${nf.format(pricing.liveAvatarInterview)} when completed.` : "pricing is loaded from the active credit settings"}. AI actions are blocked when the balance runs out.</p>
         </div>
         {data && (
           <div className={`${styles.headline} ${headlineTone}`}>
@@ -242,7 +242,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
               <option value="manual">Manual changes</option>
               <option value="cv_analysis">CV analysis</option>
               <option value="voice_interview">Voice interviews</option>
-              <option value="live_avatar_interview">Live avatar interviews</option>
+              <option value="live_avatar_interview">Live Avatar interviews</option>
             </select>
             {hasActivityFilters && <button type="button" className="btn btn-secondary btn-small" onClick={clearActivityFilters}>Clear</button>}
           </div>

@@ -557,7 +557,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
         ) : (
           <div className="table-wrap">
             <table className="applicants-table">
-              <thead><tr>{canManageApplicants && <th className="selection-column"><input type="checkbox" aria-label="Select all visible applicants" checked={allVisibleSelected} disabled={selectableVisibleApplicants.length === 0} onChange={toggleAllVisibleApplicants} /></th>}<th>Candidate</th><th>Role</th><th>Applied</th><th>Interview type</th><th>Match</th><th>Current status</th><th>Next action</th><th>Action</th></tr></thead>
+              <thead><tr>{canManageApplicants && <th className="selection-column"><input type="checkbox" aria-label="Select all visible applicants" checked={allVisibleSelected} disabled={selectableVisibleApplicants.length === 0} onChange={toggleAllVisibleApplicants} /></th>}<th>Candidate</th><th>Role</th><th>Applied</th><th>Interview Type</th><th>Match</th><th>Current Status</th><th>Next Action</th><th>Action</th></tr></thead>
               <tbody>
                 {pagedApplicants.map((applicant, index) => (
                   <tr key={`${applicant.applicationId || "applicant"}-${applicant.roleId || "role"}-${index}`} className={[selectedIds.has(applicant.applicationId) ? "is-selected" : "", newApplicantIds.has(applicant.applicationId) ? "is-new-applicant" : ""].filter(Boolean).join(" ") || undefined}>
@@ -567,10 +567,10 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
                     <td data-label="Candidate"><Link className="applicant-name-link" href={applicantDetailHref(applicant.applicationId)}><strong>{applicant.candidateName || "Unnamed candidate"}{newApplicantIds.has(applicant.applicationId) && <span className="applicant-new-badge">NEW</span>}</strong><span>{applicant.email || "Email not provided"}</span></Link></td>
                     <td data-label="Role"><strong>{applicant.selectedRole || "Role not provided"}</strong><span className="applicant-subtext">{applicant.roleId || "Role reference not available"}</span></td>
                     <td data-label="Applied">{applicant.appliedAt ? formatDate(applicant.appliedAt) : "Date not provided"}</td>
-                    <td data-label="Interview type">{applicant.interviewMode === "pending" ? "Not selected" : applicant.interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"}</td>
+                    <td data-label="Interview Type">{applicant.interviewMode === "pending" ? "Not selected" : applicant.interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"}</td>
                     <td data-label="Match"><strong className="applicant-score">{scoreValue(applicant.matchScore)}</strong>{applicant.recommendation && <span className="applicant-subtext">{applicant.recommendation}</span>}</td>
-                    <td data-label="Current stage"><span className={stageClass(applicant.currentStage)}>{applicantStageLabel(applicant.currentStage, applicant.interviewMode) || "Pending HR Review"}</span></td>
-                    <td data-label="Next action">{applicant.nextAction || "No next action available"}</td>
+                    <td data-label="Current Status"><span className={stageClass(applicant.currentStage)}>{applicantStageLabel(applicant.currentStage, applicant.interviewMode) || "Pending HR Review"}</span></td>
+                    <td data-label="Next Action">{applicant.nextAction || "No next action available"}</td>
                     <td data-label="Action"><div className="applicant-table-actions"><Link href={applicantDetailHref(applicant.applicationId)}>View</Link>{canManageApplicants && !applicant.isHistoricalDemo && <><Link href={`/applicants/${encodeURIComponent(applicant.applicationId)}/edit`}>Edit</Link><button type="button" className="table-danger-action" disabled={deletingIds.has(applicant.applicationId) || deletingId === "bulk"} onClick={() => void deleteApplicants([applicant])}>{deletingIds.has(applicant.applicationId) ? "Deleting..." : "Delete"}</button></>}{applicant.isHistoricalDemo && <span className="applicant-readonly-label">Read-only demo history</span>}</div></td>
                   </tr>
                 ))}

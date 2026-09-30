@@ -32,6 +32,15 @@ import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 export const dynamic = "force-dynamic";
 
 const TERMINAL_APPLICANT_STAGES = new Set(["passed_final", "rejected", "withdrawn"]);
+const INTERVIEW_REFRESH_STAGES = new Set([
+  "resume_approved",
+  "voice_booking_pending",
+  "voice_scheduled",
+  "voice_review_pending",
+  "approved_for_final",
+  "final_scheduled",
+  "final_decision_pending",
+]);
 
 function dateValue(value: string) {
   return formatPortalDateTime(value, true);
@@ -178,7 +187,7 @@ function AiGradingCriteria({ applicant }: { applicant: ApplicantDetails }) {
       </div>}
       {(enabled.has("strengths") || enabled.has("concerns")) && <div className="grading-columns">
         {enabled.has("strengths") && <div className="grading-panel grading-strengths"><h4>Strengths</h4><ResultList value={resultFor("strengths")} empty="No strengths recorded." /></div>}
-        {enabled.has("concerns") && <div className="grading-panel grading-concerns"><h4>Areas To Review</h4><ResultList value={resultFor("concerns")} empty="No concerns recorded." /></div>}
+        {enabled.has("concerns") && <div className="grading-panel grading-concerns"><h4>Areas to Review</h4><ResultList value={resultFor("concerns")} empty="No concerns recorded." /></div>}
       </div>}
       {otherFields.length > 0 && <div className="grading-fields">
         {otherFields.map((field) => <div className="grading-panel" key={field.key}><h4>{field.label}</h4><ResultList value={resultFor(field.key)} empty={pending} /></div>)}
@@ -237,8 +246,8 @@ function FinalInterviewCard({ applicant, role }: { applicant: ApplicantDetails; 
         <DetailField label="Role" value={applicant.selectedRole} />
         <DetailField label="Status" value={displayedStatus} />
         <DetailField label="Booking Status" value={bookingStatus} />
-        <DetailField label="Invitation status" value={bookingLinkStatus} />
-        <DetailField label="Interview time" value={scheduledValue(scheduledDate, scheduledTime)} />
+        <DetailField label="Invitation Status" value={bookingLinkStatus} />
+        <DetailField label="Interview Time" value={scheduledValue(scheduledDate, scheduledTime)} />
         <DetailField label="Timezone" value={timezone || "Not provided"} />
         <DetailField label="Interviewer" value={interviewer} className="applicant-final-interviewer-field" />
         <DetailField label="Recommendation" value={recommendation} />
@@ -250,13 +259,13 @@ function FinalInterviewCard({ applicant, role }: { applicant: ApplicantDetails; 
 }
 
 async function loadLiveInterviewReview(applicationId: string, organizationId: string) {
-  if (!isPostgresRecruitmentTarget()) return null;
+  if (!isPostgresRecruitmentTarget()) return { review: null, unavailable: false };
   try {
-    return await getLiveInterviewReview(applicationId, organizationId);
+    return { review: await getLiveInterviewReview(applicationId, organizationId), unavailable: false };
   } catch (error) {
-    // Never block the applicant profile on the interview review.
+    // Keep the applicant profile usable, but signal that interview data may be stale.
     console.error("[Applicant Details] Live interview review unavailable:", error);
-    return null;
+    return { review: null, unavailable: true };
   }
 }
 
@@ -275,7 +284,7 @@ function liveAssessmentFields(liveReview: LiveReview | null) {
   return { score: pending, recommendation: pending };
 }
 
-function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }: { applicant: ApplicantDetails; liveReview: LiveReview | null; canRetryLiveReview: boolean }) {
+function CombinedScreeningEvidence({ applicant, liveReview, liveReviewUnavailable, canRetryLiveReview }: { applicant: ApplicantDetails; liveReview: LiveReview | null; liveReviewUnavailable: boolean; canRetryLiveReview: boolean }) {
   const liveFields = liveAssessmentFields(liveReview);
   const interviewMode: ApplicantInterviewMode = liveReview ? "avatar" : applicant.interviewMode;
   const isAvatarInterview = interviewMode === "avatar";
@@ -312,6 +321,9 @@ function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }
     : voiceCompletedNoScore
       ? "No Recommendation — Not Enough Interview Content to Evaluate"
       : "Awaiting AI Evaluation";
+  const avatarInvitationStatus = liveReview
+    ? liveReview.interviewState === "completed" ? "Used — interview completed" : "Used — interview session started"
+    : bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: false });
   return <section className="card applicant-detail-card applicant-screening-evidence-card">
     <DetailCardHeader icon="document" title="AI Screening Evidence" description={`CV analysis and ${isInterviewFormatPending ? "interview" : isAvatarInterview ? "Live Avatar" : "voice interview"} evidence to support a consistent review.`} />
     <div className="applicant-detail-content">
@@ -330,6 +342,7 @@ function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }
       <div className="applicant-evidence-subsection">
         <div className="applicant-evidence-subsection-heading"><UiIcon name="microphone" size={16} /><h3>{interviewReviewTitle}</h3></div>
         {liveReview && <LiveInterviewReview applicationId={applicant.applicationId} initialReview={liveReview} canRetry={canRetryLiveReview} />}
+        {liveReviewUnavailable && isAvatarInterview && <div className="live-review-status is-failed" role="alert">Live Avatar interview details could not be loaded. The status may be out of date. Refresh this page; if the problem continues, contact your administrator.</div>}
         <div className="applicant-detail-inline-fields">
           {/* Live Avatar uses a secure one-time link rather than a calendar
               slot. Keep every interview field visible with explicit wording so
@@ -337,13 +350,13 @@ function CombinedScreeningEvidence({ applicant, liveReview, canRetryLiveReview }
               data. */}
           <DetailField label="Status" value={isInterviewFormatPending ? applicantStageLabel(applicant.currentStage, "pending") || "Not Started" : isAvatarInterview ? liveReview ? INTERVIEW_STATE_LABELS[liveReview.interviewState] : applicantStageLabel(applicant.currentStage, "avatar") || "Not Started" : applicantStageLabel(voiceCallStatus) || applicantStageLabel(applicant.voiceStatus) || "Not Started"} />
           <DetailField label="Booking Status" value={isInterviewChoicePending ? "Waiting for the candidate to choose a call or Live Avatar interview" : isInterviewFormatPending ? "Not booked — waiting for the interview invitation" : isAvatarInterview ? "One-time invitation link — no slot required" : applicant.voiceBookingStatus || "Not Booked"} />
-          <DetailField label="Invitation status" value={isInterviewFormatPending ? isInterviewChoicePending ? bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: false }) : interviewInvitationNotSentStatus(applicant.currentStage) : isAvatarInterview ? liveReview ? (liveReview.interviewState === "completed" ? "Used — interview completed" : "Used — interview session started") : "Issued — secure one-time link" : bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "completed"].includes(voiceCallStatus.toLowerCase()) })} />
-          <DetailField label="Interview time" value={isInterviewFormatPending ? isInterviewChoicePending ? "Not selected yet" : "Available after the invitation is sent" : isAvatarInterview ? liveReview ? dateValue(liveReview.interviewDate) : "Candidate chooses when ready" : scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />
+          <DetailField label="Invitation Status" value={isInterviewFormatPending ? isInterviewChoicePending ? bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: false }) : interviewInvitationNotSentStatus(applicant.currentStage) : isAvatarInterview ? avatarInvitationStatus : bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: ["scheduled", "queued", "calling", "dispatching", "initiated", "in_progress", "completed"].includes(voiceCallStatus.toLowerCase()) })} />
+          <DetailField label="Interview Time" value={isInterviewFormatPending ? isInterviewChoicePending ? "Not selected yet" : "Available after the invitation is sent" : isAvatarInterview ? liveReview ? dateValue(liveReview.interviewDate) : "Candidate chooses when ready" : scheduledValue(applicant.voiceScheduledDate, applicant.voiceScheduledTime)} />
           <DetailField label="Timezone" value={isInterviewFormatPending ? "Not selected yet" : isAvatarInterview ? liveReview ? "Asia/Singapore (portal time)" : "Not applicable — no slot required" : recordValue(applicant.interviewSlot, "Timezone", "Time Zone") || applicant.voiceTimezone || "Not provided"} />
           <DetailField label={isInterviewFormatPending ? "Interview Score" : isAvatarInterview ? "Live Avatar Interview Score" : "Voice AI Score"} value={isInterviewFormatPending ? "Not available until the candidate completes an interview" : liveFields ? liveFields.score : applicant.voiceScore ? formatMatchScore(applicant.voiceScore) : voiceScorePending} />
           <DetailField label="AI Recommendation" value={isInterviewFormatPending ? "Not available until the candidate completes an interview" : liveFields ? liveFields.recommendation : applicant.voiceRecommendation || voiceRecommendationPending} />
         </div>
-        {!liveReview && voiceBookingLink && <div className="applicant-copy-block"><span>Call booking page</span><p><Link href={voiceBookingLink} target="_blank" rel="noreferrer">Open the call booking page</Link></p></div>}
+        {!isAvatarInterview && !isInterviewFormatPending && voiceBookingLink && <div className="applicant-copy-block"><span>Voice Interview Booking Link</span><p><Link href={voiceBookingLink} target="_blank" rel="noreferrer">Open Voice Interview Booking Page</Link></p></div>}
         {/* AI Summary, Strengths, Concerns, Communication Quality, Answer
             Completeness and Recommended Follow-up Questions below are all
             sourced from the legacy Vapi phone-call evaluation (voiceResult /
@@ -399,25 +412,27 @@ export default async function ApplicantDetailsPage({ params, searchParams }: { p
   const resumeComments = applicant.resumeComments || latestDecisionComment(history, "resume");
   const voiceComments = applicant.voiceComments || latestDecisionComment(history, "voice");
   const finalComments = applicant.finalComments || latestDecisionComment(history, "final");
-  const liveReview = await loadLiveInterviewReview(applicant.applicationId, user.organizationId);
+  const liveReviewResult = await loadLiveInterviewReview(applicant.applicationId, user.organizationId);
+  const liveReview = liveReviewResult.review;
   const interviewMode: ApplicantInterviewMode = liveReview ? "avatar" : applicant.interviewMode;
 
-  // Refresh faster while scheduled interviews can advance, while other active
-  // applicant stages keep the shared slower refresh interval.
+  // Poll interview-choice, active-interview, review, and final-booking stages
+  // together so HR sees changes before, during, and after an interview.
+  const currentStageKey = applicant.currentStage.trim().toLowerCase();
   return <AppShell user={user}><main className="container page applicant-details-page">
-    <ApplicantLiveRefresh enabled={!TERMINAL_APPLICANT_STAGES.has(applicant.currentStage.trim().toLowerCase())} intervalMs={["voice_scheduled", "approved_for_final", "final_scheduled"].includes(applicant.currentStage.trim().toLowerCase()) ? 30_000 : undefined} />
+    <ApplicantLiveRefresh enabled={!TERMINAL_APPLICANT_STAGES.has(currentStageKey)} intervalMs={INTERVIEW_REFRESH_STAGES.has(currentStageKey) ? 30_000 : undefined} />
     <header className="applicant-detail-header"><Link href={returnTo} className="portal-back-link applicant-back-link"><UiIcon name="arrow-left" size={15} />Back to Applicants</Link><div className="applicant-detail-title-row"><div><h1>{applicant.candidateName || "Unnamed Candidate"}</h1><p>Application reference: {applicant.applicationId} · {applicant.email || "Email not provided"}</p></div><span className={applicantStageClass(applicant.currentStage)}>{applicantStageLabel(applicant.currentStage, interviewMode) || "Status not available"}</span></div><div className="applicant-detail-actions"><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}`}><UiIcon name="briefcase" size={15} />View Role</Link><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}/applicants`}><UiIcon name="applicants" size={15} />Role Applicants</Link><ApplicantDetailActions applicationId={applicant.applicationId} candidateName={applicant.candidateName} canManage={canEditApplicant(user)} /></div></header>
-    <div className="applicant-detail-summary"><DetailField label="Selected Role" value={applicant.selectedRole} /><DetailField label="Department" value={applicant.department} /><DetailField label="Applied" value={dateValue(applicant.appliedAt)} /><DetailField label="Interview type" value={interviewMode === "pending" ? "Not selected" : interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"} /><DetailField label="Match Score" value={formatMatchScore(applicant.matchScore)} /><DetailField label="Recommendation" value={applicant.recommendation} /><DetailField label="Next Action" value={applicant.nextAction} /></div>
+    <div className="applicant-detail-summary"><DetailField label="Selected Role" value={applicant.selectedRole} /><DetailField label="Department" value={applicant.department} /><DetailField label="Applied" value={dateValue(applicant.appliedAt)} /><DetailField label="Interview Type" value={interviewMode === "pending" ? "Not selected" : interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"} /><DetailField label="Match Score" value={formatMatchScore(applicant.matchScore)} /><DetailField label="Recommendation" value={applicant.recommendation} /><DetailField label="Next Action" value={applicant.nextAction} /></div>
     <div className="applicant-detail-grid"><div className="applicant-detail-main">
-      <CombinedScreeningEvidence applicant={applicant} liveReview={liveReview} canRetryLiveReview={canDecideApplicant(user)} />
+      <CombinedScreeningEvidence applicant={applicant} liveReview={liveReview} liveReviewUnavailable={liveReviewResult.unavailable} canRetryLiveReview={canDecideApplicant(user)} />
       <AiGradingCriteria applicant={applicant} />
-      <ApplicantDecisionPanel applicationId={applicant.applicationId} currentStage={applicant.currentStage} resumeDecision={applicant.resumeDecision} resumeComments={resumeComments} voiceDecision={applicant.voiceDecision} voiceComments={voiceComments} voiceStatus={applicant.voiceCallStatus || applicant.voiceStatus} finalInterviewStatus={applicant.finalInterviewStatus} finalStatus={applicant.finalStatus} finalComments={finalComments} finalBookingLink={applicant.finalBookingLink} voiceBookingLink={externalUrl(applicant.voiceBookingLink)} voiceRetryEligible={!/(?:^|[^a-z])failed(?:[^a-z]|$)|blocked|system[_ -]?failure|provider[_ -]?failure|technical[_ -]?failure|dispatch[_ -]?fail/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus}`) && /no[_ -]?answer|no[_ -]?show|incomplete|not connected|voicemail|busy|declined|cancell?ed/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus} ${applicant.voiceBookingStatus}`)} canReview={canDecideApplicant(user)} interviewMode={interviewMode} />
+      <ApplicantDecisionPanel applicationId={applicant.applicationId} currentStage={applicant.currentStage} resumeDecision={applicant.resumeDecision} resumeComments={resumeComments} voiceDecision={applicant.voiceDecision} voiceComments={voiceComments} voiceStatus={applicant.voiceCallStatus || applicant.voiceStatus} finalInterviewStatus={applicant.finalInterviewStatus} finalStatus={applicant.finalStatus} finalComments={finalComments} finalBookingLink={applicant.finalBookingLink} voiceBookingLink={interviewMode === "voice" ? externalUrl(applicant.voiceBookingLink) : ""} voiceRetryEligible={!/(?:^|[^a-z])failed(?:[^a-z]|$)|blocked|system[_ -]?failure|provider[_ -]?failure|technical[_ -]?failure|dispatch[_ -]?fail/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus}`) && /no[_ -]?answer|no[_ -]?show|incomplete|not connected|voicemail|busy|declined|cancell?ed/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus} ${applicant.voiceBookingStatus}`)} canReview={canDecideApplicant(user)} interviewMode={interviewMode} />
       <section className="card applicant-detail-card"><DetailCardHeader icon="document" title="Resume / CV" description="The candidate's submitted resume document." /><ResumeResource value={applicant.resumeText} fileId={applicant.resumeFileId} fileName={applicant.resumeFileName} expiresAt={applicant.resumeFileExpiresAt} /></section>
       <section className="card applicant-detail-card"><DetailCardHeader icon="microphone" title="Interview Questions" description="Questions prepared for the candidate's interview." /><InterviewQuestions value={applicant.interviewQuestions} /></section>
       <CandidateHistoryTimeline history={history} interviewMode={liveReview ? "avatar" : applicant.interviewMode} />
     </div><aside className="applicant-detail-side">
       {applicant.voiceDecision.toLowerCase() === "approve" && <FinalInterviewCard applicant={applicant} role={role} />}
-      <section className="card applicant-detail-card"><DetailCardHeader icon="clock" title="Status Tracking" description="Current progress through the candidate workflow." /><div className="applicant-timeline"><div><strong>1. AI CV Analysis</strong><span>{applicantDecisionLabel(applicant.resumeStatus) || "Not Started"}</span></div><div><strong>2. {applicant.interviewMode === "pending" ? "Interview Format" : applicant.interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"}</strong><span>{liveReview ? INTERVIEW_STATE_LABELS[liveReview.interviewState] : applicantStageLabel(applicant.currentStage, applicant.interviewMode) || "Not Started"}</span></div><div><strong>3. {applicant.interviewMode === "pending" ? "Interview Review" : applicant.interviewMode === "avatar" ? "Live Avatar Review" : "Voice Interview Review"}</strong><span>{applicant.interviewMode === "pending" ? "Not Started" : applicantDecisionLabel(applicant.voiceDecision) || "Pending"}</span></div><div><strong>4. Face-to-Face Interview</strong><span>{applicantStageLabel(applicant.finalInterviewStatus) || "Not Started"}</span></div><div><strong>Last Updated</strong><span>{dateValue(applicant.lastUpdated)}</span></div></div></section>
+      <section className="card applicant-detail-card"><DetailCardHeader icon="clock" title="Status Tracking" description="Current progress through the candidate workflow." /><div className="applicant-timeline"><div><strong>1. AI CV Analysis</strong><span>{applicantDecisionLabel(applicant.resumeStatus) || "Not Started"}</span></div><div><strong>2. {interviewMode === "pending" ? "Interview Format" : interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"}</strong><span>{liveReview ? INTERVIEW_STATE_LABELS[liveReview.interviewState] : applicantStageLabel(applicant.currentStage, interviewMode) || "Not Started"}</span></div><div><strong>3. {interviewMode === "pending" ? "Interview Review" : interviewMode === "avatar" ? "Avatar Interview Review" : "Voice Interview Review"}</strong><span>{interviewMode === "pending" ? "Not Started" : applicantDecisionLabel(applicant.voiceDecision) || "Pending"}</span></div><div><strong>4. Face-to-Face Interview</strong><span>{applicantStageLabel(applicant.finalInterviewStatus) || "Not Started"}</span></div><div><strong>Last Updated</strong><span>{dateValue(applicant.lastUpdated)}</span></div></div></section>
     </aside></div>
   </main></AppShell>;
 }

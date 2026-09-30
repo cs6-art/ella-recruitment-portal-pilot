@@ -10,7 +10,7 @@ import { publicErrorMessage } from "@/lib/safe-error";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
-  if (!isLiveAvatarConfigured()) return NextResponse.json({ success: false, error: "The live avatar interview is not configured yet." }, { status: 503 });
+  if (!isLiveAvatarConfigured()) return NextResponse.json({ success: false, error: "The Live Avatar interview is not configured yet." }, { status: 503 });
   try {
     const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
     if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
