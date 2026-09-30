@@ -69,7 +69,7 @@ const NOTIFICATION_STALE_ERROR = `Not sent: queued more than ${NOTIFICATION_MAX_
  * this list, regardless of what accumulates in the queue. Role-side
  * notifications are separately restricted to job_posted only, below.
  */
-const ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES = ["voice_booking_invitation", "voice_booking_confirmation", "final_booking_invitation"];
+export const ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES = ["voice_booking_invitation", "voice_booking_confirmation", "final_booking_invitation"];
 // A worker outage must not turn a yesterday's appointment into an unexpected
 // call when the queue comes back. Keep this configurable for environments
 // with a different polling interval, but bound it to a safe operational range.

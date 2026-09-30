@@ -1,7 +1,8 @@
 import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
-import { applicationStatusHistory, applications, bulkScreeningQueueItems, interviewSlots, oauthConnections, roles } from "@/db/schema-recruitment";
+import { applicationStatusHistory, applications, bulkScreeningQueueItems, interviewSlots, oauthConnections, roleStatusHistory, roles } from "@/db/schema-recruitment";
+import { ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES } from "@/lib/internal-recruitment-queries";
 import { CREDIT_COST, getCreditBalance } from "@/lib/ella-credits";
 
 export type AttentionAlert = {
@@ -124,22 +125,34 @@ export async function collectAttentionAlerts(organizationId: string, options: { 
         actionLabel: "Review resume screening",
       });
     },
-    // 6. Candidate or HR emails that failed, or never left the queue.
+    // 6. Emails the portal actually sends (job posted, voice and face-to-face interview
+    // invitations and confirmations) that failed or never left the queue. Other event
+    // types are deliberately never sent, so they are not counted.
     async () => {
+      const sendable = inArray(applicationStatusHistory.notificationEventType, ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES);
       const failed = await countOf(db.select(n).from(applicationStatusHistory).where(and(
-        eq(applicationStatusHistory.organizationId, org),
+        eq(applicationStatusHistory.organizationId, org), sendable,
         eq(applicationStatusHistory.notificationStatus, "failed"),
         gte(applicationStatusHistory.changedAt, weekAgo),
       )));
       const stuck = await countOf(db.select(n).from(applicationStatusHistory).where(and(
-        eq(applicationStatusHistory.organizationId, org),
+        eq(applicationStatusHistory.organizationId, org), sendable,
         eq(applicationStatusHistory.notificationStatus, "pending"),
         lt(applicationStatusHistory.changedAt, dayAgo),
+        gte(applicationStatusHistory.changedAt, weekAgo),
       )));
-      if (failed + stuck > 0) alerts.push({
+      const roleUndelivered = await countOf(db.select(n).from(roleStatusHistory).where(and(
+        eq(roleStatusHistory.organizationId, org),
+        eq(roleStatusHistory.newStatus, "job_posted"),
+        inArray(roleStatusHistory.notificationStatus, ["failed", "pending"]),
+        gte(roleStatusHistory.changedAt, weekAgo),
+        lt(roleStatusHistory.changedAt, dayAgo),
+      )));
+      const total = failed + stuck + roleUndelivered;
+      if (total > 0) alerts.push({
         id: "emails-failed",
-        title: `${plural(failed + stuck, "email has", "emails have")} not been delivered.`,
-        description: "A candidate may not have received an invitation or update.",
+        title: `${plural(total, "email has", "emails have")} not been delivered.`,
+        description: "An invitation, confirmation or job-posted email did not go out. Check the email connection, then resend from the applicant record.",
         savedMessage: "The applicant records are saved.",
         href: "/applicants",
         actionLabel: "Review applicants",

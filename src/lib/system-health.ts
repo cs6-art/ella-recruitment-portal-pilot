@@ -2,6 +2,7 @@ import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES } from "@/lib/internal-recruitment-queries";
 import { applicationStatusHistory, bulkScreeningQueueItems, interviewSlots, liveInterviewSessions, voiceCallAttempts } from "@/db/schema-recruitment";
 
 export type HealthIssue = { key: string; label: string; count: number; hint: string };
@@ -23,8 +24,8 @@ export async function collectHealthIssues(now = new Date()): Promise<HealthIssue
   const n = sql<number>`count(*)::int`;
 
   const [failedEmails, staleEmails, failedRecordings, stuckInterviews, failedCalendar, failedCalls, failedScreenings, failedAnalysis] = await Promise.all([
-    countOf(db.select({ n }).from(applicationStatusHistory).where(and(eq(applicationStatusHistory.notificationStatus, "failed"), gte(applicationStatusHistory.changedAt, weekAgo)))),
-    countOf(db.select({ n }).from(applicationStatusHistory).where(and(eq(applicationStatusHistory.notificationStatus, "pending"), lt(applicationStatusHistory.changedAt, dayAgo)))),
+    countOf(db.select({ n }).from(applicationStatusHistory).where(and(inArray(applicationStatusHistory.notificationEventType, ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES), eq(applicationStatusHistory.notificationStatus, "failed"), gte(applicationStatusHistory.changedAt, weekAgo)))),
+    countOf(db.select({ n }).from(applicationStatusHistory).where(and(inArray(applicationStatusHistory.notificationEventType, ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES), eq(applicationStatusHistory.notificationStatus, "pending"), lt(applicationStatusHistory.changedAt, dayAgo), gte(applicationStatusHistory.changedAt, weekAgo)))),
     countOf(db.select({ n }).from(liveInterviewSessions).where(and(eq(liveInterviewSessions.recordingStatus, "failed"), gte(liveInterviewSessions.updatedAt, weekAgo)))),
     countOf(db.select({ n }).from(liveInterviewSessions).where(and(inArray(liveInterviewSessions.status, STUCK_STATUSES), lt(liveInterviewSessions.updatedAt, twoHoursAgo)))),
     countOf(db.select({ n }).from(interviewSlots).where(and(eq(interviewSlots.calendarEventStatus, "failed"), gte(interviewSlots.updatedAt, weekAgo)))),
