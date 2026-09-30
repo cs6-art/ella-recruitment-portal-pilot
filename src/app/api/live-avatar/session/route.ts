@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
         await stopProviderSession(session.sessionId).catch((stopError) => console.error("[API Live Avatar Candidate Session] Failed to stop untracked provider session:", stopError));
         await releaseAvatarInterviewStart(avatarToken).catch((releaseError) => console.error("[API Live Avatar Candidate Session] Failed to release invitation after tracking failure:", releaseError));
         await releaseHold();
-        return NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable because the interview could not be prepared for recording. Please try again.", code: "recording_not_ready" }, { status: 503 });
+        return NextResponse.json({ success: false, error: "Live Avatar interviews are temporarily unavailable because the interview could not be prepared for recording. Please try again.", code: "interview_start_tracking_failed" }, { status: 503 });
       }
       return NextResponse.json({ success: true, ...session, recordingEnabled }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
