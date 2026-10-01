@@ -38,6 +38,8 @@ type Organization = {
   active: boolean;
   allowedDomains: string[];
   allowedEmails: string[];
+  maxMembers: number | null;
+  memberCount?: number;
   readiness: {
     ownerEmail: string;
     ownerStatus: "Registered" | "Awaiting registration";
@@ -65,6 +67,8 @@ type OrganizationForm = {
   // One entry per line in the form; split into arrays when saving.
   allowedDomains: string;
   allowedEmails: string;
+  // Blank means no limit on the number of people.
+  maxMembers: string;
 };
 
 function splitLines(value: string) {
@@ -86,7 +90,7 @@ const emptyForm: AccountForm = {
   active: true,
 };
 
-const emptyOrganizationForm: OrganizationForm = { name: "", slug: "", active: true, allowedDomains: "", allowedEmails: "" };
+const emptyOrganizationForm: OrganizationForm = { name: "", slug: "", active: true, allowedDomains: "", allowedEmails: "", maxMembers: "" };
 const DEFAULT_ORG_SLUG = "mclinkgroup";
 
 const accountFieldLabels: Record<string, string> = {
@@ -137,6 +141,8 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
   const [inviteError, setInviteError] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
   const [inviteAvailable, setInviteAvailable] = useState(false);
+  const [inviteLimit, setInviteLimit] = useState<number | null>(null);
+  const [inviteUsed, setInviteUsed] = useState(0);
   const [form, setForm] = useState<AccountForm>(emptyForm);
   const [originalEmail, setOriginalEmail] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -182,6 +188,8 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       const data = await response.json();
       setInvites(data.invites || []);
       setInviteDomains(data.domains || []);
+      setInviteLimit(typeof data.limit === "number" ? data.limit : null);
+      setInviteUsed(typeof data.used === "number" ? data.used : 0);
       setInviteAvailable(true);
     } catch {
       setInviteAvailable(false);
@@ -274,7 +282,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
   }
 
   function openEditOrganizationForm(organization: Organization) {
-    setOrganizationForm({ originalSlug: organization.slug, name: organization.name, slug: organization.slug, active: organization.active, allowedDomains: organization.allowedDomains.join("\n"), allowedEmails: organization.allowedEmails.join("\n") });
+    setOrganizationForm({ originalSlug: organization.slug, name: organization.name, slug: organization.slug, active: organization.active, allowedDomains: organization.allowedDomains.join("\n"), allowedEmails: organization.allowedEmails.join("\n"), maxMembers: organization.maxMembers == null ? "" : String(organization.maxMembers) });
     setOrganizationError("");
     setOrganizationMessage("");
     setShowOrganizationForm(true);
@@ -396,6 +404,11 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       setOrganizationError("Add an allowed email domain or at least one email address so the first person can register and become the owner.");
       return;
     }
+    const limitText = organizationForm.maxMembers.trim();
+    if (limitText && !/^[1-9][0-9]{0,5}$/.test(limitText)) {
+      setOrganizationError("Enter the member limit as a whole number of at least 1, or leave it blank for no limit.");
+      return;
+    }
     setOrganizationSaving(true);
     setOrganizationError("");
     setOrganizationMessage("");
@@ -404,7 +417,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
         method: organizationForm.originalSlug ? "PATCH" : "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, slug, active: organizationForm.active, allowedDomains: splitLines(organizationForm.allowedDomains), allowedEmails: splitLines(organizationForm.allowedEmails) }),
+        body: JSON.stringify({ name, slug, active: organizationForm.active, allowedDomains: splitLines(organizationForm.allowedDomains), allowedEmails: splitLines(organizationForm.allowedEmails), maxMembers: limitText ? Number(limitText) : null }),
       });
       const data = await response.json();
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to save the organization.");
@@ -496,6 +509,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
           <div className="field"><label htmlFor="organization-domains">Allowed email domains </label><textarea id="organization-domains" rows={2} value={organizationForm.allowedDomains} onChange={(event) => setOrganizationForm((current) => ({ ...current, allowedDomains: event.target.value }))} placeholder="company.com" /><small className="field-hint">Anyone registering with an email at these domains gets HR recruitment access. Add a domain, individual emails, or both.</small></div>
           <div className="organization-domain-warning" role="note"><strong>Owner is automatic:</strong> the first person to register with an allowed email and verify it becomes the organization owner. Domain access gives every person using that domain HR access.</div>
           <div className="field"><label htmlFor="organization-emails">Allowed individual emails</label><textarea id="organization-emails" rows={2} value={organizationForm.allowedEmails} onChange={(event) => setOrganizationForm((current) => ({ ...current, allowedEmails: event.target.value }))} placeholder="name@gmail.com" /><small className="field-hint">One address per line. Inviting a person individually is safer than allowing an entire email domain.</small></div>
+          <div className="field"><label htmlFor="organization-max-members">Member limit</label><input id="organization-max-members" inputMode="numeric" value={organizationForm.maxMembers} onChange={(event) => setOrganizationForm((current) => ({ ...current, maxMembers: event.target.value }))} placeholder="No limit" /><p className="field-hint">The most active people this organization can have, including its owner and pending invitations. Organizations that sign up on their own start at 5. Leave blank for no limit.</p></div>
           {organizationForm.originalSlug && <label className="user-account-active"><input type="checkbox" checked={organizationForm.active} onChange={(event) => setOrganizationForm((current) => ({ ...current, active: event.target.checked }))} disabled={organizationForm.originalSlug === DEFAULT_ORG_SLUG} /> Organization is active</label>}
           <div className="user-account-form-actions"><button type="button" className="btn btn-secondary" onClick={closeOrganizationForm}>Cancel</button><button type="submit" className="btn btn-primary" disabled={organizationSaving}>{organizationSaving ? "Creating…" : organizationForm.originalSlug ? "Save organization" : "Create organization"}</button></div>
         </form>}
@@ -505,7 +519,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
           const ready = readiness?.overallStatus === "Ready to recruit";
           return <Fragment key={organization.slug}>
             <tr key={organization.slug}>
-              <td><strong>{organization.name}</strong><span>{organization.slug}{!organization.active ? " · Inactive" : ""}</span></td>
+              <td><strong>{organization.name}</strong><span>{organization.slug}{!organization.active ? " · Inactive" : ""}</span><span>{organization.memberCount ?? 0} {organization.maxMembers == null ? "people · no limit" : `of ${organization.maxMembers} people`}</span></td>
               <td><span className={`organization-readiness-badge ${readiness?.ownerStatus === "Registered" ? "is-ready" : "is-pending"}`}>{readiness?.ownerStatus || "Checking…"}</span><span>{readiness?.ownerEmail || "First registrant becomes owner"}</span></td>
               <td><span className={`organization-readiness-badge ${ready ? "is-ready" : readiness?.overallStatus === "Partially configured" ? "is-pending" : "is-missing"}`}>{readiness?.overallStatus || "Unavailable"}</span></td>
               <td><div className="organization-readiness-actions"><button type="button" className="btn btn-secondary btn-small" aria-expanded={expanded} onClick={() => setExpandedOrganizationSlug(expanded ? "" : organization.slug)}>{expanded ? "Close setup" : ready ? "View setup" : "Continue setup"}</button><button type="button" className="btn btn-secondary btn-small" onClick={() => openEditOrganizationForm(organization)}>Edit</button></div></td>
@@ -528,7 +542,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       </section>}
 
       {inviteAvailable && !canManageOrganizations && <section className="card organization-admin-card" aria-labelledby="team-invite-title">
-        <div className="card-header"><div><h2 id="team-invite-title">Invite a teammate</h2><p>Enter their email address. When they register with that address and verify it, they join your organization automatically.</p></div></div>
+        <div className="card-header"><div><h2 id="team-invite-title">Invite a teammate</h2><p>Enter their email address. When they register with that address and verify it, they join your organization automatically.{inviteLimit !== null && <> Your organization has {inviteUsed} of {inviteLimit} people. Contact McLink support to raise the limit.</>}</p></div></div>
         {inviteError && <ActionFeedback kind="error">{inviteError}</ActionFeedback>}
         {inviteMessage && <ActionFeedback kind="success">{inviteMessage}</ActionFeedback>}
         <form className="user-account-form" noValidate onSubmit={(event) => void sendInvite(event)}>

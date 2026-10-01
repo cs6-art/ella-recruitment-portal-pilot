@@ -22,6 +22,9 @@ export async function POST(request: Request) {
     if (result.status === "personal_email") {
       return NextResponse.json({ error: "Use your work email address. Personal email addresses such as Gmail or Outlook cannot be used to register an organization." }, { status: 403 });
     }
+    if (result.status === "organization_full") {
+      return NextResponse.json({ error: "This organization has reached its limit on the number of people for now. Ask your organization's owner or contact McLink support to raise it." }, { status: 403 });
+    }
     if (result.status === "not_eligible") {
       return NextResponse.json({ error: "This email address cannot register yet. Ask your organization's owner to invite you, or contact McLink support." }, { status: 403 });
     }

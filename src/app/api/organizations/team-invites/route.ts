@@ -1,10 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb } from "@/db/client";
-import { organizations } from "@/db/schema";
+import { organizations, userCredentials } from "@/db/schema";
+import { isMemberLimitReached, memberSeatUsage } from "@/lib/organization-signup";
 import { users } from "@/db/schema-recruitment";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
@@ -36,7 +37,7 @@ async function requireOwner() {
 }
 
 async function loadOrganization(organizationId: string) {
-  const [organization] = await getDb().select({ allowedEmails: organizations.allowedEmails, allowedDomains: organizations.allowedDomains }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+  const [organization] = await getDb().select({ allowedEmails: organizations.allowedEmails, allowedDomains: organizations.allowedDomains, maxMembers: organizations.maxMembers }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
   return organization;
 }
 
@@ -46,10 +47,15 @@ export async function GET() {
   try {
     const organization = await loadOrganization(access.user.organizationId);
     if (!organization) return fail("Organization not found.", 404);
-    const registered = new Set((await getDb().select({ email: users.email }).from(users).where(eq(users.organizationId, access.user.organizationId))).map((row) => row.email.trim().toLowerCase()));
+    const people = await getDb().select({ email: users.email, active: users.active }).from(users).where(eq(users.organizationId, access.user.organizationId));
+    const pending = await getDb().select({ email: userCredentials.email }).from(userCredentials).where(and(eq(userCredentials.organizationId, access.user.organizationId), sql`${userCredentials.emailVerifiedAt} IS NULL`));
+    const registered = new Set(people.map((row) => row.email.trim().toLowerCase()));
+    const used = memberSeatUsage({ activeEmails: people.filter((row) => row.active).map((row) => row.email), invitedEmails: organization.allowedEmails, pendingEmails: pending.map((row) => row.email) });
     return NextResponse.json({
       success: true,
       domains: organization.allowedDomains,
+      limit: organization.maxMembers,
+      used,
       invites: organization.allowedEmails.map((email) => ({ email, registered: registered.has(email) })),
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
@@ -69,6 +75,13 @@ export async function POST(request: Request) {
     const organization = await loadOrganization(organizationId);
     if (!organization) return fail("Organization not found.", 404);
     if (organization.allowedEmails.includes(email)) return fail("That email address is already invited.", 409);
+    if (organization.maxMembers != null) {
+      // Seats in use are the people already in the organization plus invitations still waiting.
+      const members = await getDb().select({ email: users.email }).from(users).where(and(eq(users.organizationId, organizationId), eq(users.active, true)));
+      const pending = await getDb().select({ email: userCredentials.email }).from(userCredentials).where(and(eq(userCredentials.organizationId, organizationId), sql`${userCredentials.emailVerifiedAt} IS NULL`));
+      const used = memberSeatUsage({ activeEmails: members.map((row) => row.email), invitedEmails: organization.allowedEmails, pendingEmails: pending.map((row) => row.email) });
+      if (isMemberLimitReached(organization.maxMembers, used)) return fail(`Your organization is limited to ${organization.maxMembers} people. Contact McLink support to raise the limit.`, 409);
+    }
     if (organization.allowedEmails.length >= MAX_INVITES) return fail(`You can invite up to ${MAX_INVITES} addresses.`, 400);
     // An address may register into only one organization.
     const others = await getDb().select({ id: organizations.id, name: organizations.name, allowedEmails: organizations.allowedEmails, allowedDomains: organizations.allowedDomains }).from(organizations);

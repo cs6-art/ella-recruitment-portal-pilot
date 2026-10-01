@@ -14,6 +14,8 @@ export const organizations = pgTable("organizations", {
   allowedEmails: text("allowed_emails").array().notNull().default(sql`'{}'::text[]`),
   /** Null for organizations that existed before the guided onboarding flow. */
   onboardingStartedAt: timestamp("onboarding_started_at", { withTimezone: true }),
+  /** Most active people the organization may have; null means no limit. Raised or removed by a McLink administrator. */
+  maxMembers: integer("max_members"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

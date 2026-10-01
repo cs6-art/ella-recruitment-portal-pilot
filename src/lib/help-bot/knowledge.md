@@ -63,7 +63,11 @@ recruitment records.
 has registered a company's email domain yet, the first person to register with it
 and confirm their email creates the organization for that domain and becomes its
 owner. After that, anyone with an email at the same domain can register and join
-that organization automatically. Personal email addresses such as Gmail, Yahoo, or
+that organization automatically, up to the organization's member limit. An
+organization that signs up on its own starts with a limit of 5 people, counting
+the owner and pending invitations. When the limit is reached, new people cannot
+join or be invited until a McLink administrator raises or removes the limit.
+Deactivating someone frees a place. Personal email addresses such as Gmail, Yahoo, or
 Outlook cannot be used to create an organization. If a company's domain already
 belongs to an organization, new people join that organization instead of creating
 another one. McLink administrators can still add organizations and control who may

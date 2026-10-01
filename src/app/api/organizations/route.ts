@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb } from "@/db/client";
 import { organizations } from "@/db/schema";
-import { portalSettings } from "@/db/schema-recruitment";
+import { portalSettings, users } from "@/db/schema-recruitment";
 import { isPlatformAdmin } from "@/lib/access-control";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { getOrganizationReadiness } from "@/lib/organization-readiness";
@@ -23,6 +23,8 @@ const organizationSchema = z.object({
   // every person who registers with an address at that domain.
   allowedDomains: z.array(z.string().trim().toLowerCase().regex(/^(?:@)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/, "Enter domains like mcasia.com.")).max(20).default([]),
   allowedEmails: z.array(z.string().trim().toLowerCase().email("Enter valid email addresses.")).max(100).default([]),
+  // Most active people the organization may have. null removes the limit; leaving it out keeps the current one.
+  maxMembers: z.number().int("Enter a whole number of people.").min(1, "The limit must be at least 1 person.").max(100000).nullable().optional(),
 });
 
 function cleanRules(input: z.infer<typeof organizationSchema>) {
@@ -80,6 +82,8 @@ function publicOrganization(row: {
   active: boolean;
   allowedDomains: string[];
   allowedEmails: string[];
+  maxMembers?: number | null;
+  memberCount?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }) {
@@ -92,6 +96,8 @@ function publicOrganization(row: {
     active: row.active,
     allowedDomains: row.allowedDomains,
     allowedEmails: row.allowedEmails,
+    maxMembers: row.maxMembers ?? null,
+    ...(row.memberCount === undefined ? {} : { memberCount: row.memberCount }),
     ...(row.createdAt ? { createdAt: row.createdAt.toISOString() } : {}),
     ...(row.updatedAt ? { updatedAt: row.updatedAt.toISOString() } : {}),
   };
@@ -109,11 +115,14 @@ export async function GET() {
       active: organizations.active,
       allowedDomains: organizations.allowedDomains,
       allowedEmails: organizations.allowedEmails,
+      maxMembers: organizations.maxMembers,
       createdAt: organizations.createdAt,
       updatedAt: organizations.updatedAt,
     }).from(organizations).orderBy(organizations.name);
+    const counts = await getDb().select({ organizationId: users.organizationId, total: sql<number>`count(*)::int` }).from(users).where(eq(users.active, true)).groupBy(users.organizationId);
+    const memberCounts = new Map(counts.map((row) => [row.organizationId, Number(row.total)]));
     const items = await Promise.all(rows.map(async (row) => ({
-      ...publicOrganization(row),
+      ...publicOrganization({ ...row, memberCount: memberCounts.get(row.id) ?? 0 }),
       readiness: await getOrganizationReadiness(row.id),
     })));
     return NextResponse.json({ success: true, organizations: items }, { headers: { "Cache-Control": "no-store" } });
@@ -147,8 +156,9 @@ export async function POST(request: Request) {
         databaseStatus: "shared",
         active: true,
         onboardingStartedAt: now,
+        maxMembers: input.maxMembers ?? null,
         ...rules,
-      }).returning({ id: organizations.id, name: organizations.name, slug: organizations.slug, databaseStatus: organizations.databaseStatus, active: organizations.active, allowedDomains: organizations.allowedDomains, allowedEmails: organizations.allowedEmails });
+      }).returning({ id: organizations.id, name: organizations.name, slug: organizations.slug, databaseStatus: organizations.databaseStatus, active: organizations.active, allowedDomains: organizations.allowedDomains, allowedEmails: organizations.allowedEmails, maxMembers: organizations.maxMembers });
       await tx.insert(portalSettings).values([
         { organizationId: id, key: "Organization_Display_Name", value: input.name, category: "Branding", updatedBy: access.user.email },
         { organizationId: id, key: "Organization_Display_Subtitle", value: "Recruitment Portal", category: "Branding", updatedBy: access.user.email },
@@ -183,7 +193,7 @@ export async function PATCH(request: Request) {
     const rules = cleanRules(input);
     const conflict = await ruleConflict(rules, existing.id);
     if (conflict) return errorResponse(conflict, 409);
-    const [organization] = await getDb().update(organizations).set({ name: input.name, slug: input.slug, databaseKey: existing.databaseStatus === "pending" ? input.slug : existing.databaseKey, active: input.active, ...rules, updatedAt: new Date() }).where(and(eq(organizations.id, existing.id), eq(organizations.databaseStatus, existing.databaseStatus))).returning({ id: organizations.id, name: organizations.name, slug: organizations.slug, databaseStatus: organizations.databaseStatus, active: organizations.active, allowedDomains: organizations.allowedDomains, allowedEmails: organizations.allowedEmails });
+    const [organization] = await getDb().update(organizations).set({ name: input.name, slug: input.slug, databaseKey: existing.databaseStatus === "pending" ? input.slug : existing.databaseKey, active: input.active, ...rules, ...(input.maxMembers === undefined ? {} : { maxMembers: input.maxMembers }), updatedAt: new Date() }).where(and(eq(organizations.id, existing.id), eq(organizations.databaseStatus, existing.databaseStatus))).returning({ id: organizations.id, name: organizations.name, slug: organizations.slug, databaseStatus: organizations.databaseStatus, active: organizations.active, allowedDomains: organizations.allowedDomains, allowedEmails: organizations.allowedEmails, maxMembers: organizations.maxMembers });
     return NextResponse.json({ success: true, organization: publicOrganization(organization), message: "Organization updated." }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof z.ZodError) return errorResponse(error.issues[0]?.message || "Enter valid organization details.", 400);

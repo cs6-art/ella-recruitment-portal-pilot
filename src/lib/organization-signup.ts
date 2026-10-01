@@ -59,3 +59,22 @@ export function organizationSlugFromDomain(domain: string) {
 export function isReservedOrganizationDomain(domain: string) {
   return RESERVED_ORGANIZATION_SLUGS.has(organizationSlugFromDomain(domain));
 }
+
+/** People a self-service organization may have until a McLink administrator changes it. */
+export const SELF_SERVICE_MEMBER_LIMIT = 5;
+
+/** True when one more person would exceed the limit. A null or missing limit means no limit. */
+export function isMemberLimitReached(limit: number | null | undefined, used: number) {
+  return typeof limit === "number" && limit >= 1 && used >= limit;
+}
+
+/** Count seats used by active people and waiting invitations, without double-counting the person being checked. */
+export function memberSeatUsage(input: { activeEmails: string[]; invitedEmails: string[]; pendingEmails: string[]; currentEmail?: string }) {
+  const current = input.currentEmail?.trim().toLowerCase() || "";
+  const active = new Set(input.activeEmails.map((email) => email.trim().toLowerCase()).filter(Boolean));
+  active.delete(current);
+  const waiting = new Set([...input.invitedEmails, ...input.pendingEmails].map((email) => email.trim().toLowerCase()).filter(Boolean));
+  for (const email of active) waiting.delete(email);
+  waiting.delete(current);
+  return active.size + waiting.size;
+}

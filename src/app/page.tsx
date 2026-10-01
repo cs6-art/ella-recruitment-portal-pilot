@@ -47,6 +47,7 @@ export default async function Home({ searchParams }: HomePageProps) {
     verified: "Your email is verified. You can now log in.",
     expired: "That verification link has expired. Log in and choose “Resend verification email”.",
     invalid: "That verification link is not valid or was already used.",
+    organization_full: "Your organization has reached its limit on the number of people for now. Ask your organization's owner or contact McLink support to raise it, then open the link in your email again.",
     error: "We could not verify your email. Please try again.",
   } as Record<string, string>)[verifyValue || ""];
 

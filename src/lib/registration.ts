@@ -3,9 +3,9 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { organizations, userCredentials } from "@/db/schema";
-import { portalSettings } from "@/db/schema-recruitment";
+import { portalSettings, users } from "@/db/schema-recruitment";
 import { HR_FULL_ACCESS } from "@/lib/access-roles";
-import { emailDomain, isDomainClaimed, isPersonalEmailDomain, isReservedOrganizationDomain, organizationNameFromDomain, organizationSlugFromDomain, RESERVED_ORGANIZATION_SLUGS } from "@/lib/organization-signup";
+import { emailDomain, isDomainClaimed, isPersonalEmailDomain, isMemberLimitReached, isReservedOrganizationDomain, memberSeatUsage, organizationNameFromDomain, organizationSlugFromDomain, RESERVED_ORGANIZATION_SLUGS, SELF_SERVICE_MEMBER_LIMIT } from "@/lib/organization-signup";
 import { findDirectoryUser, type DirectoryUser } from "@/lib/google-sheets";
 import { DEFAULT_ORGANIZATION_ID, syncOrganizationMembership } from "@/lib/organization-accounts";
 import { claimOrganizationOwnershipIfNone, findPostgresDirectoryUser, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
@@ -141,6 +141,22 @@ async function resolveNewOrganizationDomain(email: string): Promise<"new" | "per
   return isDomainClaimed(domain, rules) ? "not_eligible" : "new";
 }
 
+/** True when this organization has a member limit and a new person would exceed it. People who already belong are never turned away. */
+async function organizationIsFull(organizationId: string, email: string): Promise<boolean> {
+  const db = getDb();
+  const [organization] = await db.select({ maxMembers: organizations.maxMembers, allowedEmails: organizations.allowedEmails }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+  if (!organization || organization.maxMembers == null) return false;
+  const members = await db.select({ email: users.email }).from(users).where(and(eq(users.organizationId, organizationId), eq(users.active, true)));
+  const pending = await db.select({ email: userCredentials.email }).from(userCredentials).where(and(eq(userCredentials.organizationId, organizationId), sql`${userCredentials.emailVerifiedAt} IS NULL`));
+  const used = memberSeatUsage({
+    activeEmails: members.map((member) => member.email),
+    invitedEmails: organization.allowedEmails,
+    pendingEmails: pending.map((row) => row.email),
+    currentEmail: email,
+  });
+  return isMemberLimitReached(organization.maxMembers, used);
+}
+
 /** Create the organization for a verified company-domain registrant; anyone with that domain may join it. */
 async function createOrganizationForDomain(domain: string, createdBy: string): Promise<string> {
   const db = getDb();
@@ -152,7 +168,7 @@ async function createOrganizationForDomain(domain: string, createdBy: string): P
     const id = crypto.randomUUID();
     try {
       await db.transaction(async (tx) => {
-        await tx.insert(organizations).values({ id, name, slug, databaseKey: slug, databaseStatus: "shared", active: true, onboardingStartedAt: new Date(), allowedDomains: [domain], allowedEmails: [] });
+        await tx.insert(organizations).values({ id, name, slug, databaseKey: slug, databaseStatus: "shared", active: true, onboardingStartedAt: new Date(), maxMembers: SELF_SERVICE_MEMBER_LIMIT, allowedDomains: [domain], allowedEmails: [] });
         await tx.insert(portalSettings).values([
           { organizationId: id, key: "Organization_Display_Name", value: name, category: "Branding", updatedBy: createdBy },
           { organizationId: id, key: "Organization_Display_Subtitle", value: "Recruitment Portal", category: "Branding", updatedBy: createdBy },
@@ -179,6 +195,7 @@ export type RegisterResult =
   | { status: "created"; token: string; organizationId: string | null }
   | { status: "not_eligible" }
   | { status: "personal_email" }
+  | { status: "organization_full" }
   | { status: "verification_pending" }
   | { status: "already_registered" };
 
@@ -193,8 +210,11 @@ export async function registerUser(input: { email: string; fullName: string; pas
     // No organization matches: a company domain nobody owns starts a new one
     // (created once the email is verified); anything else is turned away.
     const outcome = await resolveNewOrganizationDomain(input.email);
-    if (outcome !== "new") return { status: outcome };
+    if (outcome === "personal") return { status: "personal_email" };
+    if (outcome === "not_eligible") return { status: "not_eligible" };
     organizationId = null;
+  } else if (await organizationIsFull(organizationId, input.email)) {
+    return { status: "organization_full" };
   }
 
   const db = getDb();
@@ -228,7 +248,7 @@ export async function reissueVerification(email: string): Promise<{ token: strin
   return row ? { token, fullName: row.fullName } : null;
 }
 
-export type VerifyResult = { status: "verified" | "invalid" | "expired" };
+export type VerifyResult = { status: "verified" | "invalid" | "expired" | "organization_full" };
 
 /**
  * Consume a verification token, mark the email verified, and provision the
@@ -259,6 +279,10 @@ export async function verifyRegistration(token: string): Promise<VerifyResult> {
       organizationId = await createOrganizationForDomain(emailDomain(row.email), row.email);
     }
   }
+
+  // The limit is checked again here because colleagues may have joined since this person registered.
+  // The link stays valid, so they can confirm once McLink raises the limit.
+  if (await organizationIsFull(organizationId, row.email)) return { status: "organization_full" };
 
   await db
     .update(userCredentials)
