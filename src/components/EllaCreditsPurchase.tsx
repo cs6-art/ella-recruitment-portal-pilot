@@ -216,7 +216,7 @@ export default function EllaCreditsPurchase() {
       {configured && packs.length > 0 && <div className={styles.packGrid}>
         {packs.map((pack) => (
           <article className={styles.pack} key={pack.id}>
-            <h3>{pack.label}</h3>
+            <h3>{pack.label.split(" — ")[0]}</h3>
             <p className={styles.packCredits}>{nf.format(pack.credits)} credits</p>
             <p className={styles.packPrice}>{money.format(pack.amountCents / 100)}</p>
             <button type="button" className="btn btn-primary" disabled={buying !== ""} onClick={() => void startPayment(pack.id)}>
@@ -224,25 +224,32 @@ export default function EllaCreditsPurchase() {
             </button>
           </article>
         ))}
-        <article className={styles.pack}>
-          <h3>Custom amount</h3>
-          <label className={styles.packCredits} htmlFor="custom-credits">Credits ({nf.format(custom.min)}–{nf.format(custom.max)})</label>
-          <input
-            id="custom-credits"
-            type="number"
-            inputMode="numeric"
-            min={custom.min}
-            max={custom.max}
-            step={1}
-            value={customCredits}
-            onChange={(event) => setCustomCredits(event.target.value)}
-            placeholder="e.g. 25"
-          />
-          <p className={styles.packPrice}>{customValid ? money.format((customAmount * custom.priceCents) / 100) : money.format(custom.priceCents / 100) + " per credit"}</p>
+      </div>}
+      {configured && packs.length > 0 && <div className={styles.customRow}>
+        <div className={styles.customText}>
+          <h3>Need a different amount?</h3>
+          <p>Buy exactly the credits you need, from {nf.format(custom.min)} up to {nf.format(custom.max)}, at {money.format(custom.priceCents / 100)} per credit.</p>
+        </div>
+        <div className={styles.customControls}>
+          <label className={styles.customField} htmlFor="custom-credits">
+            <span>Credits</span>
+            <input
+              id="custom-credits"
+              type="number"
+              inputMode="numeric"
+              min={custom.min}
+              max={custom.max}
+              step={1}
+              value={customCredits}
+              onChange={(event) => setCustomCredits(event.target.value)}
+              placeholder="e.g. 25"
+            />
+          </label>
+          <p className={styles.customTotal}><span>Total</span><strong>{customValid ? money.format((customAmount * custom.priceCents) / 100) : "—"}</strong></p>
           <button type="button" className="btn btn-primary" disabled={buying !== "" || !customValid} onClick={() => void startPayment("custom", customAmount)}>
             {buying === "custom" ? "Opening checkout…" : "Pay with HitPay"}
           </button>
-        </article>
+        </div>
       </div>}
     </section>
   );
