@@ -44,21 +44,6 @@ test("a valid ELLA_CREDIT_PACKS override changes quantities but cannot change pr
   delete process.env.ELLA_CREDIT_PACKS;
 });
 
-test("the S$1 / 100-credit test pack is only offered when ELLA_TEST_CREDIT_PACK=true", () => {
-  resetCreditPackCache();
-  delete process.env.ELLA_CREDIT_PACKS;
-  delete process.env.ELLA_TEST_CREDIT_PACK;
-  assert.equal(findCreditPack("test"), undefined);
-  resetCreditPackCache();
-  process.env.ELLA_TEST_CREDIT_PACK = "true";
-  const pack = findCreditPack("test");
-  assert.equal(pack?.credits, 100);
-  assert.equal(pack?.amountCents, 100);
-  assert.equal(pack?.currency, "SGD");
-  resetCreditPackCache();
-  delete process.env.ELLA_TEST_CREDIT_PACK;
-});
-
 test("a malformed override is ignored and the built-in catalog is kept", () => {
   resetCreditPackCache();
   process.env.ELLA_CREDIT_PACKS = JSON.stringify([{ id: "x", credits: -5, amountCents: 100, currency: "USD" }]);

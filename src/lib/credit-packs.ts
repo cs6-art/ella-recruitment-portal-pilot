@@ -48,14 +48,6 @@ const DEFAULT_PACKS: CreditPack[] = [
   { id: "bulk", label: "Bulk — 100 credits", credits: 100, amountCents: 4000, currency: "SGD" },
 ];
 
-/** S$1.00 for 100 credits — deliberately off the S$0.40/credit rate, so it is
- * only offered when `ELLA_TEST_CREDIT_PACK=true`. Never enable in production. */
-const TEST_PACK: CreditPack = { id: "test", label: "Test — 100 credits (S$1)", credits: 100, amountCents: 100, currency: "SGD" };
-
-function withTestPack(packs: CreditPack[]): CreditPack[] {
-  return process.env.ELLA_TEST_CREDIT_PACK?.trim().toLowerCase() === "true" ? [...packs, TEST_PACK] : packs;
-}
-
 function isValidPack(value: unknown): value is Pick<CreditPack, "id" | "label" | "credits"> {
   if (!value || typeof value !== "object") return false;
   const pack = value as Record<string, unknown>;
@@ -75,13 +67,13 @@ export function creditPacks(): CreditPack[] {
     try {
       const parsed = JSON.parse(override);
       if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(isValidPack)) {
-        cached = withTestPack(parsed.map((pack) => ({
+        cached = parsed.map((pack) => ({
           id: pack.id.trim().toLowerCase(),
           label: pack.label?.trim() || `${pack.credits} credits`,
           credits: pack.credits,
           amountCents: amountCentsForCredits(pack.credits),
           currency: "SGD",
-        })));
+        }));
         return cached;
       }
       console.error("[Credit Packs] ELLA_CREDIT_PACKS is not a valid pack array — using the built-in catalog.");
@@ -89,7 +81,7 @@ export function creditPacks(): CreditPack[] {
       console.error("[Credit Packs] ELLA_CREDIT_PACKS is not valid JSON — using the built-in catalog:", error);
     }
   }
-  cached = withTestPack(DEFAULT_PACKS);
+  cached = DEFAULT_PACKS;
   return cached;
 }
 
