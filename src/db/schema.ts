@@ -24,7 +24,8 @@ export const userCredentials = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     email: text("email").notNull(),
-    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    /** Null until verification creates the new organization for a company domain nobody owns yet. */
+    organizationId: uuid("organization_id").references(() => organizations.id),
     fullName: text("full_name").notNull().default(""),
     passwordHash: text("password_hash").notNull(),
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),

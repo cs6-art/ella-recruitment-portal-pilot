@@ -68,7 +68,7 @@ export default async function Home({ searchParams }: HomePageProps) {
           <p>{invitedEmail ? "Register with this invited email and verify it to join the organization. The first person to register and verify becomes the organization owner." : "New here? Register with your organization email, then click the verification link we send you. Already verified? Log in."}</p>
           {verifyNotice ? <div className="notice" role="status">{verifyNotice}</div> : null}
           <AuthForm redirectTo={redirectTo} resetToken={resetToken} initialEmail={invitedEmail} startInRegistration={Boolean(invitedEmail)} />
-          <div className="notice"><strong>Organization members only.</strong><br />Your account is created in your organization automatically, based on your email address.</div>
+          <div className="notice"><strong>Use your work email address.</strong><br />If your company's domain is new, the first person to register and confirm creates the organization. Colleagues with the same domain can join automatically.</div>
         </div>
       </section>
     </main>

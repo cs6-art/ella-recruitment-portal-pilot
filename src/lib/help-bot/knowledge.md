@@ -59,6 +59,16 @@ one organization can own a given domain or email address. Editing an organizatio
 changes its details and registration rules; it does not move or delete
 recruitment records.
 
+**Can my company register by itself?** Yes, with a work email address. If nobody
+has registered a company's email domain yet, the first person to register with it
+and confirm their email creates the organization for that domain and becomes its
+owner. After that, anyone with an email at the same domain can register and join
+that organization automatically. Personal email addresses such as Gmail, Yahoo, or
+Outlook cannot be used to create an organization. If a company's domain already
+belongs to an organization, new people join that organization instead of creating
+another one. McLink administrators can still add organizations and control who may
+register.
+
 **Who becomes the organization owner?** The first person to register into a client
 organization and verify their email. The owner can invite teammates and is the
 only person (besides a McLink platform administrator) who can deactivate or

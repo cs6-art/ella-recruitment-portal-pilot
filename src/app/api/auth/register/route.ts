@@ -19,8 +19,11 @@ export async function POST(request: Request) {
     if (problem) return NextResponse.json({ error: problem }, { status: 400 });
 
     const result = await registerUser({ email, fullName, password: body.password });
+    if (result.status === "personal_email") {
+      return NextResponse.json({ error: "Use your work email address. Personal email addresses such as Gmail or Outlook cannot be used to register an organization." }, { status: 403 });
+    }
     if (result.status === "not_eligible") {
-      return NextResponse.json({ error: "Registration is limited to members of a participating organization. Use your organization email address." }, { status: 403 });
+      return NextResponse.json({ error: "This email address cannot register yet. Ask your organization's owner to invite you, or contact McLink support." }, { status: 403 });
     }
     if (result.status === "verification_pending") {
       return NextResponse.json({ error: "A verification request is already pending for this email. The link is valid for 24 hours. Check your inbox or choose Resend verification email.", needsVerification: true }, { status: 409 });

@@ -32,6 +32,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Please verify your email first. Check your inbox for the verification link.", needsVerification: true }, { status: 403 });
     }
 
+    // A verified credential always has an organization; none means verification never completed.
+    if (!credential.organizationId) return NextResponse.json({ error: "Please verify your email first. Check your inbox for the verification link.", needsVerification: true }, { status: 403 });
     const organizationId = await resolveLoginOrganization(email, credential.organizationId);
     if (organizationId !== credential.organizationId) {
       // An existing verified identity may now be explicitly eligible for a

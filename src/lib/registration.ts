@@ -3,7 +3,9 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { organizations, userCredentials } from "@/db/schema";
+import { portalSettings } from "@/db/schema-recruitment";
 import { HR_FULL_ACCESS } from "@/lib/access-roles";
+import { emailDomain, isDomainClaimed, isPersonalEmailDomain, isReservedOrganizationDomain, organizationNameFromDomain, organizationSlugFromDomain, RESERVED_ORGANIZATION_SLUGS } from "@/lib/organization-signup";
 import { findDirectoryUser, type DirectoryUser } from "@/lib/google-sheets";
 import { DEFAULT_ORGANIZATION_ID, syncOrganizationMembership } from "@/lib/organization-accounts";
 import { claimOrganizationOwnershipIfNone, findPostgresDirectoryUser, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
@@ -124,9 +126,59 @@ function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * A company email domain that no organization owns yet starts a new
+ * organization. Personal mailboxes (gmail.com and similar) never do, and a
+ * domain or address any organization already lists is left to that
+ * organization's own rules, so an ambiguous match still fails closed.
+ */
+async function resolveNewOrganizationDomain(email: string): Promise<"new" | "personal" | "not_eligible"> {
+  const domain = emailDomain(email);
+  if (!domain || !domain.includes(".")) return "not_eligible";
+  if (isPersonalEmailDomain(domain)) return "personal";
+  if (isReservedOrganizationDomain(domain)) return "not_eligible";
+  const rules = await getDb().select({ allowedDomains: organizations.allowedDomains, allowedEmails: organizations.allowedEmails }).from(organizations);
+  return isDomainClaimed(domain, rules) ? "not_eligible" : "new";
+}
+
+/** Create the organization for a verified company-domain registrant; anyone with that domain may join it. */
+async function createOrganizationForDomain(domain: string, createdBy: string): Promise<string> {
+  const db = getDb();
+  const name = organizationNameFromDomain(domain);
+  const base = organizationSlugFromDomain(domain);
+  for (let attempt = 1; attempt <= 20; attempt += 1) {
+    const slug = attempt === 1 ? base : `${base}-${attempt}`;
+    if (RESERVED_ORGANIZATION_SLUGS.has(slug)) continue;
+    const id = crypto.randomUUID();
+    try {
+      await db.transaction(async (tx) => {
+        await tx.insert(organizations).values({ id, name, slug, databaseKey: slug, databaseStatus: "shared", active: true, onboardingStartedAt: new Date(), allowedDomains: [domain], allowedEmails: [] });
+        await tx.insert(portalSettings).values([
+          { organizationId: id, key: "Organization_Display_Name", value: name, category: "Branding", updatedBy: createdBy },
+          { organizationId: id, key: "Organization_Display_Subtitle", value: "Recruitment Portal", category: "Branding", updatedBy: createdBy },
+        ]);
+      });
+      return id;
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "23505") {
+        // Two people can verify the same new domain at the same time. The
+        // second insert hits the unique slug/database-key constraint; re-read
+        // the domain before trying a suffix so we join the first organization
+        // instead of creating a duplicate.
+        const existing = await resolveRegistrationOrganization(`probe@${domain}`);
+        if (existing) return existing;
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("Unable to choose a unique organization name.");
+}
+
 export type RegisterResult =
-  | { status: "created"; token: string; organizationId: string }
+  | { status: "created"; token: string; organizationId: string | null }
   | { status: "not_eligible" }
+  | { status: "personal_email" }
   | { status: "verification_pending" }
   | { status: "already_registered" };
 
@@ -136,8 +188,14 @@ export type RegisterResult =
  * active is rejected so it cannot replace the pending password or token.
  */
 export async function registerUser(input: { email: string; fullName: string; password: string }): Promise<RegisterResult> {
-  const organizationId = await resolveRegistrationOrganization(input.email);
-  if (!organizationId) return { status: "not_eligible" };
+  let organizationId = await resolveRegistrationOrganization(input.email);
+  if (!organizationId) {
+    // No organization matches: a company domain nobody owns starts a new one
+    // (created once the email is verified); anything else is turned away.
+    const outcome = await resolveNewOrganizationDomain(input.email);
+    if (outcome !== "new") return { status: outcome };
+    organizationId = null;
+  }
 
   const db = getDb();
   const [existing] = await db.select({ id: userCredentials.id, verifiedAt: userCredentials.emailVerifiedAt, verificationExpiresAt: userCredentials.verificationExpiresAt }).from(userCredentials).where(eq(userCredentials.email, input.email)).limit(1);
@@ -190,13 +248,25 @@ export async function verifyRegistration(token: string): Promise<VerifyResult> {
   if (!row) return { status: "invalid" };
   if (!row.verificationExpiresAt || row.verificationExpiresAt.getTime() < Date.now()) return { status: "expired" };
 
+  // A registrant with no organization yet joins whichever one now owns their
+  // domain (a colleague may have verified first); otherwise the first verified
+  // person from a new company domain creates it and becomes its owner.
+  let organizationId = row.organizationId;
+  if (!organizationId) {
+    organizationId = await resolveRegistrationOrganization(row.email);
+    if (!organizationId) {
+      if ((await resolveNewOrganizationDomain(row.email)) !== "new") return { status: "invalid" };
+      organizationId = await createOrganizationForDomain(emailDomain(row.email), row.email);
+    }
+  }
+
   await db
     .update(userCredentials)
-    .set({ emailVerifiedAt: row.emailVerifiedAt ?? new Date(), verificationTokenHash: null, verificationExpiresAt: null, updatedAt: new Date() })
+    .set({ organizationId, emailVerifiedAt: row.emailVerifiedAt ?? new Date(), verificationTokenHash: null, verificationExpiresAt: null, updatedAt: new Date() })
     .where(eq(userCredentials.id, row.id));
 
-  await syncOrganizationMembership({ organizationId: row.organizationId, email: row.email, active: true });
-  await ensureDirectoryUser(row.organizationId, row.email, row.fullName);
+  await syncOrganizationMembership({ organizationId, email: row.email, active: true });
+  await ensureDirectoryUser(organizationId, row.email, row.fullName);
   return { status: "verified" };
 }
 
@@ -252,7 +322,7 @@ export async function resetPassword(token: string, password: string): Promise<"r
 export type CredentialLookup = {
   id: string;
   email: string;
-  organizationId: string;
+  organizationId: string | null;
   fullName: string;
   passwordHash: string;
   verified: boolean;
