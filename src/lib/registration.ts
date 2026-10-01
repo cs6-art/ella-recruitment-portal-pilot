@@ -8,6 +8,7 @@ import { HR_FULL_ACCESS } from "@/lib/access-roles";
 import { emailDomain, isDomainClaimed, isPersonalEmailDomain, isMemberLimitReached, isReservedOrganizationDomain, memberSeatUsage, organizationNameFromDomain, organizationSlugFromDomain, RESERVED_ORGANIZATION_SLUGS, SELF_SERVICE_MEMBER_LIMIT } from "@/lib/organization-signup";
 import { findDirectoryUser, type DirectoryUser } from "@/lib/google-sheets";
 import { DEFAULT_ORGANIZATION_ID, syncOrganizationMembership } from "@/lib/organization-accounts";
+import { grantWelcomeCredits } from "@/lib/organization-welcome-credits";
 import { claimOrganizationOwnershipIfNone, findPostgresDirectoryUser, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
 import { runWithTenantDatabase } from "@/lib/tenant-database";
 import { fetchWithTimeout, timeoutFromEnv } from "@/lib/fetch-with-timeout";
@@ -173,6 +174,7 @@ async function createOrganizationForDomain(domain: string, createdBy: string): P
           { organizationId: id, key: "Organization_Display_Name", value: name, category: "Branding", updatedBy: createdBy },
           { organizationId: id, key: "Organization_Display_Subtitle", value: "Recruitment Portal", category: "Branding", updatedBy: createdBy },
         ]);
+        await grantWelcomeCredits(tx, id);
       });
       return id;
     } catch (error) {

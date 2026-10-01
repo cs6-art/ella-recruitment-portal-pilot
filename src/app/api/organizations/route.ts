@@ -9,6 +9,7 @@ import { organizations } from "@/db/schema";
 import { portalSettings, users } from "@/db/schema-recruitment";
 import { isPlatformAdmin } from "@/lib/access-control";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
+import { grantWelcomeCredits } from "@/lib/organization-welcome-credits";
 import { getOrganizationReadiness } from "@/lib/organization-readiness";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -163,6 +164,7 @@ export async function POST(request: Request) {
         { organizationId: id, key: "Organization_Display_Name", value: input.name, category: "Branding", updatedBy: access.user.email },
         { organizationId: id, key: "Organization_Display_Subtitle", value: "Recruitment Portal", category: "Branding", updatedBy: access.user.email },
       ]);
+      await grantWelcomeCredits(tx, id);
       return [organization];
     });
 

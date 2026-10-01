@@ -59,6 +59,7 @@ const eventLabels: Record<string, string> = {
   manual_topup: "Manual top-up",
   manual_adjustment: "Manual adjustment",
   volume_discount: "Volume bonus",
+  welcome_credit: "Welcome credits",
   cv_analysis: "CV analysis",
   phone_interview: "Voice interview",
   phone_interview_no_answer: "Voice interview",
