@@ -9,11 +9,13 @@ import styles from "./NewApplicantsBell.module.css";
 import { useSharedPoll } from "@/lib/client-poll";
 import { formatPortalDateTime } from "@/lib/portal-time";
 import {
+  APPLICANTS_SEEN_EVENT,
   applicantAppliedTime,
   applicantNotificationBadge,
   hasApplicantNotifications,
   readApplicantsLastSeen,
   type RecentApplicant,
+  writeApplicantsLastSeen,
 } from "@/lib/new-applicants";
 
 const POLL_KEY = "applicants-recent";
@@ -52,9 +54,11 @@ export function useNewApplicantFeed(userEmail?: string, enabled = true) {
     sync();
     const timer = window.setTimeout(sync, 800);
     window.addEventListener("storage", sync);
+    window.addEventListener(APPLICANTS_SEEN_EVENT, sync);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("storage", sync);
+      window.removeEventListener(APPLICANTS_SEEN_EVENT, sync);
     };
   }, [pathname, userEmail]);
 
@@ -76,6 +80,14 @@ export default function NewApplicantsBell({ userEmail }: { userEmail?: string })
   const { newApplicants, count, badge } = useNewApplicantFeed(userEmail);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(false);
+
+  // Looking at the bell counts as seeing the applicants. Mark them seen when the
+  // panel closes (not when it opens, so the list stays visible while reading).
+  useEffect(() => {
+    if (wasOpen.current && !open) writeApplicantsLastSeen(userEmail);
+    wasOpen.current = open;
+  }, [open, userEmail]);
 
   useEffect(() => {
     if (!open) return;

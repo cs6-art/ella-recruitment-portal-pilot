@@ -13,9 +13,17 @@ The application appends `/payment-requests` and
 `/payment-requests/<id>`. Do not configure the host-only URL and do not add a
 second `/v1`.
 
-Ella Credits are priced at S$0.40 each. The built-in packs are 10 credits for
-S$4.00, 50 credits for S$20.00, and 100 credits for S$40.00. The client sends
-only a pack id; the server derives both the quantity and amount.
+Ella Credits are priced at S$0.40 each. The built-in packs are Starter (50 credits for
+S$20.00), Standard (100 credits for S$40.00) and Bulk (2,000 credits for
+S$800.00). Buyers can also enter any whole number of credits from 1 to 10,000
+at the same rate. The client sends only a pack id or a credit quantity; the
+server derives the amount.
+
+A purchase of 2,000 credits or more earns a 10% volume bonus, so Bulk adds 200
+bonus credits. The bonus is a separate `volume_discount` ledger row written in
+the same transaction as the purchase. The threshold and percent come from the
+`Ella_Credit_Discount_Threshold` and `Ella_Credit_Discount_Percent` portal
+settings (defaults 2000 and 10).
 
 The deployed webhook route is:
 

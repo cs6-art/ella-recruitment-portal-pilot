@@ -8,15 +8,17 @@
  *
  * Known limitation (accepted for pilot UAT): because the watermark lives in
  * localStorage, read/unread state is per browser/device and is not synced
- * across a user's devices. A server-side per-user watermark is the future
+ * across a user's devices. A browser with no watermark starts at "now" (no
+ * badge) rather than flagging the last week of applicants as new. A server-side per-user watermark is the future
  * improvement; it is intentionally out of scope for the pilot.
  */
 
 const LAST_SEEN_PREFIX = "mclink.applicants.lastSeen.";
 
-/** A brand-new install has no watermark; treat anything applied in this
- *  trailing window as new so the first visit still surfaces recent activity. */
-const FIRST_VISIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+/** Fired in this tab whenever the watermark is written, so the sidebar badge
+ *  and the header bell (separate hook instances) clear together. The browser's
+ *  own `storage` event only reaches *other* tabs. */
+export const APPLICANTS_SEEN_EVENT = "mclink:applicants-seen";
 
 function storageKey(email: string | undefined | null) {
   return `${LAST_SEEN_PREFIX}${(email || "anonymous").trim().toLowerCase()}`;
@@ -28,10 +30,17 @@ export function readApplicantsLastSeen(email: string | undefined | null): number
     const raw = window.localStorage.getItem(storageKey(email));
     const parsed = raw ? Number(raw) : NaN;
     if (Number.isFinite(parsed)) return parsed;
+    // No watermark in this browser yet (a new browser, device or private window,
+    // or cleared site data). Start from "now" instead of treating the last week
+    // as unseen, otherwise every such login shows a badge for applicants the
+    // user has already looked at on another browser.
+    const now = Date.now();
+    window.localStorage.setItem(storageKey(email), String(now));
+    return now;
   } catch {
-    // Private mode / disabled storage — fall through to the first-visit window.
+    // Private mode / disabled storage: no badge rather than a permanent one.
   }
-  return Date.now() - FIRST_VISIT_WINDOW_MS;
+  return Date.now();
 }
 
 export function writeApplicantsLastSeen(email: string | undefined | null, whenMs: number = Date.now()): void {
@@ -41,6 +50,7 @@ export function writeApplicantsLastSeen(email: string | undefined | null, whenMs
   } catch {
     // Best effort only; a missed write just re-shows the same "new" rows.
   }
+  window.dispatchEvent(new Event(APPLICANTS_SEEN_EVENT));
 }
 
 /**

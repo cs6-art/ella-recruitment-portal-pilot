@@ -43,9 +43,10 @@ export function customCreditPack(credits: unknown): CreditPack | null {
 }
 
 const DEFAULT_PACKS: CreditPack[] = [
-  { id: "starter", label: "Starter — 10 credits", credits: 10, amountCents: 400, currency: "SGD" },
-  { id: "standard", label: "Standard — 50 credits", credits: 50, amountCents: 2000, currency: "SGD" },
-  { id: "bulk", label: "Bulk — 100 credits", credits: 100, amountCents: 4000, currency: "SGD" },
+  { id: "starter", label: "Starter — 50 credits", credits: 50, amountCents: 2000, currency: "SGD" },
+  { id: "standard", label: "Standard — 100 credits", credits: 100, amountCents: 4000, currency: "SGD" },
+  // 2,000 credits reaches the volume-discount threshold, so the server adds a 10% bonus (see volumeDiscountBonus).
+  { id: "bulk", label: "Bulk — 2,000 credits", credits: 2000, amountCents: 80000, currency: "SGD" },
 ];
 
 function isValidPack(value: unknown): value is Pick<CreditPack, "id" | "label" | "credits"> {

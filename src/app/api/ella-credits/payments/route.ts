@@ -6,6 +6,7 @@ import { canManageCredits } from "@/lib/access-control";
 import { creditPacks, ELLA_CREDIT_PRICE_CENTS, MAX_CUSTOM_CREDITS, MIN_CUSTOM_CREDITS } from "@/lib/credit-packs";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { createCreditPurchase, isPaymentsConfigured, listRecentPayments, PaymentError } from "@/lib/payments";
+import { getCreditPricing, volumeDiscountBonus } from "@/lib/ella-credits";
 import { hitpayMode } from "@/lib/hitpay";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -30,7 +31,16 @@ export async function GET() {
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
 
   const configured = isPaymentsConfigured();
-  const packs = creditPacks().map((pack) => ({ id: pack.id, label: pack.label, credits: pack.credits, amountCents: pack.amountCents, currency: pack.currency }));
+  const pricing = await getCreditPricing().catch(() => null);
+  const packs = await Promise.all(creditPacks().map(async (pack) => ({
+    id: pack.id,
+    label: pack.label,
+    credits: pack.credits,
+    amountCents: pack.amountCents,
+    currency: pack.currency,
+    // Credits added on top at settlement (volume discount); 0 when the pack is below the threshold.
+    bonusCredits: (await volumeDiscountBonus(pack.credits).catch(() => ({ bonus: 0 }))).bonus,
+  })));
   let recent: Array<Record<string, unknown>> = [];
   if (configured && canManageCredits(user)) {
     try {
@@ -49,7 +59,7 @@ export async function GET() {
       console.error("[API Payments] list failed:", error);
     }
   }
-  return NextResponse.json({ success: true, configured, mode: hitpayMode(), packs, custom: { priceCents: ELLA_CREDIT_PRICE_CENTS, min: MIN_CUSTOM_CREDITS, max: MAX_CUSTOM_CREDITS, currency: "SGD" }, recent }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ success: true, configured, mode: hitpayMode(), packs, custom: { priceCents: ELLA_CREDIT_PRICE_CENTS, min: MIN_CUSTOM_CREDITS, max: MAX_CUSTOM_CREDITS, currency: "SGD", bonusThreshold: pricing?.discountThreshold ?? 0, bonusPercent: pricing?.discountPercent ?? 0 }, recent }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {

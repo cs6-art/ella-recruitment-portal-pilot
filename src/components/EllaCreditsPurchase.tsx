@@ -12,6 +12,7 @@ type CreditPack = {
   credits: number;
   amountCents: number;
   currency: string;
+  bonusCredits?: number;
 };
 
 type Payment = {
@@ -39,7 +40,7 @@ function clearPaymentReturnUrl() {
 
 export default function EllaCreditsPurchase() {
   const [packs, setPacks] = useState<CreditPack[]>([]);
-  const [custom, setCustom] = useState({ priceCents: 40, min: 1, max: 10000 });
+  const [custom, setCustom] = useState({ priceCents: 40, min: 1, max: 10000, bonusThreshold: 0, bonusPercent: 0 });
   const [customCredits, setCustomCredits] = useState("");
   const [configured, setConfigured] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -197,6 +198,10 @@ export default function EllaCreditsPurchase() {
   const customAmount = Number(customCredits);
   const customValid = customCredits.trim() !== "" && Number.isInteger(customAmount) && customAmount >= custom.min && customAmount <= custom.max;
 
+  // Same rule the server applies when the payment settles (see volumeDiscountBonus).
+  const bonusOn = custom.bonusThreshold > 0 && custom.bonusPercent > 0;
+  const customBonus = customValid && bonusOn && customAmount >= custom.bonusThreshold ? Math.floor(customAmount * (custom.bonusPercent / 100)) : 0;
+
   return (
     <section className={`card ${styles.panel}`}>
       <div className={styles.header}>
@@ -218,6 +223,7 @@ export default function EllaCreditsPurchase() {
           <article className={styles.pack} key={pack.id}>
             <h3>{pack.label.split(" — ")[0]}</h3>
             <p className={styles.packCredits}>{nf.format(pack.credits)} credits</p>
+            {(pack.bonusCredits ?? 0) > 0 && <p className={styles.packBonus}>+ {nf.format(pack.bonusCredits ?? 0)} bonus credits</p>}
             <p className={styles.packPrice}>{money.format(pack.amountCents / 100)}</p>
             <button type="button" className="btn btn-primary" disabled={buying !== ""} onClick={() => void startPayment(pack.id)}>
               {buying === pack.id ? "Opening checkout…" : "Pay with HitPay"}
@@ -228,7 +234,7 @@ export default function EllaCreditsPurchase() {
       {configured && packs.length > 0 && <div className={styles.customRow}>
         <div className={styles.customText}>
           <h3>Need a different amount?</h3>
-          <p>Buy exactly the credits you need, from {nf.format(custom.min)} up to {nf.format(custom.max)}, at {money.format(custom.priceCents / 100)} per credit.</p>
+          <p>Buy exactly the credits you need, from {nf.format(custom.min)} up to {nf.format(custom.max)}, at {money.format(custom.priceCents / 100)} per credit.{bonusOn && <> Buy {nf.format(custom.bonusThreshold)} or more and get a <strong>{custom.bonusPercent}% bonus</strong> in free credits.</>}</p>
         </div>
         <div className={styles.customControls}>
           <label className={styles.customField} htmlFor="custom-credits">
@@ -245,7 +251,7 @@ export default function EllaCreditsPurchase() {
               placeholder="e.g. 25"
             />
           </label>
-          <p className={styles.customTotal}><span>Total</span><strong>{customValid ? money.format((customAmount * custom.priceCents) / 100) : "—"}</strong></p>
+          <p className={styles.customTotal}><span>Total</span><strong>{customValid ? money.format((customAmount * custom.priceCents) / 100) : "—"}</strong>{customBonus > 0 && <em className={styles.customBonus}>+{nf.format(customBonus)} bonus credits</em>}</p>
           <button type="button" className="btn btn-primary" disabled={buying !== "" || !customValid} onClick={() => void startPayment("custom", customAmount)}>
             {buying === "custom" ? "Opening checkout…" : "Pay with HitPay"}
           </button>

@@ -11,6 +11,7 @@
 .pack { display: grid; gap: 8px; padding: 16px; border: 1px solid #dfe8f0; border-radius: 10px; background: #fbfdff; }
 .pack h3 { margin: 0; color: var(--navy, #17324d); font-size: 14px; }
 .packCredits { margin: 0; color: #0e4471; font-size: 19px; font-weight: 800; }
+.packBonus { margin: -4px 0 0; color: #1a7f4b; font-size: 13px; font-weight: 700; }
 .packPrice { margin: 0 0 5px; color: var(--muted, #5e6b78); font-size: 13px; }
 .pack button { min-height: 40px; }
 
@@ -24,6 +25,7 @@
 .customField input:focus-visible { outline: 2px solid #0e4471; outline-offset: 1px; }
 .customTotal { display: grid; gap: 4px; min-width: 90px; margin: 0; color: var(--muted, #5e6b78); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .customTotal strong { display: flex; align-items: center; min-height: 40px; color: #0e4471; font-size: 19px; letter-spacing: 0; text-transform: none; }
+.customBonus { margin-top: -6px; color: #1a7f4b; font-size: 12px; font-style: normal; font-weight: 700; letter-spacing: 0; text-transform: none; }
 .customControls button { min-height: 40px; }
 
 @media (max-width: 700px) {
