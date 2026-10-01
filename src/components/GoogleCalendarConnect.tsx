@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import GoogleCalendarIcon from "@/components/GoogleCalendarIcon";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 type Status = "loading" | "connected" | "mismatch" | "not_connected" | "error";
 type NoticeKind = "success" | "warning" | "error";
@@ -59,7 +60,7 @@ export default function GoogleCalendarConnect({ canManage = false }: { canManage
     <section className="card calendar-connect-card">
       <div className="card-header">
         <h2>Shared HR Google Calendar</h2>
-        {status === "connected" ? <span className="calendar-status-pill calendar-status-connected">Connected</span> : status === "mismatch" ? <span className="calendar-status-pill calendar-status-warning">Account mismatch</span> : null}
+        {status === "connected" ? <StatusBadge value="Connected" /> : status === "mismatch" ? <StatusBadge value="Account mismatch" /> : null}
       </div>
       <div className="calendar-connect-body">
         {notice ? <ActionFeedback kind={noticeKind} className="calendar-connect-notice">{notice}</ActionFeedback> : null}

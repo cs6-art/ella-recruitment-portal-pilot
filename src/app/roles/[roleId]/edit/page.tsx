@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
 import AppShell from "@/components/AppShell";
+import PageHeader from "@/components/ui/PageHeader";
 import RecruitmentSetupEditor from "@/components/RecruitmentSetupEditor";
 import RoleRequestForm, { type RoleRequestFormValues } from "@/components/RoleRequestForm";
 import { canEditRoleRequest, canViewRole } from "@/lib/access-control";
@@ -134,15 +135,11 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
   return (
     <AppShell user={user}>
       <main className="container page">
-        <div className="hero-row">
-          <div>
-            <a className="btn btn-secondary portal-back-link roles-back-button" href={`/roles/${encodeURIComponent(role.roleId)}`}>
-              Back to Role Details
-            </a>
-            <h1>Edit Role Request</h1>
-            <p>Update the vacancy details and HR screening information before the request moves forward.</p>
-          </div>
-        </div>
+        <PageHeader
+          title="Edit Role Request"
+          description="Update the vacancy details and HR screening information before the request moves forward."
+          actions={<a className="btn btn-secondary portal-back-link roles-back-button" href={`/roles/${encodeURIComponent(role.roleId)}`}>Back to Role Details</a>}
+        />
         <RoleRequestForm
           user={{ name: String(user.name ?? ""), email: String(user.email ?? "") }}
           canApproveRole={user.canApproveRole === true}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import ValidationSummary from "@/components/ValidationSummary";
+import PageHeader from "@/components/ui/PageHeader";
 import { clientErrorMessage } from "@/lib/client-error";
 
 type Setting = {
@@ -111,10 +112,13 @@ export default function SettingsEditor() {
 
   return (
     <main className="container page settings-page">
-      <header className="hero-row settings-header">
-        <div><span className="eyebrow-dark">PORTAL CONFIGURATION</span><h1>Settings</h1><p>These working defaults apply across all organizations. Only a McLink platform administrator can change them.</p></div>
-        <div className="settings-header-note"><strong>Applies to every organization</strong><span>Clear a field to return to its built-in or environment value. Private credentials are managed securely elsewhere.</span></div>
-      </header>
+      <PageHeader
+        className="settings-header"
+        eyebrow="PORTAL CONFIGURATION"
+        title="Settings"
+        description="These working defaults apply across all organizations. Only a McLink platform administrator can change them."
+        actions={<div className="settings-header-note"><strong>Applies to every organization</strong><span>Clear a field to return to its built-in or environment value. Private credentials are managed securely elsewhere.</span></div>}
+      />
 
       <section className="settings-guide"><span className="settings-guide-icon">i</span><div><strong>When changes take effect</strong><p>Changes are saved immediately and apply to new actions after the portal refreshes its settings—usually within 20 seconds. Existing booking links and appointments are not changed. If settings are temporarily unavailable, an update may take longer to reach every action.</p></div></section>
 

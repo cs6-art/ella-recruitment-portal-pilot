@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import AppShell from "@/components/AppShell";
 import MyCalendarConnect from "@/components/MyCalendarConnect";
+import PageHeader from "@/components/ui/PageHeader";
 import { canAdministerAccess } from "@/lib/access-control";
 import {
   COOKIE_NAME,
@@ -28,12 +29,7 @@ export default async function ProfilePage() {
   return (
     <AppShell user={user}>
       <main className="container page">
-        <div className="hero-row">
-          <div>
-            <h1>Profile</h1>
-            <p>View your recruitment portal access.</p>
-          </div>
-        </div>
+        <PageHeader title="Profile" description="View your recruitment portal access." />
 
         <section className="card role-section">
           <div className="card-header">

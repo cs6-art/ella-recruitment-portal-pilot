@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 type Notice = { kind: "success" | "warning" | "error"; text: string } | null;
 
@@ -48,7 +49,7 @@ export default function MyCalendarConnect({ email }: { email: string }) {
         <p>Connect the Google account <strong>{email}</strong> so HR can assign you as the interviewer for face-to-face interviews. Interviews assigned to you are created on your calendar, and only times when you are free are offered to candidates.</p>
         {notice && <ActionFeedback kind={notice.kind}>{notice.text}</ActionFeedback>}
         {connected === null ? <p>Checking connection…</p> : connected ? (
-          <p><span className="status-badge">Connected</span>{" "}<button type="button" className="btn btn-secondary btn-small" disabled={busy} onClick={() => void disconnect()}>{busy ? "Disconnecting…" : "Disconnect"}</button></p>
+          <p><StatusBadge value="Connected" />{" "}<button type="button" className="btn btn-secondary btn-small" disabled={busy} onClick={() => void disconnect()}>{busy ? "Disconnecting…" : "Disconnect"}</button></p>
         ) : (
           <p><a className="btn btn-primary" href="/api/auth/google-calendar/connect?self=1">Connect My Google Calendar</a></p>
         )}

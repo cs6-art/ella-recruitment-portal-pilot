@@ -8,6 +8,8 @@ import ActionFeedback from "@/components/ActionFeedback";
 import { useConfirmation } from "@/components/ConfirmationModal";
 import Pagination from "@/components/Pagination";
 import UiIcon from "@/components/UiIcon";
+import PageHeader from "@/components/ui/PageHeader";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { canEditRoleRequest } from "@/lib/access-control";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
@@ -307,12 +309,6 @@ export default function RolesList({
     updateQuery({ [key]: key === "statusFilter" ? "All" : key === "sort" ? "newest" : "", page: 1 } as Partial<RoleListQuery>);
   }
 
-  function statusClass(status: string) {
-    return `status-badge status-${status
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")}`;
-  }
-
   function formatDate(value: string, includeTime = false) {
     return formatPortalDateTime(value, includeTime);
   }
@@ -418,20 +414,15 @@ export default function RolesList({
 
   return (
     <main className="container page roles-page">
-      <div className="hero-row roles-page-header">
-        <div className="roles-page-heading">
-          <h1>{creatorOnly ? "My Role Requests" : departmentOnly ? "Department Role Requests" : "All Role Requests"}</h1>
-
-          <p>
-            {creatorOnly
-              ? "Track the role requests you submitted."
-              : departmentOnly
-                ? "Review role requests submitted for your department."
-                : "Review submitted staff addition and replacement requests."}
-          </p>
-        </div>
-
-        <div className="hero-actions roles-page-actions">
+      <PageHeader
+        className="roles-page-header"
+        title={creatorOnly ? "My Role Requests" : departmentOnly ? "Department Role Requests" : "All Role Requests"}
+        description={creatorOnly
+          ? "Track the role requests you submitted."
+          : departmentOnly
+            ? "Review role requests submitted for your department."
+            : "Review submitted staff addition and replacement requests."}
+        actions={<div className="roles-page-actions">
           <button
             type="button"
             className="btn btn-secondary"
@@ -452,8 +443,8 @@ export default function RolesList({
               <UiIcon name="plus" size={17} />Create Role Request
             </Link>
           )}
-        </div>
-      </div>
+        </div>}
+      />
 
       <section className="card">
         <div className="list-toolbar-header">
@@ -633,9 +624,7 @@ export default function RolesList({
                         {(() => { const target = targetDateMeta(role.targetHiringDate); return <span className={`role-target-date role-target-date-${target.tone}`}><strong>{target.label}</strong>{target.date && <span>{target.date}</span>}</span>; })()}
                       </td>
                       <td data-label="Status">
-                        <span className={statusClass(role.status)}>
-                          {roleStatusLabel(role.status)}
-                        </span>
+                        <StatusBadge value={role.status} label={roleStatusLabel(role.status)} />
                       </td>
                       <td data-label="Action"><div className="role-table-actions"><Link href={`/roles/${encodeURIComponent(role.roleId)}`}>View</Link>{canEditRole(role) && <details className="role-actions-menu"><summary>More <UiIcon name="chevron-down" size={14} /></summary><div><Link href={`/roles/${encodeURIComponent(role.roleId)}/edit`}>Edit</Link><button type="button" className="table-danger-action" disabled={deletingRoleIds.has(role.roleId) || deletingRoleId === "bulk"} onClick={() => void deleteRoles([role])}>{deletingRoleIds.has(role.roleId) ? "Deleting…" : "Delete"}</button></div></details>}</div></td>
                     </tr>

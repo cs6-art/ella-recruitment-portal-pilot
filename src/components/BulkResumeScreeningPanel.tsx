@@ -7,6 +7,7 @@ import DriveFilePicker from "@/components/DriveFilePicker";
 import EllaCreditsMeter from "@/components/EllaCreditsMeter";
 import GoogleDriveIcon from "@/components/GoogleDriveIcon";
 import Pagination from "@/components/Pagination";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 import { buildCloudImportRequest, selectedCloudFiles, type CloudImportSelection } from "@/lib/cloud-import-request";
 import { formatPortalDateTime } from "@/lib/portal-time";
@@ -50,10 +51,6 @@ const TERMINAL_STATUSES = new Set(["screened", "processed", "failed", "skipped"]
 // that field in the UI payload, so retain the historical job/file fallbacks.
 function queueIdentity(item: Pick<QueueItem, "dedupeKey" | "jobId" | "driveFileId">) {
   return item.dedupeKey || item.jobId || item.driveFileId;
-}
-
-function statusClass(status: string) {
-  return `bulk-status bulk-status-${status.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 }
 
 // Human-facing label + result text for the live table, matching the coarse
@@ -897,7 +894,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
                     <td>{item.driveFileUrl ? <a href={item.driveFileUrl} target="_blank" rel="noreferrer">{item.driveFileName || "Open resume"}</a> : item.driveFileName || "Resume name not available"}</td>
                     <td>{item.candidateName || item.candidateEmail || "Candidate details being prepared"}</td>
                     <td>{item.source === "drive" ? "Google Drive" : item.source === "onedrive" ? "OneDrive" : item.source === "reconciled" ? "Recovered record" : "Computer upload"}</td>
-                    <td><span className={statusClass(label)}>{label}</span></td>
+                    <td><StatusBadge value={label} /></td>
                     <td>{item.errorMessage || result}</td>
                     <td>{(() => { const ts = item.lastUpdated || item.processedAt || item.discoveredAt; return ts ? formatPortalDateTime(ts) : "Not available"; })()}</td>
                   </tr>;

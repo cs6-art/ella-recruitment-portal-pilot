@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import BulkResumeScreeningPanel from "@/components/BulkResumeScreeningPanel";
 import CandidateApplicationForm from "@/components/CandidateApplicationForm";
+import PageHeader from "@/components/ui/PageHeader";
 import ResumeScreeningInviteGenerator from "@/components/ResumeScreeningInviteGenerator";
 import { canManagePipeline } from "@/lib/access-control";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
@@ -34,12 +35,11 @@ export default async function ResumeScreeningPage() {
   return (
     <AppShell user={user}>
       <main className="container page resume-screening-page">
-        <header className="hero-row resume-screening-header">
-          <div>
-            <h1>Resume Screening</h1>
-            <p>Select a role, add resumes, and review the screening results. Upload files from your computer or import them from cloud storage.</p>
-          </div>
-        </header>
+        <PageHeader
+          className="resume-screening-header"
+          title="Resume Screening"
+          description="Select a role, add resumes, and review the screening results. Upload files from your computer or import them from cloud storage."
+        />
         {isBulkResumeUatMode() ? <div className="uat-mode-banner">UAT MODE · Bulk resume data is routed to the configured UAT destinations.</div> : null}
         <BulkResumeScreeningPanel roleOptions={roleOptions} />
         <ResumeScreeningInviteGenerator roleOptions={roleOptions} />

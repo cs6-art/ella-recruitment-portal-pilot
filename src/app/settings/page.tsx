@@ -5,6 +5,7 @@ import AppShell from "@/components/AppShell";
 import EmailTemplatesEditor from "@/components/EmailTemplatesEditor";
 import GoogleCalendarConnect from "@/components/GoogleCalendarConnect";
 import OrganizationBrandingEditor from "@/components/OrganizationBrandingEditor";
+import PageHeader from "@/components/ui/PageHeader";
 import RecordingDriveConnect from "@/components/RecordingDriveConnect";
 import SettingsEditor from "@/components/SettingsEditor";
 import { isPlatformAdmin } from "@/lib/access-control";
@@ -20,9 +21,12 @@ export default async function SettingsPage() {
     {isPlatformAdmin(user)
       ? <SettingsEditor />
       : <main className="container page settings-page">
-        <header className="hero-row settings-header">
-          <div><span className="eyebrow-dark">YOUR ORGANIZATION</span><h1>Settings</h1><p>Set how your organization appears and connect the services used for interviews.</p></div>
-        </header>
+        <PageHeader
+          className="settings-header"
+          eyebrow="YOUR ORGANIZATION"
+          title="Settings"
+          description="Set how your organization appears and connect the services used for interviews."
+        />
       </main>}
     <OrganizationBrandingEditor />
     <main className="container page settings-page">

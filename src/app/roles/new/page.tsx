@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import AppShell from "@/components/AppShell";
 import RoleRequestForm from "@/components/RoleRequestForm";
+import PageHeader from "@/components/ui/PageHeader";
 import {
   COOKIE_NAME,
   verifySessionToken,
@@ -28,17 +29,10 @@ export default async function NewRolePage() {
   return (
     <AppShell user={user}>
       <main className="container page">
-        <div className="hero-row">
-          <div>
-            <h1>Create Role Request</h1>
-
-            <p>
-              Submit a Staff Addition or
-              Replacement Request for HR
-              Review.
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          title="Create Role Request"
+          description="Submit a Staff Addition or Replacement Request for HR Review."
+        />
 
         <RoleRequestForm
           user={{

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { STANDARD_AVATAR_SYSTEM_PROMPT_TEMPLATE } from "@/lib/avatar-prompt";
 import RoleInterviewerPicker from "@/components/RoleInterviewerPicker";
 import ValidationSummary, { type ValidationIssue } from "@/components/ValidationSummary";
@@ -889,7 +890,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
       </div>
 
       <details id="vapi-publishing-checklist" className="vapi-publishing" open>
-        <summary><span><strong>Publishing checklist</strong><small>Complete the missing items below before publishing.</small></span><span className="vapi-status-badge">{setupStatus}</span></summary>
+        <summary><span><strong>Publishing checklist</strong><small>Complete the missing items below before publishing.</small></span><StatusBadge value={setupStatus} /></summary>
         <div className="vapi-publishing-content">
           <fieldset id="vapi-posting-channels" className="vapi-channel-fieldset">
             <legend>External posting channels (optional)</legend>

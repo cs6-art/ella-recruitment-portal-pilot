@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import AppShell from "@/components/AppShell";
 import BookingsList from "@/components/BookingsList";
+import PageHeader from "@/components/ui/PageHeader";
 import { getActiveBookingLinkRoleIds, getInterviewBookings } from "@/lib/candidate-applications";
 import { canManageInterviewAvailability, canManagePipeline } from "@/lib/access-control";
 import { getRoleRequests } from "@/lib/google-sheets";
@@ -15,13 +16,7 @@ export const dynamic = "force-dynamic";
 
 function BookingsLoading() {
   return <main className="container page bookings-page" aria-busy="true">
-    <header className="hero-row bookings-header">
-      <div>
-        <span className="eyebrow-dark">INTERVIEW OPERATIONS</span>
-        <h1>Interview Calendars</h1>
-        <p>Loading schedules and availability...</p>
-      </div>
-    </header>
+    <PageHeader className="bookings-header" eyebrow="INTERVIEW OPERATIONS" title="Interview Calendars" description="Loading schedules and availability..." />
     <section className="card" aria-label="Loading interview calendars">
       <div className="empty">Loading interview calendars...</div>
     </section>

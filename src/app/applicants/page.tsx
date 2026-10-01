@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import AppShell from "@/components/AppShell";
 import ApplicantsList from "@/components/ApplicantsList";
+import PageHeader from "@/components/ui/PageHeader";
 import { filterVisibleApplicants, isDepartmentReviewer } from "@/lib/access-control";
 import { getApplicantMetrics, getApplicantsPage } from "@/lib/candidate-applications";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
@@ -13,13 +14,7 @@ export const dynamic = "force-dynamic";
 
 function ApplicantsLoading() {
   return <main className="container page applicants-page" aria-busy="true">
-    <header className="hero-row">
-      <div>
-        <span className="eyebrow-dark">RECRUITMENT PIPELINE</span>
-        <h1>Applicants</h1>
-        <p>Loading applicant records...</p>
-      </div>
-    </header>
+    <PageHeader eyebrow="RECRUITMENT PIPELINE" title="Applicants" description="Loading applicant records..." />
     <section className="card" aria-label="Loading applicants">
       <div className="empty">Loading applicants...</div>
     </section>

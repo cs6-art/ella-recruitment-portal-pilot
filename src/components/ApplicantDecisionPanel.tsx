@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import ValidationSummary from "@/components/ValidationSummary";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { applicantDecisionLabel, LIVE_AVATAR_REVIEW_LABEL, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 
 type Stage = "resume" | "voice" | "final";
@@ -57,7 +58,7 @@ function reviewStage(props: Props): Stage {
 }
 
 function CompletedDecision({ title, decision, comments, link, linkLabel = "Open Face-to-Face Interview Booking Link" }: { title: string; decision: string; comments: string; link?: string; linkLabel?: string }) {
-  return <div className="applicant-completed-decision"><div className="applicant-decision-title"><strong>{title}</strong><span className={`applicant-decision-badge ${isRejectedDecision(decision) ? "is-rejected" : ""}`}>{applicantDecisionLabel(decision)}</span></div>{link && <a className="applicant-booking-link" href={link} target="_blank" rel="noreferrer">{linkLabel}</a>}{comments ? <div className="applicant-completed-comments"><span>Comments</span><p>{comments}</p></div> : <p className="applicant-completed-empty">No comments were recorded for this decision.</p>}</div>;
+  return <div className="applicant-completed-decision"><div className="applicant-decision-title"><strong>{title}</strong><StatusBadge value={applicantDecisionLabel(decision)} tone={isRejectedDecision(decision) ? "negative" : "positive"} /></div>{link && <a className="applicant-booking-link" href={link} target="_blank" rel="noreferrer">{linkLabel}</a>}{comments ? <div className="applicant-completed-comments"><span>Comments</span><p>{comments}</p></div> : <p className="applicant-completed-empty">No comments were recorded for this decision.</p>}</div>;
 }
 
 function DecisionRow({ stage, title, description, current, link, enabled = true, applicationId, canReview, retryEligible = false, onSaved }: {
@@ -123,7 +124,7 @@ function DecisionRow({ stage, title, description, current, link, enabled = true,
 
   return <div className="applicant-decision-row">
     <div className="applicant-decision-copy">
-      <div className="applicant-decision-title"><strong>{title}</strong>{current && <span className={`applicant-decision-badge ${isRejectedDecision(current) ? "is-rejected" : "is-approved"}`}>{applicantDecisionLabel(current)}</span>}</div>
+      <div className="applicant-decision-title"><strong>{title}</strong>{current && <StatusBadge value={applicantDecisionLabel(current)} tone={isRejectedDecision(current) ? "negative" : "positive"} />}</div>
       <p>{description}</p>
       {stage === "voice" && link && <a className="applicant-booking-link" href={link} target="_blank" rel="noreferrer">Open Voice Interview Booking Link</a>}
       {stage === "voice" && retryEligible && canReview && enabled && !decided && <div className="applicant-voice-retry"><button type="button" className="btn btn-secondary" disabled={retryBusy || busy} onClick={() => void sendBookingLink()}>{retryBusy ? "Sending..." : "Send Reschedule Link"}</button><span>Creates a fresh booking link and emails it to the candidate. No call will be placed until the candidate books a new time.</span></div>}

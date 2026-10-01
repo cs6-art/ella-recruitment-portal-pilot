@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import PageHeader from "@/components/ui/PageHeader";
 import { useConfirmation } from "@/components/ConfirmationModal";
 import { DEPARTMENT_OPTIONS, isKnownDepartment } from "@/lib/department-options";
 import ValidationSummary, { type ValidationIssue } from "@/components/ValidationSummary";
@@ -478,14 +479,13 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
 
   return (
     <main className="container page user-accounts-page">
-      <header className="hero-row user-accounts-header">
-        <div>
-          <span className="eyebrow-dark">{canManageOrganizations ? "ACCESS ADMINISTRATION" : "YOUR TEAM"}</span>
-          <h1>{canManageOrganizations ? "User Accounts & Organizations" : "Team Members"}</h1>
-          <p>{canManageOrganizations ? "Manage organizations, who may register into each one, and their accounts." : canManageTeam ? "Everyone in your organization has full access. As the organization owner, you can deactivate someone here when they should no longer sign in." : "Everyone in your organization has full access. Only the organization owner can deactivate or reactivate accounts."}</p>
-        </div>
-        {canManageOrganizations && <button type="button" className="btn btn-primary" onClick={openNewForm}>Add user account</button>}
-      </header>
+      <PageHeader
+        className="user-accounts-header"
+        eyebrow={canManageOrganizations ? "ACCESS ADMINISTRATION" : "YOUR TEAM"}
+        title={canManageOrganizations ? "User Accounts & Organizations" : "Team Members"}
+        description={canManageOrganizations ? "Manage organizations, who may register into each one, and their accounts." : canManageTeam ? "Everyone in your organization has full access. As the organization owner, you can deactivate someone here when they should no longer sign in." : "Everyone in your organization has full access. Only the organization owner can deactivate or reactivate accounts."}
+        actions={canManageOrganizations ? <button type="button" className="btn btn-primary" onClick={openNewForm}>Add user account</button> : undefined}
+      />
 
       <section className="settings-guide user-accounts-guide">
         <span className="settings-guide-icon">i</span>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { clientErrorMessage } from "@/lib/client-error";
 
 type StorageStatus = {
@@ -279,9 +280,9 @@ export default function RecordingDriveConnect() {
     <div className="card-header">
       <h2>Google Drive for Live Avatar recordings</h2>
       {!loading && status.connected && status.folderConfigured
-        ? <span className="calendar-status-pill calendar-status-connected">Ready</span>
+        ? <StatusBadge value="Ready" />
         : !loading && status.connected
-          ? <span className="calendar-status-pill calendar-status-warning">Choose a folder</span>
+          ? <StatusBadge value="Choose a folder" />
           : null}
     </div>
     <div className="calendar-connect-body">

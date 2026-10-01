@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import UiIcon from "@/components/UiIcon";
+import PageHeader from "@/components/ui/PageHeader";
 import { useConfirmation } from "@/components/ConfirmationModal";
 import type { ApplicantMetrics, ApplicantSummary } from "@/lib/candidate-applications";
 import Pagination from "@/components/Pagination";
@@ -493,16 +494,13 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
   return (
     <>
       <main className="container page applicants-page">
-      <div className="hero-row applicants-header">
-        <div>
-          <h1>{title}</h1>
-          <p>{description}</p>
-          <span className="live-data-note">Applicant records{lastUpdated ? ` · updated ${formatPortalDateTime(lastUpdated)}` : ""}</span>
-        </div>
-        <div className="hero-actions">
-          <button type="button" className="btn btn-secondary" aria-label="Refresh applicants" disabled={refreshing} aria-busy={refreshing} onClick={refreshApplicants}><UiIcon name="refresh" size={16} />{refreshing ? "Refreshing..." : "Refresh"}</button>
-        </div>
-      </div>
+      <PageHeader
+        className="applicants-header"
+        title={title}
+        description={description}
+        meta={<span className="live-data-note">Applicant records{lastUpdated ? ` · updated ${formatPortalDateTime(lastUpdated)}` : ""}</span>}
+        actions={<button type="button" className="btn btn-secondary" aria-label="Refresh applicants" disabled={refreshing} aria-busy={refreshing} onClick={refreshApplicants}><UiIcon name="refresh" size={16} />{refreshing ? "Refreshing..." : "Refresh"}</button>}
+      />
 
       {actionMessage && <ActionFeedback kind="success" className="applicants-action-feedback">{actionMessage}</ActionFeedback>}
       {actionError && <ActionFeedback kind="error" className="applicants-action-feedback" dismissAfterMs={12000}>{actionError}</ActionFeedback>}
