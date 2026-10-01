@@ -4,8 +4,8 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { getDb, isDatabaseConfigured } from "@/db/client";
 import { paymentEvents, payments, type PaymentRow } from "@/db/schema";
-import { findCreditPack } from "@/lib/credit-packs";
-import { recordTopUp } from "@/lib/ella-credits";
+import { customCreditPack, findCreditPack } from "@/lib/credit-packs";
+import { recordTopUp, volumeDiscountBonus } from "@/lib/ella-credits";
 import { appendAccountLedgerEntryOnExecutor, organizationCreditsEnabled } from "@/lib/ella-credits-accounts";
 import { isPaymentEventDedupeConflict, parseProviderAmountCents } from "@/lib/payment-validation";
 import {
@@ -37,7 +37,10 @@ export function isPaymentsConfigured(): boolean {
 const grantKeyFor = (reference: string) => `payment:${reference}`;
 
 export type CreatePurchaseInput = {
-  packId: string;
+  /** A catalog pack id, or omit and pass `credits` for a custom quantity. */
+  packId?: string;
+  /** Custom quantity; the server prices it at the fixed per-credit rate. */
+  credits?: number;
   actorEmail: string;
   actorName: string;
   organizationId: string;
@@ -56,8 +59,8 @@ export type CreatePurchaseResult = {
 };
 
 export async function createCreditPurchase(input: CreatePurchaseInput): Promise<CreatePurchaseResult> {
-  const pack = findCreditPack(input.packId);
-  if (!pack) throw new PaymentError("UNKNOWN_PACK", "That credit pack is not available.");
+  const pack = input.credits !== undefined ? customCreditPack(input.credits) : findCreditPack(input.packId ?? "");
+  if (!pack) throw new PaymentError("UNKNOWN_PACK", input.credits !== undefined ? "Enter a whole number of credits within the allowed range." : "That credit pack is not available.");
 
   const db = getDb();
 
@@ -222,6 +225,9 @@ export async function handleProviderUpdate(update: ProviderUpdate): Promise<Prov
   }
 
   if (organizationCreditsEnabled()) {
+    // Same volume bonus the legacy recordTopUp path applies. Computed before the
+    // transaction (it reads portal settings); the ledger key keeps it idempotent.
+    const { bonus: volumeBonus, percent: volumePercent } = await volumeDiscountBonus(payment.credits);
     // The Pilot's organization wallet and payment row share the same Neon
     // database. Locking the payment row and writing the ledger through the
     // same transaction makes webhook/reconcile races atomic.
@@ -266,6 +272,23 @@ export async function handleProviderUpdate(update: ProviderUpdate): Promise<Prov
             sourceEntryId: creditLedgerSourceId,
           },
         });
+        if (volumeBonus > 0) {
+          await appendAccountLedgerEntryOnExecutor(tx, {
+            organizationId: locked.organizationId,
+            ownerEmail: "org",
+            entry: {
+              type: "TopUp",
+              event: "volume_discount",
+              units: volumeBonus,
+              creditsDelta: volumeBonus,
+              reference: locked.reference,
+              actorName: locked.actorName,
+              actorEmail: locked.actorEmail,
+              note: `${volumePercent}% volume discount on a ${locked.credits}-credit purchase`,
+              sourceEntryId: `LDG-${crypto.createHash("sha256").update(`${grantKeyFor(locked.reference)}:bonus`).digest("hex")}`,
+            },
+          });
+        }
         await tx.update(payments).set({
           providerReference: update.providerReference || locked.providerReference,
           status: "paid",

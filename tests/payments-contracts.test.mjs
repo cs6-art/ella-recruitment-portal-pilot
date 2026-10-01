@@ -44,15 +44,17 @@ test("the webhook verifies the signature before any processing and is idempotent
 
 test("amount is server-calculated and a provider mismatch is never credited", () => {
   const payments = read("src/lib/payments.ts");
-  assert.match(payments, /findCreditPack\(input\.packId\)/);
+  assert.match(payments, /findCreditPack\(input\.packId/);
+  assert.match(payments, /customCreditPack\(input\.credits\)/);
   assert.match(payments, /amountCents: pack\.amountCents/);
   assert.match(payments, /providerCents !== payment\.amountCents/);
   assert.match(payments, /providerCents === null/);
   assert.match(payments, /outcome: "amount_mismatch"/);
   assert.match(payments, /outcome: "provider_mismatch"/);
   const createRoute = read("src/app/api/ella-credits/payments/route.ts");
-  // request body only carries a packId — no amount / credits from the client
+  // request body carries only a packId or a credit quantity — never an amount; the server prices it
   assert.match(createRoute, /z\.object\(\{ packId:/);
+  assert.match(createRoute, /z\.object\(\{ credits: z\.number\(\)\.int\(\)/);
   assert.doesNotMatch(createRoute, /amountCents:\s*z\./);
 });
 

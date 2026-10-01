@@ -67,3 +67,11 @@ test("a malformed override is ignored and the built-in catalog is kept", () => {
   resetCreditPackCache();
   delete process.env.ELLA_CREDIT_PACKS;
 });
+
+test("custom purchases price any whole credit quantity at the fixed rate and reject out-of-range input", async () => {
+  const { customCreditPack, MAX_CUSTOM_CREDITS } = await import("../src/lib/credit-packs.ts");
+  assert.equal(customCreditPack(1)?.amountCents, 40);
+  assert.equal(customCreditPack(25)?.amountCents, 1000);
+  assert.equal(customCreditPack(MAX_CUSTOM_CREDITS)?.amountCents, MAX_CUSTOM_CREDITS * 40);
+  for (const bad of [0, -1, 1.5, MAX_CUSTOM_CREDITS + 1, "10", null, NaN]) assert.equal(customCreditPack(bad), null);
+});

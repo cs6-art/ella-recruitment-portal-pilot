@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { canManageCredits } from "@/lib/access-control";
-import { creditPacks } from "@/lib/credit-packs";
+import { creditPacks, ELLA_CREDIT_PRICE_CENTS, MAX_CUSTOM_CREDITS, MIN_CUSTOM_CREDITS } from "@/lib/credit-packs";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { createCreditPurchase, isPaymentsConfigured, listRecentPayments, PaymentError } from "@/lib/payments";
 import { hitpayMode } from "@/lib/hitpay";
@@ -12,7 +12,10 @@ import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const bodySchema = z.object({ packId: z.string().trim().min(1).max(64) });
+const bodySchema = z.union([
+  z.object({ packId: z.string().trim().min(1).max(64) }),
+  z.object({ credits: z.number().int().min(MIN_CUSTOM_CREDITS).max(MAX_CUSTOM_CREDITS) }),
+]);
 
 async function currentUser() {
   return verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
@@ -46,7 +49,7 @@ export async function GET() {
       console.error("[API Payments] list failed:", error);
     }
   }
-  return NextResponse.json({ success: true, configured, mode: hitpayMode(), packs, recent }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ success: true, configured, mode: hitpayMode(), packs, custom: { priceCents: ELLA_CREDIT_PRICE_CENTS, min: MIN_CUSTOM_CREDITS, max: MAX_CUSTOM_CREDITS, currency: "SGD" }, recent }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {
@@ -66,11 +69,11 @@ export async function POST(request: Request) {
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
-  if (!parsed.success) return NextResponse.json({ success: false, error: "Choose a credit pack." }, { status: 422 });
+  if (!parsed.success) return NextResponse.json({ success: false, error: `Choose a credit pack or enter ${MIN_CUSTOM_CREDITS}-${MAX_CUSTOM_CREDITS} credits.` }, { status: 422 });
 
   try {
     const result = await createCreditPurchase({
-      packId: parsed.data.packId,
+      ...("packId" in parsed.data ? { packId: parsed.data.packId } : { credits: parsed.data.credits }),
       actorEmail: user.email,
       actorName: user.name,
       organizationId: user.organizationId,

@@ -31,6 +31,17 @@ export function amountCentsForCredits(credits: number): number {
   return quantity * ELLA_CREDIT_PRICE_CENTS;
 }
 
+/** Custom purchases: any whole number of credits in this range, at the fixed rate. */
+export const MIN_CUSTOM_CREDITS = 1;
+export const MAX_CUSTOM_CREDITS = 10000;
+
+/** Build a one-off pack for a custom quantity, or null if it is out of range. */
+export function customCreditPack(credits: unknown): CreditPack | null {
+  if (typeof credits !== "number" || !Number.isInteger(credits)) return null;
+  if (credits < MIN_CUSTOM_CREDITS || credits > MAX_CUSTOM_CREDITS) return null;
+  return { id: "custom", label: `Custom — ${credits} credits`, credits, amountCents: amountCentsForCredits(credits), currency: "SGD" };
+}
+
 const DEFAULT_PACKS: CreditPack[] = [
   { id: "starter", label: "Starter — 10 credits", credits: 10, amountCents: 400, currency: "SGD" },
   { id: "standard", label: "Standard — 50 credits", credits: 50, amountCents: 2000, currency: "SGD" },

@@ -39,6 +39,8 @@ function clearPaymentReturnUrl() {
 
 export default function EllaCreditsPurchase() {
   const [packs, setPacks] = useState<CreditPack[]>([]);
+  const [custom, setCustom] = useState({ priceCents: 40, min: 1, max: 10000 });
+  const [customCredits, setCustomCredits] = useState("");
   const [configured, setConfigured] = useState(false);
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState("");
@@ -54,6 +56,7 @@ export default function EllaCreditsPurchase() {
       const body = await response.json();
       if (!response.ok || body.success !== true) throw new Error(body.error || "Unable to load credit packs.");
       setPacks(body.packs || []);
+      if (body.custom) setCustom(body.custom);
       setConfigured(body.configured === true);
       setError("");
     } catch (loadError) {
@@ -167,7 +170,7 @@ export default function EllaCreditsPurchase() {
     }
   }
 
-  async function startPayment(packId: string) {
+  async function startPayment(packId: string, credits?: number) {
     setBuying(packId);
     setError("");
     try {
@@ -178,7 +181,7 @@ export default function EllaCreditsPurchase() {
           "Content-Type": "application/json",
           "Idempotency-Key": `credit-purchase-ui:${crypto.randomUUID()}`,
         },
-        body: JSON.stringify({ packId }),
+        body: JSON.stringify(credits === undefined ? { packId } : { credits }),
       });
       const body = await response.json();
       if (!response.ok || body.success !== true || typeof body.url !== "string" || !body.url) {
@@ -191,13 +194,16 @@ export default function EllaCreditsPurchase() {
     }
   }
 
+  const customAmount = Number(customCredits);
+  const customValid = customCredits.trim() !== "" && Number.isInteger(customAmount) && customAmount >= custom.min && customAmount <= custom.max;
+
   return (
     <section className={`card ${styles.panel}`}>
       <div className={styles.header}>
         <div>
           <span className={styles.eyebrow}>CREDIT PURCHASE</span>
           <h2>Buy Smile Credits</h2>
-          <p>Choose a pack and continue to the secure checkout. Credits are added as soon as your payment is confirmed.</p>
+          <p>Choose a pack or enter your own amount and continue to the secure checkout. Credits are added as soon as your payment is confirmed.</p>
         </div>
       </div>
 
@@ -218,6 +224,25 @@ export default function EllaCreditsPurchase() {
             </button>
           </article>
         ))}
+        <article className={styles.pack}>
+          <h3>Custom amount</h3>
+          <label className={styles.packCredits} htmlFor="custom-credits">Credits ({nf.format(custom.min)}–{nf.format(custom.max)})</label>
+          <input
+            id="custom-credits"
+            type="number"
+            inputMode="numeric"
+            min={custom.min}
+            max={custom.max}
+            step={1}
+            value={customCredits}
+            onChange={(event) => setCustomCredits(event.target.value)}
+            placeholder="e.g. 25"
+          />
+          <p className={styles.packPrice}>{customValid ? money.format((customAmount * custom.priceCents) / 100) : money.format(custom.priceCents / 100) + " per credit"}</p>
+          <button type="button" className="btn btn-primary" disabled={buying !== "" || !customValid} onClick={() => void startPayment("custom", customAmount)}>
+            {buying === "custom" ? "Opening checkout…" : "Pay with HitPay"}
+          </button>
+        </article>
       </div>}
     </section>
   );
