@@ -69,7 +69,7 @@ async function resolveTargetOrganization(request: Request, user: Awaited<ReturnT
       : await getDb().select({ id: organizations.id, active: organizations.active }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
   if (!organization) return { error: responseError("Organization not found.", 404) } as const;
   if (!organization.active) return { error: responseError("This organization is inactive.", 409) } as const;
-  return { organizationId } as const;
+  return { organizationId: organization.id } as const;
 }
 
 /** McLink's directory is the staff Sheet plus accounts that registered themselves in the database. */

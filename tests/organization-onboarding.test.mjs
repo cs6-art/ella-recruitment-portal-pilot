@@ -85,6 +85,7 @@ test("admin organization responses use public slugs, never database keys or inte
   const directory = read("src/app/api/user-directory/route.ts");
   assert.match(directory, /searchParams\.get\("organizationSlug"\)/);
   assert.match(directory, /isPlatformAdmin\(user\)/);
+  assert.match(directory, /return \{ organizationId: organization\.id \} as const;/, "selected organizations must use the looked-up ID");
 });
 
 test("dashboard turns saved email delivery failures into operational alerts", () => {
