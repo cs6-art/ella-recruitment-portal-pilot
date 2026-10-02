@@ -141,6 +141,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
   const [inviteSaving, setInviteSaving] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
+  const [inviteMessageKind, setInviteMessageKind] = useState<"success" | "warning">("success");
   const [inviteAvailable, setInviteAvailable] = useState(false);
   const [inviteLimit, setInviteLimit] = useState<number | null>(null);
   const [inviteUsed, setInviteUsed] = useState(0);
@@ -201,6 +202,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
     event.preventDefault();
     setInviteError("");
     setInviteMessage("");
+    setInviteMessageKind("success");
     const email = inviteEmail.trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(email)) { setInviteError("Enter a valid email address."); return; }
     setInviteSaving(true);
@@ -209,6 +211,7 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       const data = await response.json();
       if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to send the invitation.");
       setInviteMessage(data.message || "Invitation saved.");
+      setInviteMessageKind(data.emailSent === false ? "warning" : "success");
       setInviteEmail("");
       await loadInvites();
     } catch (caught) {
@@ -543,9 +546,9 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
       </section>}
 
       {inviteAvailable && !canManageOrganizations && <section className="card organization-admin-card" aria-labelledby="team-invite-title">
-        <div className="card-header"><div><h2 id="team-invite-title">Invite a teammate</h2><p>Enter their email address. When they register with that address and verify it, they join your organization automatically.{inviteLimit !== null && <> Your organization has {inviteUsed} of {inviteLimit} people. Contact McLink support to raise the limit.</>}</p></div></div>
+        <div className="card-header"><div><h2 id="team-invite-title">Invite a teammate</h2><p>Enter their email address and we’ll send a registration link. After they register, they’ll receive a one-time verification link; confirming it returns them to log in.{inviteLimit !== null && <> Your organization has {inviteUsed} of {inviteLimit} people. Contact McLink support to raise the limit.</>}</p></div></div>
         {inviteError && <ActionFeedback kind="error">{inviteError}</ActionFeedback>}
-        {inviteMessage && <ActionFeedback kind="success">{inviteMessage}</ActionFeedback>}
+        {inviteMessage && <ActionFeedback kind={inviteMessageKind}>{inviteMessage}</ActionFeedback>}
         <form className="user-account-form" noValidate onSubmit={(event) => void sendInvite(event)}>
           <div className="field"><label htmlFor="invite-email">Email address</label><input id="invite-email" type="email" value={inviteEmail} onChange={(event) => { setInviteEmail(event.target.value); setInviteError(""); }} placeholder="name@company.com" /></div>
           <div className="user-account-form-actions"><button type="submit" className="btn btn-primary" disabled={inviteSaving}>{inviteSaving ? "Inviting…" : "Invite teammate"}</button></div>

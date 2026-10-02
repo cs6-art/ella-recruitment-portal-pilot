@@ -77,6 +77,13 @@ test("HR exception saves update the client calendar immediately", () => {
   assert.match(bookings, /router\.refresh\(\)/);
 });
 
+test("blocked HR slots explain why they cannot be booked", () => {
+  assert.match(bookings, /const isBlocked = bookingStatus === "blocked"/);
+  assert.match(bookings, /Connected HR calendar has a conflicting event/);
+  assert.match(bookings, /HR Google Calendar is not connected/);
+  assert.match(bookings, /booking-unassigned-blocked/);
+});
+
 test("calendar counter uses configured windows and recruitment setup is editable from role details", () => {
   assert.match(bookings, /function activeWindowCount/);
   assert.match(bookings, /\{activeWindows\}/);

@@ -10,6 +10,8 @@ import { users } from "@/db/schema-recruitment";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { getPublicAppBaseUrl } from "@/lib/public-url";
+import { sendTeamInvitationEmail } from "@/lib/registration";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,7 +39,7 @@ async function requireOwner() {
 }
 
 async function loadOrganization(organizationId: string) {
-  const [organization] = await getDb().select({ allowedEmails: organizations.allowedEmails, allowedDomains: organizations.allowedDomains, maxMembers: organizations.maxMembers }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+  const [organization] = await getDb().select({ name: organizations.name, allowedEmails: organizations.allowedEmails, allowedDomains: organizations.allowedDomains, maxMembers: organizations.maxMembers }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
   return organization;
 }
 
@@ -89,7 +91,19 @@ export async function POST(request: Request) {
     const conflict = others.find((other) => other.id !== organizationId && (other.allowedEmails.includes(email) || other.allowedDomains.includes(domain)));
     if (conflict) return fail("That email address already belongs to another organization.", 409);
     await getDb().update(organizations).set({ allowedEmails: [...organization.allowedEmails, email], updatedAt: new Date() }).where(eq(organizations.id, organizationId));
-    return NextResponse.json({ success: true, message: `${email} can now register with that address and will join your organization.` });
+    const inviteLink = new URL(`${getPublicAppBaseUrl(request)}/`);
+    inviteLink.searchParams.set("register", "1");
+    inviteLink.searchParams.set("email", email);
+    const emailResult = await sendTeamInvitationEmail({ email, organizationName: organization.name, link: inviteLink.toString() });
+    if (emailResult.status !== "sent") {
+      console.error("[API Team Invites] Invitation email not sent:", emailResult.status, emailResult.error || "");
+      return NextResponse.json({
+        success: true,
+        emailSent: false,
+        message: `${email} was added as an invited teammate, but the invitation email could not be sent. Check the email configuration and try again.`,
+      });
+    }
+    return NextResponse.json({ success: true, emailSent: true, message: `Invitation sent to ${email}. They can register from the email and will receive a verification link.` });
   } catch (error) {
     if (error instanceof z.ZodError) return fail(error.issues[0]?.message || "Enter a valid email address.", 400);
     console.error("[API Team Invites] POST failed:", error);

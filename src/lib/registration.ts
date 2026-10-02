@@ -396,7 +396,27 @@ export function sendVerificationEmail(input: { email: string; fullName: string; 
   }, VERIFICATION_TTL_MS / 3_600_000);
 }
 
-async function postAuthEmail(eventType: string, input: { email: string; fullName: string; link: string }, email: Record<string, string>, expiresInHours: number): Promise<AuthEmailResult> {
+/**
+ * Send the first message in the teammate invitation flow. The invitation
+ * opens registration with the invited address filled in; registration then
+ * issues the actual one-time verification link. The existing auth-email
+ * event is kept for compatibility with the deployed n8n auth workflow.
+ */
+export function sendTeamInvitationEmail(input: { email: string; organizationName: string; link: string }): Promise<AuthEmailResult> {
+  return postAuthEmail("registration_verification_requested", {
+    email: input.email,
+    fullName: "",
+    link: input.link,
+    organizationName: input.organizationName,
+  }, {
+    subject: `Invitation to join ${input.organizationName} on Smile Recruitment Portal`,
+    heading: `You’re invited to join ${input.organizationName}`,
+    message: "Your organization owner invited you to join the recruitment portal. Use the link below to register with this email address and verify your account.",
+    note: "You’ll choose your password during registration. After you confirm your email, return to the portal to log in.",
+  });
+}
+
+async function postAuthEmail(eventType: string, input: { email: string; fullName: string; link: string; organizationName?: string }, email: Record<string, string>, expiresInHours?: number): Promise<AuthEmailResult> {
   const url = process.env.N8N_VERIFICATION_EMAIL_WEBHOOK_URL?.trim();
   const secret = process.env.N8N_WEBHOOK_SECRET?.trim();
   if (!url || !secret) return { status: "not_configured" };
@@ -410,6 +430,7 @@ async function postAuthEmail(eventType: string, input: { email: string; fullName
         verificationLink: input.link,
         actionLink: input.link,
         expiresInHours,
+        organizationName: input.organizationName,
         email,
       }),
       cache: "no-store",

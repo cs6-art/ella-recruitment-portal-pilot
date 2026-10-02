@@ -2479,7 +2479,21 @@ export async function listBookingSlots(kind?: string, roleExternalId?: string, o
   const conditions = options.availableOnly === false ? [] : [eq(interviewSlots.status, "available")];
   if (kind) conditions.push(eq(interviewSlots.interviewType, kind));
   if (roleExternalId) conditions.push(eq(roles.externalId, roleExternalId));
-  return db.select({ slot: interviewSlots, roleExternalId: roles.externalId }).from(interviewSlots).innerJoin(roles, eq(roles.id, interviewSlots.roleId)).where(and(...conditions, eq(roles.organizationId, organizationId.trim()))).orderBy(asc(interviewSlots.startsAt)).limit(LIMIT);
+  // The slot stores the internal application UUID. Admin links need the
+  // stable external application reference used by /applicants/[applicationId],
+  // so join it here instead of leaking the internal identifier to the UI.
+  return db.select({
+    slot: interviewSlots,
+    roleExternalId: roles.externalId,
+    applicationExternalId: applications.externalId,
+    applicationCandidateName: applications.candidateName,
+    applicationEmail: applications.email,
+  }).from(interviewSlots)
+    .innerJoin(roles, eq(roles.id, interviewSlots.roleId))
+    .leftJoin(applications, eq(applications.id, interviewSlots.applicationId))
+    .where(and(...conditions, eq(roles.organizationId, organizationId.trim())))
+    .orderBy(asc(interviewSlots.startsAt))
+    .limit(LIMIT);
 }
 
 /** Return only future booked interviews for the dashboard, avoiding the

@@ -1565,10 +1565,11 @@ export async function targetBookings() {
   const interviewerNames = await interviewerNamesForOrganization(organizationId);
   return rows.map((row) => {
     const slot = (row as { slot?: Record<string, unknown> }).slot || row as unknown as Record<string, unknown>;
+    const applicationExternalId = text((row as { applicationExternalId?: string }).applicationExternalId);
     const timezone = text(slot.timezone) || "Asia/Singapore";
     const startsAt = slotDateTime(slot.startsAt, timezone);
     const endsAt = slotDateTime(slot.endsAt, timezone);
-    return { slotId: text(slot.id), interviewType: text(slot.interviewType), roleId: text((row as { roleExternalId?: string }).roleExternalId), date: startsAt.date, startTime: startsAt.time, endTime: endsAt.time, timezone, status: label(slot.status), applicationId: text(slot.applicationId), candidateName: text(slot.candidateName), candidateEmail: text(slot.candidateEmail), bookedAt: text(slot.bookedAt), lastUpdated: text(slot.updatedAt), interviewerName: interviewerNameForSlot(slot, interviewerNames), interviewerEmail: text(slot.interviewerEmail), calendarEventId: text(slot.calendarEventId), calendarEventLink: text(slot.calendarEventLink), calendarEventStatus: text(slot.calendarEventStatus), calendarEventError: text(slot.calendarEventError) };
+    return { slotId: text(slot.id), interviewType: text(slot.interviewType), roleId: text((row as { roleExternalId?: string }).roleExternalId), date: startsAt.date, startTime: startsAt.time, endTime: endsAt.time, timezone, status: label(slot.status), applicationId: applicationExternalId, candidateName: text((row as { applicationCandidateName?: string }).applicationCandidateName) || text(slot.candidateName), candidateEmail: text((row as { applicationEmail?: string }).applicationEmail) || text(slot.candidateEmail), bookedAt: text(slot.bookedAt), lastUpdated: text(slot.updatedAt), interviewerName: interviewerNameForSlot(slot, interviewerNames), interviewerEmail: text(slot.interviewerEmail), calendarEventId: text(slot.calendarEventId), calendarEventLink: text(slot.calendarEventLink), calendarEventStatus: text(slot.calendarEventStatus), calendarEventError: text(slot.calendarEventError) };
   });
 }
 

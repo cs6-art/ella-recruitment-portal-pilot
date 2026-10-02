@@ -919,6 +919,7 @@ a { color: inherit; text-decoration: none; }
 .selected-booking-item.is-completed { border-left-color: #1674c5; background: #f1f8ff; }
 .selected-booking-item.is-no-show { border-left-color: #c45b5b; background: #fff8f8; }
 .selected-booking-item.is-cancelled { border-left-color: #72808c; background: #f5f7f8; }
+.selected-booking-item.is-blocked { border-left-color: #d68a25; background: #fffaf1; }
 .selected-booking-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 9px; color: #176ba6; background: #e8f3ff; }
 .is-booked .selected-booking-icon { color: #176b43; background: #e4f5eb; }
 .selected-booking-main { min-width: 0; flex: 1; }
@@ -955,6 +956,7 @@ a { color: inherit; text-decoration: none; }
 .booking-status-available { background: #e8f3ff; color: #176ba6; }
 .booking-status-no-show { background: #fde9e9; color: #a53f3f; }
 .booking-unassigned { color: var(--muted); font-size: 13px; }
+.booking-unassigned-blocked { color: #8d5423; font-weight: 700; }
 .booking-calendar-summary-day { min-height: 122px; }
 .booking-calendar-summary-day .calendar-day-button { min-height: 104px; }
 .calendar-day-summary { display: grid; gap: 4px; margin-top: 7px; }

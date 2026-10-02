@@ -1,10 +1,24 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+const CANONICAL_PORTAL_ORIGIN = "https://smile.mclinkgroup.com";
+const RETIRED_PORTAL_HOSTS = new Set([
+  "ella-recruitment.mclinkgroup.com",
+  "ella-recruitment-portal-pilot.vercel.app",
+]);
+
 // The candidate page contains a form, so direct visits without an invitation
 // must not receive the static page. The invitation itself is still validated
 // by the page and by the submission API.
 export function proxy(request: NextRequest) {
+  // The old pilot host still serves a pre-email-auth deployment that sends
+  // users into the retired Google OAuth flow. Keep old bookmarks and links
+  // from reaching that deployment when this app receives the request.
+  if (RETIRED_PORTAL_HOSTS.has(request.nextUrl.hostname.toLowerCase())) {
+    const destination = new URL(`${request.nextUrl.pathname}${request.nextUrl.search}`, CANONICAL_PORTAL_ORIGIN);
+    return NextResponse.redirect(destination, 308);
+  }
+
   if (request.nextUrl.pathname === "/index.html" && !request.nextUrl.searchParams.get("invite")?.trim()) {
     return NextResponse.redirect(new URL("/", request.url));
   }
@@ -70,5 +84,10 @@ function sameOrigin(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/index.html", "/api/:path*"],
+  // The host redirect must also cover the root page and protected pages. Keep
+  // static assets out of Proxy while retaining the existing API checks.
+  matcher: [
+    "/api/:path*",
+    "/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
+  ],
 };
