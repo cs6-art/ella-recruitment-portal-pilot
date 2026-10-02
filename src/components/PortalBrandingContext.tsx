@@ -7,7 +7,7 @@ export type PortalBranding = {
   subtitle: string;
 };
 
-const FALLBACK_BRANDING: PortalBranding = { name: "Recruitment Portal", subtitle: "" };
+const FALLBACK_BRANDING: PortalBranding = { name: "Smile", subtitle: "Recruitment Portal" };
 const PortalBrandingContext = createContext<PortalBranding>(FALLBACK_BRANDING);
 
 export function PortalBrandingProvider({ initialBranding, children }: { initialBranding: PortalBranding; children: React.ReactNode }) {

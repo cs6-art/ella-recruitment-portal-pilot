@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import { countryOptions, CountrySelect } from "@/components/CountryOptions";
@@ -137,7 +138,7 @@ export default function BookingSelector({ token, initialContext }: { token: stri
 
   const interviewLabel = context.kind === "voice" ? "AI voice interview" : "face-to-face interview";
   return <main className="booking-page"><section className="booking-card">
-    <div className="booking-brand"><span className="booking-brand-mark">M</span><span><strong>McLink</strong><small>Recruitment Portal</small></span></div>
+    <div className="booking-brand"><span className="booking-brand-mark"><Image src="/smile-recruitment-portal-logo.png" alt="" width={34} height={34} /></span><span><strong>Smile</strong><small>Recruitment Portal</small></span></div>
     <div className="booking-eyebrow">{title}</div>
     <h1>{noAvailability ? (noShow ? "No replacement times are available" : "No interview times are currently available") : noShow ? "Choose a new interview time" : completed ? "Your interview has been completed" : booked ? "Your interview is confirmed" : "Choose a time for your interview"}</h1>
     <p className="booking-intro">Hello {context.candidateName || "there"}. {noAvailability ? <>We do not have any available times for {roleName ? <><strong>{roleName}</strong> at this time</> : interviewLabel}.</> : selecting ? <>Select a time that suits you for {roleName ? <><strong>{roleName}</strong></> : "your interview"}.</> : <>{roleName ? <>Your <strong>{roleName}</strong> interview has been confirmed.</> : "Your interview has been confirmed."}</>}</p>

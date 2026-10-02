@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
 
 import InterviewStatusNotice from "@/components/InterviewStatusNotice";
 import LiveAvatarInterview from "@/components/LiveAvatarInterview";
@@ -21,7 +22,7 @@ export default async function AvatarInterviewPage({ params }: { params: Promise<
     return (
       <main className="avatar-interview-page">
         <section className="avatar-interview-shell">
-          <div className="avatar-interview-brand"><span className="avatar-interview-mark">M</span><span><strong>McLink</strong><small>Recruitment Portal</small></span></div>
+          <div className="avatar-interview-brand"><span className="avatar-interview-mark"><Image src="/smile-recruitment-portal-logo.png" alt="" width={34} height={34} /></span><span><strong>Smile</strong><small>Recruitment Portal</small></span></div>
           <span className="avatar-interview-eyebrow">CANDIDATE LIVE AVATAR INTERVIEW</span>
           <h1>Live Avatar Interview with Smile</h1>
           <InterviewStatusNotice avatarToken={token} inProgress={interview.status === "INTERVIEW_IN_PROGRESS"} />
@@ -39,7 +40,7 @@ export default async function AvatarInterviewPage({ params }: { params: Promise<
   return (
     <main className="avatar-interview-page">
       <section className="avatar-interview-shell">
-        <div className="avatar-interview-brand"><span className="avatar-interview-mark">M</span><span><strong>McLink</strong><small>Recruitment Portal</small></span></div>
+        <div className="avatar-interview-brand"><span className="avatar-interview-mark"><Image src="/smile-recruitment-portal-logo.png" alt="" width={34} height={34} /></span><span><strong>Smile</strong><small>Recruitment Portal</small></span></div>
         <span className="avatar-interview-eyebrow">CANDIDATE LIVE AVATAR INTERVIEW</span>
         <h1>Live Avatar Interview with Smile</h1>
         <p className="avatar-interview-intro">Hello {context.candidateName || "there"}. Smile&apos;s Live Avatar will ask one focused question about your application for the <strong>{context.roleTitle}</strong> role.</p>

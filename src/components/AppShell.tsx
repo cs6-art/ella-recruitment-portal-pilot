@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -113,7 +114,7 @@ export default function AppShell({ user, children }: AppShellProps) {
       <aside id="portal-navigation" className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ""} ${sidebarCollapsed ? styles.sidebarCollapsed : ""}`} aria-label="Portal navigation">
         <div className={styles.sidebarTop}>
           <Link href="/dashboard" className={styles.brand} onClick={closeSidebar}>
-            <span className={styles.brandIcon}>{branding.name.slice(0, 1).toUpperCase()}</span><span><strong>{branding.name}</strong><small>{branding.subtitle}</small></span>
+            <span className={styles.brandIcon}><Image className={styles.brandLogo} src="/smile-recruitment-portal-logo.png" alt="" width={44} height={44} priority /></span><span><strong>{branding.name}</strong><small>{branding.subtitle}</small></span>
           </Link>
           <button type="button" className={styles.closeButton} onClick={closeSidebar} aria-label="Close navigation"><UiIcon name="close" /></button>
         </div>
@@ -152,7 +153,7 @@ export default function AppShell({ user, children }: AppShellProps) {
       </aside>
 
       <div className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ""}`}>
-        <header className={styles.mobileHeader}><Link href="/dashboard" className={styles.mobileBrand} onClick={closeSidebar}><span className={styles.brandIcon}>{branding.name.slice(0, 1).toUpperCase()}</span><strong>{branding.name} {branding.subtitle}</strong></Link><div className={styles.mobileHeaderActions}><EllaCreditsMeter variant="mobile" /><button type="button" className={styles.menuButton} onClick={() => setSidebarOpen(true)} aria-expanded={sidebarOpen} aria-controls="portal-navigation"><UiIcon name="menu" /><span>Menu</span></button></div></header>
+        <header className={styles.mobileHeader}><Link href="/dashboard" className={styles.mobileBrand} onClick={closeSidebar}><span className={styles.brandIcon}><Image className={styles.brandLogo} src="/smile-recruitment-portal-logo.png" alt="" width={38} height={38} /></span><strong>{branding.name} {branding.subtitle}</strong></Link><div className={styles.mobileHeaderActions}><EllaCreditsMeter variant="mobile" /><button type="button" className={styles.menuButton} onClick={() => setSidebarOpen(true)} aria-expanded={sidebarOpen} aria-controls="portal-navigation"><UiIcon name="menu" /><span>Menu</span></button></div></header>
         {/* Single instance: absolutely positioned on desktop, a slim right-aligned
             row on mobile. Rendering it twice would double the poll traffic. */}
         {showApplicants && <div className={styles.topBar}><NewApplicantsBell userEmail={userEmail} /></div>}

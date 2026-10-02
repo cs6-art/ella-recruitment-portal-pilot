@@ -31,6 +31,26 @@ test("organization branding is tenant-scoped and editable only through Settings 
   assert.match(shell, /usePortalBranding/);
 });
 
+test("Smile branding is present in the document title, fallback shell, and app mark", () => {
+  const layout = read("src/app/layout.tsx");
+  const context = read("src/components/PortalBrandingContext.tsx");
+  const shell = read("src/components/AppShell.tsx");
+  const bookingSelector = read("src/components/BookingSelector.tsx");
+  const avatarPage = read("src/app/avatar/[token]/page.tsx");
+  const bookingNotFound = read("src/app/book/[kind]/[token]/not-found.tsx");
+
+  assert.match(layout, /default: "Smile Recruitment Portal"/);
+  assert.match(layout, /template: "%s \\| Smile Recruitment Portal"/);
+  assert.match(layout, /title: "Smile Recruitment Portal"/);
+  assert.match(context, /name: "Smile", subtitle: "Recruitment Portal"/);
+  assert.match(shell, /\/smile-recruitment-portal-logo\.png/);
+  assert.match(bookingSelector, /\/smile-recruitment-portal-logo\.png/);
+  assert.match(avatarPage, /\/smile-recruitment-portal-logo\.png/);
+  assert.match(bookingNotFound, /\/smile-recruitment-portal-logo\.png/);
+  assert.doesNotMatch(bookingSelector, /booking-brand-mark">M</);
+  assert.doesNotMatch(avatarPage, /avatar-interview-mark">M</);
+});
+
 test("role IDs are allocated from the signed-in organization's roles", () => {
   const rolesRoute = read("src/app/api/roles/route.ts");
   const statusRoute = read("src/app/api/roles/[roleId]/status/route.ts");

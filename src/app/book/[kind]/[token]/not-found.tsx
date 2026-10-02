@@ -1,13 +1,14 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export default function BookingLinkNotFound() {
   return (
     <main className="booking-page">
       <section className="booking-card booking-unavailable-card" aria-labelledby="booking-unavailable-title">
         <div className="booking-brand">
-          <span className="booking-brand-mark">M</span>
+          <span className="booking-brand-mark"><Image src="/smile-recruitment-portal-logo.png" alt="" width={34} height={34} /></span>
           <span>
-            <strong>McLink</strong>
+            <strong>Smile</strong>
             <small>Recruitment Portal</small>
           </span>
         </div>
@@ -25,7 +26,7 @@ export default function BookingLinkNotFound() {
         </div>
 
         <Link className="booking-submit booking-unavailable-link" href="/">
-          Return to McLink
+          Return to Smile
         </Link>
         <p className="booking-help">No action is required on this page.</p>
       </section>

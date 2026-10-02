@@ -9,8 +9,17 @@ import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Recruitment Portal",
+  title: {
+    default: "Smile Recruitment Portal",
+    template: "%s | Smile Recruitment Portal",
+  },
+  applicationName: "Smile Recruitment Portal",
   description: "Role-first recruitment request and approval portal",
+  appleWebApp: {
+    capable: true,
+    title: "Smile Recruitment Portal",
+    statusBarStyle: "default",
+  },
 };
 
 // Applies the saved sidebar-collapsed preference before first paint so the
