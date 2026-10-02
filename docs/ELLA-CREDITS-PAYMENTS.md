@@ -13,7 +13,7 @@ The application appends `/payment-requests` and
 `/payment-requests/<id>`. Do not configure the host-only URL and do not add a
 second `/v1`.
 
-Ella Credits are priced at S$0.40 each. The built-in packs are Starter (50 credits for
+Ella Credits are priced at S$0.40 each by default. Set the `ELLA_CREDIT_PRICE_CENTS` environment variable (for example `50`) to change the per-credit price, which also reprices the packs and custom amounts. The built-in packs are Starter (50 credits for
 S$20.00), Standard (100 credits for S$40.00) and Bulk (2,000 credits for
 S$800.00). Buyers can also enter any whole number of credits from 1 to 10,000
 at the same rate. The client sends only a pack id or a credit quantity; the

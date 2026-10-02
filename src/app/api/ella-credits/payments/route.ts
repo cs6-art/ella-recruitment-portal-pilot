@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { canManageCredits } from "@/lib/access-control";
-import { creditPacks, ELLA_CREDIT_PRICE_CENTS, MAX_CUSTOM_CREDITS, MIN_CUSTOM_CREDITS } from "@/lib/credit-packs";
+import { creditPacks, creditPriceCents, MAX_CUSTOM_CREDITS, MIN_CUSTOM_CREDITS } from "@/lib/credit-packs";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { createCreditPurchase, isPaymentsConfigured, listRecentPayments, PaymentError } from "@/lib/payments";
 import { getCreditPricing, volumeDiscountBonus } from "@/lib/ella-credits";
@@ -59,7 +59,7 @@ export async function GET() {
       console.error("[API Payments] list failed:", error);
     }
   }
-  return NextResponse.json({ success: true, configured, mode: hitpayMode(), packs, custom: { priceCents: ELLA_CREDIT_PRICE_CENTS, min: MIN_CUSTOM_CREDITS, max: MAX_CUSTOM_CREDITS, currency: "SGD", bonusThreshold: pricing?.discountThreshold ?? 0, bonusPercent: pricing?.discountPercent ?? 0 }, recent }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ success: true, configured, mode: hitpayMode(), packs, custom: { priceCents: creditPriceCents(), min: MIN_CUSTOM_CREDITS, max: MAX_CUSTOM_CREDITS, currency: "SGD", bonusThreshold: pricing?.discountThreshold ?? 0, bonusPercent: pricing?.discountPercent ?? 0 }, recent }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {

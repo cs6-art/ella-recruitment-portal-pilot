@@ -20,15 +20,23 @@ export type CreditPack = {
   currency: string;
 };
 
-/** Smile Credits are priced at S$0.40 per credit. Keep this calculation in one
- * server-only module so a client payload or an env override cannot change the
- * amount charged for a given quantity. */
-export const ELLA_CREDIT_PRICE_CENTS = 40;
+/** Smile Credits are priced at S$0.40 per credit unless the operator sets
+ * `ELLA_CREDIT_PRICE_CENTS` (a whole number of cents, e.g. 50 while HitPay's
+ * minimum charge is S$0.50). It is a server-side env var, so a client payload
+ * cannot change the amount charged for a given quantity. */
+export const DEFAULT_CREDIT_PRICE_CENTS = 40;
+
+export function creditPriceCents(): number {
+  const raw = process.env.ELLA_CREDIT_PRICE_CENTS?.trim();
+  if (!raw) return DEFAULT_CREDIT_PRICE_CENTS;
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : DEFAULT_CREDIT_PRICE_CENTS;
+}
 
 export function amountCentsForCredits(credits: number): number {
   const quantity = Math.trunc(credits);
   if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new Error("Credit quantity must be a positive whole number.");
-  return quantity * ELLA_CREDIT_PRICE_CENTS;
+  return quantity * creditPriceCents();
 }
 
 /** Custom purchases: any whole number of credits in this range, at the fixed rate. */
@@ -42,12 +50,15 @@ export function customCreditPack(credits: unknown): CreditPack | null {
   return { id: "custom", label: `Custom — ${credits} credits`, credits, amountCents: amountCentsForCredits(credits), currency: "SGD" };
 }
 
-const DEFAULT_PACKS: CreditPack[] = [
-  { id: "starter", label: "Starter — 50 credits", credits: 50, amountCents: 2000, currency: "SGD" },
-  { id: "standard", label: "Standard — 100 credits", credits: 100, amountCents: 4000, currency: "SGD" },
-  // 2,000 credits reaches the volume-discount threshold, so the server adds a 10% bonus (see volumeDiscountBonus).
-  { id: "bulk", label: "Bulk — 2,000 credits", credits: 2000, amountCents: 80000, currency: "SGD" },
-];
+// Amounts are derived from the per-credit price so the packs follow `ELLA_CREDIT_PRICE_CENTS`.
+// 2,000 credits reaches the volume-discount threshold, so the server adds a 10% bonus (see volumeDiscountBonus).
+function defaultPacks(): CreditPack[] {
+  return [
+    { id: "starter", label: "Starter — 50 credits", credits: 50 },
+    { id: "standard", label: "Standard — 100 credits", credits: 100 },
+    { id: "bulk", label: "Bulk — 2,000 credits", credits: 2000 },
+  ].map((pack) => ({ ...pack, amountCents: amountCentsForCredits(pack.credits), currency: "SGD" }));
+}
 
 function isValidPack(value: unknown): value is Pick<CreditPack, "id" | "label" | "credits"> {
   if (!value || typeof value !== "object") return false;
@@ -82,7 +93,7 @@ export function creditPacks(): CreditPack[] {
       console.error("[Credit Packs] ELLA_CREDIT_PACKS is not valid JSON — using the built-in catalog:", error);
     }
   }
-  cached = DEFAULT_PACKS;
+  cached = defaultPacks();
   return cached;
 }
 

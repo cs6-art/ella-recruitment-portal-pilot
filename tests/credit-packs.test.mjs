@@ -32,6 +32,22 @@ test("Ella Credits use the fixed S$0.40 server-side price", () => {
   for (const pack of packs) assert.equal(pack.amountCents, pack.credits * 40);
 });
 
+test("ELLA_CREDIT_PRICE_CENTS changes the per-credit price for packs and custom amounts, and bad values are ignored", async () => {
+  const { customCreditPack, creditPriceCents } = await import("../src/lib/credit-packs.ts");
+  resetCreditPackCache();
+  process.env.ELLA_CREDIT_PRICE_CENTS = "50";
+  assert.equal(creditPriceCents(), 50);
+  assert.equal(amountCentsForCredits(1), 50);
+  assert.equal(customCreditPack(2)?.amountCents, 100);
+  for (const pack of creditPacks()) assert.equal(pack.amountCents, pack.credits * 50);
+  for (const bad of ["0", "-5", "abc", "0.5"]) {
+    process.env.ELLA_CREDIT_PRICE_CENTS = bad;
+    assert.equal(creditPriceCents(), 40);
+  }
+  delete process.env.ELLA_CREDIT_PRICE_CENTS;
+  resetCreditPackCache();
+});
+
 test("a valid ELLA_CREDIT_PACKS override changes quantities but cannot change price or currency", () => {
   resetCreditPackCache();
   process.env.ELLA_CREDIT_PACKS = JSON.stringify([{ id: "x", credits: 10, amountCents: 100, currency: "USD" }]);
