@@ -56,9 +56,9 @@ export default async function Home({ searchParams }: HomePageProps) {
     <main className="login-page">
       <section className="login-card">
         <div className="login-hero">
-          <span className="eyebrow">Recruitment Portal</span>
+          <span className="eyebrow">Smile Recruitment Portal</span>
           <h1>Start every hire with the right role.</h1>
-          <p>Create a staff addition or replacement request, approve it, and start screening candidates, all in one place.</p>
+          <p>Smile Recruitment Portal helps organizations create a staff addition or replacement request, approve it, and start screening candidates, all in one place.</p>
           <div className="steps-preview">
             <div><span className="step-dot">1</span> Register with your organization email</div>
             <div><span className="step-dot">2</span> Submit a role request. HR accounts approve it instantly</div>
