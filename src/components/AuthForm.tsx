@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
@@ -31,6 +32,7 @@ export default function AuthForm({ redirectTo = "/dashboard", resetToken = "", i
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
@@ -135,6 +137,12 @@ export default function AuthForm({ redirectTo = "/dashboard", resetToken = "", i
       {mode !== "reset" ? <label>Email<input type="email" autoComplete="email" required value={email} readOnly={Boolean(initialEmail)} onChange={(e) => setEmail(e.target.value)} />{initialEmail && <small>This invitation is for this email address. The first person to register and verify their email becomes the organization owner.</small>}</label> : null}
       {mode !== "forgot" ? <label>{mode === "reset" ? "New password" : "Password"}<span className="auth-password-field"><input type={showPassword ? "text" : "password"} autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={mode === "register" || mode === "reset" ? 10 : undefined} value={password} onChange={(e) => setPassword(e.target.value)} /><button type="button" className="auth-password-toggle" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} title={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((visible) => !visible)}><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={showPassword ? "M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.2A10.7 10.7 0 0 1 12 4c5.2 0 8.6 4.8 9.8 7a16.7 16.7 0 0 1-3.1 3.9M6.2 6.2C4.3 7.5 3 9.4 2.2 11c1.2 2.2 4.6 7 9.8 7 1 0 2-.2 2.9-.5" : "M2.2 12C3.4 9.8 6.8 5 12 5s8.6 4.8 9.8 7c-1.2 2.2-4.6 7-9.8 7S3.4 14.2 2.2 12Z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"} /></svg></button></span></label> : null}
       {mode === "register" || mode === "reset" ? <small>Use at least 10 characters.</small> : null}
+      {mode === "register" ? (
+        <label className="auth-consent">
+          <input type="checkbox" required checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+          <span>I agree to the <Link href="/terms" target="_blank">Terms of Service</Link> and have read and consent to the processing of personal data in accordance with the <Link href="/privacy" target="_blank">Privacy Policy</Link> of Smile.</span>
+        </label>
+      ) : null}
       <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Please wait…" : { login: "Log in", register: "Create account", forgot: "Send reset link", reset: "Update password" }[mode]}</button>
       {mode === "login" ? <button type="button" className="auth-link" onClick={() => switchMode("forgot")}>Forgot your password?</button> : null}
       {mode === "forgot" ? <button type="button" className="auth-link" onClick={() => switchMode("login")}>Back to log in</button> : null}

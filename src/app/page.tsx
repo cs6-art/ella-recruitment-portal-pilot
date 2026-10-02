@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import AuthForm from "@/components/AuthForm";
@@ -70,6 +71,11 @@ export default async function Home({ searchParams }: HomePageProps) {
           {verifyNotice ? <div className="notice" role="status">{verifyNotice}</div> : null}
           <AuthForm redirectTo={redirectTo} resetToken={resetToken} initialEmail={invitedEmail} startInRegistration={Boolean(invitedEmail)} />
           <div className="notice"><strong>Use your work email address.</strong><br />If your company's domain is new, the first person to register and confirm creates the organization. Colleagues with the same domain can join automatically.</div>
+          <nav className="login-legal" aria-label="Legal">
+            <Link href="/privacy">Privacy Policy</Link>
+            <span aria-hidden="true">·</span>
+            <Link href="/terms">Terms of Service</Link>
+          </nav>
         </div>
       </section>
     </main>

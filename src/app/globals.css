@@ -168,6 +168,8 @@ a { color: inherit; text-decoration: none; }
 .login-panel h2 { margin: 0 0 10px; color: var(--navy); font-size: 30px; }
 .login-panel p { margin: 0 0 30px; color: var(--muted); line-height: 1.6; }
 .google-slot { min-height: 48px; }
+.login-legal { margin-top: 18px; display: flex; gap: 10px; justify-content: center; font-size: 13px; color: var(--muted); }
+.login-legal a { color: var(--muted); text-decoration: underline; }
 .notice { margin-top: 24px; padding: 14px 16px; background: #f7f9fc; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .error-box { margin-top: 16px; padding: 12px 14px; border-radius: 10px; color: #8f221b; background: #fff1ef; border: 1px solid #f3c6c1; }
 
@@ -6907,3 +6909,6 @@ textarea:focus { border-color: var(--color-link); box-shadow: var(--focus-ring);
   .dashboard-kpi-card,
   .dashboard-skeleton-kpis > span { animation: none; transition: none; }
 }
+.auth-form label.auth-consent { flex-direction: row; align-items: flex-start; gap: 12px; font-weight: 400; color: var(--muted); line-height: 1.5; }
+.auth-form label.auth-consent input { width: 18px; min-height: 18px; height: 18px; margin: 2px 0 0; flex: none; }
+.auth-consent a { color: var(--navy); font-weight: 700; text-decoration: underline; }
