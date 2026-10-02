@@ -5,12 +5,12 @@ import ApplicantEditForm from "@/components/ApplicantEditForm";
 import { canEditApplicant } from "@/lib/access-control";
 import { getApplicantById } from "@/lib/candidate-applications";
 import { countryForPhone } from "@/lib/country-codes";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function EditApplicantPage({ params }: { params: Promise<{ applicationId: string }> }) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
   if (!canEditApplicant(user)) redirect("/applicants");
   const applicationId = decodeURIComponent((await params).applicationId);

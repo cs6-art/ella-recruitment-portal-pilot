@@ -124,7 +124,7 @@ async function runTool(name: LiveToolName, user: SessionUser, deps: LiveToolDepe
       // authenticated user may see their organization's balance. No
       // additional gate -- reusing that precedent verbatim, not inventing one.
       // A session missing its identity fields (malformed/degenerate, should
-      // never happen post-verifySessionToken, but fail closed rather than
+      // never happen post-getActiveSessionUser, but fail closed rather than
       // querying an empty-string organization) is denied rather than queried.
       if (!user.organizationId?.trim() || !user.email?.trim()) return { ok: false, reason: "not_authorized" };
       const { balance } = await deps.getCreditBalance({ organizationId: user.organizationId, ownerEmail: user.email });

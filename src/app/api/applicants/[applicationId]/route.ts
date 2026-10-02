@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { canDeleteApplicant, canEditApplicant } from "@/lib/access-control";
 import { deleteApplicant, isPreferredMobileValid, normalizePreferredMobile, updateApplicantProfile } from "@/lib/applicant-workflow";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
@@ -23,7 +23,7 @@ const applicantUpdateSchema = z.object({
 
 async function getUser() {
   const cookieStore = await cookies();
-  return verifySessionToken(cookieStore.get(COOKIE_NAME)?.value);
+  return await getActiveSessionUser(cookieStore.get(COOKIE_NAME)?.value);
 }
 
 export async function PATCH(request: Request, context: RouteContext) {

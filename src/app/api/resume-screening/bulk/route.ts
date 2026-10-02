@@ -8,7 +8,7 @@ import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { updateBulkQueueStatus } from "@/lib/internal-recruitment-queries";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { logServerTiming, measureServerOperation } from "@/lib/server-timing";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   let roleCount = 0;
   let queueCount = 0;
   let evidenceCount = 0;
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return errorResponse("Authentication required.", 401);
   if (!canManagePipeline(user)) return errorResponse("Only HR reviewers can view bulk screening status.", 403);
 

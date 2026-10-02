@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { canManagePipeline } from "@/lib/access-control";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
 import { evaluateLiveAvatarTranscript, type LiveAvatarTranscriptTurn } from "@/lib/live-avatar-screening";
 import { completeAvatarInterview, getAvatarInterviewContext } from "@/lib/internal-recruitment-queries";
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, evaluation }, { headers: { "Cache-Control": "no-store" } });
     }
     // The tokenless path is the HR preview only; it must not expose provider transcripts to the public.
-    const reviewer = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+    const reviewer = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
     if (!reviewer || !canManagePipeline(reviewer)) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
     const role = await getRoleRequestById(roleId);
     if (!role || !isPublishedRoleForIntake(role)) return NextResponse.json({ success: false, error: "This role is not currently accepting applications." }, { status: 404 });

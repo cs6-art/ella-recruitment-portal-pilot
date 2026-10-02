@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import RoleDetails from "@/components/RoleDetails";
 import {
   COOKIE_NAME,
-  verifySessionToken,
+  getActiveSessionUser,
 } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export default async function RoleDetailsPage({
   const rolePath = `/roles/${encodeURIComponent(decodedRoleId)}`;
   const cookieStore = await cookies();
 
-  const user = verifySessionToken(
+  const user = await getActiveSessionUser(
     cookieStore.get(COOKIE_NAME)?.value,
   );
 

@@ -2,14 +2,14 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getOrganizationReadiness } from "@/lib/organization-readiness";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Return only setup statuses for the organization already bound to this session. */
 export async function GET() {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Please sign in to view workspace setup." }, { status: 401, headers: { "Cache-Control": "no-store" } });
   try {
     const readiness = await getOrganizationReadiness(user.organizationId);

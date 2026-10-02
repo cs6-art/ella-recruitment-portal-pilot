@@ -8,7 +8,7 @@ import { canEditRoleRequest, canViewRole } from "@/lib/access-control";
 import { getRoleRequestById } from "@/lib/google-sheets";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleDetails } from "@/lib/recruitment-target-portal";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +33,7 @@ function setupChannels(value: string) {
 
 export default async function EditRolePage({ params }: EditRolePageProps) {
   const cookieStore = await cookies();
-  const user = verifySessionToken(cookieStore.get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser(cookieStore.get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
 
   const { roleId: encodedRoleId } = await params;

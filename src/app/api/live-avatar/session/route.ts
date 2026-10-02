@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { canManagePipeline } from "@/lib/access-control";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { CREDIT_COST, EllaCreditsError, getCreditBalance, placeAvatarInterviewHold, releaseAvatarInterviewHold } from "@/lib/ella-credits";
 import { consumeDurableRateLimit } from "@/lib/durable-rate-limit";
 import { rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
   // Without an invitation token this path starts a paid LiveAvatar session for
   // any published role, so it is limited to signed-in HR reviewers (the
   // resume-screening preview). Candidates always arrive with a token.
-  const reviewer = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const reviewer = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!reviewer || !canManagePipeline(reviewer)) {
     return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   }

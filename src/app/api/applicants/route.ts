@@ -16,7 +16,7 @@ import { assertCreditsAvailable, creditCostFor, EllaCreditsError, recordDeductio
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { deleteResumeFile, storeResumeFile } from "@/lib/resume-files";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { invalidateSheetsCache } from "@/lib/sheets-cache";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetCreateApplication, targetRoleDetails } from "@/lib/recruitment-target-portal";
@@ -60,7 +60,7 @@ function parsedDate(value: string | null, inclusiveEnd = false) {
 
 /** Authenticated, tenant-scoped list endpoint; page data and count use identical filters. */
 export async function GET(request: Request) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return responseError("Authentication required.", 401);
   if (user.canReviewRole !== true && user.canApproveRole !== true && user.canReviewDepartmentRole !== true) {
     return responseError("Not authorized.", 403);
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
   try {
     // Allow HR to add a new candidate in demo mode; outbound contact and
     // booking safeguards live in the downstream workflows and booking APIs.
-    const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+    const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
     if (!user) return responseError("Authentication required.", 401);
     if (user.canReviewRole !== true) return responseError("Only HR reviewers can add candidates.", 403);
 

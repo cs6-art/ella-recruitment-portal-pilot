@@ -8,7 +8,7 @@ import { downloadMicrosoftDriveFile, getAuthorizedGraphToken, getMicrosoftDriveI
 import { MAX_RESUME_FILE_BYTES } from "@/lib/resume-files";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
@@ -31,7 +31,7 @@ function responseError(error: string, status: number, extra: Record<string, unkn
 }
 
 export async function POST(request: Request) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return responseError("Authentication required.", 401);
   if (!canManagePipeline(user)) return responseError("Only HR reviewers can import resumes from OneDrive.", 403);
 

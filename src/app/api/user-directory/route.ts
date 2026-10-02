@@ -12,7 +12,7 @@ import { canAdministerAccess, isPlatformAdmin } from "@/lib/access-control";
 import { applyAccessRolePolicy } from "@/lib/access-roles";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { normalizeEmail } from "@/lib/registration";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { runWithTenantDatabase } from "@/lib/tenant-database";
 
 export const runtime = "nodejs";
@@ -36,7 +36,7 @@ const userSchema = z.object({
 });
 
 async function currentUser() {
-  return verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  return await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
 }
 
 function responseError(error: string, status: number) {

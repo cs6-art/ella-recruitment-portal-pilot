@@ -4,10 +4,10 @@ import { NextResponse } from "next/server";
 import { canManagePipeline } from "@/lib/access-control";
 import { getDriveConsentUrl } from "@/lib/google-drive";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export async function GET(request: Request) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.redirect(new URL("/", request.url));
   if (!canManagePipeline(user)) return NextResponse.json({ success: false, error: "Only HR reviewers can connect Google Drive." }, { status: 403 });
 

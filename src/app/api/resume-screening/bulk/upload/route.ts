@@ -6,7 +6,7 @@ import { EllaCreditsError } from "@/lib/ella-credits";
 import { intakeResumeBatch, MAX_BULK_REQUEST_BYTES, MAX_FILES_PER_SUBMISSION } from "@/lib/bulk-resume-intake";
 import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { logServerTiming } from "@/lib/server-timing";
 import { publicErrorMessage } from "@/lib/safe-error";
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const startedAt = performance.now();
   let fileCount = 0;
   let submittedCount = 0;
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return responseError("Authentication required.", 401);
   if (!canManagePipeline(user)) return responseError("Only HR reviewers can upload bulk resumes.", 403);
 

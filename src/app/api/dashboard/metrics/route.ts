@@ -14,7 +14,7 @@ import { listOverdueFinalInterviews } from "@/lib/internal-recruitment-queries";
 import { collectAttentionAlerts } from "@/lib/dashboard-attention";
 import { scheduledInstant } from "@/lib/interview-time";
 import { targetRecentApplicantSummaries, targetRoleSummaries, targetUpcomingBookings } from "@/lib/recruitment-target-portal";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { logServerTiming, measureServerOperation } from "@/lib/server-timing";
 
 export const runtime = "nodejs";
@@ -68,7 +68,7 @@ function createRecentActivity(roleRequests: ReturnType<typeof calculateDashboard
 export async function GET() {
   const startedAt = performance.now();
   const timings: Record<string, number> = {};
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   if (!user.canCreateRole && !user.canReviewRole && !user.canApproveRole && !user.canReviewDepartmentRole) {
     return NextResponse.json({ success: false, error: "You do not have permission to view dashboard information." }, { status: 403 });

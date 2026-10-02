@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { extractDocumentText, MAX_DOCUMENT_FILE_BYTES } from "@/lib/document-extraction";
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { roleAiDraftSchema } from "@/lib/role-ai-draft-schema";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
@@ -15,7 +15,7 @@ function failure(error: string, status: number) {
 
 export async function POST(request: Request) {
   try {
-    const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+    const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
     if (!user || user.canCreateRole !== true) return failure("Only authorized HR users can create role drafts.", 403);
 
     const parserUrl = (await getPortalConfigValue("N8N_Role_Description_Parser_Webhook_URL")).trim();

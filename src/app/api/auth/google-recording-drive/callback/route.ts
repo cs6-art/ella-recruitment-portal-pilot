@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getOrganizationRecordingDrive, saveOrganizationRecordingDrive } from "@/lib/organization-recording-drive";
 import { deleteRecordingDriveConnectionIfUnused, exchangeRecordingDriveCode, verifyRecordingDriveOAuthState } from "@/lib/recording-drive-oauth";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 function settingsRedirect(requestUrl: URL, status: "connected" | "denied" | "error", reason = "") {
   const target = new URL("/settings", requestUrl);
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   const code = query.get("code") || "";
   const oauthError = query.get("error");
   const payload = verifyRecordingDriveOAuthState(state);
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
 
   if (!payload || !user || user.organizationId !== payload.organizationId || user.email.trim().toLowerCase() !== payload.actorEmail || user.canEditSettings !== true) {
     return settingsRedirect(url, "error", "Your settings session expired. Sign in again and reconnect Google Drive.");

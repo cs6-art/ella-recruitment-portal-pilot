@@ -6,7 +6,7 @@ import { canManagePipeline } from "@/lib/access-control";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
 import { retryFailedBulkQueueItems } from "@/lib/internal-recruitment-queries";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
@@ -23,7 +23,7 @@ function responseError(error: string, status: number) {
 
 /** Re-queue saved failed work; no resume re-upload or duplicate application. */
 export async function POST(request: Request) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return responseError("Authentication required.", 401);
   if (!canManagePipeline(user)) return responseError("Only HR reviewers can retry bulk resumes.", 403);
   if (!isPostgresRecruitmentTarget()) return responseError("Saved queue retry is available in the active recruitment target only.", 409);

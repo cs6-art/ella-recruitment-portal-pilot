@@ -9,7 +9,7 @@ import { getPortalConfig } from "@/lib/portal-config";
 import { requestOrigin } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { createResumeScreeningInvitation } from "@/lib/resume-screening-invite";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleDetails } from "@/lib/recruitment-target-portal";
 
@@ -27,7 +27,7 @@ function responseError(error: string, status: number) {
 }
 
 export async function POST(request: Request, context: { params: Promise<{ roleId: string }> }) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return responseError("Authentication required.", 401);
   if (!canManagePipeline(user)) {
     return responseError("Only HR reviewers can generate application links.", 403);

@@ -6,7 +6,7 @@ import { isPlatformAdmin } from "@/lib/access-control";
 import { defaultPortalSettings, getPortalSettings, upsertPortalSettings } from "@/lib/google-sheets";
 import { PORTAL_CONFIG_CATALOG, resolvePortalConfigValue } from "@/lib/portal-config";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,7 +90,7 @@ const settingSchema = z.object({ key: z.string().trim().min(1).max(200), value: 
 const settingsSchema = z.object({ settings: z.array(settingSchema).max(500) });
 
 async function currentUser() {
-  return verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  return await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
 }
 
 export async function GET() {

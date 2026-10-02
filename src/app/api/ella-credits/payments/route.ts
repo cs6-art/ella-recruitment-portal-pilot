@@ -8,7 +8,7 @@ import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate
 import { createCreditPurchase, isPaymentsConfigured, listRecentPayments, PaymentError } from "@/lib/payments";
 import { getCreditPricing, volumeDiscountBonus } from "@/lib/ella-credits";
 import { hitpayMode } from "@/lib/hitpay";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ const bodySchema = z.union([
 ]);
 
 async function currentUser() {
-  return verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  return await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
 }
 
 function appOrigin(request: Request): string {

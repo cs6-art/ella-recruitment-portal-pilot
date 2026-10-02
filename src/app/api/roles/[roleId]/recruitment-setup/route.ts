@@ -9,7 +9,7 @@ import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate
 import { evaluationFieldsForSetup, recruitmentSetupSchema } from "@/lib/recruitment-setup-schema";
 import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
 import { getSetupReadiness, setupStatusForAction } from "@/lib/recruitment-setup-readiness";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { getPortalConfig } from "@/lib/portal-config";
 import { publicApplicationLink, resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { createConfiguredVoiceInterviewSlots } from "@/lib/applicant-workflow";
@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ roleId: string }> };
 
 export async function POST(request: Request, context: Context) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   if (!canEditRecruitmentSetup(user)) return NextResponse.json({ success: false, error: "Only HR reviewers can edit recruitment setup." }, { status: 403 });
 

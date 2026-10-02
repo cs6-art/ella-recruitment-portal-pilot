@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { getDb, getTenantDb, isDatabaseConfigured } from "@/db/client";
 import { organizations } from "@/db/schema";
@@ -61,7 +61,7 @@ export async function findPostgresDirectoryUser(email: string, organizationId: s
 
   const db = getTenantDb();
   try {
-    const [row] = await db
+    const rows = await db
       .select({
         email: users.email,
         fullName: users.fullName,
@@ -81,9 +81,12 @@ export async function findPostgresDirectoryUser(email: string, organizationId: s
       })
       .from(users)
       .leftJoin(departments, and(eq(departments.id, users.departmentId), eq(departments.organizationId, users.organizationId)))
-      .where(and(eq(users.email, normalizedEmail), eq(users.organizationId, organizationId)))
-      .limit(1);
-    if (!row) return null;
+      .where(and(sql`lower(trim(${users.email})) = ${normalizedEmail}`, eq(users.organizationId, organizationId)))
+      .limit(2);
+    // Legacy data may contain case variants or duplicate rows despite the
+    // tenant/email unique index. Never let an arbitrary matching row grant access.
+    if (rows.length !== 1) return null;
+    const [row] = rows;
     return directoryUserFromRow(row);
   } catch (error) {
     // The recruitment-core tables are an opt-in migration; a client org

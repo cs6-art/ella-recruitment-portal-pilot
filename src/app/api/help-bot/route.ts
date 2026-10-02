@@ -5,7 +5,7 @@ import OpenAI from "openai";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { retrieveContext } from "@/lib/help-bot/knowledge";
 import { cleanHelpBotAnswer, directHelpAnswer, HELP_BOT_SYSTEM_PROMPT, buildUserPrompt, type HelpUserContext } from "@/lib/help-bot/prompt";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { runHelpBotConversation } from "@/lib/help-bot/conversation";
 import type { LiveToolDependencies } from "@/lib/help-bot/live-tools";
 import { getCreditBalance } from "@/lib/ella-credits";
@@ -61,7 +61,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) {
     return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   }

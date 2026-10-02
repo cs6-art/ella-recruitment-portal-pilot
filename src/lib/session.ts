@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
-import { enterTenantDatabase } from "@/lib/tenant-database";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
+import { findPostgresDirectoryUser } from "@/lib/postgres-directory";
+import { enterTenantDatabase, runWithTenantDatabase } from "@/lib/tenant-database";
 
 export type SessionUser = {
   sub: string;
@@ -77,6 +79,34 @@ export function verifySessionToken(token?: string | null): SessionUser | null {
     enterTenantDatabase(user.organizationId);
     return user;
   } catch {
+    return null;
+  }
+}
+
+/**
+ * Verify the signed cookie and re-check the account's current directory status.
+ * A valid, unexpired cookie must stop authorizing requests as soon as HR
+ * deactivates the account; the token's original `active` claim is not enough.
+ */
+export async function getActiveSessionUser(token?: string | null): Promise<SessionUser | null> {
+  const user = verifySessionToken(token);
+  if (!user) return null;
+
+  try {
+    let isActive: boolean;
+    if (user.organizationId === DEFAULT_ORGANIZATION_ID) {
+      // Load the Google Sheets-backed directory lazily: importing it eagerly
+      // would require Sheets configuration even for client-tenant requests.
+      const { findDirectoryUser } = await import("@/lib/google-sheets");
+      isActive = (await findDirectoryUser(user.email))?.active === true;
+    } else {
+      const directoryUser = await runWithTenantDatabase(user.organizationId, () => findPostgresDirectoryUser(user.email, user.organizationId));
+      isActive = directoryUser?.active === true;
+    }
+    return isActive ? user : null;
+  } catch (error) {
+    // Fail closed if the account status cannot be confirmed.
+    console.error("[Session] Could not confirm directory status:", error instanceof Error ? error.message : error);
     return null;
   }
 }

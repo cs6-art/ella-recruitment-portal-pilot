@@ -8,12 +8,12 @@ import PageHeader from "@/components/ui/PageHeader";
 import RecordingDriveConnect from "@/components/RecordingDriveConnect";
 import SettingsEditor from "@/components/SettingsEditor";
 import { isPlatformAdmin } from "@/lib/access-control";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
   if (user.canEditSettings !== true) redirect("/dashboard");
   return <>

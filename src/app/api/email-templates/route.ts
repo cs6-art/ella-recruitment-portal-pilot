@@ -5,13 +5,13 @@ import { z } from "zod";
 import { listEmailTemplates, resetEmailTemplate, saveEmailTemplate } from "@/lib/email-template-store";
 import { EMAIL_EVENTS, editableEmailEvent, validateEmailTemplate } from "@/lib/email-templates";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 async function settingsUser() {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return { error: NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 }) };
   if (user.canEditSettings !== true) return { error: NextResponse.json({ success: false, error: "Settings permission required." }, { status: 403 }) };
   return { user };

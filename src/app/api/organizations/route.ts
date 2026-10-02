@@ -11,7 +11,7 @@ import { isPlatformAdmin } from "@/lib/access-control";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { grantWelcomeCredits } from "@/lib/organization-welcome-credits";
 import { getOrganizationReadiness } from "@/lib/organization-readiness";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,7 +67,7 @@ function errorResponse(error: string, status: number) {
 }
 
 async function requirePlatformAdmin() {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return { error: errorResponse("Authentication required.", 401) } as const;
   if (!isPlatformAdmin(user)) {
     return { error: errorResponse("Only a McLink platform administrator can manage organizations.", 403) } as const;

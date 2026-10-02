@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 
 import { exchangeCodeAndStore, verifyOAuthState } from "@/lib/google-calendar";
 import { getFinalInterviewCalendarConfig } from "@/lib/google-sheets";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 function calendarErrorReason(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
   // A user connecting their own calendar returns to their profile; the shared
   // HR calendar (an administrator's connection) returns to Settings.
-  const sessionUser = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const sessionUser = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   let settingsUrl = new URL("/settings", url);
 
   if (oauthError) {

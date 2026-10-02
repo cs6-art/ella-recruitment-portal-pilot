@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { canViewApplicant } from "@/lib/access-control";
 import { getApplicantById } from "@/lib/candidate-applications";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { COOKIE_NAME, verifySessionToken, type SessionUser } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser, type SessionUser } from "@/lib/session";
 
 /**
  * Same gate as the applicant profile page: an HR reviewer/approver (or a
@@ -13,7 +13,7 @@ import { COOKIE_NAME, verifySessionToken, type SessionUser } from "@/lib/session
  * never confirms that a record exists elsewhere.
  */
 export async function authorizeInterviewReviewer(applicationId: string): Promise<{ user: SessionUser } | { response: NextResponse }> {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return { response: NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 }) };
   if (user.canReviewRole !== true && user.canApproveRole !== true && user.canReviewDepartmentRole !== true) {
     return { response: NextResponse.json({ success: false, error: "You do not have permission to review interviews." }, { status: 403 }) };

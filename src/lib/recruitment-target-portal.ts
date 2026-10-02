@@ -65,7 +65,7 @@ import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterv
 import { hasValidFutureTime, isBeforeTargetHiringDate, isFinalInterviewSlotDuration, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { getPortalConfigNumber } from "@/lib/portal-config";
 import { applicationLinkWithOrganization } from "@/lib/public-url";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { runWithTenantDatabase } from "@/lib/tenant-database";
 import { MAX_CONCURRENT_VOICE_INTERVIEWS, voiceInterviewConcurrencyKey } from "@/lib/voice-interview-capacity";
@@ -75,7 +75,7 @@ function isVoiceTimeFull(counts: Map<string, number>, slot: { date: string; star
 }
 
 async function targetOrganizationId() {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   return user?.organizationId || DEFAULT_ORGANIZATION_ID;
 }
 

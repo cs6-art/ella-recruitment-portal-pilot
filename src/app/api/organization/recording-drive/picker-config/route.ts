@@ -4,12 +4,12 @@ import { NextResponse } from "next/server";
 import { readOAuthConnection } from "@/lib/oauth-connection-store";
 import { getOrganizationRecordingDrive } from "@/lib/organization-recording-drive";
 import { getRecordingDrivePickerConfig } from "@/lib/recording-drive-oauth";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401, headers: { "Cache-Control": "no-store" } });
   if (user.canEditSettings !== true) return NextResponse.json({ success: false, error: "Settings permission required." }, { status: 403, headers: { "Cache-Control": "no-store" } });
 

@@ -13,7 +13,7 @@ import { generateRoleId } from "@/lib/role-id";
 import { invalidateSheetsCache } from "@/lib/sheets-cache";
 import {
   COOKIE_NAME,
-  verifySessionToken,
+  getActiveSessionUser,
 } from "@/lib/session";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { getPortalConfigValue } from "@/lib/portal-config";
@@ -109,7 +109,7 @@ export async function POST(
 ) {
   try {
     const cookieStore = await cookies();
-    const user = verifySessionToken(
+    const user = await getActiveSessionUser(
       cookieStore.get(COOKIE_NAME)?.value,
     );
 

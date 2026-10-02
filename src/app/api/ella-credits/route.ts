@@ -8,7 +8,7 @@ import { getDirectoryUsers } from "@/lib/google-sheets";
 import { getPostgresDirectoryUsers } from "@/lib/postgres-directory";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
@@ -29,7 +29,7 @@ const topUpSchema = z.object({
 });
 
 async function currentUser() {
-  return verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  return await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
 }
 
 async function displayCreditActors<T extends { actorName: string; actorEmail: string }>(entries: T[], organizationId: string) {

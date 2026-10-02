@@ -6,7 +6,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import { canAdministerAccess } from "@/lib/access-control";
 import {
   COOKIE_NAME,
-  verifySessionToken,
+  getActiveSessionUser,
 } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ function permissionLabel(value: boolean) {
 
 export default async function ProfilePage() {
   const cookieStore = await cookies();
-  const user = verifySessionToken(
+  const user = await getActiveSessionUser(
     cookieStore.get(COOKIE_NAME)?.value,
   );
 

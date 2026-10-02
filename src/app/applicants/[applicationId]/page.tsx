@@ -18,7 +18,7 @@ import {
   type CandidateStatusHistoryEntry,
 } from "@/lib/candidate-applications";
 import type { RoleRequestDetails } from "@/lib/google-sheets";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { formatMatchScore } from "@/lib/score-format";
 import { formatPortalClock, formatPortalDateTime } from "@/lib/portal-time";
 import { applicantDecisionLabel, applicantStageLabel, LIVE_AVATAR_REVIEW_LABEL, type ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
@@ -397,7 +397,7 @@ function InterviewQuestions({ value }: { value: string }) {
 }
 
 export default async function ApplicantDetailsPage({ params, searchParams }: { params: Promise<{ applicationId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
   if (user.canReviewRole !== true && user.canApproveRole !== true && user.canReviewDepartmentRole !== true) redirect("/dashboard");
 

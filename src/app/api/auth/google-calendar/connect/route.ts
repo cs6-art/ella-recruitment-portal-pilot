@@ -4,10 +4,10 @@ import { NextResponse } from "next/server";
 import { getGoogleConsentUrl } from "@/lib/google-calendar";
 import { defaultPortalSettings, getFinalInterviewCalendarConfig, upsertPortalSettings } from "@/lib/google-sheets";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export async function GET(request: Request) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.redirect(new URL("/", request.url));
   // ?self=1 lets any HR reviewer connect their OWN calendar (so they can be
   // assigned as a role's interviewer); the shared HR calendar stays admin-only.

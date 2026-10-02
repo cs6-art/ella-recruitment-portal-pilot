@@ -6,7 +6,7 @@ import { getCalendarConnection } from "@/lib/calendar-tokens";
 import { getFinalInterviewCalendarConfig, getRoleRequestById } from "@/lib/google-sheets";
 import { setRoleInterviewer } from "@/lib/internal-recruitment-queries";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { listEligibleInterviewers } from "@/lib/interviewers";
 
 export const runtime = "nodejs";
@@ -16,7 +16,7 @@ type Context = { params: Promise<{ roleId: string }> };
 
 /** Assign (or clear) the interviewer whose own calendar hosts this role's face-to-face interviews. */
 export async function PUT(request: Request, context: Context) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   if (!isPostgresRecruitmentTarget()) return NextResponse.json({ success: false, error: "Not available." }, { status: 404 });
   const { roleId: encodedRoleId } = await context.params;

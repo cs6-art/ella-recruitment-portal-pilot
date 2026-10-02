@@ -7,7 +7,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import { filterVisibleApplicants, isDepartmentReviewer } from "@/lib/access-control";
 import { getApplicantMetrics, getApplicantsPage } from "@/lib/candidate-applications";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
-import { COOKIE_NAME, verifySessionToken, type SessionUser } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser, type SessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +48,7 @@ async function ApplicantsData({ user }: { user: SessionUser }) {
 }
 
 export default async function ApplicantsPage() {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
   if (user.canReviewRole !== true && user.canApproveRole !== true && user.canReviewDepartmentRole !== true) redirect("/dashboard");
   return (

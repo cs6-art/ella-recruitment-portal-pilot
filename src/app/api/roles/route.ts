@@ -16,7 +16,7 @@ import { resolvePublicAppBaseUrl } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE } from "@/lib/recruitment-prompt";
 import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
@@ -151,7 +151,7 @@ export async function GET(request: Request) {
   try {
     const cookieStore = await cookies();
 
-    const user = verifySessionToken(
+    const user = await getActiveSessionUser(
       cookieStore.get(COOKIE_NAME)?.value,
     );
 
@@ -245,7 +245,7 @@ export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
 
-    const user = verifySessionToken(
+    const user = await getActiveSessionUser(
       cookieStore.get(COOKIE_NAME)?.value,
     );
 

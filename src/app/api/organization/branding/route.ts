@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { getOrganizationBranding, saveOrganizationBranding } from "@/lib/organization-branding";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ const brandingSchema = z.object({
 });
 
 async function currentUser() {
-  return verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  return await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
 }
 
 export async function GET() {

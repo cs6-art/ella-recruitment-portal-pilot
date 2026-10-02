@@ -7,7 +7,7 @@ import { getDb } from "@/db/client";
 import { organizations } from "@/db/schema";
 import DashboardMetrics from "@/components/DashboardMetrics";
 import UiIcon from "@/components/UiIcon";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +25,7 @@ function LimitedAccessCard({ canEditSettings }: { canEditSettings: boolean }) {
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
-  const user = verifySessionToken(cookieStore.get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser(cookieStore.get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
 
   const userName = String(user.name ?? "").trim().split(/\s+/)[0] || "there";

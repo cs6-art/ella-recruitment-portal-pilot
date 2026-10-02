@@ -7,7 +7,7 @@ import { applicantAppliedTime, type RecentApplicant } from "@/lib/new-applicants
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRecentApplicantSummaries } from "@/lib/recruitment-target-portal";
 import { logServerTiming, measureServerOperation } from "@/lib/server-timing";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const timings: Record<string, number> = {};
   let itemCount = 0;
   let timingLogged = false;
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   if (user.canReviewRole !== true && user.canApproveRole !== true && user.canReviewDepartmentRole !== true) {
     return NextResponse.json({ success: false, error: "Not authorized." }, { status: 403 });

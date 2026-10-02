@@ -9,7 +9,7 @@ import { canManageInterviewAvailability, canManagePipeline } from "@/lib/access-
 import { getRoleRequests } from "@/lib/google-sheets";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleSummaries } from "@/lib/recruitment-target-portal";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +45,7 @@ async function BookingsData() {
 }
 
 export default async function BookingsPage() {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
   if (!canManagePipeline(user)) redirect("/dashboard");
   return <Suspense fallback={<BookingsLoading />}><BookingsData /></Suspense>;

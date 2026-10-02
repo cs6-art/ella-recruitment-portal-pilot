@@ -5,12 +5,12 @@ import EllaCreditsPanel from "@/components/EllaCreditsPanel";
 import EllaCreditsPurchase from "@/components/EllaCreditsPurchase";
 import PageHeader from "@/components/ui/PageHeader";
 import { canManageCredits } from "@/lib/access-control";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function CreditsPage() {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
   const canManage = canManageCredits(user);
 

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { canManagePipeline } from "@/lib/access-control";
 import { getAuthorizedGraphToken, listMicrosoftDriveChildren } from "@/lib/microsoft-drive";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const RESUME_EXT = /\.(pdf|docx?|doc)$/i;
 
 export async function GET(request: Request) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   if (!canManagePipeline(user)) return NextResponse.json({ success: false, error: "Only HR reviewers can browse OneDrive." }, { status: 403 });
 

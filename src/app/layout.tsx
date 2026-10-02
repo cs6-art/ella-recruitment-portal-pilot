@@ -4,7 +4,7 @@ import "./globals.css";
 import PortalBrandingProvider from "@/components/PortalBrandingContext";
 import AppShell from "@/components/AppShell";
 import { getOrganizationBranding } from "@/lib/organization-branding";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +34,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 
 async function RootLayoutContent({ children }: Readonly<{ children: React.ReactNode }>) {
   const cookieStore = await cookies();
-  const user = verifySessionToken(cookieStore.get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser(cookieStore.get(COOKIE_NAME)?.value);
   let initialBranding = { name: "Recruitment Portal", subtitle: "" };
   if (user) {
     try {

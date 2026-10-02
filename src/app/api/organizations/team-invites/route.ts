@@ -9,7 +9,7 @@ import { isMemberLimitReached, memberSeatUsage } from "@/lib/organization-signup
 import { users } from "@/db/schema-recruitment";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { getPublicAppBaseUrl } from "@/lib/public-url";
 import { sendTeamInvitationEmail } from "@/lib/registration";
 
@@ -29,7 +29,7 @@ function fail(error: string, status: number, headers?: HeadersInit) {
  * common domain such as gmail.com would let anyone register into the workspace.
  */
 async function requireOwner() {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return { error: fail("Authentication required.", 401) } as const;
   if (user.organizationId === DEFAULT_ORGANIZATION_ID) return { error: fail("McLink accounts are managed by a platform administrator.", 403) } as const;
   const [owner] = await getDb().select({ id: users.id }).from(users)

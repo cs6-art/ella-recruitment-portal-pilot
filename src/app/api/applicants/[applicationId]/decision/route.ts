@@ -11,7 +11,7 @@ import {
 import { canDecideApplicant } from "@/lib/access-control";
 import { getPublicAppBaseUrl } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 const stages = new Set<ApplicantDecisionStage>(["resume", "voice", "final"]);
 const decisions = new Set<ApplicantDecision>(["Approve", "Reject", "Manual Review"]);
@@ -30,7 +30,7 @@ function publicDecisionError(error: unknown) {
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ applicationId: string }> }) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user || !canDecideApplicant(user)) {
     return NextResponse.json({ error: "You are not authorized to review applicants." }, { status: 403 });
   }

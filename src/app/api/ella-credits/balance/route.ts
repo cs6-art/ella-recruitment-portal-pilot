@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getCreditBalance, getCreditPricing } from "@/lib/ella-credits";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 // screens (e.g. bulk resume screening) can show remaining credits without
 // exposing the full ledger, which stays settings-admin only.
 export async function GET() {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   try {
     const [{ balance }, pricing] = await Promise.all([getCreditBalance({ organizationId: user.organizationId, ownerEmail: user.email }), getCreditPricing()]);

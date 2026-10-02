@@ -17,7 +17,7 @@ import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { isDateOnOrAfterToday } from "@/lib/date-only";
 import {
   COOKIE_NAME,
-  verifySessionToken,
+  getActiveSessionUser,
 } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
 
@@ -103,7 +103,7 @@ export async function GET(
   try {
     const cookieStore = await cookies();
 
-    const user = verifySessionToken(
+    const user = await getActiveSessionUser(
       cookieStore.get(COOKIE_NAME)?.value,
     );
 
@@ -181,7 +181,7 @@ export async function GET(
 
 async function getRoleAndUser(roleId: string) {
   const cookieStore = await cookies();
-  const user = verifySessionToken(cookieStore.get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser(cookieStore.get(COOKIE_NAME)?.value);
   if (!user) return { user: null, role: null, error: NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 }) };
 
   // Mutations must observe a draft or role written by a preceding request,

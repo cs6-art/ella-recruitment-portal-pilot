@@ -6,12 +6,12 @@ import ApplicantsList from "@/components/ApplicantsList";
 import { canViewRole, isDepartmentReviewer } from "@/lib/access-control";
 import { getApplicantMetrics, getApplicantsPage } from "@/lib/candidate-applications";
 import { getRoleRequestById } from "@/lib/google-sheets";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function RoleApplicantsPage({ params }: { params: Promise<{ roleId: string }> }) {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
 
   const roleId = decodeURIComponent((await params).roleId);

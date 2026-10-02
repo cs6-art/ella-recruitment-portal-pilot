@@ -6,13 +6,13 @@ import { canEditRecruitmentSetup } from "@/lib/access-control";
 import { deleteRecruitmentTemplate, getRecruitmentTemplates, upsertRecruitmentTemplate, type RecruitmentTemplateRecord } from "@/lib/google-sheets";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { recruitmentSetupSchema } from "@/lib/recruitment-setup-schema";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 async function getUser() {
-  return verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  return await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
 }
 
 function responseError(message: string, status: number) {

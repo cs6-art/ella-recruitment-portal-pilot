@@ -6,13 +6,13 @@ import { getCalendarBusyWindows } from "@/lib/google-calendar";
 import { getRoleRequests } from "@/lib/google-sheets";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleSummaries } from "@/lib/recruitment-target-portal";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+  const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   if (user.canReviewRole !== true && user.canApproveRole !== true) {
     return NextResponse.json({ success: false, error: "You are not authorized to view calendar conflicts." }, { status: 403 });

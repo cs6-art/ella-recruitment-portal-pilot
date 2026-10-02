@@ -5,14 +5,14 @@ import { extractResumeText } from "@/lib/resume-files";
 import { isLiveAvatarConfigured } from "@/lib/live-avatar";
 import { prepareLiveAvatarScreening } from "@/lib/live-avatar-screening";
 import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
-import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   if (!isLiveAvatarConfigured()) return NextResponse.json({ success: false, error: "The Live Avatar interview is not configured yet." }, { status: 503 });
   try {
-    const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
+    const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
     if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
     if (!canManagePipeline(user)) return NextResponse.json({ success: false, error: "Only HR reviewers can run resume screening." }, { status: 403 });
     const form = await request.formData();
