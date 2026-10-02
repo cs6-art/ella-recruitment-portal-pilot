@@ -100,6 +100,9 @@ const QUERY_ALIASES: Array<[RegExp, string]> = [
   [/\b(?:credit|credits|balance|charge|charged|deduct|deduction)\b/, "credits"],
   [/\b(?:permission|permissions|account|accounts|user|users)\b/, "access"],
   [/\b(?:separat\w*|isolat\w*|mixed|tenants?|clients?|compan(?:y|ies))\b/, "organizations separate mixed"],
+  [/\b(?:gmail|yahoo|outlook|hotmail|icloud|proton\w*|personal)\b/, "personal work email company sign"],
+  [/\b(?:full|seats?|places?|capacity|maximum|max|member limit|people limit)\b/, "limit people member company"],
+  [/\b(?:sign ?up|signing up|self[- ]?regist\w*|new compan(?:y|ies)|new organi[sz]ations?)\b/, "company sign register"],
 ];
 
 function tokenize(value: string): string[] {

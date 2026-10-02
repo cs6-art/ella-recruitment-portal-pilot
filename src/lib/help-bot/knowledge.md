@@ -45,7 +45,8 @@ account with an email address the organisation allows and verify it. The
 organisation's **owner** can also open **User Accounts**, use **Invite a teammate**,
 and enter the person's email address; when that person registers with that address
 and verifies it, they join the organisation automatically. An invitation can be
-withdrawn before it is used. McLink platform administrators can additionally add a
+withdrawn before it is used. An organisation can have a people limit (5 to start for a
+company that signed up on its own), and invitations count toward it. McLink platform administrators can additionally add a
 user directly: open **User Accounts**, choose the organization in **Manage users
 for**, choose **Add user account**, complete the details, and save.
 
@@ -53,7 +54,8 @@ for**, choose **Add user account**, complete the details, and save.
 Accounts**, chooses **Add organization**, and enters the organization name, its
 web address (a short lowercase name), and who may register: an allowed email
 domain (for example company.com), individual email addresses, or both. At least
-one is needed. There is no owner to enter: the first person who registers with an
+one is needed. You can also set an optional **Member limit**, the most people the
+organization may have (leave it empty for no limit). There is no owner to enter: the first person who registers with an
 allowed email and verifies it becomes the organization's owner automatically. Only
 one organization can own a given domain or email address. Editing an organization
 changes its details and registration rules; it does not move or delete
@@ -64,10 +66,13 @@ has registered a company's email domain yet, the first person to register with i
 and confirm their email creates the organization for that domain and becomes its
 owner. After that, anyone with an email at the same domain can register and join
 that organization automatically, up to the organization's member limit. An
-organization that signs up on its own starts with a limit of 5 people, counting
-the owner and pending invitations. When the limit is reached, new people cannot
-join or be invited until a McLink administrator raises or removes the limit.
-Deactivating someone frees a place. Personal email addresses such as Gmail, Yahoo, or
+organization that signs up on its own starts with a limit of 5 people. The owner,
+every other person in it, invitations still waiting, and people who registered but
+have not confirmed their email yet each use a place. When the limit is reached, new
+people cannot join or be invited until a McLink administrator raises or removes
+the limit. Deactivating someone frees a place, and a place held by an unconfirmed
+registration is freed when its 24-hour link runs out. See "How a company signs up
+and the people limit" for the full rules. Personal email addresses such as Gmail, Yahoo, or
 Outlook cannot be used to create an organization. If a company's domain already
 belongs to an organization, new people join that organization instead of creating
 another one. McLink administrators can still add organizations and control who may
@@ -118,7 +123,7 @@ and OneDrive import.
 ## Signing in
 
 Sign in with your email address and password. The first time, choose **Create
-account**, enter your name, your organisation email address, and a password of at
+account**, enter your name, your work email address, and a password of at
 least 10 characters. Your account is placed in your organisation automatically,
 based on your email address and the organisation's registration rules. We email you
 a link; select it within 24 hours to confirm your address, then **Log in**.
@@ -126,10 +131,16 @@ a link; select it within 24 hours to confirm your address, then **Log in**.
 - **Forgot your password?** Choose **Forgot your password?** on the sign-in page and
   follow the link we email you. The link works once and expires after an hour.
 - **"Verify your email":** choose **Resend verification email** and use the newest link.
-- **Your email is not accepted when creating an account:** only addresses that an
-  organisation allows can register (its email domain, or addresses it has invited).
-  Ask your organisation's owner to invite you from User Accounts, or contact McLink
-  to add your domain.
+- **"Use your work email address":** personal addresses such as Gmail, Yahoo,
+  Outlook, or iCloud cannot be used to register a company. Register with your work
+  email, or ask your organisation's owner to invite your personal address by name.
+- **"This email address cannot register yet":** your email domain or address already
+  belongs to an organisation that has not allowed you. Ask that organisation's owner
+  to invite you from User Accounts, or contact McLink support.
+- **"This organization has reached its limit on the number of people":** the
+  organisation is full. Ask your organisation's owner or McLink support to raise the
+  limit. If you see this after clicking your confirmation link, the link still works:
+  click it again once the limit is raised.
 - **Too many attempts:** wait a few minutes and try again.
 - **"Limited access" after signing in:** your account is active but has not been given
   recruitment permissions yet. Contact HR.
@@ -160,7 +171,7 @@ shows "x of y required" and updates by itself every 30 seconds. Its steps:
 - **Add candidates** (after setup) — share the role's application link or upload a
   batch of resumes.
 - **Invite teammates** (optional) — the owner invites colleagues by email, or they
-  register with the organisation's email.
+  register with the organisation's email, up to the organisation's people limit.
 - **Customize automated emails** (optional) — in Settings under Automated Emails.
 
 Each step shows whether it is done and has a button that goes straight there.
@@ -195,12 +206,62 @@ be deactivated by other users, and the organization's last active account is
 protected. Deactivated accounts record who deactivated them and when, and the
 account list shows each person's last sign-in. A McLink platform administrator
 decides who may register into each organization (allowed domains and emails) and
-can transfer ownership. McLink's own organization has no owner concept.
+can transfer ownership. McLink's own organization has no owner concept. A company that
+signs up on its own starts with a limit of 5 people; only McLink can change it.
 
 The organization and user setup is informationally separate from candidate
 records: an organization administrator can manage users and access, while HR
 handles roles, screening, applicants, and interviews. If a menu item is missing,
 the account's permissions or active status should be checked.
+
+## How a company signs up and the people limit
+
+**How does a new company start using the portal?** Someone from the company registers
+with their work email address. If nobody from that email domain (the part after the @,
+such as company.com) has registered and no organisation already lists it, registration
+is accepted and we email a confirmation link that works for 24 hours. When the person
+confirms their email, Smile creates the organisation for that domain, named after it
+(name@acme.com becomes "Acme"), and that person becomes its owner with HR access. The
+owner can change the displayed name in Settings under Organization Branding. Nothing is
+created until the email is confirmed.
+
+**Who can join that company afterwards?** Anyone with an email at the same domain can
+register, confirm, and join automatically as HR, until the company reaches its people
+limit. The owner can also invite specific email addresses from User Accounts with
+**Invite a teammate**, including addresses at other domains such as a consultant's
+Gmail address.
+
+**What is the people limit and what counts toward it?** A company that signs up on its
+own starts with a limit of 5 people. A place is used by each person in the organisation
+(including the owner), each invitation still waiting, and each person who registered
+but has not confirmed their email yet. A place held by an unconfirmed registration is
+freed when its 24-hour link runs out. Deactivating someone frees their place.
+Organisations that McLink adds by hand have no limit unless McLink sets one, and
+McLink's own organisation has none.
+
+**What happens when the company is full?** A person who tries to register is told the
+organization has reached its limit on the number of people and to ask the owner or
+McLink support to raise it. A person who registered while a place was free but finds it
+full when they confirm sees a similar message; their link still works, so they can click
+it again once the limit is raised. An owner who invites past the limit is told the
+organization is limited to that many people and to contact McLink support. The owner's
+Invite a teammate section shows how many places are used, for example "3 of 5 people".
+
+**Who can change the limit, and how?** Only a McLink platform administrator. Open **User
+Accounts**, find the organization under **Organizations**, choose **Edit**, and change
+**Member limit** to a whole number of 1 or more, or leave it empty for no limit. The
+list shows each organization's people, for example "3 of 5 people" or "no limit". The
+owner cannot change the limit.
+
+**Who cannot sign up?** Personal email addresses (Gmail, Yahoo, Outlook, Hotmail,
+iCloud, Proton, and temporary mailboxes) cannot start a company: the message is "Use
+your work email address." A personal address the owner has invited by name can still
+join that owner's company. If an organisation already lists the person's domain or
+address, the person follows that organisation's rules instead of starting a new
+company. McLink staff with mclinkgroup.com email join McLink's own organisation, which
+never starts a new company.
+
+---
 
 ## What the User Accounts permissions mean
 
@@ -920,6 +981,17 @@ complete.
 **"I cannot deactivate a user."** Only the organisation owner (or McLink) can
 deactivate or reactivate accounts, the owner cannot be deactivated, and the last
 active account is protected.
+
+**"I cannot invite a teammate" or "my colleague cannot register."** The organisation
+may have reached its people limit (5 to start for a company that signed up on its own).
+The owner's Invite a teammate section shows how many places are used, for example "3
+of 5 people". Waiting invitations and unconfirmed registrations also use a place.
+Withdraw an invitation or deactivate someone to free a place, or ask McLink support
+to raise the limit.
+
+**"I cannot register with my Gmail address."** Personal email addresses cannot start a
+company. Register with your work email, or ask your organisation's owner to invite
+your address by name.
 
 **Booking link does not work.** Booking links are single-use and personal. If a
 link is expired or already used, generate or request a new invitation.
