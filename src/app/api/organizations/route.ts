@@ -39,7 +39,12 @@ function normalizeDomain(value: string) {
   return value.trim().toLowerCase().replace(/^@/, "");
 }
 
-/** Reject registrations that would match more than one organization's explicit invite rules. */
+/**
+ * Reject registrations that would match more than one organization's explicit
+ * invite rules. An individual email is allowed to be an exception to another
+ * organization's domain-wide rule because registration resolves exact email
+ * matches before domain matches.
+ */
 async function ruleConflict(rules: ReturnType<typeof cleanRules>, ownId: string) {
   const all = await getDb().select({ id: organizations.id, name: organizations.name, allowedDomains: organizations.allowedDomains, allowedEmails: organizations.allowedEmails }).from(organizations);
   for (const other of all.filter((row) => row.id !== ownId)) {
@@ -53,11 +58,6 @@ async function ruleConflict(rules: ReturnType<typeof cleanRules>, ownId: string)
     if (duplicateEmail) return `${duplicateEmail} is already assigned to ${other.name}.`;
     const domainWithExistingInvite = rules.allowedDomains.find((domain) => otherEmails.some((email) => normalizeDomain(email.split("@")[1] || "") === normalizeDomain(domain)));
     if (domainWithExistingInvite) return `The @${domainWithExistingInvite} domain includes an email already invited to ${other.name}. Invite people individually instead.`;
-    const directEmailMatchingOtherDomain = rules.allowedEmails.find((email) => {
-      const domain = normalizeDomain(email.split("@")[1] || "");
-      return otherDomains.includes(domain);
-    });
-    if (directEmailMatchingOtherDomain) return `${directEmailMatchingOtherDomain} is covered by the @${normalizeDomain(directEmailMatchingOtherDomain.split("@")[1] || "")} domain already assigned to ${other.name}.`;
   }
   return "";
 }

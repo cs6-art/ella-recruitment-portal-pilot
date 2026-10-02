@@ -48,7 +48,7 @@ export async function GET() {
     const organization = await loadOrganization(access.user.organizationId);
     if (!organization) return fail("Organization not found.", 404);
     const people = await getDb().select({ email: users.email, active: users.active }).from(users).where(eq(users.organizationId, access.user.organizationId));
-    const pending = await getDb().select({ email: userCredentials.email }).from(userCredentials).where(and(eq(userCredentials.organizationId, access.user.organizationId), sql`${userCredentials.emailVerifiedAt} IS NULL`));
+    const pending = await getDb().select({ email: userCredentials.email }).from(userCredentials).where(and(eq(userCredentials.organizationId, access.user.organizationId), sql`${userCredentials.emailVerifiedAt} IS NULL`, sql`${userCredentials.verificationExpiresAt} > now()`));
     const registered = new Set(people.map((row) => row.email.trim().toLowerCase()));
     const used = memberSeatUsage({ activeEmails: people.filter((row) => row.active).map((row) => row.email), invitedEmails: organization.allowedEmails, pendingEmails: pending.map((row) => row.email) });
     return NextResponse.json({
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     if (organization.maxMembers != null) {
       // Seats in use are the people already in the organization plus invitations still waiting.
       const members = await getDb().select({ email: users.email }).from(users).where(and(eq(users.organizationId, organizationId), eq(users.active, true)));
-      const pending = await getDb().select({ email: userCredentials.email }).from(userCredentials).where(and(eq(userCredentials.organizationId, organizationId), sql`${userCredentials.emailVerifiedAt} IS NULL`));
+      const pending = await getDb().select({ email: userCredentials.email }).from(userCredentials).where(and(eq(userCredentials.organizationId, organizationId), sql`${userCredentials.emailVerifiedAt} IS NULL`, sql`${userCredentials.verificationExpiresAt} > now()`));
       const used = memberSeatUsage({ activeEmails: members.map((row) => row.email), invitedEmails: organization.allowedEmails, pendingEmails: pending.map((row) => row.email) });
       if (isMemberLimitReached(organization.maxMembers, used)) return fail(`Your organization is limited to ${organization.maxMembers} people. Contact McLink support to raise the limit.`, 409);
     }

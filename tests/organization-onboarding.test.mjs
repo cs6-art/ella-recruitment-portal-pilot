@@ -43,11 +43,12 @@ test("organization creation needs no owner email or invitation; the first verifi
   assert.doesNotMatch(read(".env.example"), /N8N_ORGANIZATION_OWNER_INVITE_WEBHOOK_URL/);
 });
 
-test("organization allowlists reject overlapping individual addresses and domains", () => {
+test("organization allowlists reject overlaps while permitting explicit email exceptions to domains", () => {
   const route = read("src/app/api/organizations/route.ts");
   assert.match(route, /already assigned to \$\{other\.name\}/);
   assert.match(route, /domainWithExistingInvite/);
-  assert.match(route, /directEmailMatchingOtherDomain/);
+  assert.match(route, /exact email[\s\S]*domain matches/);
+  assert.doesNotMatch(route, /directEmailMatchingOtherDomain/);
   const registration = read("src/lib/registration.ts");
   assert.match(registration, /if \(byEmail\.length\) return byEmail\.length === 1 \? byEmail\[0\]\.id : null/);
   assert.match(registration, /return byDomain\.length === 1 \? byDomain\[0\]\.id : null/);

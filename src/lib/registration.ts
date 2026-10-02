@@ -148,7 +148,7 @@ async function organizationIsFull(organizationId: string, email: string): Promis
   const [organization] = await db.select({ maxMembers: organizations.maxMembers, allowedEmails: organizations.allowedEmails }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
   if (!organization || organization.maxMembers == null) return false;
   const members = await db.select({ email: users.email }).from(users).where(and(eq(users.organizationId, organizationId), eq(users.active, true)));
-  const pending = await db.select({ email: userCredentials.email }).from(userCredentials).where(and(eq(userCredentials.organizationId, organizationId), sql`${userCredentials.emailVerifiedAt} IS NULL`));
+  const pending = await db.select({ email: userCredentials.email }).from(userCredentials).where(and(eq(userCredentials.organizationId, organizationId), sql`${userCredentials.emailVerifiedAt} IS NULL`, sql`${userCredentials.verificationExpiresAt} > now()`));
   const used = memberSeatUsage({
     activeEmails: members.map((member) => member.email),
     invitedEmails: organization.allowedEmails,

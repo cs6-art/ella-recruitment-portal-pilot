@@ -93,3 +93,12 @@ test("the Organizations screen has a Member limit box and shows how many people 
   assert.match(editor, /of \$\{organization\.maxMembers\} people/);
   assert.match(editor, /Your organization has \{inviteUsed\} of \{inviteLimit\} people/);
 });
+
+test("a registration whose confirmation link has expired no longer holds a place", () => {
+  const countedPending = "sql`${userCredentials.emailVerifiedAt} IS NULL`, sql`${userCredentials.verificationExpiresAt} > now()`";
+  assert.equal(registration.split(countedPending).length - 1, 1);
+  assert.equal(invites.split(countedPending).length - 1, 2);
+  // Resending a link must still work for an expired, unconfirmed registration.
+  const reissue = registration.slice(registration.indexOf("export async function reissueVerification"), registration.indexOf("export type VerifyResult"));
+  assert.doesNotMatch(reissue, /verificationExpiresAt\} > now\(\)/);
+});
