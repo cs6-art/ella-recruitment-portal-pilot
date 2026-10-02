@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import AppShell from "@/components/AppShell";
 import ApplicantsList from "@/components/ApplicantsList";
 import { canViewRole, isDepartmentReviewer } from "@/lib/access-control";
 import { getApplicantMetrics, getApplicantsPage } from "@/lib/candidate-applications";
@@ -26,9 +25,9 @@ export default async function RoleApplicantsPage({ params }: { params: Promise<{
   // in their own department.
   if (!role || !canViewRole(user, role)) redirect("/dashboard");
   return (
-    <AppShell user={user}>
+    <>
       <div className="role-applicants-context"><Link className="portal-back-link" href={`/roles/${encodeURIComponent(roleId)}`}>← Back to role details</Link><span>{role?.jobTitle || roleId}</span></div>
       <ApplicantsList applicants={applicantPage.applicants} initialTotal={applicantPage.total} scopeRoleId={roleId} historyMetrics={metrics} publishedRoles={[{ roleId, label: role?.jobTitle || roleId }]} canManageApplicants={user.canReviewRole === true} title={`${role?.jobTitle || roleId} Applicants`} description="Review candidates connected to this role." />
-    </AppShell>
+    </>
   );
 }

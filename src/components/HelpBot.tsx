@@ -9,6 +9,21 @@ import styles from "./HelpBot.module.css";
 type ChatMessage = { role: "user" | "assistant"; content: string };
 const STARTER_RETURN_DELAY_MS = 4_000;
 
+type HelpBotConfig = { enabled: boolean; configured: boolean };
+let helpBotConfigPromise: Promise<HelpBotConfig> | null = null;
+
+function loadHelpBotConfig() {
+  if (!helpBotConfigPromise) {
+    helpBotConfigPromise = fetch("/api/help-bot", { credentials: "same-origin", cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        return { enabled: data?.enabled === true, configured: data?.configured === true };
+      })
+      .catch(() => ({ enabled: false, configured: false }));
+  }
+  return helpBotConfigPromise;
+}
+
 const GREETING =
   "Hi, I'm Smile. Ask me how to use the recruitment portal — creating role requests, screening, interviews, statuses, access, and more. I answer from the portal guide and can't see candidate records or make changes.";
 
@@ -35,14 +50,11 @@ export default function HelpBot() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/help-bot", { credentials: "same-origin", cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => {
+    loadHelpBotConfig().then((data) => {
         if (!active) return;
-        setEnabled(data?.enabled === true);
-        setConfigured(data?.configured === true);
-      })
-      .catch(() => { if (active) setEnabled(false); });
+        setEnabled(data.enabled);
+        setConfigured(data.configured);
+      });
     return () => { active = false; };
   }, []);
 

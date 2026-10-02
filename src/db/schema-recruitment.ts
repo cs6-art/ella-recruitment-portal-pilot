@@ -140,6 +140,8 @@ export const roles = pgTable(
     index("roles_department_id_idx").on(t.departmentId),
     index("roles_requester_email_idx").on(t.requesterEmail),
     index("roles_created_at_idx").on(t.createdAt),
+    index("roles_organization_status_idx").on(t.organizationId, t.status),
+    index("roles_organization_updated_at_idx").on(t.organizationId, t.updatedAt),
     uniqueIndex("roles_organization_external_id_uidx").on(t.organizationId, t.externalId),
     uniqueIndex("roles_organization_code_uidx").on(t.organizationId, t.code),
   ],
@@ -263,6 +265,8 @@ export const applications = pgTable(
     index("applications_current_stage_idx").on(t.currentStage),
     index("applications_applied_at_idx").on(t.appliedAt),
     index("applications_role_stage_idx").on(t.roleId, t.currentStage),
+    index("applications_organization_applied_at_idx").on(t.organizationId, t.appliedAt),
+    index("applications_organization_stage_idx").on(t.organizationId, t.currentStage),
   ],
 );
 
@@ -375,6 +379,7 @@ export const interviewSlots = pgTable(
     index("interview_slots_role_type_status_idx").on(t.roleId, t.interviewType, t.status),
     index("interview_slots_starts_at_idx").on(t.startsAt),
     index("interview_slots_application_id_idx").on(t.applicationId),
+    index("interview_slots_organization_status_starts_at_idx").on(t.organizationId, t.status, t.startsAt),
   ],
 );
 

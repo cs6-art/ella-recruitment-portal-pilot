@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import AppShell from "@/components/AppShell";
 import MyCalendarConnect from "@/components/MyCalendarConnect";
 import PageHeader from "@/components/ui/PageHeader";
 import { canAdministerAccess } from "@/lib/access-control";
@@ -27,7 +26,7 @@ export default async function ProfilePage() {
   }
 
   return (
-    <AppShell user={user}>
+    <>
       <main className="container page">
         <PageHeader title="Profile" description="View your recruitment portal access." />
 
@@ -102,6 +101,6 @@ export default async function ProfilePage() {
 
         {user.canReviewRole === true && <MyCalendarConnect email={user.email} />}
       </main>
-    </AppShell>
+    </>
   );
 }

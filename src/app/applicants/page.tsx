@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
-import AppShell from "@/components/AppShell";
 import ApplicantsList from "@/components/ApplicantsList";
 import PageHeader from "@/components/ui/PageHeader";
 import { filterVisibleApplicants, isDepartmentReviewer } from "@/lib/access-control";
@@ -53,6 +52,6 @@ export default async function ApplicantsPage() {
   if (!user) redirect("/");
   if (user.canReviewRole !== true && user.canApproveRole !== true && user.canReviewDepartmentRole !== true) redirect("/dashboard");
   return (
-    <AppShell user={user}><Suspense fallback={<ApplicantsLoading />}><ApplicantsData user={user} /></Suspense></AppShell>
+    <Suspense fallback={<ApplicantsLoading />}><ApplicantsData user={user} /></Suspense>
   );
 }

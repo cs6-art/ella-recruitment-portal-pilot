@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import AppShell from "@/components/AppShell";
 import BulkResumeScreeningPanel from "@/components/BulkResumeScreeningPanel";
 import CandidateApplicationForm from "@/components/CandidateApplicationForm";
 import PageHeader from "@/components/ui/PageHeader";
@@ -33,7 +32,7 @@ export default async function ResumeScreeningPage() {
     // role catalogue grows; IDs remain the option values.
     .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
   return (
-    <AppShell user={user}>
+    <>
       <main className="container page resume-screening-page">
         <PageHeader
           className="resume-screening-header"
@@ -55,6 +54,6 @@ export default async function ResumeScreeningPage() {
           successRedirectTo="/applicants"
         />
       </main>
-    </AppShell>
+    </>
   );
 }

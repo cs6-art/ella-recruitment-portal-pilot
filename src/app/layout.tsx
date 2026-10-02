@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import "./globals.css";
 import PortalBrandingProvider from "@/components/PortalBrandingContext";
+import AppShell from "@/components/AppShell";
 import { getOrganizationBranding } from "@/lib/organization-branding";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
 
@@ -38,7 +39,9 @@ async function RootLayoutContent({ children }: Readonly<{ children: React.ReactN
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body>
         <script dangerouslySetInnerHTML={{ __html: sidebarPreferenceScript }} />
-        <PortalBrandingProvider initialBranding={initialBranding}>{children}</PortalBrandingProvider>
+        <PortalBrandingProvider initialBranding={initialBranding}>
+          {user ? <AppShell user={user}>{children}</AppShell> : children}
+        </PortalBrandingProvider>
       </body>
     </html>
   );

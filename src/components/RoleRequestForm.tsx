@@ -505,7 +505,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
     if (draftSaveInFlight.current) await draftSaveInFlight.current;
     await autosaveDraft();
     if (draftSaveInFlight.current) await draftSaveInFlight.current;
-    window.location.assign("/roles");
+    router.push("/roles");
   }
 
   function fieldErrorProps(field: string) {
@@ -656,10 +656,10 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
         router.push(`/roles/${encodeURIComponent(savedRoleId)}?updated=1`);
         router.refresh();
       } else {
-        // The new role is written by n8n outside the Next.js process. A full
-        // navigation avoids reusing a prefetched/stale client tree and prevents
-        // the first redirect from briefly showing "Role request not found".
-        window.location.assign(`/roles/${encodeURIComponent(savedRoleId)}`);
+        // The new role is written by n8n outside the Next.js process. The
+        // detail component fetches its record with no-store, so client routing
+        // keeps the persistent portal shell without reusing stale list data.
+        router.push(`/roles/${encodeURIComponent(savedRoleId)}`);
       }
       if (!isEditing) setForm(initial);
     } catch (submissionError) {

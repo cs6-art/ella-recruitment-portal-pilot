@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
-import AppShell from "@/components/AppShell";
 import BookingsList from "@/components/BookingsList";
 import PageHeader from "@/components/ui/PageHeader";
 import { getActiveBookingLinkRoleIds, getInterviewBookings } from "@/lib/candidate-applications";
@@ -49,5 +48,5 @@ export default async function BookingsPage() {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
   if (!canManagePipeline(user)) redirect("/dashboard");
-  return <AppShell user={user}><Suspense fallback={<BookingsLoading />}><BookingsData /></Suspense></AppShell>;
+  return <Suspense fallback={<BookingsLoading />}><BookingsData /></Suspense>;
 }

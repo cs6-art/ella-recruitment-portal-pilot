@@ -590,7 +590,7 @@ export type ApplicationListFilters = {
 };
 
 function applicationListConditions(organizationId: string, filters: ApplicationListFilters = {}) {
-  const conditions = [eq(roles.organizationId, organizationId.trim())];
+  const conditions = [eq(applications.organizationId, organizationId.trim()), eq(roles.organizationId, organizationId.trim())];
   if (filters.stage?.length) conditions.push(inArray(applications.currentStage, filters.stage));
   if (filters.roleExternalId) conditions.push(eq(roles.externalId, filters.roleExternalId.trim()));
   if (filters.department) conditions.push(sql`lower(trim(${roles.departmentSnapshot})) = lower(trim(${filters.department.trim()}))`);
@@ -676,12 +676,60 @@ export async function listApplications(
   return query.where(and(...conditions)).orderBy(...orderBy).limit(limit).offset(offset);
 }
 
+/**
+ * Read only the fields needed by the portal applicant list and dashboard.
+ * Detail-only resume text, raw screening payloads, and attachment metadata
+ * stay behind the applicant detail query.
+ */
+export async function listApplicationSummaries(
+  organizationId = DEFAULT_ORGANIZATION_ID,
+  pagination: { limit?: number; offset?: number; filters?: ApplicationListFilters } = {},
+) {
+  const db = getDb();
+  const filters = { ...pagination.filters };
+  const conditions = applicationListConditions(organizationId, filters);
+  const limit = Math.min(Math.max(Math.trunc(pagination.limit ?? LIMIT), 1), 500);
+  const offset = Math.max(Math.trunc(pagination.offset ?? 0), 0);
+  const query = db.select({
+    application: {
+      externalId: applications.externalId,
+      candidateName: applications.candidateName,
+      email: applications.email,
+      phone: applications.phone,
+      appliedAt: applications.appliedAt,
+      currentStage: applications.currentStage,
+      voiceHrDecision: applications.voiceHrDecision,
+      finalHrDecision: applications.finalHrDecision,
+    },
+    roleExternalId: roles.externalId,
+    roleTitle: roles.title,
+    departmentSnapshot: roles.departmentSnapshot,
+    applicantEmail: applicants.primaryEmail,
+    screeningResult: {
+      id: screeningResults.id,
+      matchScore: screeningResults.matchScore,
+      recommendation: screeningResults.recommendation,
+    },
+    hasLiveAvatarInterview: hasAvatarInterviewSql(),
+    hasVoiceInterviewChoice: hasVoiceInterviewChoiceSql(),
+  })
+    .from(applications)
+    .innerJoin(roles, eq(roles.id, applications.roleId))
+    .innerJoin(applicants, eq(applicants.id, applications.applicantId))
+    .leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id));
+  const orderBy = filters.sort === "oldest"
+    ? [asc(applications.appliedAt), asc(applications.externalId)]
+    : filters.sort === "match"
+      ? [sql`${screeningResults.matchScore} desc nulls last`, desc(applications.appliedAt), desc(applications.externalId)]
+      : [desc(applications.appliedAt), desc(applications.externalId)];
+  return query.where(and(...conditions)).orderBy(...orderBy).limit(limit).offset(offset);
+}
+
 export async function countApplications(organizationId = DEFAULT_ORGANIZATION_ID, filters: ApplicationListFilters = {}) {
   const db = getDb();
   const [result] = await db.select({ count: sql<number>`count(*)::int` })
     .from(applications)
     .innerJoin(roles, eq(roles.id, applications.roleId))
-    .innerJoin(applicants, eq(applicants.id, applications.applicantId))
     .leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id))
     .where(and(...applicationListConditions(organizationId, filters)));
   return Number(result?.count || 0);
@@ -713,7 +761,6 @@ export async function aggregateApplicationsByStage(organizationId = DEFAULT_ORGA
     hrActivity: sql<number>`count(*) filter (where ${finalActivity})::int`,
   }).from(applications)
     .innerJoin(roles, eq(roles.id, applications.roleId))
-    .innerJoin(applicants, eq(applicants.id, applications.applicantId))
     .leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id))
     .where(and(...applicationListConditions(organizationId, filters)))
     .groupBy(applications.currentStage, mode);
@@ -755,17 +802,13 @@ export async function reconcileMissingTargetScreeningQueue(organizationId: strin
 
 /** Return only the newest target applicants needed by the notification bell. */
 export async function listRecentApplications(department?: string, limit = 50, organizationId = DEFAULT_ORGANIZATION_ID) {
-  const db = getDb();
-  const query = db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql(), hasVoiceInterviewChoice: hasVoiceInterviewChoiceSql() })
-    .from(applications)
-    .innerJoin(roles, eq(roles.id, applications.roleId))
-    .innerJoin(applicants, eq(applicants.id, applications.applicantId))
-    .leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id))
-    .leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId));
-  const departmentWhere = department?.trim()
-    ? sql`lower(trim(${roles.departmentSnapshot})) = lower(trim(${department.trim()}))`
-    : undefined;
-  return query.where(and(eq(roles.organizationId, organizationId.trim()), departmentWhere)).orderBy(desc(applications.appliedAt)).limit(Math.max(1, Math.min(LIMIT, Math.trunc(limit))));
+  const filters: ApplicationListFilters = department?.trim()
+    ? { department: department.trim() }
+    : {};
+  return listApplicationSummaries(organizationId, {
+    limit: Math.max(1, Math.min(LIMIT, Math.trunc(limit))),
+    filters,
+  });
 }
 
 export async function listRoleStatusHistory(externalId: string, organizationId = DEFAULT_ORGANIZATION_ID) {

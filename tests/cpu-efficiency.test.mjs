@@ -39,7 +39,7 @@ test("applicant list and metrics share target Postgres query work per render", (
   assert.match(source, /cache\(targetApplicantSummaries\)/);
   assert.match(source, /targetApplicantMetrics\(filters\)/);
   assert.match(source, /targetApplicantPage\(input\)/);
-  assert.match(target, /listApplications\(undefined, undefined, organizationId, \{[\s\S]*?limit: pageSize,[\s\S]*?offset: \(page - 1\) \* pageSize/);
+  assert.match(target, /listApplicationSummaries\(organizationId, \{[\s\S]*?limit: pageSize,[\s\S]*?offset: \(page - 1\) \* pageSize/);
   assert.match(target, /countApplications\(organizationId, filters\)/);
 });
 

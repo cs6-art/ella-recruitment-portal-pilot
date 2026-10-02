@@ -6705,3 +6705,201 @@ textarea:focus { border-color: var(--color-link); box-shadow: var(--focus-ring);
 @media (prefers-reduced-motion: reduce) {
   .btn, .ui-button-spinner { transition: none; animation: none; }
 }
+
+/* Dashboard summary and work-queue refinements. These use the shared tokens
+   and keep the existing dashboard links as the source of truth for navigation. */
+.dashboard-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-kpi-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "icon copy arrow"
+    "icon status arrow";
+  align-items: start;
+  column-gap: 11px;
+  min-width: 0;
+  min-height: 132px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--elevation-1);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.dashboard-kpi-card:hover,
+.dashboard-kpi-card:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-selected);
+  box-shadow: var(--elevation-2);
+  color: var(--color-primary);
+  transform: translateY(-1px);
+}
+
+.dashboard-kpi-card:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.dashboard-kpi-icon {
+  display: grid;
+  grid-area: icon;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--color-surface-selected);
+  color: var(--color-primary);
+}
+
+.dashboard-kpi-card-warning .dashboard-kpi-icon { background: var(--color-status-warning-surface); color: var(--color-status-warning-ink); }
+.dashboard-kpi-card-progress .dashboard-kpi-icon { background: var(--color-status-progress-surface); color: var(--color-status-progress-ink); }
+.dashboard-kpi-card-positive .dashboard-kpi-icon { background: var(--color-status-positive-surface); color: var(--color-status-positive-ink); }
+.dashboard-kpi-card-info .dashboard-kpi-icon { background: var(--color-status-info-surface); color: var(--color-status-info-ink); }
+
+.dashboard-kpi-copy {
+  display: grid;
+  grid-area: copy;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dashboard-kpi-label {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .02em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dashboard-kpi-copy strong {
+  color: var(--color-primary);
+  font-size: 28px;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-kpi-copy small {
+  min-height: 36px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.dashboard-kpi-card .status-badge {
+  grid-area: status;
+  justify-self: start;
+  margin-top: 7px;
+  font-size: 11px;
+}
+
+.dashboard-kpi-arrow {
+  display: grid;
+  grid-area: arrow;
+  align-self: center;
+  color: var(--color-text-muted);
+  font-size: 19px;
+}
+
+.dashboard-task-list { gap: 8px; }
+.dashboard-task-list > li + li { border-top: 0; }
+.dashboard-task-row {
+  min-height: 72px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.dashboard-task-row:hover,
+.dashboard-task-row:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-selected);
+}
+
+.dashboard-pipeline-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dashboard-pipeline-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  min-height: 86px;
+  padding: 13px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
+}
+
+.dashboard-pipeline-row > span:first-child { grid-column: 1; grid-row: 1; }
+.dashboard-pipeline-row strong { grid-column: 1; grid-row: 2; align-self: end; font-size: 22px; }
+.dashboard-pipeline-row .dashboard-pipeline-arrow { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+.dashboard-pipeline-row:hover,
+.dashboard-pipeline-row:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-selected);
+}
+
+.dashboard-alert-list { display: grid; gap: 8px; border-top: 0; }
+.dashboard-alert-list > li + li { border-top: 0; }
+.dashboard-alert-row {
+  min-height: 78px;
+  padding: 12px;
+  border: 1px solid var(--color-status-warning-line);
+  border-radius: var(--radius-md);
+  background: var(--color-status-warning-surface);
+}
+
+.dashboard-skeleton-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-skeleton-kpis > span {
+  display: block;
+  min-height: 132px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(90deg, var(--color-surface) 25%, var(--color-surface-subtle) 50%, var(--color-surface) 75%);
+  background-size: 200% 100%;
+  animation: dashboard-pulse 1.4s ease-in-out infinite alternate;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-kpi-grid,
+  .dashboard-skeleton-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .dashboard-kpi-grid,
+  .dashboard-skeleton-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-kpi-card { min-height: 126px; padding: 14px; }
+  .dashboard-kpi-copy strong { font-size: 24px; }
+  .dashboard-pipeline-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-pipeline-row { min-height: 82px; }
+  .dashboard-task-row { grid-template-columns: 34px minmax(0, 1fr); padding: 12px; }
+}
+
+@media (max-width: 500px) {
+  .dashboard-kpi-grid,
+  .dashboard-skeleton-kpis,
+  .dashboard-pipeline-list { grid-template-columns: 1fr; }
+  .dashboard-kpi-card { min-height: 112px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-kpi-card,
+  .dashboard-skeleton-kpis > span { animation: none; transition: none; }
+}

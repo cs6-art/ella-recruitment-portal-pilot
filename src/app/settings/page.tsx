@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import AppShell from "@/components/AppShell";
 import EmailTemplatesEditor from "@/components/EmailTemplatesEditor";
 import GoogleCalendarConnect from "@/components/GoogleCalendarConnect";
 import OrganizationBrandingEditor from "@/components/OrganizationBrandingEditor";
@@ -17,7 +16,7 @@ export default async function SettingsPage() {
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) redirect("/");
   if (user.canEditSettings !== true) redirect("/dashboard");
-  return <AppShell user={user}>
+  return <>
     {isPlatformAdmin(user)
       ? <SettingsEditor />
       : <main className="container page settings-page">
@@ -37,5 +36,5 @@ export default async function SettingsPage() {
       </section>
       <EmailTemplatesEditor />
     </main>
-  </AppShell>;
+  </>;
 }

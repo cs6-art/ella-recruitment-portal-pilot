@@ -18,7 +18,7 @@ import {
   listActiveBookingRoleIds,
   listApplicationSlots,
   listApplicationBookingTokens,
-  listApplications,
+  listApplicationSummaries,
   countApplications,
   aggregateApplicationsByStage,
   countBulkQueueForPortal,
@@ -1152,7 +1152,7 @@ export async function targetArchiveRole(roleId: string, actor: { email: string; 
   return archiveRole({ externalId: roleId, organizationId: await targetOrganizationId(), actorEmail: actor.email, actorName: actor.name, actionRequestId: `archive:${roleId}` });
 }
 
-type TargetApplicationRow = Awaited<ReturnType<typeof listApplications>>[number];
+type TargetApplicationRow = Awaited<ReturnType<typeof listApplicationSummaries>>[number];
 
 function targetApplicantSummary(row: TargetApplicationRow) {
     const application = row.application as unknown as Record<string, unknown>;
@@ -1201,7 +1201,7 @@ export async function targetApplicantPage(input: {
   const pageSize = Math.min(100, Math.max(10, Math.trunc(input.pageSize)));
   const filters = input.filters || {};
   const [rows, total] = await Promise.all([
-    listApplications(undefined, undefined, organizationId, {
+    listApplicationSummaries(organizationId, {
       limit: pageSize,
       offset: (page - 1) * pageSize,
       filters,
@@ -1232,7 +1232,7 @@ export async function targetApplicantSummaries() {
   const rows: TargetApplicationRow[] = [];
   const pageSize = 500;
   for (let offset = 0; ; offset += pageSize) {
-    const page = await listApplications(undefined, undefined, organizationId, { limit: pageSize, offset });
+    const page = await listApplicationSummaries(organizationId, { limit: pageSize, offset });
     rows.push(...page);
     if (page.length < pageSize) break;
   }

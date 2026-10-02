@@ -15,6 +15,7 @@ import { collectAttentionAlerts } from "@/lib/dashboard-attention";
 import { scheduledInstant } from "@/lib/interview-time";
 import { targetRecentApplicantSummaries, targetRoleSummaries, targetUpcomingBookings } from "@/lib/recruitment-target-portal";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { logServerTiming, measureServerOperation } from "@/lib/server-timing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,6 +66,8 @@ function createRecentActivity(roleRequests: ReturnType<typeof calculateDashboard
 }
 
 export async function GET() {
+  const startedAt = performance.now();
+  const timings: Record<string, number> = {};
   const user = verifySessionToken((await cookies()).get(COOKIE_NAME)?.value);
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   if (!user.canCreateRole && !user.canReviewRole && !user.canApproveRole && !user.canReviewDepartmentRole) {
@@ -75,34 +78,35 @@ export async function GET() {
   const canViewApplicants = user.canReviewRole === true || user.canApproveRole === true;
   const canViewInterviews = user.canReviewRole === true;
 
-  const roleRequestsPromise = postgresTarget ? targetRoleSummaries() : getRoleRequests();
-  const applicantMetricsPromise = canViewApplicants ? getApplicantMetrics() : Promise.resolve(undefined);
+  const timed = <T>(name: string, operation: () => Promise<T>) => measureServerOperation(timings, name, operation);
+  const roleRequestsPromise = timed("roles", () => postgresTarget ? targetRoleSummaries() : getRoleRequests());
+  const applicantMetricsPromise = canViewApplicants ? timed("applicantMetrics", () => getApplicantMetrics()) : Promise.resolve(undefined);
   const interviewBookingsPromise = canViewInterviews
-    ? (postgresTarget ? targetUpcomingBookings(50) : getInterviewBookings())
+    ? timed("upcomingBookings", () => postgresTarget ? targetUpcomingBookings(50) : getInterviewBookings())
     : Promise.resolve([] as InterviewBooking[]);
   const recentApplicantsPromise = canViewApplicants
-    ? (postgresTarget ? targetRecentApplicantSummaries() : getApplicants())
+    ? timed("recentApplicants", () => postgresTarget ? targetRecentApplicantSummaries() : getApplicants())
     : Promise.resolve([] as ApplicantSummary[]);
   const recordingFailuresPromise = canViewInterviews && postgresTarget
-    ? listDashboardRecordingFailures(user.organizationId)
+    ? timed("recordingFailures", () => listDashboardRecordingFailures(user.organizationId))
     : Promise.resolve([] as Awaited<ReturnType<typeof listDashboardRecordingFailures>>);
 
   const processingFailuresPromise = canViewInterviews && postgresTarget
-    ? listDashboardProcessingFailures(user.organizationId)
+    ? timed("processingFailures", () => listDashboardProcessingFailures(user.organizationId))
     : Promise.resolve([] as Awaited<ReturnType<typeof listDashboardProcessingFailures>>);
   const overdueInterviewsPromise = canViewInterviews && postgresTarget
-    ? listOverdueFinalInterviews(user.organizationId)
+    ? timed("overdueInterviews", () => listOverdueFinalInterviews(user.organizationId))
     : Promise.resolve([] as Awaited<ReturnType<typeof listOverdueFinalInterviews>>);
 
   const attentionPromise = canViewInterviews && postgresTarget
-    ? collectAttentionAlerts(user.organizationId, { ownerEmail: user.email })
+    ? timed("attention", () => collectAttentionAlerts(user.organizationId, { ownerEmail: user.email }))
     : Promise.resolve([] as Awaited<ReturnType<typeof collectAttentionAlerts>>);
 
   const notificationHealthPromise = canViewInterviews && postgresTarget
-    ? getDb().select({ status: applicationStatusHistory.notificationStatus, count: sql<number>`count(*)::int` })
+    ? timed("notificationHealth", () => getDb().select({ status: applicationStatusHistory.notificationStatus, count: sql<number>`count(*)::int` })
       .from(applicationStatusHistory)
       .where(and(eq(applicationStatusHistory.organizationId, user.organizationId), ne(applicationStatusHistory.notificationStatus, "")))
-      .groupBy(applicationStatusHistory.notificationStatus)
+      .groupBy(applicationStatusHistory.notificationStatus))
     : Promise.resolve([] as { status: string; count: number }[]);
 
   const [rolesResult, metricsResult, bookingsResult, applicantsResult, recordingsResult, processingResult, overdueResult, attentionResult, notificationHealthResult] = await Promise.allSettled([
@@ -236,6 +240,13 @@ export async function GET() {
   }
 
   const recentActivity = createRecentActivity(roleMetrics?.recentRequests, visibleApplicants);
+  logServerTiming("/api/dashboard/metrics", startedAt, timings, {
+    postgresTarget,
+    canViewApplicants,
+    canViewInterviews,
+    alertCount: alerts.length,
+    recentApplicantCount: visibleApplicants.length,
+  });
   return NextResponse.json({
     success: true,
     metrics: {

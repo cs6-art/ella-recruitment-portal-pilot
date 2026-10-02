@@ -31,6 +31,20 @@ type AppShellUser = {
 type AppShellProps = { user: AppShellUser; children: React.ReactNode };
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "mclink.sidebar.collapsed";
 
+function isPortalRoute(pathname: string) {
+  return [
+    "/dashboard",
+    "/roles",
+    "/resume-screening",
+    "/applicants",
+    "/bookings",
+    "/settings",
+    "/credits",
+    "/user-accounts",
+    "/profile",
+  ].some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
+
 function getInitials(name?: string, email?: string) {
   const source = name?.trim() || email?.trim() || "User";
   const words = source.split(/\s+/).filter(Boolean);
@@ -40,6 +54,7 @@ function getInitials(name?: string, email?: string) {
 
 export default function AppShell({ user, children }: AppShellProps) {
   const pathname = usePathname();
+  const portalRoute = isPortalRoute(pathname);
   const [signingOut, setSigningOut] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -54,7 +69,7 @@ export default function AppShell({ user, children }: AppShellProps) {
   // read-only) do not manage the pipeline, so they don't see these.
   const showOperationalTools = user.canReviewRole === true;
   const showApplicants = user.canReviewRole === true || user.canApproveRole === true || user.canReviewDepartmentRole === true;
-  const { count: applicantNotificationCount, badge: applicantNotificationBadge } = useNewApplicantFeed(userEmail, showApplicants);
+  const { count: applicantNotificationCount, badge: applicantNotificationBadge } = useNewApplicantFeed(userEmail, portalRoute && showApplicants);
   const isDashboard = pathname === "/dashboard";
   const isRoleList = pathname === "/roles";
   const isRoleCreate = pathname === "/roles/new";
@@ -85,6 +100,11 @@ export default function AppShell({ user, children }: AppShellProps) {
     if (sidebarCollapsed) document.documentElement.dataset.sidebarCollapsed = "true";
     else delete document.documentElement.dataset.sidebarCollapsed;
   }, [sidebarCollapsed, sidebarPreferenceLoaded]);
+
+  // The root layout owns the shell so it can survive route transitions. Public
+  // candidate and authentication pages still share the root layout, but must
+  // not inherit the authenticated portal navigation.
+  if (!portalRoute) return <>{children}</>;
 
   return (
     <ConfirmationProvider>

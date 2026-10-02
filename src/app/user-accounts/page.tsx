@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import AppShell from "@/components/AppShell";
 import UserAccountsEditor from "@/components/UserAccountsEditor";
 import { canAdministerAccess } from "@/lib/access-control";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
@@ -13,5 +12,5 @@ export default async function UserAccountsPage() {
   if (!user) redirect("/");
   if (!canAdministerAccess(user)) redirect("/dashboard");
 
-  return <AppShell user={user}><UserAccountsEditor currentEmail={user.email} /></AppShell>;
+  return <UserAccountsEditor currentEmail={user.email} />;
 }

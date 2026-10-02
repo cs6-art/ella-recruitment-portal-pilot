@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import AppShell from "@/components/AppShell";
 import ApplicantEditForm from "@/components/ApplicantEditForm";
 import { canEditApplicant } from "@/lib/access-control";
 import { getApplicantById } from "@/lib/candidate-applications";
@@ -16,6 +15,6 @@ export default async function EditApplicantPage({ params }: { params: Promise<{ 
   if (!canEditApplicant(user)) redirect("/applicants");
   const applicationId = decodeURIComponent((await params).applicationId);
   const applicant = await getApplicantById(applicationId);
-  if (!applicant) return <AppShell user={user}><main className="container page"><section className="card"><div className="empty">Applicant not found.</div></section></main></AppShell>;
-  return <AppShell user={user}><main className="container page applicant-edit-page"><ApplicantEditForm applicant={{ applicationId: applicant.applicationId, candidateName: applicant.candidateName, email: applicant.email, contactNumber: applicant.contactNumber, roleId: applicant.roleId, selectedRole: applicant.selectedRole, department: applicant.department, applicantCountry: countryForPhone(applicant.contactNumber).country }} /></main></AppShell>;
+  if (!applicant) return <main className="container page"><section className="card"><div className="empty">Applicant not found.</div></section></main>;
+  return <main className="container page applicant-edit-page"><ApplicantEditForm applicant={{ applicationId: applicant.applicationId, candidateName: applicant.candidateName, email: applicant.email, contactNumber: applicant.contactNumber, roleId: applicant.roleId, selectedRole: applicant.selectedRole, department: applicant.department, applicantCountry: countryForPhone(applicant.contactNumber).country }} /></main>;
 }

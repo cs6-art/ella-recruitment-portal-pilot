@@ -7,7 +7,7 @@ const read = (path) => fs.readFileSync(path, "utf8");
 test("Applicants badge uses the data-driven new-applicant feed and hides at zero", () => {
   const shell = read("src/components/AppShell.tsx");
   const feed = read("src/components/NewApplicantsBell.tsx");
-  assert.match(shell, /useNewApplicantFeed\(userEmail, showApplicants\)/);
+  assert.match(shell, /useNewApplicantFeed\(userEmail, portalRoute && showApplicants\)/);
   assert.match(shell, /applicantNotificationCount > 0/);
   assert.match(feed, /fetch\("\/api\/applicants\/recent"/);
 });

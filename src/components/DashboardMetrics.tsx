@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import GettingStarted from "@/components/GettingStarted";
-import UiIcon from "@/components/UiIcon";
+import UiIcon, { type UiIconName } from "@/components/UiIcon";
+import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
 type RecentRequest = { roleId: string; jobTitle: string; department: string; status: string; createdAt: string; targetHiringDate: string; requesterName: string };
@@ -59,6 +60,15 @@ type Metrics = {
   lastUpdatedAt?: string;
 };
 type TaskItem = { id: string; message: string; detail: string; action: string; href: string };
+type DashboardKpi = {
+  label: string;
+  value: number;
+  description: string;
+  icon: UiIconName;
+  href: string;
+  tone: StatusTone;
+  status?: { label: string; tone: StatusTone };
+};
 
 function countFor(metrics: ApplicantMetrics, key: string) {
   return metrics.stageCounts.find((stage) => stage.key === key)?.value ?? 0;
@@ -81,8 +91,18 @@ function interviewDate(value: string) {
   }).format(date);
 }
 
+function DashboardKpiCard({ kpi }: { kpi: DashboardKpi }) {
+  return <Link className={`dashboard-kpi-card dashboard-kpi-card-${kpi.tone}`} href={kpi.href}>
+    <span className="dashboard-kpi-icon" aria-hidden="true"><UiIcon name={kpi.icon} size={19} /></span>
+    <span className="dashboard-kpi-copy"><span className="dashboard-kpi-label">{kpi.label}</span><strong>{kpi.value}</strong><small>{kpi.description}</small></span>
+    {kpi.status && <StatusBadge value={kpi.status.label} label={kpi.status.label} tone={kpi.status.tone} />}
+    <span className="dashboard-kpi-arrow" aria-hidden="true">→</span>
+  </Link>;
+}
+
 function DashboardSkeleton() {
   return <div className="dashboard-loading-grid" aria-label="Loading your dashboard">
+    <div className="dashboard-skeleton-kpis" aria-hidden="true"><span /><span /><span /><span /><span /></div>
     <section className="dashboard-skeleton dashboard-skeleton-attention" aria-hidden="true"><span /><i /><i /><i /></section>
     <section className="dashboard-skeleton" aria-hidden="true"><span /><i /><i /><i /><i /></section>
     <div className="dashboard-skeleton-columns"><section className="dashboard-skeleton" aria-hidden="true"><span /><i /><i /><i /></section><section className="dashboard-skeleton" aria-hidden="true"><span /><i /><i /></section></div>
@@ -222,6 +242,30 @@ export default function DashboardMetrics({
   const upcoming = metrics.upcomingInterviews || [];
   const alerts = metrics.alerts || [];
   const activity = metrics.recentActivity || [];
+  const reviewStatus = (value: number) => value > 0 ? { label: "Needs action", tone: "warning" as const } : { label: "Clear", tone: "positive" as const };
+  const kpis: DashboardKpi[] = canReviewRole && applicantMetrics ? [
+    { label: "Role reviews", value: metrics.pendingHrDiscussion || 0, description: "Waiting for HR review", icon: "roles", href: "/roles?status=Pending%20HR%20Discussion", tone: "warning", status: reviewStatus(metrics.pendingHrDiscussion || 0) },
+    { label: "Resume reviews", value: countFor(applicantMetrics, "resume_review"), description: "Candidates awaiting review", icon: "document", href: "/applicants?stage=Resume%20Review", tone: "progress", status: reviewStatus(countFor(applicantMetrics, "resume_review")) },
+    { label: "Voice reviews", value: applicantMetrics.voiceReviewPending, description: "Completed calls to review", icon: "microphone", href: "/applicants?stage=Voice%20Interview%20Review", tone: "warning", status: reviewStatus(applicantMetrics.voiceReviewPending) },
+    { label: "Avatar reviews", value: applicantMetrics.liveAvatarReviewPending, description: "Completed avatars to review", icon: "applicants", href: "/applicants?stage=Avatar%20Interview%20Review", tone: "progress", status: reviewStatus(applicantMetrics.liveAvatarReviewPending) },
+    { label: "Open alerts", value: alerts.length, description: "Issues needing follow-up", icon: "alert", href: "/dashboard#dashboard-alerts", tone: "warning", status: reviewStatus(alerts.length) },
+  ] : canReviewRole ? [
+    { label: "Role reviews", value: metrics.pendingHrDiscussion || 0, description: "Waiting for HR review", icon: "roles", href: "/roles?status=Pending%20HR%20Discussion", tone: "warning", status: reviewStatus(metrics.pendingHrDiscussion || 0) },
+    { label: "Approved requests", value: metrics.approved || 0, description: "Ready to move forward", icon: "check-circle", href: "/roles?status=Approved", tone: "positive" },
+    { label: "Open positions", value: metrics.openPositions || 0, description: "Currently accepting candidates", icon: "briefcase", href: "/roles", tone: "info" },
+    { label: "Upcoming interviews", value: upcoming.length, description: "Scheduled interviews", icon: "calendar", href: "/bookings", tone: "progress" },
+    { label: "Open alerts", value: alerts.length, description: "Issues needing follow-up", icon: "alert", href: "/dashboard#dashboard-alerts", tone: "warning", status: reviewStatus(alerts.length) },
+  ] : canApproveRole && applicantMetrics ? [
+    { label: "Role requests", value: metrics.total || 0, description: "Visible in your workspace", icon: "roles", href: "/roles", tone: "info" },
+    { label: "Hiring decisions", value: applicantMetrics.finalDecisionPending, description: "Candidates awaiting a decision", icon: "check-circle", href: "/applicants?stage=Face-to-Face%20Decision%20Pending", tone: "warning", status: reviewStatus(applicantMetrics.finalDecisionPending) },
+    { label: "Approved requests", value: metrics.approved || 0, description: "Ready to move forward", icon: "check-circle", href: "/roles?status=Approved", tone: "positive" },
+    { label: "Open positions", value: metrics.openPositions || 0, description: "Currently accepting candidates", icon: "briefcase", href: "/roles", tone: "info" },
+    { label: "Applications", value: applicantMetrics.total, description: "Visible candidate records", icon: "applicants", href: "/applicants", tone: "progress" },
+  ] : [
+    { label: canCreateRole ? "My role requests" : "Role requests", value: metrics.total || 0, description: "Visible in your workspace", icon: "roles", href: "/roles", tone: "info" },
+    { label: "Approved requests", value: metrics.approved || 0, description: "Ready to move forward", icon: "check-circle", href: "/roles?status=Approved", tone: "positive" },
+    { label: "Open positions", value: metrics.openPositions || 0, description: "Currently accepting candidates", icon: "briefcase", href: "/roles", tone: "info" },
+  ];
   const lastUpdated = metrics.lastUpdatedAt ? dateTime(metrics.lastUpdatedAt) : "just now";
   return <main className="container page dashboard-page">
     <header className="dashboard-welcome">
@@ -244,6 +288,10 @@ export default function DashboardMetrics({
     <p className="sr-only" role="status" aria-live="polite">{refreshing ? "Refreshing dashboard information." : ""}</p>
 
     {canReviewRole && showGettingStarted && organizationId && !personalScope && <GettingStarted organizationId={organizationId} />}
+
+    <section className="dashboard-kpi-grid" aria-label="Dashboard summary" aria-busy={refreshing}>
+      {kpis.map((kpi) => <DashboardKpiCard key={kpi.label} kpi={kpi} />)}
+    </section>
 
     <section className="dashboard-section dashboard-attention" aria-labelledby="dashboard-attention-title" aria-busy={refreshing}>
       <div className="dashboard-section-heading">
@@ -273,7 +321,7 @@ export default function DashboardMetrics({
 
     {canReviewRole && <section className="dashboard-section dashboard-upcoming" aria-labelledby="dashboard-upcoming-title" aria-busy={refreshing}>
       <div className="dashboard-section-heading"><div><h2 id="dashboard-upcoming-title">Upcoming Interviews</h2><p>The next scheduled interviews you can manage.</p></div><Link className="dashboard-text-link" href="/bookings">View all interviews <span aria-hidden="true">→</span></Link></div>
-      {sectionErrors.upcomingInterviews ? <div className="dashboard-section-message" role="status">We couldn’t load upcoming interviews. Try refreshing.</div> : upcoming.length === 0 ? <div className="dashboard-empty-state"><UiIcon name="calendar" size={20} /><p>There are no upcoming interviews.</p><Link className="dashboard-text-link" href="/bookings">Manage interview schedules <span aria-hidden="true">→</span></Link></div> : <ul className="dashboard-interview-list">{upcoming.map((interview) => <li key={`${interview.applicationId}:${interview.date}:${interview.startTime}`}><article className="dashboard-interview-row"><div className="dashboard-interview-date"><strong>{interviewDate(interview.date)}</strong><span>{interview.startTime}–{interview.endTime} · {interview.timezone}</span></div><div className="dashboard-interview-candidate"><strong>{interview.candidateName}</strong><span>{interview.roleTitle}</span></div><div className="dashboard-interview-meta"><span className="dashboard-interview-type">{interview.interviewType}</span><span>{interview.interviewerName ? `Interviewer: ${interview.interviewerName}` : "Interviewer not assigned"}</span></div><span className="dashboard-status-label"><UiIcon name="check-circle" size={15} />Scheduled</span><Link className="dashboard-interview-link" href={interview.href}>View details</Link></article></li>)}</ul>}
+      {sectionErrors.upcomingInterviews ? <div className="dashboard-section-message" role="status">We couldn’t load upcoming interviews. Try refreshing.</div> : upcoming.length === 0 ? <div className="dashboard-empty-state"><UiIcon name="calendar" size={20} /><p>There are no upcoming interviews.</p><Link className="dashboard-text-link" href="/bookings">Manage interview schedules <span aria-hidden="true">→</span></Link></div> : <ul className="dashboard-interview-list">{upcoming.map((interview) => <li key={`${interview.applicationId}:${interview.date}:${interview.startTime}`}><article className="dashboard-interview-row"><div className="dashboard-interview-date"><strong>{interviewDate(interview.date)}</strong><span>{interview.startTime}–{interview.endTime} · {interview.timezone}</span></div><div className="dashboard-interview-candidate"><strong>{interview.candidateName}</strong><span>{interview.roleTitle}</span></div><div className="dashboard-interview-meta"><span className="dashboard-interview-type">{interview.interviewType}</span><span>{interview.interviewerName ? `Interviewer: ${interview.interviewerName}` : "Interviewer not assigned"}</span></div><StatusBadge value="Scheduled" /><Link className="dashboard-interview-link" href={interview.href}>View details</Link></article></li>)}</ul>}
     </section>}
 
     {canReviewRole && <section className="dashboard-section dashboard-alerts" aria-labelledby="dashboard-alerts-title" aria-busy={refreshing}>

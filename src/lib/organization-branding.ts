@@ -29,15 +29,21 @@ async function defaultOrganizationName(organizationId: string) {
 }
 
 export async function getOrganizationBranding(organizationId: string) {
-  const rows = await getTenantDb()
-    .select({ key: portalSettings.key, value: portalSettings.value })
-    .from(portalSettings)
-    .where(and(eq(portalSettings.organizationId, organizationId), eq(portalSettings.key, NAME_KEY)));
-  const subtitleRows = await getTenantDb()
-    .select({ value: portalSettings.value })
-    .from(portalSettings)
-    .where(and(eq(portalSettings.organizationId, organizationId), eq(portalSettings.key, SUBTITLE_KEY)));
-  const fallbackName = await defaultOrganizationName(organizationId);
+  const db = getTenantDb();
+  // Branding is needed by the shell on every portal route. These reads are
+  // independent and the fallback is only needed when a tenant has not saved a
+  // display name, so keep them on one concurrent round trip.
+  const [rows, subtitleRows, fallbackName] = await Promise.all([
+    db
+      .select({ key: portalSettings.key, value: portalSettings.value })
+      .from(portalSettings)
+      .where(and(eq(portalSettings.organizationId, organizationId), eq(portalSettings.key, NAME_KEY))),
+    db
+      .select({ value: portalSettings.value })
+      .from(portalSettings)
+      .where(and(eq(portalSettings.organizationId, organizationId), eq(portalSettings.key, SUBTITLE_KEY))),
+    defaultOrganizationName(organizationId),
+  ]);
   return {
     name: clean(rows[0]?.value, fallbackName, 80),
     subtitle: clean(subtitleRows[0]?.value, DEFAULT_ORGANIZATION_BRANDING.subtitle, 80),

@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
-import AppShell from "@/components/AppShell";
 import PageHeader from "@/components/ui/PageHeader";
 import RecruitmentSetupEditor from "@/components/RecruitmentSetupEditor";
 import RoleRequestForm, { type RoleRequestFormValues } from "@/components/RoleRequestForm";
@@ -133,7 +132,7 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
   };
 
   return (
-    <AppShell user={user}>
+    <>
       <main className="container page">
         <PageHeader
           title="Edit Role Request"
@@ -159,6 +158,6 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
           setup={recruitmentSetup}
         />
       </main>
-    </AppShell>
+    </>
   );
 }

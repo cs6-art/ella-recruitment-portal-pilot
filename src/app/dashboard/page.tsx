@@ -5,7 +5,6 @@ import { eq } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { organizations } from "@/db/schema";
-import AppShell from "@/components/AppShell";
 import DashboardMetrics from "@/components/DashboardMetrics";
 import UiIcon from "@/components/UiIcon";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
@@ -42,7 +41,7 @@ export default async function DashboardPage() {
   const hasRecruitmentAccess = user.canCreateRole === true || user.canReviewRole === true || user.canApproveRole === true || user.canReviewDepartmentRole === true;
   const creatorOnly = user.canCreateRole === true && user.canReviewRole !== true && user.canApproveRole !== true;
 
-  return <AppShell user={user}>
+  return <>
     {hasRecruitmentAccess
       ? <DashboardMetrics
           scope={creatorOnly ? "personal" : "organization"}
@@ -57,5 +56,5 @@ export default async function DashboardPage() {
           <header className="dashboard-welcome dashboard-welcome-limited"><div><h1>Hello, {userName}</h1><p>Here’s what needs your attention today.</p></div></header>
           <LimitedAccessCard canEditSettings={user.canEditSettings} />
         </main>}
-  </AppShell>;
+  </>;
 }

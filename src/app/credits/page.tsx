@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import AppShell from "@/components/AppShell";
 import EllaCreditsPanel from "@/components/EllaCreditsPanel";
 import EllaCreditsPurchase from "@/components/EllaCreditsPurchase";
 import PageHeader from "@/components/ui/PageHeader";
@@ -16,7 +15,7 @@ export default async function CreditsPage() {
   const canManage = canManageCredits(user);
 
   return (
-    <AppShell user={user}>
+    <>
       <main className="container page settings-page">
         <PageHeader
           className="settings-header"
@@ -27,6 +26,6 @@ export default async function CreditsPage() {
         <EllaCreditsPurchase />
         <EllaCreditsPanel canManage={canManage} />
       </main>
-    </AppShell>
+    </>
   );
 }

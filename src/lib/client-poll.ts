@@ -85,7 +85,10 @@ function createStore<T>(key: string, fetcher: () => Promise<T | null>, intervalM
       listeners.add(listener);
       if (listeners.size === 1) {
         startTimers();
-        void doFetch();
+        // Route changes remount the shell-level consumers, but the process-wide
+        // store intentionally survives those remounts. Reuse a fresh value
+        // instead of hitting the same endpoint on every navigation.
+        if (value === null || Date.now() - lastFetch >= intervalMs) void doFetch();
       }
       return () => {
         listeners.delete(listener);

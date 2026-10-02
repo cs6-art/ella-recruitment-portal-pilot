@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import AppShell from "@/components/AppShell";
 import RoleDetails from "@/components/RoleDetails";
 import {
   COOKIE_NAME,
@@ -43,13 +42,13 @@ export default async function RoleDetailsPage({
   }
 
   return (
-    <AppShell user={user}>
+    <>
       <RoleDetails
         roleId={decodedRoleId}
         userEmail={user.email}
         canReviewRole={user.canReviewRole === true}
         canApproveRole={user.canApproveRole === true}
       />
-    </AppShell>
+    </>
   );
 }

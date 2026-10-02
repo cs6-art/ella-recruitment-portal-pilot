@@ -39,7 +39,7 @@ test("the recent-applicants feed is a single shared poll for both callers", () =
   const hits = (s) => (s.match(/fetch\("\/api\/applicants\/recent"/g) || []).length;
   assert.equal(hits(bell), 1);
   assert.equal(hits(appShell), 0);
-  assert.match(appShell, /useNewApplicantFeed\(userEmail, showApplicants\)/);
+  assert.match(appShell, /useNewApplicantFeed\(userEmail, portalRoute && showApplicants\)/);
 });
 
 test("bulk screening polls only while a batch is pending and the tab is visible", () => {

@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import AppShell from "@/components/AppShell";
 import RoleRequestForm from "@/components/RoleRequestForm";
 import PageHeader from "@/components/ui/PageHeader";
 import {
@@ -27,7 +26,7 @@ export default async function NewRolePage() {
   }
 
   return (
-    <AppShell user={user}>
+    <>
       <main className="container page">
         <PageHeader
           title="Create Role Request"
@@ -47,6 +46,6 @@ export default async function NewRolePage() {
           unified={user.canReviewRole === true && user.canApproveRole === true}
         />
       </main>
-    </AppShell>
+    </>
   );
 }
