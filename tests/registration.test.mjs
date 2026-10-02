@@ -55,3 +55,8 @@ test("a live verification request cannot be replaced by another registration", (
   assert.match(registerRoute, /A verification request is already pending/);
   assert.match(registerRoute, /status: 409/);
 });
+
+test("registration IP throttling is opt-in during pilot onboarding", () => {
+  assert.match(registerRoute, /ENABLE_REGISTRATION_RATE_LIMIT === "true"/);
+  assert.match(registerRoute, /five-attempt-per-IP hourly guard/);
+});

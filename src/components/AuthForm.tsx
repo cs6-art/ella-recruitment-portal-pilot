@@ -16,6 +16,15 @@ type AuthFormProps = {
 
 type Mode = "login" | "register" | "forgot" | "reset";
 
+function retryWaitText(seconds: number) {
+  const remainingSeconds = Math.max(1, Math.ceil(seconds));
+  if (remainingSeconds < 60) return "less than a minute";
+  const minutes = Math.ceil(remainingSeconds / 60);
+  if (minutes < 60) return `about ${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+  const hours = Math.ceil(minutes / 60);
+  return `about ${hours} ${hours === 1 ? "hour" : "hours"}`;
+}
+
 export default function AuthForm({ redirectTo = "/dashboard", resetToken = "", initialEmail = "", startInRegistration = false }: AuthFormProps) {
   const [mode, setMode] = useState<Mode>(resetToken ? "reset" : startInRegistration ? "register" : "login");
   const [fullName, setFullName] = useState("");
@@ -38,7 +47,9 @@ export default function AuthForm({ redirectTo = "/dashboard", resetToken = "", i
   async function post(url: string, body: Record<string, string>) {
     const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const result = await response.json().catch(() => ({}));
-    return { ok: response.ok, result };
+    const retryAfterHeader = response.headers.get("Retry-After");
+    const parsedRetryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+    return { ok: response.ok, result, retryAfterSeconds: Number.isFinite(parsedRetryAfterSeconds) ? parsedRetryAfterSeconds : null };
   }
 
   async function submit(event: FormEvent) {
@@ -80,9 +91,11 @@ export default function AuthForm({ redirectTo = "/dashboard", resetToken = "", i
         window.history.replaceState(null, "", "/");
         return;
       }
-      const { ok, result } = await post("/api/auth/register", { fullName, email, password });
+      const { ok, result, retryAfterSeconds } = await post("/api/auth/register", { fullName, email, password });
       if (!ok) {
-        setError(result.error || "Registration failed.");
+        setError(retryAfterSeconds && retryAfterSeconds > 0
+          ? `Too many registration attempts. Please try again in ${retryWaitText(retryAfterSeconds)}.`
+          : result.error || "Registration failed.");
         setNeedsVerification(Boolean(result.needsVerification));
         if (result.needsVerification) setMode("login");
         return;

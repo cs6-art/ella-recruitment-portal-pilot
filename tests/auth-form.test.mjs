@@ -13,3 +13,9 @@ test("password fields provide an accessible show and hide control", () => {
   assert.match(form, /className="auth-password-toggle"/);
   assert.match(styles, /\.auth-password-toggle:focus-visible/);
 });
+
+test("registration throttling explains when the user can try again", () => {
+  assert.match(form, /response\.headers\.get\("Retry-After"\)/);
+  assert.match(form, /Too many registration attempts\. Please try again in/);
+  assert.match(form, /retryWaitText/);
+});
