@@ -524,7 +524,8 @@ export default function UserAccountsEditor({ currentEmail }: { currentEmail: str
               <td><span className={`organization-readiness-badge ${ready ? "is-ready" : readiness?.overallStatus === "Partially configured" ? "is-pending" : "is-missing"}`}>{readiness?.overallStatus || "Unavailable"}</span></td>
               <td><div className="organization-readiness-actions"><button type="button" className="btn btn-secondary btn-small" aria-expanded={expanded} onClick={() => setExpandedOrganizationSlug(expanded ? "" : organization.slug)}>{expanded ? "Close setup" : ready ? "View setup" : "Continue setup"}</button><button type="button" className="btn btn-secondary btn-small" onClick={() => openEditOrganizationForm(organization)}>Edit</button></div></td>
             </tr>
-            {expanded && <tr key={`${organization.slug}-details`}><td colSpan={4}><div className="organization-readiness-details">
+            {/* Keep the expanded setup row as a table cell so its checklist spans the full organization table. */}
+            {expanded && <tr key={`${organization.slug}-details`}><td colSpan={4} className="organization-readiness-details-cell"><div className="organization-readiness-details">
               <StatusChip label="Organization owner" value={readiness?.ownerStatus || "Status unavailable"} done={readiness?.ownerStatus === "Registered"} />
               <StatusChip label="Smile Credits" value={readiness?.creditsAdded ? "Added" : "Not added"} done={readiness?.creditsAdded === true} />
               <StatusChip label="Live Avatar recording storage" value={readiness?.recordingStorageApplicable ? readiness.recordingStorageReady ? "Connected" : "Required" : "Not needed yet"} done={!readiness?.recordingStorageApplicable || readiness?.recordingStorageReady === true} />
