@@ -1661,6 +1661,9 @@ a { color: inherit; text-decoration: none; }
 .role-section { margin: 0; scroll-margin-top: 190px; }
 .role-section .card-header { padding: 17px 20px; }
 .role-section .card-header h2 { font-size: 18px; }
+.role-section-body { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; padding: 18px 24px 22px; }
+.role-section-body p { margin: 0; line-height: 1.55; }
+.role-section-body .action-feedback { align-self: stretch; }
 .role-definition-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; margin: 0; padding: 4px 20px 10px; }
 .role-field { min-width: 0; padding: 12px 0; border-bottom: 1px solid #edf1f5; }
 .role-field-wide { grid-column: 1 / -1; }

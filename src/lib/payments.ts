@@ -4,7 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { getDb, isDatabaseConfigured } from "@/db/client";
 import { paymentEvents, payments, type PaymentRow } from "@/db/schema";
-import { customCreditPack, findCreditPack } from "@/lib/credit-packs";
+import { customCreditPack, findCreditPack, type PaymentCurrency } from "@/lib/credit-packs";
 import { recordTopUp, volumeDiscountBonus } from "@/lib/ella-credits";
 import { appendAccountLedgerEntryOnExecutor, organizationCreditsEnabled } from "@/lib/ella-credits-accounts";
 import { isPaymentEventDedupeConflict, parseProviderAmountCents } from "@/lib/payment-validation";
@@ -41,6 +41,8 @@ export type CreatePurchaseInput = {
   packId?: string;
   /** Custom quantity; the server prices it at the fixed per-credit rate. */
   credits?: number;
+  /** Checkout currency; defaults to SGD. PHP is what makes HitPay offer QR Ph. */
+  currency?: PaymentCurrency;
   actorEmail: string;
   actorName: string;
   organizationId: string;
@@ -59,7 +61,8 @@ export type CreatePurchaseResult = {
 };
 
 export async function createCreditPurchase(input: CreatePurchaseInput): Promise<CreatePurchaseResult> {
-  const pack = input.credits !== undefined ? customCreditPack(input.credits) : findCreditPack(input.packId ?? "");
+  const currency = input.currency ?? "SGD";
+  const pack = input.credits !== undefined ? customCreditPack(input.credits, currency) : findCreditPack(input.packId ?? "", currency);
   if (!pack) throw new PaymentError("UNKNOWN_PACK", input.credits !== undefined ? "Enter a whole number of credits within the allowed range." : "That credit pack is not available.");
 
   const db = getDb();

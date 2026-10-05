@@ -26,7 +26,12 @@ type Payment = {
 };
 
 const nf = new Intl.NumberFormat("en-US");
-const money = new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" });
+const amountFormat = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const CURRENCY_SYMBOLS: Record<string, string> = { SGD: "S$", PHP: "₱" };
+function formatMoney(amount: number, currency = "SGD") {
+  return `${CURRENCY_SYMBOLS[currency] ?? `${currency} `}${amountFormat.format(amount)}`;
+}
+const CURRENCY_LABELS: Record<string, string> = { SGD: "SGD (PayNow, cards)", PHP: "PHP (QR Ph, cards)" };
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -40,7 +45,10 @@ function clearPaymentReturnUrl() {
 
 export default function EllaCreditsPurchase() {
   const [packs, setPacks] = useState<CreditPack[]>([]);
-  const [custom, setCustom] = useState({ priceCents: 40, min: 1, max: 10000, bonusThreshold: 0, bonusPercent: 0 });
+  const [packsByCurrency, setPacksByCurrency] = useState<Record<string, CreditPack[]>>({});
+  const [currencies, setCurrencies] = useState<string[]>(["SGD"]);
+  const [currency, setCurrency] = useState("SGD");
+  const [custom, setCustom] = useState<{ priceCents: number; prices?: Record<string, number>; min: number; max: number; bonusThreshold: number; bonusPercent: number }>({ priceCents: 40, min: 1, max: 10000, bonusThreshold: 0, bonusPercent: 0 });
   const [customCredits, setCustomCredits] = useState("");
   const [configured, setConfigured] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -57,6 +65,8 @@ export default function EllaCreditsPurchase() {
       const body = await response.json();
       if (!response.ok || body.success !== true) throw new Error(body.error || "Unable to load credit packs.");
       setPacks(body.packs || []);
+      setPacksByCurrency(body.packsByCurrency || {});
+      setCurrencies(Array.isArray(body.currencies) && body.currencies.length ? body.currencies : ["SGD"]);
       if (body.custom) setCustom(body.custom);
       setConfigured(body.configured === true);
       setError("");
@@ -104,7 +114,7 @@ export default function EllaCreditsPurchase() {
         requestEllaCreditsRefresh();
         clearPaymentReturnUrl();
         setReturnReference("");
-        setReturnMessage(`Payment Successful — ${nf.format(nextPayment.credits)} Smile Credits have been added. Amount paid: ${money.format(nextPayment.amountCents / 100)}. New balance: ${nf.format(nextPayment.newBalance ?? 0)}.`);
+        setReturnMessage(`Payment Successful — ${nf.format(nextPayment.credits)} Smile Credits have been added. Amount paid: ${formatMoney(nextPayment.amountCents / 100, nextPayment.currency)}. New balance: ${nf.format(nextPayment.newBalance ?? 0)}.`);
         return true;
       }
       if (["failed", "expired", "cancelled", "refunded"].includes(nextPayment.status)) {
@@ -182,7 +192,7 @@ export default function EllaCreditsPurchase() {
           "Content-Type": "application/json",
           "Idempotency-Key": `credit-purchase-ui:${crypto.randomUUID()}`,
         },
-        body: JSON.stringify(credits === undefined ? { packId } : { credits }),
+        body: JSON.stringify(credits === undefined ? { packId, currency } : { credits, currency }),
       });
       const body = await response.json();
       if (!response.ok || body.success !== true || typeof body.url !== "string" || !body.url) {
@@ -195,6 +205,8 @@ export default function EllaCreditsPurchase() {
     }
   }
 
+  const visiblePacks = packsByCurrency[currency] ?? packs;
+  const pricePerCredit = custom.prices?.[currency] ?? custom.priceCents;
   const customAmount = Number(customCredits);
   const customValid = customCredits.trim() !== "" && Number.isInteger(customAmount) && customAmount >= custom.min && customAmount <= custom.max;
 
@@ -218,13 +230,20 @@ export default function EllaCreditsPurchase() {
 
       {!configured && !loading && <p className={styles.unavailable}>Credit purchases are currently unavailable. Please contact an administrator.</p>}
       {loading && <p className={styles.loading}>Loading credit packs…</p>}
+      {configured && currencies.length > 1 && <div className={styles.feedback}>
+        <label htmlFor="credit-currency">Pay in{" "}
+          <select id="credit-currency" value={currency} disabled={buying !== ""} onChange={(event) => setCurrency(event.target.value)}>
+            {currencies.map((code) => <option key={code} value={code}>{CURRENCY_LABELS[code] ?? code}</option>)}
+          </select>
+        </label>
+      </div>}
       {configured && packs.length > 0 && <div className={styles.packGrid}>
-        {packs.map((pack) => (
+        {visiblePacks.map((pack) => (
           <article className={styles.pack} key={pack.id}>
             <h3>{pack.label.split(" — ")[0]}</h3>
             <p className={styles.packCredits}>{nf.format(pack.credits)} credits</p>
             {(pack.bonusCredits ?? 0) > 0 && <p className={styles.packBonus}>+ {nf.format(pack.bonusCredits ?? 0)} bonus credits</p>}
-            <p className={styles.packPrice}>{money.format(pack.amountCents / 100)}</p>
+            <p className={styles.packPrice}>{formatMoney(pack.amountCents / 100, pack.currency)}</p>
             <button type="button" className="btn btn-primary" disabled={buying !== ""} onClick={() => void startPayment(pack.id)}>
               {buying === pack.id ? "Opening checkout…" : "Pay with HitPay"}
             </button>
@@ -234,7 +253,7 @@ export default function EllaCreditsPurchase() {
       {configured && packs.length > 0 && <div className={styles.customRow}>
         <div className={styles.customText}>
           <h3>Need a different amount?</h3>
-          <p>Buy exactly the credits you need, from {nf.format(custom.min)} up to {nf.format(custom.max)}, at {money.format(custom.priceCents / 100)} per credit.{bonusOn && <> Buy {nf.format(custom.bonusThreshold)} or more and get a <strong>{custom.bonusPercent}% bonus</strong> in free credits.</>}</p>
+          <p>Buy exactly the credits you need, from {nf.format(custom.min)} up to {nf.format(custom.max)}, at {formatMoney(pricePerCredit / 100, currency)} per credit.{bonusOn && <> Buy {nf.format(custom.bonusThreshold)} or more and get a <strong>{custom.bonusPercent}% bonus</strong> in free credits.</>}</p>
         </div>
         <div className={styles.customControls}>
           <label className={styles.customField} htmlFor="custom-credits">
@@ -251,7 +270,7 @@ export default function EllaCreditsPurchase() {
               placeholder="e.g. 25"
             />
           </label>
-          <p className={styles.customTotal}><span>Total</span><strong>{customValid ? money.format((customAmount * custom.priceCents) / 100) : "—"}</strong>{customBonus > 0 && <em className={styles.customBonus}>+{nf.format(customBonus)} bonus credits</em>}</p>
+          <p className={styles.customTotal}><span>Total</span><strong>{customValid ? formatMoney((customAmount * pricePerCredit) / 100, currency) : "—"}</strong>{customBonus > 0 && <em className={styles.customBonus}>+{nf.format(customBonus)} bonus credits</em>}</p>
           <button type="button" className="btn btn-primary" disabled={buying !== "" || !customValid} onClick={() => void startPayment("custom", customAmount)}>
             {buying === "custom" ? "Opening checkout…" : "Pay with HitPay"}
           </button>

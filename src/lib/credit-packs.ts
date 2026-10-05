@@ -33,10 +33,35 @@ export function creditPriceCents(): number {
   return Number.isInteger(value) && value > 0 ? value : DEFAULT_CREDIT_PRICE_CENTS;
 }
 
-export function amountCentsForCredits(credits: number): number {
+/** Currencies a buyer can pay in. HitPay offers methods by currency: PayNow for SGD, QR Ph for PHP. */
+export type PaymentCurrency = "SGD" | "PHP";
+
+/** Per-credit price in centavos for PHP checkouts (e.g. 1800 = ₱18.00). PHP is offered only when this is set,
+ * so the exchange rate is always an explicit operator decision made server-side. */
+export function creditPricePhpCentavos(): number | null {
+  const raw = process.env.ELLA_CREDIT_PRICE_PHP_CENTS?.trim();
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+export function enabledCurrencies(): PaymentCurrency[] {
+  return creditPricePhpCentavos() === null ? ["SGD"] : ["SGD", "PHP"];
+}
+
+export function parsePaymentCurrency(value: unknown): PaymentCurrency | null {
+  const code = String(value ?? "").trim().toUpperCase();
+  return (enabledCurrencies() as string[]).includes(code) ? (code as PaymentCurrency) : null;
+}
+
+export function creditPriceFor(currency: PaymentCurrency): number {
+  return currency === "PHP" ? (creditPricePhpCentavos() ?? creditPriceCents()) : creditPriceCents();
+}
+
+export function amountCentsForCredits(credits: number, currency: PaymentCurrency = "SGD"): number {
   const quantity = Math.trunc(credits);
   if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new Error("Credit quantity must be a positive whole number.");
-  return quantity * creditPriceCents();
+  return quantity * creditPriceFor(currency);
 }
 
 /** Custom purchases: any whole number of credits in this range, at the fixed rate. */
@@ -44,10 +69,10 @@ export const MIN_CUSTOM_CREDITS = 1;
 export const MAX_CUSTOM_CREDITS = 10000;
 
 /** Build a one-off pack for a custom quantity, or null if it is out of range. */
-export function customCreditPack(credits: unknown): CreditPack | null {
+export function customCreditPack(credits: unknown, currency: PaymentCurrency = "SGD"): CreditPack | null {
   if (typeof credits !== "number" || !Number.isInteger(credits)) return null;
   if (credits < MIN_CUSTOM_CREDITS || credits > MAX_CUSTOM_CREDITS) return null;
-  return { id: "custom", label: `Custom — ${credits} credits`, credits, amountCents: amountCentsForCredits(credits), currency: "SGD" };
+  return { id: "custom", label: `Custom — ${credits} credits`, credits, amountCents: amountCentsForCredits(credits, currency), currency };
 }
 
 // Amounts are derived from the per-credit price so the packs follow `ELLA_CREDIT_PRICE_CENTS`.
@@ -97,9 +122,14 @@ export function creditPacks(): CreditPack[] {
   return cached;
 }
 
-export function findCreditPack(packId: string): CreditPack | undefined {
+/** The catalog priced in another currency; credits per pack stay the same. */
+export function creditPacksIn(currency: PaymentCurrency): CreditPack[] {
+  return creditPacks().map((pack) => (pack.currency === currency ? pack : { ...pack, amountCents: amountCentsForCredits(pack.credits, currency), currency }));
+}
+
+export function findCreditPack(packId: string, currency: PaymentCurrency = "SGD"): CreditPack | undefined {
   const normalized = String(packId || "").trim().toLowerCase();
-  return creditPacks().find((pack) => pack.id.toLowerCase() === normalized);
+  return creditPacksIn(currency).find((pack) => pack.id.toLowerCase() === normalized);
 }
 
 /** Test-only: drop the memoized catalog so an env change takes effect. */

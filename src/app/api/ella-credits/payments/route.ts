@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { canManageCredits } from "@/lib/access-control";
-import { creditPacks, creditPriceCents, MAX_CUSTOM_CREDITS, MIN_CUSTOM_CREDITS } from "@/lib/credit-packs";
+import { creditPacksIn, creditPriceFor, enabledCurrencies, MAX_CUSTOM_CREDITS, MIN_CUSTOM_CREDITS, parsePaymentCurrency } from "@/lib/credit-packs";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { createCreditPurchase, isPaymentsConfigured, listRecentPayments, PaymentError } from "@/lib/payments";
 import { getCreditPricing, volumeDiscountBonus } from "@/lib/ella-credits";
@@ -13,9 +13,10 @@ import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const currencyField = z.string().trim().max(8).optional();
 const bodySchema = z.union([
-  z.object({ packId: z.string().trim().min(1).max(64) }),
-  z.object({ credits: z.number().int().min(MIN_CUSTOM_CREDITS).max(MAX_CUSTOM_CREDITS) }),
+  z.object({ packId: z.string().trim().min(1).max(64), currency: currencyField }),
+  z.object({ credits: z.number().int().min(MIN_CUSTOM_CREDITS).max(MAX_CUSTOM_CREDITS), currency: currencyField }),
 ]);
 
 async function currentUser() {
@@ -32,15 +33,21 @@ export async function GET() {
 
   const configured = isPaymentsConfigured();
   const pricing = await getCreditPricing().catch(() => null);
-  const packs = await Promise.all(creditPacks().map(async (pack) => ({
-    id: pack.id,
-    label: pack.label,
-    credits: pack.credits,
-    amountCents: pack.amountCents,
-    currency: pack.currency,
-    // Credits added on top at settlement (volume discount); 0 when the pack is below the threshold.
-    bonusCredits: (await volumeDiscountBonus(pack.credits).catch(() => ({ bonus: 0 }))).bonus,
-  })));
+  const currencies = enabledCurrencies();
+  const packsByCurrency: Record<string, Array<Record<string, unknown>>> = {};
+  for (const code of currencies) {
+    packsByCurrency[code] = await Promise.all(creditPacksIn(code).map(async (pack) => ({
+      id: pack.id,
+      label: pack.label,
+      credits: pack.credits,
+      amountCents: pack.amountCents,
+      currency: pack.currency,
+      // Credits added on top at settlement (volume discount); 0 when the pack is below the threshold.
+      bonusCredits: (await volumeDiscountBonus(pack.credits).catch(() => ({ bonus: 0 }))).bonus,
+    })));
+  }
+  const packs = packsByCurrency.SGD;
+  const prices = Object.fromEntries(currencies.map((code) => [code, creditPriceFor(code)]));
   let recent: Array<Record<string, unknown>> = [];
   if (configured && canManageCredits(user)) {
     try {
@@ -59,7 +66,7 @@ export async function GET() {
       console.error("[API Payments] list failed:", error);
     }
   }
-  return NextResponse.json({ success: true, configured, mode: hitpayMode(), packs, custom: { priceCents: creditPriceCents(), min: MIN_CUSTOM_CREDITS, max: MAX_CUSTOM_CREDITS, currency: "SGD", bonusThreshold: pricing?.discountThreshold ?? 0, bonusPercent: pricing?.discountPercent ?? 0 }, recent }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ success: true, configured, mode: hitpayMode(), packs, packsByCurrency, currencies, custom: { priceCents: prices.SGD, prices, min: MIN_CUSTOM_CREDITS, max: MAX_CUSTOM_CREDITS, currency: "SGD", bonusThreshold: pricing?.discountThreshold ?? 0, bonusPercent: pricing?.discountPercent ?? 0 }, recent }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {
@@ -81,9 +88,13 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ success: false, error: `Choose a credit pack or enter ${MIN_CUSTOM_CREDITS}-${MAX_CUSTOM_CREDITS} credits.` }, { status: 422 });
 
+  const currency = parsed.data.currency ? parsePaymentCurrency(parsed.data.currency) : "SGD";
+  if (!currency) return NextResponse.json({ success: false, error: "That payment currency is not available." }, { status: 422 });
+
   try {
     const result = await createCreditPurchase({
       ...("packId" in parsed.data ? { packId: parsed.data.packId } : { credits: parsed.data.credits }),
+      currency,
       actorEmail: user.email,
       actorName: user.name,
       organizationId: user.organizationId,
