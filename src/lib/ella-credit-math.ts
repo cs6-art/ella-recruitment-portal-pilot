@@ -3,14 +3,38 @@
  * is unit-testable in isolation. The stateful ledger lives in ella-credits.ts.
  */
 
-/** Published Smile Credits per unit of each metered action. */
+/**
+ * Published Smile Credits per unit of each metered action. A Live Avatar
+ * interview is metered per started minute (see liveAvatarCreditsForSeconds), so
+ * its unit is one minute; every other action is one flat charge.
+ */
 export const CREDIT_COST = {
   cv_analysis: 1,
   phone_interview: 10,
   phone_interview_no_answer: 5,
   phone_interview_incomplete: 8,
-  live_avatar_interview: 20,
+  live_avatar_interview: 2,
 } as const;
+
+/** Live Avatar sessions are capped at 20 minutes (see LIVEAVATAR_MAX_SESSION_DURATION_SECONDS). */
+export const LIVE_AVATAR_MAX_MINUTES = 20;
+
+/** The most one Live Avatar interview can cost; this is what is reserved while it runs. */
+export const LIVE_AVATAR_MAX_CREDITS = CREDIT_COST.live_avatar_interview * LIVE_AVATAR_MAX_MINUTES;
+
+/**
+ * Minutes billed for a Live Avatar interview that ran `seconds`: every started
+ * minute counts, with a one-minute minimum and the 20-minute session cap.
+ */
+export function liveAvatarBillableMinutes(seconds: number | null | undefined): number {
+  const elapsed = Number.isFinite(seconds) ? Math.max(0, Number(seconds)) : 0;
+  return Math.min(LIVE_AVATAR_MAX_MINUTES, Math.max(1, Math.ceil(elapsed / 60)));
+}
+
+/** Credits charged for a Live Avatar interview that ran `seconds`. */
+export function liveAvatarCreditsForSeconds(seconds: number | null | undefined): number {
+  return liveAvatarBillableMinutes(seconds) * CREDIT_COST.live_avatar_interview;
+}
 
 export type CreditEvent = keyof typeof CREDIT_COST;
 

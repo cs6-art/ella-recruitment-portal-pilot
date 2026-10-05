@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { canManagePipeline } from "@/lib/access-control";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
-import { CREDIT_COST, EllaCreditsError, getCreditBalance, placeAvatarInterviewHold, releaseAvatarInterviewHold } from "@/lib/ella-credits";
+import { EllaCreditsError, getCreditBalance, LIVE_AVATAR_MAX_CREDITS, placeAvatarInterviewHold, releaseAvatarInterviewHold } from "@/lib/ella-credits";
 import { consumeDurableRateLimit } from "@/lib/durable-rate-limit";
 import { rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
           // organization cannot spend it elsewhere while the interview runs.
           const hold = await placeAvatarInterviewHold({ organizationId: preview.organizationId, applicationId: preview.applicationId, expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000) });
           if (hold.supported) heldFor = { organizationId: preview.organizationId, applicationId: preview.applicationId };
-          else if ((await getCreditBalance({ organizationId: preview.organizationId, ownerEmail: preview.creditOwnerEmail })).balance < CREDIT_COST.live_avatar_interview) throw new EllaCreditsError(CREDIT_COST.live_avatar_interview, 0);
+          else if ((await getCreditBalance({ organizationId: preview.organizationId, ownerEmail: preview.creditOwnerEmail })).balance < LIVE_AVATAR_MAX_CREDITS) throw new EllaCreditsError(LIVE_AVATAR_MAX_CREDITS, 0);
         } catch (creditError) {
           if (!(creditError instanceof EllaCreditsError)) throw creditError;
           console.error("[API Live Avatar Candidate Session] Blocked: organization has insufficient credits.", { stage: startupStage, organizationId: preview.organizationId });

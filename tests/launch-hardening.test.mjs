@@ -16,7 +16,7 @@ test("the tokenless avatar session and evaluate paths require a signed-in HR rev
 
 test("an avatar interview is refused, before the link is consumed, when the organization cannot cover it", () => {
   const session = read("src/app/api/live-avatar/session/route.ts");
-  const guard = session.indexOf("balance < CREDIT_COST.live_avatar_interview");
+  const guard = session.indexOf("balance < LIVE_AVATAR_MAX_CREDITS");
   assert.ok(guard > 0);
   assert.ok(guard < session.indexOf("await startAvatarInterview(avatarToken)"), "credit check must precede consuming the invitation");
   assert.match(session, /consumeDurableRateLimit\(`avatar-session:/);

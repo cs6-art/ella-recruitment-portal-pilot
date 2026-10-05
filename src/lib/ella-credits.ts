@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { assertBalanceCovers, CREDIT_COST, type CreditEvent, type VoiceInterviewBillingOutcome, VOICE_INTERVIEW_BILLING_COST } from "@/lib/ella-credit-math";
+import { assertBalanceCovers, CREDIT_COST, type CreditEvent, LIVE_AVATAR_MAX_CREDITS, LIVE_AVATAR_MAX_MINUTES, liveAvatarBillableMinutes, type VoiceInterviewBillingOutcome, VOICE_INTERVIEW_BILLING_COST } from "@/lib/ella-credit-math";
 import { getPortalConfig } from "@/lib/portal-config";
 import { isDatabaseConfigured } from "@/db/client";
 import { appendSheetLedgerEntry, getSheetCreditBalance } from "@/lib/ella-credits-sheets";
@@ -9,7 +9,7 @@ import { appendAccountLedgerEntry, getAccountCreditBalance, getAccountHeldCredit
 import { runWithTenantDatabase } from "@/lib/tenant-database";
 import type { CreditBalance, LedgerAppend } from "@/lib/ella-credits-store";
 
-export { CREDIT_COST, EllaCreditsError } from "@/lib/ella-credit-math";
+export { CREDIT_COST, EllaCreditsError, LIVE_AVATAR_MAX_CREDITS, LIVE_AVATAR_MAX_MINUTES } from "@/lib/ella-credit-math";
 export type { CreditEvent } from "@/lib/ella-credit-math";
 export type { CreditBalance, LedgerEntry } from "@/lib/ella-credits-store";
 
@@ -116,7 +116,10 @@ export type CreditPricing = {
   phoneInterview: number;
   phoneInterviewNoAnswer: number;
   phoneInterviewIncomplete: number;
+  /** Credits per started minute of a Live Avatar interview. */
   liveAvatarInterview: number;
+  /** Longest Live Avatar interview, in minutes; its cost is liveAvatarInterview × this. */
+  liveAvatarMaxMinutes: number;
   discountThreshold: number;
   discountPercent: number;
 };
@@ -134,6 +137,7 @@ export async function getCreditPricing(): Promise<CreditPricing> {
     phoneInterviewNoAnswer: CREDIT_COST.phone_interview_no_answer,
     phoneInterviewIncomplete: CREDIT_COST.phone_interview_incomplete,
     liveAvatarInterview: CREDIT_COST.live_avatar_interview,
+    liveAvatarMaxMinutes: LIVE_AVATAR_MAX_MINUTES,
     discountThreshold: configuredWholeNumber(config.Ella_Credit_Discount_Threshold, 2000),
     discountPercent: configuredWholeNumber(config.Ella_Credit_Discount_Percent, 10),
   };
@@ -212,15 +216,17 @@ export function avatarHoldKey(applicationId: string) {
 }
 
 /**
- * Reserve the avatar interview charge when the session starts, so credits spent
- * elsewhere during the interview cannot leave it unbillable. Throws
+ * Reserve the most an avatar interview can cost (the 20-minute cap) when the
+ * session starts, so credits spent elsewhere during the interview cannot leave
+ * it unbillable. The hold is released when the actual, shorter charge is
+ * recorded. Throws
  * EllaCreditsError when the organization cannot cover it. Legacy Sheets
  * balances have no holds; callers then rely on a plain balance check.
  */
 export async function placeAvatarInterviewHold(input: { organizationId?: string; applicationId: string; expiresAt: Date }): Promise<{ supported: boolean }> {
   const organizationId = input.organizationId?.trim();
   if (!organizationCreditsEnabled() || !organizationId) return { supported: false };
-  const credits = await creditCostFor("live_avatar_interview");
+  const credits = (await creditCostFor("live_avatar_interview")) * LIVE_AVATAR_MAX_MINUTES;
   await runWithTenantDatabase(organizationId, () => placeAccountCreditHold({ organizationId, holdKey: avatarHoldKey(input.applicationId), credits, expiresAt: input.expiresAt, reference: input.applicationId }));
   return { supported: true };
 }
@@ -327,9 +333,10 @@ export async function recordVoiceInterviewDeduction(input: {
 }
 
 /**
- * Bill a completed live-avatar (video) interview session. The session id is
- * the billing identity, so a retried/duplicate completion call cannot charge
- * the same interview twice.
+ * Bill a completed live-avatar (video) interview session by the minutes it ran:
+ * every started minute, minimum one, capped at 20. The session id is the
+ * billing identity, so a retried/duplicate completion call cannot charge the
+ * same interview twice.
  */
 export async function recordLiveAvatarInterviewDeduction(input: {
   applicationId: string;
@@ -338,17 +345,20 @@ export async function recordLiveAvatarInterviewDeduction(input: {
   actorName?: string;
   actorEmail?: string;
   organizationId?: string;
+  /** How long the interview ran, from start to completion. Unknown counts as the one-minute minimum. */
+  durationSeconds?: number | null;
 }): Promise<number> {
-  const cost = CREDIT_COST.live_avatar_interview;
+  const minutes = liveAvatarBillableMinutes(input.durationSeconds);
+  const cost = minutes * CREDIT_COST.live_avatar_interview;
   await recordDeduction({
     event: "live_avatar_interview",
-    units: 1,
+    units: minutes,
     reference: input.applicationId,
     idempotencyKey: `live-avatar-session:${input.sessionId}`,
     actorName: input.actorName,
     actorEmail: input.actorEmail,
     organizationId: input.organizationId,
-    note: "Live avatar interview completed",
+    note: `Live avatar interview completed (${minutes} min billed)`,
     holdKey: avatarHoldKey(input.applicationId),
   });
   // The real charge is on the ledger now; the reservation has done its job.

@@ -836,8 +836,10 @@ Current usage costs are:
 - **10 credits** for a completed AI voice interview.
 - **8 credits** when an AI voice interview is connected but incomplete.
 - **5 credits** when the candidate does not answer.
-- **20 credits** for an Interview with Smile on video (the Live Avatar interview),
-  reserved when the interview starts.
+- **2 credits per minute** for an Interview with Smile on video (the Live Avatar
+  interview). Every started minute counts, so a 1-minute interview costs 2 credits,
+  a 5-minute interview 10, and the 20-minute maximum 40. Up to 40 credits are
+  reserved when the interview starts, and only the minutes used are charged.
 
 Booking a time, creating a role request, commenting, and ordinary portal actions
 do not consume credits. The credit balance is shared by everyone in the

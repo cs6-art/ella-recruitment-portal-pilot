@@ -44,7 +44,9 @@ type LedgerResponse = {
     phoneInterview: number;
     phoneInterviewNoAnswer: number;
     phoneInterviewIncomplete: number;
+    /** Credits per started minute. */
     liveAvatarInterview: number;
+    liveAvatarMaxMinutes: number;
     discountThreshold: number;
     discountPercent: number;
   };
@@ -53,7 +55,7 @@ type LedgerResponse = {
 type ActivityTypeFilter = "all" | "added" | "used";
 type ActivityEventFilter = "all" | "manual" | "cv_analysis" | "voice_interview" | "live_avatar_interview";
 
-const defaultPricing = { cvAnalysis: 1, phoneInterview: 10, phoneInterviewNoAnswer: 5, phoneInterviewIncomplete: 8, liveAvatarInterview: 20, discountThreshold: 2000, discountPercent: 10 };
+const defaultPricing = { cvAnalysis: 1, phoneInterview: 10, phoneInterviewNoAnswer: 5, phoneInterviewIncomplete: 8, liveAvatarInterview: 2, liveAvatarMaxMinutes: 20, discountThreshold: 2000, discountPercent: 10 };
 
 const eventLabels: Record<string, string> = {
   manual_topup: "Manual top-up",
@@ -184,7 +186,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
       <div className={styles.header}>
         <div>
           <h2>Credit Balance</h2>
-          <p>All signed-in users in this organization share one Smile Credits balance — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer; Live Avatar interviews cost ${nf.format(pricing.liveAvatarInterview)} when completed.` : "pricing is loaded from the active credit settings"}. AI actions are blocked when the balance runs out.</p>
+          <p>All signed-in users in this organization share one Smile Credits balance — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer; Live Avatar interviews cost ${nf.format(pricing.liveAvatarInterview)} per minute (every started minute counts, up to ${nf.format(pricing.liveAvatarInterview * pricing.liveAvatarMaxMinutes)} for a ${nf.format(pricing.liveAvatarMaxMinutes)}-minute interview).` : "pricing is loaded from the active credit settings"}. AI actions are blocked when the balance runs out.</p>
         </div>
         {data && (
           <div className={`${styles.headline} ${headlineTone}`}>

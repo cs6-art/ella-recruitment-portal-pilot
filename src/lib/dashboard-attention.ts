@@ -3,7 +3,7 @@ import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { applicationStatusHistory, applications, bulkScreeningQueueItems, interviewSlots, oauthConnections, roleStatusHistory, roles } from "@/db/schema-recruitment";
 import { ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES } from "@/lib/internal-recruitment-queries";
-import { CREDIT_COST, getCreditBalance } from "@/lib/ella-credits";
+import { getCreditBalance, LIVE_AVATAR_MAX_CREDITS } from "@/lib/ella-credits";
 
 export type AttentionAlert = {
   id: string;
@@ -88,10 +88,10 @@ export async function collectAttentionAlerts(organizationId: string, options: { 
     // 3. Not enough Smile Credits for the next interview.
     async () => {
       const { balance } = await getCreditBalance({ organizationId: org, ownerEmail: options.ownerEmail });
-      if (balance < CREDIT_COST.live_avatar_interview) alerts.push({
+      if (balance < LIVE_AVATAR_MAX_CREDITS) alerts.push({
         id: "credits-low",
         title: balance <= 0 ? "Your organization has no Smile Credits left." : `Only ${balance} Smile Credits are left.`,
-        description: `A Live Avatar interview needs ${CREDIT_COST.live_avatar_interview} credits. Screening and interviews pause when credits run out.`,
+        description: `A Live Avatar interview needs up to ${LIVE_AVATAR_MAX_CREDITS} credits. Screening and interviews pause when credits run out.`,
         savedMessage: "Nothing has been lost.",
         href: "/credits",
         actionLabel: "Top up credits",

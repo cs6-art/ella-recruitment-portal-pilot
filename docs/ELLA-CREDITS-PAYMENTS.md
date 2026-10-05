@@ -72,10 +72,12 @@ Postgres organisation wallet (`credit_accounts`). Prices, in credits:
 
 Duplicate resumes for the same role and failed or invalid files are not charged.
 
-A video interview reserves its 20 credits in a **credit hold** (`credit_holds`) when the
+A video interview is billed per started minute (2 credits a minute, one-minute minimum, 20-minute
+cap, so 2 to 40 credits). It reserves the 40-credit maximum in a **credit hold** (`credit_holds`) when the
 candidate starts it, under a row lock so two starts cannot spend the same credits. The hold is
 released if the session cannot start or the recording cannot be set up, and converted into the
-charge (idempotency key `live-avatar-session:<sessionId>`) when the interview is billed. Voice
+actual charge for the minutes used (idempotency key `live-avatar-session:<sessionId>`) when the
+interview is billed. Voice
 interviews use the same hold mechanism. If the balance is short, the interview is refused
 before any provider cost is incurred.
 

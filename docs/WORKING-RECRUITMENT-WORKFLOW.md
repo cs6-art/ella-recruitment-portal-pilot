@@ -40,7 +40,7 @@ is named, its behaviour was read from n8n on 29 September 2026 unless marked "no
      places the Vapi call from the number in `caller.phoneNumberId` (Philippine for +63,
      Malaysian for +60 when configured, Singapore for everyone else).
    - Video: the candidate agrees to recording, camera and microphone, and interviews with
-     Smile for up to about five minutes. The portal reserves 20 credits when it starts,
+     Smile for up to about five minutes. The portal reserves up to 40 credits when it starts and charges 2 credits per started minute,
      records to the interview recording Drive folder, and analyses the transcript.
 6. **Result.** The result, transcript and scores are written back; HR reviews the *Voice
    Interview Review* or *Live Avatar Review*.

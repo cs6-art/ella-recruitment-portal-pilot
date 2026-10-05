@@ -308,6 +308,7 @@ export async function completeInterviewSession(input: { rawToken: string; provid
       applicationId: application?.externalId || updated.applicationId,
       sessionId: updated.id,
       organizationId: updated.organizationId,
+      durationSeconds: updated.interviewStartedAt && updated.interviewCompletedAt ? (updated.interviewCompletedAt.getTime() - updated.interviewStartedAt.getTime()) / 1000 : null,
     });
   } catch (error) {
     // Never block interview completion on a billing failure; the ledger can
