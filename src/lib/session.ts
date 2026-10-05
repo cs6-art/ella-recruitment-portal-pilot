@@ -93,17 +93,30 @@ export async function getActiveSessionUser(token?: string | null): Promise<Sessi
   if (!user) return null;
 
   try {
-    let isActive: boolean;
+    let directoryUser: Awaited<ReturnType<typeof findPostgresDirectoryUser>>;
     if (user.organizationId === DEFAULT_ORGANIZATION_ID) {
       // Load the Google Sheets-backed directory lazily: importing it eagerly
       // would require Sheets configuration even for client-tenant requests.
       const { findDirectoryUser } = await import("@/lib/google-sheets");
-      isActive = (await findDirectoryUser(user.email))?.active === true;
+      directoryUser = await findDirectoryUser(user.email);
     } else {
-      const directoryUser = await runWithTenantDatabase(user.organizationId, () => findPostgresDirectoryUser(user.email, user.organizationId));
-      isActive = directoryUser?.active === true;
+      directoryUser = await runWithTenantDatabase(user.organizationId, () => findPostgresDirectoryUser(user.email, user.organizationId));
     }
-    return isActive ? user : null;
+    if (directoryUser?.active !== true) return null;
+    // The cookie's permission claims go stale as soon as HR edits the account,
+    // so take the live role and permissions from the directory on every request.
+    return {
+      ...user,
+      accessRole: directoryUser.accessRole,
+      department: directoryUser.department,
+      canCreateRole: directoryUser.canCreateRole,
+      canReviewRole: directoryUser.canReviewRole,
+      canApproveRole: directoryUser.canApproveRole,
+      canEditSettings: directoryUser.canEditSettings,
+      canManageUsers: directoryUser.canManageUsers,
+      canManageCredits: directoryUser.canManageCredits,
+      canReviewDepartmentRole: directoryUser.canReviewDepartmentRole,
+    };
   } catch (error) {
     // Fail closed if the account status cannot be confirmed.
     console.error("[Session] Could not confirm directory status:", error instanceof Error ? error.message : error);
