@@ -230,12 +230,15 @@ test("existing HeyGen LiveAvatar integration is extended, not replaced", () => {
   assert.match(component, /logIntegrityEvent\("avatar_disconnected"\);\s*void finishInterview\(false\)/, "an avatar-ended session is saved, not lost");
   assert.match(component, /"pagehide"/);
   const live = read("src/lib/live-avatar.ts");
+  const prompt = read("src/lib/avatar-prompt.ts");
   assert.match(live, /mode: "FULL"/);
-  assert.match(live, /MAX_SESSION_DURATION_SECONDS = 5 \* 60/);
+  assert.match(live, /MAX_SESSION_DURATION_SECONDS = 20 \* 60/);
   assert.match(live, /DEFAULT_MAX_SESSION_DURATION_SECONDS = MAX_SESSION_DURATION_SECONDS/);
-  assert.match(live, /Math\.min\(configured, MAX_SESSION_DURATION_SECONDS\)/, "environment overrides cannot exceed the provider's five-minute limit");
+  assert.match(live, /Math\.min\(configured, MAX_SESSION_DURATION_SECONDS\)/, "environment overrides cannot exceed the provider's twenty-minute limit");
   assert.match(live, /max_session_duration: maxSessionDurationSeconds\(\)/);
   assert.doesNotMatch(live, /max_session_duration: 60[,;]/, "LiveAvatar sessions are not capped at one minute");
+  assert.match(prompt, /session can last up to 20 minutes/);
+  assert.match(prompt, /about 16 minutes/);
 });
 
 test("completion is saved first and processing is idempotent, leased, retried, and recoverable", () => {

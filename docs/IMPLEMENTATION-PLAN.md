@@ -28,8 +28,8 @@ Update the AI interview prompt to:
 - Avoid automatically scheduling during the closing
 - Ask whether the candidate has any final questions
 - Close the interview politely
-- Remove the five-minute restriction
-- Set a hard maximum interview duration of 10 minutes
+- Remove the previous five-minute restriction
+- Set a hard maximum interview duration of 20 minutes
 - Add a wrap-up instruction before the maximum duration
 - Add multilingual fallback instructions
 - Improve response depth for role-specific and technical questions

@@ -63,8 +63,8 @@ See `.env.example` for the full list and comments:
 - `LIVEAVATAR_IS_SANDBOX` — set to `true` in non-production environments to
   avoid consuming LiveAvatar credits while testing.
 - `LIVEAVATAR_MAX_SESSION_DURATION_SECONDS` — optional maximum session length in
-  seconds; defaults to `300` (5 minutes). Values above `300` are capped at the
-  provider's five-minute plan limit; lower values can be used for testing.
+  seconds; defaults to `1200` (20 minutes). Values above `1200` are capped at
+  the provider's twenty-minute plan limit; lower values can be used for testing.
 - `LIVEAVATAR_LANGUAGE` — optional, defaults to `en`.
 
 Add these in Vercel under Project Settings → Environment Variables for each

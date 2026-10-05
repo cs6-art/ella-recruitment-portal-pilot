@@ -17,15 +17,15 @@ import { avatarOpeningText, avatarPromptVariables, renderAvatarPrompt } from "./
 import crypto from "node:crypto";
 
 const LIVEAVATAR_API_URL = process.env.LIVEAVATAR_API_URL || "https://api.liveavatar.com";
-const MAX_SESSION_DURATION_SECONDS = 5 * 60;
+const MAX_SESSION_DURATION_SECONDS = 20 * 60;
 const DEFAULT_MAX_SESSION_DURATION_SECONDS = MAX_SESSION_DURATION_SECONDS;
 
 function maxSessionDurationSeconds(): number {
   const configured = Number.parseInt(process.env.LIVEAVATAR_MAX_SESSION_DURATION_SECONDS || "", 10);
   if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_MAX_SESSION_DURATION_SECONDS;
 
-  // Never request more than the provider's five-minute plan limit, even when
-  // an environment override from an older deployment is still set to 600.
+  // Never request more than the provider's twenty-minute plan limit, even when
+  // an environment override is set higher than the supported maximum.
   return Math.min(configured, MAX_SESSION_DURATION_SECONDS);
 }
 
@@ -172,7 +172,7 @@ export async function createLiveAvatarSession(
       ...agent,
       interactivity_type: "CONVERSATIONAL",
       // Keep an abandoned browser tab from running up LiveAvatar credits
-      // indefinitely, and stay within the provider's five-minute plan limit.
+      // indefinitely, and stay within the provider's twenty-minute plan limit.
       max_session_duration: maxSessionDurationSeconds(),
     }),
   });
