@@ -2112,7 +2112,10 @@ export async function countBulkQueueByStatus(roleExternalId = "", organizationId
     .innerJoin(roles, eq(roles.id, bulkScreeningQueueItems.roleId))
     .leftJoin(screeningResults, eq(screeningResults.applicationId, bulkScreeningQueueItems.applicationId))
     .where(and(...conditions))
-    .groupBy(displayStatus);
+    // Group by the output column: repeating displayStatus would bind its
+    // stale-window parameters again ($5 instead of $1), and Postgres then
+    // rejects the select list as not matching the GROUP BY expression.
+    .groupBy(sql`1`);
   return Object.fromEntries(rows.map((row) => [row.status, row.count]));
 }
 
