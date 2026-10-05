@@ -51,6 +51,7 @@ const SAMPLE: Record<EmailPlaceholder, string> = {
   role_id: "(RR-1024)",
   department: "in Sales",
   requested_by: "Jordan Lee",
+  interview_type: "Live Avatar interview",
 };
 
 function draftOf(template: Template): Draft {

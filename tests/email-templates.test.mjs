@@ -135,3 +135,16 @@ test("the editor, API, storage and queue carry buttons and the image end to end"
   for (const text of ["Button text", "Header image (optional)", "Image link", "Preview", "Restore Original", "Discard Changes", "Insert:"]) assert.ok(editor.includes(text), text);
   assert.match(editor, /validateEmailTemplate\(selected\.key, draft\.subject, draft\.body, draft\)/);
 });
+
+test("the final interview invitation names the interview the candidate actually completed", async () => {
+  const { renderEventEmail } = await import("../src/lib/email-templates.ts");
+  const values = { candidate_name: "Alex", role_phrase: "the General Manager position", company_name: "McTest" };
+  const avatar = renderEventEmail("final_booking_invitation", { ...values, interview_type: "Live Avatar interview" });
+  assert.match(avatar.body, /Thank you for completing your Live Avatar interview\./);
+  assert.doesNotMatch(avatar.body, /AI voice interview/);
+  const voice = renderEventEmail("final_booking_invitation", { ...values, interview_type: "AI voice interview" });
+  assert.match(voice.body, /Thank you for completing your AI voice interview\./);
+  // The notifier fills interview_type from the candidate's interview mode.
+  assert.match(read("src/lib/notification-labels.ts"), /interview_type: context\.interviewMode === "avatar" \? "Live Avatar interview" : context\.interviewMode === "voice" \? "AI voice interview" : "interview"/);
+  assert.match(read("src/lib/internal-recruitment-queries.ts"), /interviewMode: mode,/);
+});

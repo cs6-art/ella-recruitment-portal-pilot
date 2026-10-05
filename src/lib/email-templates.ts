@@ -7,7 +7,7 @@
 
 export type EditableEmailEvent = "voice_booking_invitation" | "voice_booking_confirmation" | "final_booking_invitation" | "job_posted";
 
-export type EmailPlaceholder = "candidate_name" | "role_title" | "role_phrase" | "company_name" | "interview_time" | "ai_notice" | "recipient_name" | "role_id" | "department" | "requested_by";
+export type EmailPlaceholder = "candidate_name" | "role_title" | "role_phrase" | "company_name" | "interview_time" | "ai_notice" | "recipient_name" | "role_id" | "department" | "requested_by" | "interview_type";
 
 export const PLACEHOLDER_HELP: Record<EmailPlaceholder, string> = {
   candidate_name: "The candidate's name",
@@ -20,6 +20,7 @@ export const PLACEHOLDER_HELP: Record<EmailPlaceholder, string> = {
   role_id: "The role reference number",
   department: "The role's department",
   requested_by: "Who requested the role",
+  interview_type: 'The interview the candidate completed, e.g. "AI voice interview" or "Live Avatar interview"',
 };
 
 /** Short names for the "insert a detail" buttons in the editor. */
@@ -34,6 +35,7 @@ export const PLACEHOLDER_LABEL: Record<EmailPlaceholder, string> = {
   role_id: "Role number",
   department: "Department",
   requested_by: "Requested by",
+  interview_type: "Interview type",
 };
 
 export type EmailEventDefinition = {
@@ -88,9 +90,9 @@ export const EMAIL_EVENTS: EmailEventDefinition[] = [
     when: "Sent when HR invites a candidate to book their final interview. Contains the booking button.",
     editable: false,
     buttons: { primary: "Schedule Final Interview" },
-    placeholders: ["candidate_name", "role_title", "role_phrase", "company_name"],
+    placeholders: ["candidate_name", "role_title", "role_phrase", "company_name", "interview_type"],
     subject: "Schedule Your Final Interview with {{company_name}}",
-    body: `Hi {{candidate_name}},\n\nThank you for completing your AI voice interview. We are pleased to invite you to the final interview stage for {{role_phrase}}. Please use the button below to select your preferred interview time. This invitation expires automatically.`,
+    body: `Hi {{candidate_name}},\n\nThank you for completing your {{interview_type}}. We are pleased to invite you to the final interview stage for {{role_phrase}}. Please use the button below to select your preferred interview time. This invitation expires automatically.`,
   },
   {
     key: "job_posted",

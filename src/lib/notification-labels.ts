@@ -91,6 +91,8 @@ export type NotificationEmailContext = {
   avatarLink?: string | null;
   /** Human date/time already formatted with its timezone, for confirmations. */
   scheduledLabel?: string | null;
+  /** The interview the candidate took ("avatar" or "voice"), so follow-up emails name the right one. */
+  interviewMode?: string | null;
 };
 
 export type NotificationEmailCopy = {
@@ -137,6 +139,7 @@ function buildNotificationEmail(eventType: string | null | undefined, context: N
     role_phrase: rolePhrase,
     company_name: companyName,
     interview_time: scheduled,
+    interview_type: context.interviewMode === "avatar" ? "Live Avatar interview" : context.interviewMode === "voice" ? "AI voice interview" : "interview",
   };
 
   const base = { subject: EMAIL_SUBJECTS[key] || notificationEventLabel(key), signoff: emailSignoff(companyName), cta: "", ctaLink: "", secondaryCta: "", secondaryCtaLink: "", includeRawBookingLink: false as const };

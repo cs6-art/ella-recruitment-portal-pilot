@@ -3000,6 +3000,7 @@ export async function notificationQueue(stage?: string) {
         bookingLink: context.notificationLink,
         avatarLink: context.avatarLink,
         scheduledLabel: scheduledLabel(context.bookedSlotStartsAt, context.bookedSlotTimezone),
+        interviewMode: mode,
       }),
     };
   });
