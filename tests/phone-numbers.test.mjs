@@ -86,3 +86,13 @@ test("all number boxes use the shared guide and check, and the dispatch response
   assert.match(dispatch, /caller:/);
   assert.match(read(".env.example"), /VAPI_PHONE_NUMBER_ID_PH=/);
 });
+
+test("applicant edits accept every country the country picker offers", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../src/app/api/applicants/[applicationId]/route.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(route, /z\.enum\(\["PH", "SG", "MY"\]\)/);
+  assert.match(route, /SUPPORTED_COUNTRIES = new Set\(countryOptions\.map\(\(option\) => option\.country\)\)/);
+  const { countryOptions } = await import("../src/lib/country-codes.ts");
+  assert.ok(countryOptions.length > 200);
+  assert.ok(["AU", "ID", "IN", "US", "VN"].every((code) => countryOptions.some((option) => option.country === code)));
+});

@@ -8,6 +8,9 @@ import { canDeleteApplicant, canEditApplicant } from "@/lib/access-control";
 import { deleteApplicant, isPreferredMobileValid, normalizePreferredMobile, updateApplicantProfile } from "@/lib/applicant-workflow";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
+import { countryOptions } from "@/lib/country-codes";
+
+const SUPPORTED_COUNTRIES = new Set(countryOptions.map((option) => option.country));
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +21,8 @@ const applicantUpdateSchema = z.object({
   candidateName: z.string().trim().min(3).max(150),
   email: z.string().trim().email().max(320),
   preferredMobile: z.string().trim().min(8).max(50),
-  applicantCountry: z.enum(["PH", "SG", "MY"]).default("PH"),
+  // Any country the form's country picker offers, not only the three we call from.
+  applicantCountry: z.string().trim().toUpperCase().refine((value) => SUPPORTED_COUNTRIES.has(value), "Choose a country from the list.").default("PH"),
 });
 
 async function getUser() {
