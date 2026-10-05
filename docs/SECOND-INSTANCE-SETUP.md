@@ -67,7 +67,7 @@ In Google Cloud Console → **APIs & Services → Credentials → the existing O
   **and** `https://<new-url>/api/auth/google-drive/callback`
 
 For the HR "Connect Google Drive" resume-import feature also: on the **OAuth
-consent screen** add the scope `https://www.googleapis.com/auth/drive.readonly`,
+consent screen** add the scope `https://www.googleapis.com/auth/drive.file`,
 and confirm the **Google Drive API** is enabled under APIs & Services. For an
 Internal Workspace app no verification review is required.
 

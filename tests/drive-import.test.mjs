@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
@@ -7,9 +7,11 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 test("Google Drive is a separate OAuth connection from the calendar one", () => {
   const drive = read("src/lib/google-drive.ts");
   const tokens = read("src/lib/drive-tokens.ts");
-  // minimum read scope only
-  assert.match(drive, /"https:\/\/www\.googleapis\.com\/auth\/drive\.readonly"/);
-  assert.doesNotMatch(drive, /drive\.file|auth\/drive"|calendar\.events/);
+  // non-restricted per-file scope only: no CASA, no Drive-wide read access
+  assert.match(drive, /DRIVE_FILE_SCOPE = "https:\/\/www\.googleapis\.com\/auth\/drive\.file"/);
+  assert.doesNotMatch(drive, /drive\.readonly|auth\/drive"|calendar\.events/);
+  // pre-migration drive.readonly connections must re-consent
+  assert.match(drive, /hasPickerScope\(connection\.scope\)/);
   // its own token store + encryption label, separate from Calendar_Connections
   assert.match(tokens, /TAB = "Drive_Connections"/);
   assert.match(tokens, /"drive-token-encryption"/);
@@ -28,11 +30,14 @@ test("Drive auth routes are HR-gated and per-user", () => {
   assert.match(connect, /getDriveConsentUrl\(user\.email/);
 });
 
-test("Drive list + import feed the shared intake pipeline", () => {
-  const list = read("src/app/api/resume-screening/drive/list/route.ts");
+test("Drive picker token route is HR-gated and Drive import feeds the shared intake pipeline", () => {
+  const picker = read("src/app/api/auth/google-drive/picker/route.ts");
   const importRoute = read("src/app/api/resume-screening/drive/import/route.ts");
-  assert.match(list, /getAuthorizedDriveClient\(user\.email\)/);
-  assert.match(list, /DRIVE_NOT_CONNECTED/);
+  assert.match(picker, /canManagePipeline/);
+  assert.match(picker, /getDrivePickerAccessToken\(user\.email\)/);
+  assert.doesNotMatch(picker, /refreshToken/);
+  assert.match(picker, /DRIVE_NOT_CONNECTED/);
+  assert.equal(existsSync(new URL("../src/app/api/resume-screening/drive/list/route.ts", import.meta.url)), false, "Drive-wide listing must not exist under drive.file");
   assert.match(importRoute, /intakeResumeBatch/);
   assert.match(importRoute, /sourceLabel: "Portal Drive Import"/);
   assert.match(importRoute, /\.max\(MAX_FILES_PER_SUBMISSION\)/);
@@ -70,18 +75,19 @@ test("the panel offers connect / choose-from-Drive and imports into the same bat
   assert.match(panel, /selectedCloudFiles\(selections\)/);
   assert.match(request, /\/api\/resume-screening\/drive\/import/);
   assert.match(panel, /applyBatchResult/);
-  assert.match(panel, /DriveFilePicker/);
+  assert.match(panel, /GoogleDriveResumePicker/);
 });
 
-test("Drive picker selection builds the authenticated import request with the active role", () => {
-  const picker = read("src/components/DriveFilePicker.tsx");
+test("Google Picker selection builds the authenticated import request with the active role", () => {
+  const picker = read("src/components/GoogleDriveResumePicker.tsx");
   const panel = read("src/components/BulkResumeScreeningPanel.tsx");
   const request = read("src/lib/cloud-import-request.ts");
-  // The picker passes the rendered file records, not a free-standing ID set.
-  // This preserves the exact file-name-to-file-ID mapping selected by HR.
-  assert.match(picker, /const selectedFiles = Array\.from\(selected\.values\(\)\)/);
-  assert.match(picker, /next\.set\(file\.id, file\)/);
-  assert.match(picker, /onImport\(selectedFiles\)/);
+  assert.match(picker, /\/api\/auth\/google-drive\/picker/);
+  assert.match(picker, /setSelectFolderEnabled\(false\)/);
+  assert.match(picker, /MULTISELECT_ENABLED/);
+  assert.match(picker, /SUPPORT_DRIVES/);
+  assert.match(picker, /setEnableDrives\(true\)/);
+  assert.match(picker, /callbacks\.current\.onImport\(docs\.map/);
   assert.match(panel, /buildCloudImportRequest\(provider, roleId, chunk, submissionId\)/);
   assert.match(panel, /fetch\(request\.endpoint, request\.init\)/);
   assert.match(request, /\/api\/resume-screening\/drive\/import/);
@@ -90,16 +96,9 @@ test("Drive picker selection builds the authenticated import request with the ac
   assert.match(request, /JSON\.stringify\(\{ roleId: normalizedRoleId, fileIds: normalizedFileIds, files: normalizedFiles, \.\.\.\(submissionId \? \{ submissionId \} : \{\}\) \}\)/);
 });
 
-test("Drive selection rejects folders, roots, unsupported files, and stale picker IDs", () => {
-  const picker = read("src/components/DriveFilePicker.tsx");
+test("Drive selection rejects folders, roots, unsupported files, and stale IDs", () => {
   const request = read("src/lib/cloud-import-request.ts");
   const importRoute = read("src/app/api/resume-screening/drive/import/route.ts");
-  assert.match(picker, /file\.id !== "root"/);
-  assert.match(picker, /file\.isFolder !== true/);
-  assert.match(picker, /file\.mimeType !== "application\/vnd\.google-apps\.folder"/);
-  assert.match(picker, /initialFolderId/);
-  assert.match(picker, /const loadedIds = new Set\(files\.map\(\(file\) => file\.id\)\)/);
-  assert.match(picker, /selectedFiles\.some\(\(file\) => !loadedIds\.has\(file\.id\)\)/);
   assert.match(request, /id === "root"/);
   assert.match(request, /selection\.isFolder === true/);
   assert.match(request, /mimeType === FOLDER_MIME/);
@@ -111,45 +110,6 @@ test("Drive selection rejects folders, roots, unsupported files, and stale picke
   assert.match(importRoute, /expected\.mimeType !== mimeType/);
   assert.match(importRoute, /shortcutDetails\(targetId, targetMimeType\)/);
   assert.match(importRoute, /Select the target resume file, not a Drive shortcut/);
-});
-
-test("Drive listing preserves file IDs and never substitutes container metadata", () => {
-  const list = read("src/app/api/resume-screening/drive/list/route.ts");
-  assert.match(list, /files\(id, name, mimeType, size, modifiedTime, driveId, parents, shortcutDetails/);
-  assert.match(list, /const targetId = file\.shortcutDetails\?\.targetId/);
-  assert.match(list, /const id = targetId \|\| file\.id/);
-  assert.match(list, /driveId: maskDriveId\(file\.driveId\)/);
-  assert.match(list, /parentIds: file\.parents/);
-  assert.match(list, /parentIds:/);
-  assert.doesNotMatch(list, /id:\s*file\.driveId/);
-  assert.doesNotMatch(list, /id:\s*file\.parents/);
-  assert.doesNotMatch(list, /id:\s*folderId/);
-});
-
-test("Drive picker exposes Shared Drives and the list API uses shared-drive query options", () => {
-  const list = read("src/app/api/resume-screening/drive/list/route.ts");
-  const picker = read("src/components/DriveFilePicker.tsx");
-  assert.match(list, /drive\.drives\.list\(/);
-  assert.match(list, /fields: "nextPageToken, drives\(id, name\)"/);
-  assert.match(list, /corpora: currentSharedDrive \? "drive" : "user"/);
-  assert.match(list, /driveId: currentSharedDrive\.id/);
-  assert.match(list, /includeItemsFromAllDrives: true/);
-  assert.match(list, /supportsAllDrives: true/);
-  assert.match(list, /sharedDrives/);
-  assert.match(picker, /Shared Drives/);
-  assert.match(picker, /sharedDrive\.id/);
-  assert.match(picker, /navigate\(sharedDrive\.id\)/);
-  assert.match(picker, /selectedFiles = Array\.from\(selected\.values\(\)\)/);
-});
-
-test("resume screening starts Google Drive navigation from the connected user's root", () => {
-  const page = read("src/app/resume-screening/page.tsx");
-  const panel = read("src/components/BulkResumeScreeningPanel.tsx");
-  const picker = read("src/components/DriveFilePicker.tsx");
-  assert.doesNotMatch(page, /RESUME_STORAGE_DRIVE_FOLDER_ID/);
-  assert.doesNotMatch(page, /driveRootFolderId/);
-  assert.doesNotMatch(panel, /initialFolderId=/);
-  assert.match(picker, /initialFolderId = "root"/);
 });
 
 test("Drive intake keeps queue and credit safety guarantees", () => {

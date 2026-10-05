@@ -8,13 +8,17 @@ configureGoogleApiTimeout();
 
 /**
  * Per-HR-user Google Drive connection — a separate OAuth flow from the shared
- * calendar connection. Read-only: HR grants `drive.readonly` so the portal can
- * browse their Drive and download the resume files they pick for bulk
- * screening. Mirrors `google-calendar.ts`; reuses its signed OAuth state.
+ * calendar connection. Per-file access: HR grants the non-restricted
+ * `drive.file` scope, then chooses resumes in the Google Picker. Google grants
+ * the portal access to only those picked files, which it downloads for bulk
+ * screening; it can never browse or list the rest of the Drive. Mirrors
+ * `google-calendar.ts`; reuses its signed OAuth state.
  */
 
+const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+
 export const DRIVE_SCOPES = [
-  "https://www.googleapis.com/auth/drive.readonly",
+  DRIVE_FILE_SCOPE,
   // So token introspection returns the account email — lets us verify the
   // token belongs to the HR user who started the connection.
   "https://www.googleapis.com/auth/userinfo.email",
@@ -83,8 +87,24 @@ export async function exchangeDriveCodeAndStore(code: string, email: string, req
  * not connected Drive, or the stored token no longer belongs to them.
  */
 export async function getAuthorizedDriveClient(email: string) {
+  return (await authorizeDrive(email))?.drive ?? null;
+}
+
+/** Short-lived access token for the browser-side Google Picker. */
+export async function getDrivePickerAccessToken(email: string): Promise<string | null> {
+  return (await authorizeDrive(email))?.accessToken ?? null;
+}
+
+// Connections made before the move to `drive.file` hold the old broad
+// read-only Drive token. Treat them as disconnected so HR re-consents to the
+// narrower scope instead of silently continuing on the old one.
+function hasPickerScope(scope: string) {
+  return scope.split(/\s+/).includes(DRIVE_FILE_SCOPE);
+}
+
+async function authorizeDrive(email: string) {
   const connection = await getDriveConnection(email);
-  if (!connection?.refreshToken) return null;
+  if (!connection?.refreshToken || !hasPickerScope(connection.scope)) return null;
 
   const client = newOAuthClient();
   const expiresAt = connection.tokenExpiresAt ? Date.parse(connection.tokenExpiresAt) : 0;
@@ -115,12 +135,19 @@ export async function getAuthorizedDriveClient(email: string) {
       scope: refreshed.scope || DRIVE_SCOPES.join(" "),
     });
   }
-  return google.drive({ version: "v3", auth: client });
+  return { drive: google.drive({ version: "v3", auth: client }), accessToken };
+}
+
+export function getDrivePickerConfig() {
+  const apiKey = process.env.GOOGLE_PICKER_API_KEY?.trim();
+  const projectNumber = process.env.GOOGLE_CLOUD_PROJECT_NUMBER?.trim();
+  if (!apiKey || !projectNumber) throw new Error("Google Picker is not configured.");
+  return { apiKey, projectNumber };
 }
 
 export async function getDriveConnectionStatus(email: string): Promise<{ connected: boolean; accountEmail: string; connectedAt: string }> {
   const connection = await getDriveConnection(email);
-  if (!connection?.refreshToken) return { connected: false, accountEmail: "", connectedAt: "" };
+  if (!connection?.refreshToken || !hasPickerScope(connection.scope)) return { connected: false, accountEmail: "", connectedAt: "" };
   return { connected: true, accountEmail: connection.email, connectedAt: connection.connectedAt };
 }
 

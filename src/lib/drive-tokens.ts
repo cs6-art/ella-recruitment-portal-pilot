@@ -9,7 +9,7 @@ import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
  * Per-HR-user Google Drive OAuth tokens, stored separately from the calendar
  * connection (`Calendar_Connections`). Same encrypted-at-rest, one-row-per-email
  * pattern as `calendar-tokens.ts`. Used only to browse and download resume
- * files the HR user picks for bulk screening (scope: drive.readonly).
+ * files the HR user selects in the Google Picker for bulk screening (scope: drive.file).
  */
 
 const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;

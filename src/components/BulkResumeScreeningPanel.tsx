@@ -6,6 +6,7 @@ import ActionFeedback from "@/components/ActionFeedback";
 import DriveFilePicker from "@/components/DriveFilePicker";
 import EllaCreditsMeter from "@/components/EllaCreditsMeter";
 import GoogleDriveIcon from "@/components/GoogleDriveIcon";
+import GoogleDriveResumePicker from "@/components/GoogleDriveResumePicker";
 import Pagination from "@/components/Pagination";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
@@ -906,11 +907,14 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
         ) : <p className="bulk-screening-empty">{!roleId ? "Choose a published role to see its screening records." : queueTotal === 0 && queueSearch === "" && queueStatus === "All statuses" && queueSource === "All sources" ? "No resumes have been added for this role yet." : "No screening records match your search or filters."}</p>}
       </div>
 
-      <DriveFilePicker
+      <GoogleDriveResumePicker
         open={cloudPicker === "google" && Boolean(roleId)}
-        importing={driveImporting}
         maxSelection={MAX_CAMPAIGN_FILES}
         onClose={() => setCloudPicker(null)}
+        onError={(message, reconnect) => {
+          setError(message);
+          if (reconnect) setDriveStatus({ connected: false, accountEmail: "" });
+        }}
         onImport={(selections) => void importFromCloud("google", selections)}
       />
       <DriveFilePicker

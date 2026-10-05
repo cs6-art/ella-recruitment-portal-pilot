@@ -13,10 +13,11 @@ required.
 As an alternative to the folder poller and local uploads, an HR reviewer can
 pick resumes straight from their own Google Drive on the Resume Screening page:
 
-1. **Connect Google Drive** — a one-time per-user OAuth consent (read-only
-   `drive.readonly`, stored separately from the calendar connection).
-2. **Choose from Google Drive** — a folder browser opens; navigate, select up
-   to 25 PDF/DOC/DOCX files, and **Import**.
+1. **Connect Google Drive** — a one-time per-user OAuth consent (per-file
+   `drive.file`, stored separately from the calendar connection).
+2. **Choose from Google Drive** — Google's own file chooser (Picker) opens;
+   select PDF/DOC/DOCX files and the portal can read only those files.
+   Users connected under the old `drive.readonly` scope are asked to reconnect.
 
 The portal downloads the selected files server-side and runs them through the
 **same** bulk intake pipeline as a local upload — SHA-256 dedupe, the Shared
@@ -24,8 +25,9 @@ Drive copy, `Bulk_Resume_Queue`, the `bulk_resume_uploaded` webhook, one Ella
 Credit per accepted file, and the live status table. Re-importing the same
 files returns `Skipped`.
 
-Google Cloud Console prerequisites (one-time): add the `drive.readonly` scope
-to the OAuth consent screen, confirm the Google Drive API is enabled, and add
+Google Cloud Console prerequisites (one-time): add the `drive.file` scope
+to the OAuth consent screen, confirm the Google Drive API and Google Picker API
+are enabled (`GOOGLE_PICKER_API_KEY`, `GOOGLE_CLOUD_PROJECT_NUMBER` set), and add
 `https://<portal-domain>/api/auth/google-drive/callback` to the OAuth client's
 Authorized redirect URIs. For an Internal Workspace app no verification is
 needed.

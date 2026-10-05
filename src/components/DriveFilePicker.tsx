@@ -23,7 +23,7 @@ export default function DriveFilePicker({
   onClose,
   onImport,
   importing,
-  listUrl = "/api/resume-screening/drive/list",
+  listUrl,
   pageParam = "pageToken",
   providerLabel = "Google Drive",
   rootName = "My Drive",
@@ -34,7 +34,7 @@ export default function DriveFilePicker({
   onClose: () => void;
   onImport: (files: DriveFile[]) => void;
   importing: boolean;
-  listUrl?: string;
+  listUrl: string;
   pageParam?: string;
   providerLabel?: string;
   rootName?: string;
