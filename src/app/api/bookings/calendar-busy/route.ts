@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { canManageInterviewAvailability } from "@/lib/access-control";
 import { getCalendarBusyWindows } from "@/lib/google-calendar";
+import { calendarLookupStatus } from "@/lib/calendar-lookup-status";
 import { getRoleRequests } from "@/lib/google-sheets";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleSummaries } from "@/lib/recruitment-target-portal";
@@ -22,9 +23,8 @@ export async function GET() {
     const roles = isPostgresRecruitmentTarget() ? await targetRoleSummaries() : await getRoleRequests();
     const start = new Date();
     const end = new Date(start.getTime() + 180 * 24 * 60 * 60 * 1000);
-    // Return connection state separately from busy windows. An empty busy
-    // list means either a free calendar or an unavailable calendar, so the
-    // client must not treat it as proof that final slots are bookable.
+    // Keep connection failures separate from temporary lookup errors. An
+    // empty busy list alone proves neither connectivity nor availability.
     const busyByCalendar = new Map<string, ReturnType<typeof getCalendarBusyWindows>>();
     const entries = await Promise.all(roles
       .filter((role) => canManageInterviewAvailability(role.status))
@@ -36,13 +36,15 @@ export async function GET() {
           busyByCalendar.set(calendarKey, resultPromise);
         }
         const result = await resultPromise;
-        return [role.roleId, { busy: result.checked ? result.busy : [], connected: result.checked }] as const;
+        const status = calendarLookupStatus(result);
+        return [role.roleId, { busy: result.checked ? result.busy : [], connected: status === "error" ? null : status === "ready", status }] as const;
       }));
 
     return NextResponse.json({
       success: true,
       busyWindows: Object.fromEntries(entries.map(([roleId, value]) => [roleId, value.busy])),
       calendarConnected: Object.fromEntries(entries.map(([roleId, value]) => [roleId, value.connected])),
+      calendarStatus: Object.fromEntries(entries.map(([roleId, value]) => [roleId, value.status])),
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.warn("[Bookings Calendar] Conflict lookup failed:", error);

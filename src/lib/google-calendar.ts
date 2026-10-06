@@ -457,7 +457,13 @@ export async function getCalendarBusyWindows(input: { hodEmail: string; start: D
           items: [{ id: target.calendarId }],
         },
       });
-      const busy = (response.data.calendars?.[target.calendarId]?.busy || [])
+      const calendarResult = response.data.calendars?.[target.calendarId];
+      // Google can return HTTP 200 with a per-calendar failure. Never expose
+      // an unreadable calendar as an empty, successfully checked calendar.
+      if (!calendarResult || calendarResult.errors?.length) {
+        return { checked: false, busy: [], reason: "error", error: "Google Calendar availability could not be read." };
+      }
+      const busy = (calendarResult.busy || [])
         .filter((window): window is { start: string; end: string } => Boolean(window.start && window.end))
         .map((window) => ({ start: window.start, end: window.end }));
       return { checked: true, busy };
