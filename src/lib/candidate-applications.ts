@@ -726,11 +726,14 @@ function applicantMatchesListFilters(applicant: ApplicantSummary, filters: Appli
   const interviewCurrentlyInProgress = /in progress/i.test(`${applicant.currentStage} ${applicant.voiceStatus} ${applicant.nextAction}`);
   const interviewDecisionRecorded = /approve|reject|completed|interviewed|passed/i.test(`${applicant.voiceStatus} ${applicant.finalInterviewStatus}`);
   const screened = ["processed", "screened", "for hr review", "pending hr review"].includes(applicant.resumeStatus.trim().toLowerCase());
+  const matchScore = numericMatchScore(applicant.matchScore);
   return (!filters.query || searchable.includes(filters.query.trim().toLowerCase())) &&
     (!filters.roleExternalId || applicant.roleId.toLowerCase() === filters.roleExternalId.toLowerCase()) &&
     (!filters.department || applicant.department.trim().toLowerCase() === filters.department.trim().toLowerCase()) &&
     (!filters.stage?.length || filters.stage.includes(stage)) &&
     (!filters.resumeStatus || (filters.resumeStatus === "screened" ? screened : !screened)) &&
+    (filters.matchScoreMin === undefined || (matchScore !== null && matchScore >= filters.matchScoreMin)) &&
+    (filters.matchScoreMax === undefined || (matchScore !== null && matchScore <= filters.matchScoreMax)) &&
     (!filters.interviewMode || applicant.interviewMode === filters.interviewMode) &&
     (!filters.interviewStatus || (filters.interviewStatus === "in_progress"
       ? interviewCurrentlyInProgress

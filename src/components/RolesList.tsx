@@ -12,6 +12,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { canEditRoleRequest } from "@/lib/access-control";
 import { formatPortalDateTime } from "@/lib/portal-time";
+import { downloadResponseFile } from "@/lib/download-response-file";
 
 const statusFilters = [
   { value: "All", label: "All statuses" },
@@ -152,6 +153,7 @@ export default function RolesList({
   const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   const { statusFilter, department, requester, search, sort, page, pageSize } = queryState;
 
@@ -268,6 +270,27 @@ export default function RolesList({
       if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [department, page, pageSize, requester, search, sort, statusFilter, updateQuery]);
+
+  async function exportRoles() {
+    if (exporting) return;
+    setExporting(true);
+    setActionError("");
+    setActionMessage("");
+    const params = new URLSearchParams({ export: "excel", sort });
+    if (statusFilter !== "All") params.set("status", statusFilter);
+    if (department.trim()) params.set("department", department.trim());
+    if (requester.trim()) params.set("requester", requester.trim());
+    if (search.trim()) params.set("search", search.trim());
+    try {
+      const response = await fetch(`/api/roles?${params}`, { method: "GET", cache: "no-store", credentials: "same-origin" });
+      await downloadResponseFile(response, "role-requests.xlsx");
+      setActionMessage("Role request export downloaded.");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Role requests could not be exported. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   useEffect(() => {
     void loadRoles();
@@ -457,6 +480,8 @@ export default function RolesList({
             </span>
             {refreshing && <span className="roles-refreshing" role="status">Updating…</span>}
           </div>
+
+          <button type="button" className="btn btn-secondary" disabled={exporting || loading || totalRoles === 0} aria-busy={exporting} onClick={() => void exportRoles()}>{exporting ? "Exporting…" : "Export to Excel"}</button>
 
           {selectableRoles.length > 0 && <div className="bulk-selection-toolbar"><span>{selectedRoles.length} selected</span><button type="button" className="btn btn-danger-outline" disabled={selectedRoles.length === 0 || deletingRoleId !== ""} onClick={() => void deleteRoles(selectedRoles)}>Delete selected</button></div>}
 

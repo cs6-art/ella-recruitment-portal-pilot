@@ -26,6 +26,9 @@ import { getApplicantMetrics, getApplicantsPage } from "@/lib/candidate-applicat
 import { canViewRole, isDepartmentReviewer } from "@/lib/access-control";
 import type { ApplicationListFilters } from "@/lib/internal-recruitment-queries";
 import { portalDateBoundary } from "@/lib/portal-time";
+import { createExcelExportResponse } from "@/lib/excel-export";
+import { applicantStageLabel } from "@/lib/applicant-stage-labels";
+import { numericMatchScore } from "@/lib/score-format";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,6 +63,30 @@ function parsedDate(value: string | null, inclusiveEnd = false) {
   return value ? portalDateBoundary(value, inclusiveEnd) || undefined : undefined;
 }
 
+function parsedMatchScore(value: string | null) {
+  if (!value?.trim()) return undefined;
+  const score = Number(value);
+  return Number.isFinite(score) && score >= 0 && score <= 100 ? score : undefined;
+}
+
+async function allApplicantsForExport(filters: ApplicationListFilters) {
+  const pageSize = 100;
+  const firstPage = await getApplicantsPage({ page: 1, pageSize, filters });
+  const pages = [firstPage.applicants];
+  const totalPages = Math.ceil(firstPage.total / pageSize);
+
+  // Bound concurrency while fetching all matching pages for larger lists.
+  for (let startPage = 2; startPage <= totalPages; startPage += 5) {
+    const batch = await Promise.all(Array.from(
+      { length: Math.min(5, totalPages - startPage + 1) },
+      (_, index) => getApplicantsPage({ page: startPage + index, pageSize, filters }),
+    ));
+    pages.push(...batch.map((page) => page.applicants));
+  }
+
+  return pages.flat();
+}
+
 /** Authenticated, tenant-scoped list endpoint; page data and count use identical filters. */
 export async function GET(request: Request) {
   const user = await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
@@ -88,6 +115,8 @@ export async function GET(request: Request) {
   const sort = params.get("sort");
   const dateFrom = parsedDate(params.get("from"));
   const dateToExclusive = parsedDate(params.get("to"), true);
+  const matchScoreMin = parsedMatchScore(params.get("scoreMin"));
+  const matchScoreMax = parsedMatchScore(params.get("scoreMax"));
   const filters: ApplicationListFilters = {
     query: params.get("search") || undefined,
     stage: stage?.stage,
@@ -99,10 +128,54 @@ export async function GET(request: Request) {
     dateFrom,
     dateToExclusive,
     sort: sort === "oldest" || sort === "match" ? sort : undefined,
+    matchScoreMin,
+    matchScoreMax,
     attention: params.get("attention") === "stalled" || params.get("attention") === "email_undelivered" ? params.get("attention") as "stalled" | "email_undelivered" : undefined,
   };
 
   try {
+    if (params.get("export") === "excel") {
+      const applicants = await allApplicantsForExport(filters);
+      const uniqueApplicants = new Map<string, typeof applicants[number]>();
+      for (const applicant of applicants) {
+        if (applicant.isHistoricalDemo && !stageLabel) continue;
+        if (!uniqueApplicants.has(applicant.applicationId)) uniqueApplicants.set(applicant.applicationId, applicant);
+      }
+      const rows = [...uniqueApplicants.values()].map((applicant) => ({
+        applicationId: applicant.applicationId,
+        candidate: applicant.candidateName || "Unnamed candidate",
+        email: applicant.email,
+        role: applicant.selectedRole || "Role not provided",
+        roleId: applicant.roleId,
+        department: applicant.department,
+        applied: applicant.appliedAt,
+        interviewType: applicant.interviewMode === "pending" ? "Not selected" : applicant.interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview",
+        matchScore: numericMatchScore(applicant.matchScore),
+        recommendation: applicant.cvRecommendation || applicant.recommendation,
+        currentStatus: applicantStageLabel(applicant.currentStage, applicant.interviewMode),
+        nextAction: applicant.nextAction,
+      }));
+      return createExcelExportResponse({
+        sheetName: "Applicants",
+        filenamePrefix: "applicants",
+        columns: [
+          { header: "Application ID", key: "applicationId", width: 24 },
+          { header: "Candidate", key: "candidate", width: 28 },
+          { header: "Email", key: "email", width: 32 },
+          { header: "Role", key: "role", width: 30 },
+          { header: "Role ID", key: "roleId", width: 18 },
+          { header: "Department", key: "department", width: 22 },
+          { header: "Applied", key: "applied", width: 22 },
+          { header: "Interview Type", key: "interviewType", width: 24 },
+          { header: "Match Score (%)", key: "matchScore", width: 18 },
+          { header: "Recommendation", key: "recommendation", width: 28 },
+          { header: "Current Status", key: "currentStatus", width: 28 },
+          { header: "Next Action", key: "nextAction", width: 32 },
+        ],
+        rows,
+      });
+    }
+
     const [result, metrics] = await Promise.all([getApplicantsPage({ page, pageSize, filters }), getApplicantMetrics(filters)]);
     return NextResponse.json({ success: true, ...result, metrics, lastUpdatedAt: new Date().toISOString() }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

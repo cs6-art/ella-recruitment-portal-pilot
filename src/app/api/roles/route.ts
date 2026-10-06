@@ -18,6 +18,7 @@ import { STANDARD_VAPI_SYSTEM_PROMPT_TEMPLATE } from "@/lib/recruitment-prompt";
 import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
+import { createExcelExportResponse } from "@/lib/excel-export";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -201,6 +202,36 @@ export async function GET(request: Request) {
       if (sort === "target-latest") return (right.targetHiringDate || "0000-00-00").localeCompare(left.targetHiringDate || "0000-00-00");
       return Date.parse(right.createdAt) - Date.parse(left.createdAt);
     });
+
+    if (query.get("export") === "excel") {
+      return createExcelExportResponse({
+        sheetName: "Role Requests",
+        filenamePrefix: "role-requests",
+        columns: [
+          { header: "Role ID", key: "roleId", width: 20 },
+          { header: "Job Title", key: "jobTitle", width: 32 },
+          { header: "Department", key: "department", width: 24 },
+          { header: "Request Type", key: "requestType", width: 22 },
+          { header: "Vacancies", key: "vacancies", width: 12 },
+          { header: "Requester", key: "requester", width: 28 },
+          { header: "Created", key: "createdAt", width: 22 },
+          { header: "Target Hiring Date", key: "targetHiringDate", width: 22 },
+          { header: "Status", key: "status", width: 24 },
+        ],
+        rows: roles.map((role) => ({
+          roleId: role.roleId,
+          jobTitle: role.jobTitle || "Not provided",
+          department: role.department || "Not provided",
+          requestType: role.requestType || "Not provided",
+          vacancies: role.numberOfVacancies,
+          requester: role.requesterName || "Not provided",
+          createdAt: role.createdAt,
+          targetHiringDate: role.targetHiringDate,
+          status: role.status,
+        })),
+      });
+    }
+
     const total = roles.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(requestedPage, totalPages);

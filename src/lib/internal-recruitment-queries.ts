@@ -631,6 +631,8 @@ export type ApplicationListFilters = {
   resumeStatus?: "screened" | "awaiting";
   interviewMode?: "voice" | "avatar" | "pending";
   interviewStatus?: "not_started" | "scheduled" | "in_progress" | "awaiting_review" | "review_complete";
+  matchScoreMin?: number;
+  matchScoreMax?: number;
   dateFrom?: Date;
   dateToExclusive?: Date;
   sort?: "oldest" | "match";
@@ -660,6 +662,8 @@ function applicationListConditions(organizationId: string, filters: ApplicationL
   }
   if (filters.resumeStatus === "screened") conditions.push(isNotNull(screeningResults.id));
   if (filters.resumeStatus === "awaiting") conditions.push(isNull(screeningResults.id));
+  if (filters.matchScoreMin !== undefined) conditions.push(gte(screeningResults.matchScore, filters.matchScoreMin));
+  if (filters.matchScoreMax !== undefined) conditions.push(lte(screeningResults.matchScore, filters.matchScoreMax));
   const avatarSelected = hasAvatarInterviewSql();
   const voiceSelected = hasVoiceInterviewChoiceSql();
   if (filters.interviewMode === "avatar") conditions.push(avatarSelected);

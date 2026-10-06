@@ -17,6 +17,7 @@ import { isNewApplicant, writeApplicantsLastSeen } from "@/lib/new-applicants";
 import { useNewApplicantFeed } from "@/components/NewApplicantsBell";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { numericMatchScore } from "@/lib/score-format";
+import { downloadResponseFile } from "@/lib/download-response-file";
 
 type Props = {
   applicants: ApplicantSummary[];
@@ -137,6 +138,12 @@ function scoreValue(value: string) {
   return formatMatchScore(value);
 }
 
+function scoreFilterValue(value: string | null) {
+  if (!value?.trim()) return "";
+  const score = Number(value);
+  return Number.isFinite(score) && score >= 0 && score <= 100 ? String(score) : "";
+}
+
 export default function ApplicantsList({ applicants: initialApplicants, initialTotal, scopeRoleId, title = "Applicants", description = "Review candidates across every published role.", topContent, publishedRoles, canManageApplicants = false, userEmail, historyMetrics, lastUpdatedAt }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -153,6 +160,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
   const [interviewTypeFilter, setInterviewTypeFilter] = useState("All interview types");
   const [interviewStatusFilter, setInterviewStatusFilter] = useState("All interview statuses");
   const [sortFilter, setSortFilter] = useState("Newest first");
+  const [matchScoreMin, setMatchScoreMin] = useState("");
+  const [matchScoreMax, setMatchScoreMax] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   // Set only by dashboard "Actionable Alerts" links (?attention=…).
@@ -167,6 +176,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
   const [actionMessage, setActionMessage] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [approving, setApproving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   // Opening Applicants records the current visit as the viewed watermark.
   // Applicants arriving after that timestamp remain highlighted during this visit.
@@ -192,6 +202,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
     setInterviewTypeFilter(params.get("interview") || "All interview types");
     setInterviewStatusFilter(params.get("interviewStatus") || "All interview statuses");
     setSortFilter(params.get("sort") === "oldest" ? "Oldest first" : params.get("sort") === "match" ? "Highest match" : "Newest first");
+    setMatchScoreMin(scoreFilterValue(params.get("scoreMin")));
+    setMatchScoreMax(scoreFilterValue(params.get("scoreMax")));
     setDateFrom(params.get("from") || "");
     setDateTo(params.get("to") || "");
     const attention = params.get("attention");
@@ -216,6 +228,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
       if (interviewTypeFilter !== "All interview types") params.set("interview", interviewTypeFilter);
       if (interviewStatusFilter !== "All interview statuses") params.set("interviewStatus", interviewStatusFilter.toLowerCase().replaceAll(" ", "_"));
       if (sortFilter !== "Newest first") params.set("sort", sortFilter === "Oldest first" ? "oldest" : "match");
+      if (matchScoreMin) params.set("scoreMin", matchScoreMin);
+      if (matchScoreMax) params.set("scoreMax", matchScoreMax);
       if (dateFrom) params.set("from", dateFrom);
       if (dateTo) params.set("to", dateTo);
       if (attentionFilter) params.set("attention", attentionFilter);
@@ -240,7 +254,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
       }
     }, search.trim() ? 300 : 0);
     return () => { window.clearTimeout(timeout); controller.abort(); };
-  }, [attentionFilter, dateFrom, dateTo, initialApplicants, initialTotal, interviewStatusFilter, interviewTypeFilter, page, pageSize, refreshSequence, resumeFilter, roleFilter, scopeRoleId, search, sortFilter, stageFilter]);
+  }, [attentionFilter, dateFrom, dateTo, initialApplicants, initialTotal, interviewStatusFilter, interviewTypeFilter, matchScoreMax, matchScoreMin, page, pageSize, refreshSequence, resumeFilter, roleFilter, scopeRoleId, search, sortFilter, stageFilter]);
   useEffect(() => {
     if (!lastUpdatedAt) return;
     setLastUpdated(lastUpdatedAt);
@@ -319,6 +333,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
         (roleFilter === "All Roles" || applicant.roleId === selectedRole?.roleId || applicantRole === roleFilter || applicant.selectedRole === selectedRole?.label) &&
         matchesDashboardStageFilter(applicant, stageFilter) &&
         (resumeFilter === "All resume statuses" || (resumeFilter === "Screened" ? isScreened : !isScreened)) &&
+        (!matchScoreMin || (numericMatchScore(applicant.matchScore) ?? -1) >= Number(matchScoreMin)) &&
+        (!matchScoreMax || (numericMatchScore(applicant.matchScore) ?? 101) <= Number(matchScoreMax)) &&
         (interviewTypeFilter === "All interview types" || (interviewTypeFilter === "Voice Interview" ? applicant.interviewMode === "voice" : interviewTypeFilter === "Live Avatar Interview" ? applicant.interviewMode === "avatar" : applicant.interviewMode === "pending"));
     }).sort((left, right) => {
       if (sortFilter === "Oldest first") return applicantSortTimestamp(left) - applicantSortTimestamp(right);
@@ -329,7 +345,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
       // date-only value.
       return right.applicationId.localeCompare(left.applicationId);
     });
-  }, [activeApplicants, interviewTypeFilter, resumeFilter, roleFilter, roleOptions, search, sortFilter, stageFilter]);
+  }, [activeApplicants, interviewTypeFilter, matchScoreMax, matchScoreMin, resumeFilter, roleFilter, roleOptions, search, sortFilter, stageFilter]);
 
   const totalPages = Math.max(1, Math.ceil(remoteTotal / pageSize));
   // The API already filters, sorts, and pages the rows. Avoid slicing a second time here.
@@ -371,10 +387,10 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
   const summaryHr = metricsData?.hrActivity ?? finalInterviewCount;
   // Keep the pipeline headline aligned with the history-backed summary. Demo
   // history is read-only and appears only after an explicit stage filter.
-  const hasApplicantFilters = Boolean(attentionFilter) || Boolean(search.trim()) || roleFilter !== "All Roles" || stageFilter !== "All Stages" || resumeFilter !== "All resume statuses" || interviewTypeFilter !== "All interview types" || interviewStatusFilter !== "All interview statuses" || Boolean(dateFrom || dateTo);
+  const hasApplicantFilters = Boolean(attentionFilter) || Boolean(search.trim()) || roleFilter !== "All Roles" || stageFilter !== "All Stages" || resumeFilter !== "All resume statuses" || interviewTypeFilter !== "All interview types" || interviewStatusFilter !== "All interview statuses" || Boolean(matchScoreMin || matchScoreMax || dateFrom || dateTo);
   const matchingApplicantCount = remoteTotal;
 
-  function writeListUrl(overrides: Partial<{ page: number; pageSize: number; search: string; role: string; stage: string; resume: string; interview: string; interviewStatus: string; sort: string; from: string; to: string; attention: string }> = {}) {
+  function writeListUrl(overrides: Partial<{ page: number; pageSize: number; search: string; role: string; stage: string; resume: string; interview: string; interviewStatus: string; sort: string; scoreMin: string; scoreMax: string; from: string; to: string; attention: string }> = {}) {
     const values = {
       attention: overrides.attention ?? attentionFilter,
       page: overrides.page ?? page,
@@ -386,6 +402,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
       interview: overrides.interview ?? interviewTypeFilter,
       interviewStatus: overrides.interviewStatus ?? interviewStatusFilter,
       sort: overrides.sort ?? sortFilter,
+      scoreMin: overrides.scoreMin ?? matchScoreMin,
+      scoreMax: overrides.scoreMax ?? matchScoreMax,
       from: overrides.from ?? dateFrom,
       to: overrides.to ?? dateTo,
     };
@@ -412,6 +430,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
     if (interviewStatusFilter !== "All interview statuses") params.set("interviewStatus", interviewStatusFilter.toLowerCase().replaceAll(" ", "_"));
     if (sortFilter === "Oldest first") params.set("sort", "oldest");
     if (sortFilter === "Highest match") params.set("sort", "match");
+    if (matchScoreMin) params.set("scoreMin", matchScoreMin);
+    if (matchScoreMax) params.set("scoreMax", matchScoreMax);
     if (dateFrom) params.set("from", dateFrom);
     if (dateTo) params.set("to", dateTo);
     // usePathname is safe during server rendering; window is not.
@@ -427,6 +447,37 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
     manualRefreshPending.current = true;
     setRefreshSequence((sequence) => sequence + 1);
     router.refresh();
+  }
+
+  async function exportApplicants() {
+    if (exporting) return;
+    setExporting(true);
+    setActionError("");
+    setActionMessage("");
+    const params = new URLSearchParams({ page: "1", pageSize: "100", export: "excel" });
+    if (scopeRoleId) params.set("scopeRole", scopeRoleId);
+    if (search.trim()) params.set("search", search.trim());
+    if (roleFilter !== "All Roles") params.set("role", roleFilter);
+    if (stageFilter !== "All Stages") params.set("stage", stageFilter);
+    if (resumeFilter !== "All resume statuses") params.set("resume", resumeFilter);
+    if (interviewTypeFilter !== "All interview types") params.set("interview", interviewTypeFilter);
+    if (interviewStatusFilter !== "All interview statuses") params.set("interviewStatus", interviewStatusFilter.toLowerCase().replaceAll(" ", "_"));
+    if (sortFilter !== "Newest first") params.set("sort", sortFilter === "Oldest first" ? "oldest" : "match");
+    if (matchScoreMin) params.set("scoreMin", matchScoreMin);
+    if (matchScoreMax) params.set("scoreMax", matchScoreMax);
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+    if (attentionFilter) params.set("attention", attentionFilter);
+
+    try {
+      const response = await fetch(`/api/applicants?${params}`, { cache: "no-store", credentials: "same-origin" });
+      await downloadResponseFile(response, "applicants.xlsx");
+      setActionMessage("Applicant export downloaded.");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Applicants could not be exported. Please try again.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function deleteApplicants(applicantsToDelete: ApplicantSummary[]) {
@@ -530,8 +581,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
   }
 
   function clearApplicantFilters() {
-    setAttentionFilter(""); setSearch(""); setRoleFilter("All Roles"); setStageFilter("All Stages"); setResumeFilter("All resume statuses"); setInterviewTypeFilter("All interview types"); setInterviewStatusFilter("All interview statuses"); setDateFrom(""); setDateTo(""); setPage(1);
-    writeListUrl({ attention: "", search: "", role: "All Roles", stage: "All Stages", resume: "All resume statuses", interview: "All interview types", interviewStatus: "All interview statuses", from: "", to: "", page: 1 });
+    setAttentionFilter(""); setSearch(""); setRoleFilter("All Roles"); setStageFilter("All Stages"); setResumeFilter("All resume statuses"); setInterviewTypeFilter("All interview types"); setInterviewStatusFilter("All interview statuses"); setMatchScoreMin(""); setMatchScoreMax(""); setDateFrom(""); setDateTo(""); setPage(1);
+    writeListUrl({ attention: "", search: "", role: "All Roles", stage: "All Stages", resume: "All resume statuses", interview: "All interview types", interviewStatus: "All interview statuses", scoreMin: "", scoreMax: "", from: "", to: "", page: 1 });
   }
 
   function toggleAllVisibleApplicants() {
@@ -575,6 +626,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
             <span className="list-result-count" aria-live="polite">{matchingApplicantCount} matching applicant{matchingApplicantCount === 1 ? "" : "s"}</span>
             {recordsLoading && <span className="list-refreshing" role="status">Updating…</span>}
           </div>
+          <button type="button" className="btn btn-secondary" disabled={exporting || recordsLoading || matchingApplicantCount === 0} aria-busy={exporting} onClick={() => void exportApplicants()}>{exporting ? "Exporting…" : "Export to Excel"}</button>
           {canManageApplicants && <div className={`bulk-selection-toolbar${selectedApplicants.length > 0 ? " has-selection" : ""}`} role="toolbar" aria-label="Selected applicant actions"><span aria-live="polite">{selectedApplicants.length} {selectedApplicants.length === 1 ? "applicant" : "applicants"} selected</span><button type="button" className="btn btn-small btn-primary" disabled={approvableSelected.length === 0 || approving || deletingId !== ""} title={selectedApplicants.length > 0 && approvableSelected.length === 0 ? "Only applicants in Resume Review can be approved for interview." : undefined} onClick={() => void approveSelectedForInterview()}>{approving ? "Approving…" : "Approve for Interview"}</button><button type="button" className="btn btn-small btn-danger-outline" disabled={selectedApplicants.length === 0 || deletingId !== "" || approving} onClick={() => void deleteApplicants(selectedApplicants)}>Delete selected</button>{selectedApplicants.length > 0 && <button type="button" className="btn btn-small btn-secondary" disabled={approving || deletingId !== ""} onClick={() => { clearActionFeedback(); setSelectedIds(new Set()); }}>Clear</button>}</div>}
           {hasApplicantFilters && <button type="button" className="btn btn-secondary list-clear-button" onClick={clearApplicantFilters}><UiIcon name="filter" size={16} />Clear all filters</button>}
         </div>
@@ -587,6 +639,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
           <div className="list-filter-field"><label htmlFor="applicant-interview-type">Interview type</label><select id="applicant-interview-type" value={interviewTypeFilter} onChange={(event) => { setInterviewTypeFilter(event.target.value); setPage(1); writeListUrl({ interview: event.target.value, page: 1 }); }}><option>All interview types</option><option>Voice Interview</option><option>Live Avatar Interview</option><option>Not selected</option></select></div>
           <div className="list-filter-field"><label htmlFor="applicant-interview-status">Interview status</label><select id="applicant-interview-status" value={interviewStatusFilter} onChange={(event) => { setInterviewStatusFilter(event.target.value); setPage(1); writeListUrl({ interviewStatus: event.target.value, page: 1 }); }}><option>All interview statuses</option><option value="not_started">Not started</option><option value="scheduled">Scheduled</option><option value="in_progress">In progress</option><option value="awaiting_review">Awaiting review</option><option value="review_complete">Review complete</option></select></div>
           <div className="list-filter-field"><label htmlFor="applicant-sort">Sort by</label><select id="applicant-sort" value={sortFilter} onChange={(event) => { setSortFilter(event.target.value); setPage(1); writeListUrl({ sort: event.target.value, page: 1 }); }}><option>Newest first</option><option>Oldest first</option><option>Highest match</option></select></div>
+          <div className="list-filter-field"><label htmlFor="applicant-score-min">Match score from (%)</label><input id="applicant-score-min" type="number" min="0" max="100" step="any" inputMode="decimal" placeholder="Any" value={matchScoreMin} onChange={(event) => { const value = event.target.value; if (value && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 100)) return; setMatchScoreMin(value); setPage(1); writeListUrl({ scoreMin: value, page: 1 }); }} /></div>
+          <div className="list-filter-field"><label htmlFor="applicant-score-max">Match score to (%)</label><input id="applicant-score-max" type="number" min="0" max="100" step="any" inputMode="decimal" placeholder="Any" value={matchScoreMax} onChange={(event) => { const value = event.target.value; if (value && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 100)) return; setMatchScoreMax(value); setPage(1); writeListUrl({ scoreMax: value, page: 1 }); }} /></div>
           <div className="list-filter-field"><label htmlFor="applicant-from">Applied from</label><input id="applicant-from" type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); writeListUrl({ from: event.target.value, page: 1 }); }} /></div>
           <div className="list-filter-field"><label htmlFor="applicant-to">Applied to</label><input id="applicant-to" type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); writeListUrl({ to: event.target.value, page: 1 }); }} /></div>
         </div>
@@ -600,6 +654,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
           {resumeFilter !== "All resume statuses" && <span className="list-filter-chip">Resume: {resumeFilter}</span>}
           {interviewTypeFilter !== "All interview types" && <span className="list-filter-chip">Interview: {interviewTypeFilter}</span>}
           {interviewStatusFilter !== "All interview statuses" && <span className="list-filter-chip">Interview status: {INTERVIEW_STATUS_LABELS[interviewStatusFilter] || interviewStatusFilter}</span>}
+          {(matchScoreMin || matchScoreMax) && <span className="list-filter-chip">Match score: {matchScoreMin || "0"}%–{matchScoreMax || "100"}%</span>}
           {dateFrom && <span className="list-filter-chip">From: {dateFrom}</span>}{dateTo && <span className="list-filter-chip">To: {dateTo}</span>}
         </div>}
 
