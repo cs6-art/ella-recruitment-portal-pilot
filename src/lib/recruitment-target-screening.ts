@@ -8,6 +8,7 @@ import {
   updateBulkQueueStatus,
 } from "@/lib/internal-recruitment-queries";
 import { applyScreeningEvidenceGuard, parseScreeningResult, screeningDbValues } from "@/lib/recruitment-screening";
+import { maybeAutoAdvance } from "@/lib/auto-advance";
 
 function text(value: unknown) {
   return String(value ?? "").trim();
@@ -80,7 +81,11 @@ export async function processTargetBulkScreening(input: {
       await updateBulkQueueStatus({ dedupeKey, status: "failed", errorMessage: result.error }).catch(() => undefined);
       return { status: "failed" as const, error: result.error };
     }
-    return { status: "screened" as const, dedupeKey, applicationId: result.applicationId || context.application?.externalId || "", creditApplied: result.credit?.applied === true };
+    const applicationId = result.applicationId || context.application?.externalId || "";
+    // The screening transaction has committed; apply the role's Interview
+    // automation separately so a failure there can never undo the charge.
+    if (applicationId) await maybeAutoAdvance(applicationId);
+    return { status: "screened" as const, dedupeKey, applicationId, creditApplied: result.credit?.applied === true };
   } catch (error) {
     const message = error instanceof EllaCreditsError ? "insufficient_credits" : error instanceof Error ? error.message : "screening_failed";
     await updateBulkQueueStatus({ dedupeKey, status: "failed", errorMessage: message }).catch(() => undefined);

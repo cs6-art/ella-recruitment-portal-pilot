@@ -242,18 +242,57 @@ async function getStoredCalendarAccountEmail(email: string): Promise<string | nu
   return accountEmail || null;
 }
 
-export async function getCalendarConnectionStatus(email = ""): Promise<{ connected: boolean; accountEmail: string | null; connectedAt: string | null; expectedEmail: string; accountMismatch: boolean }> {
+/**
+ * What HR needs to know about the calendar connection, without raw OAuth or
+ * API text: `needs_reconnect` (expired, revoked or wrong account — only a new
+ * connection fixes it) versus `unavailable` (Google could not be reached).
+ */
+export type CalendarIntegrationState = "connected" | "not_connected" | "needs_reconnect" | "unavailable";
+
+export function classifyCalendarError(error: unknown): "needs_reconnect" | "unavailable" {
+  const message = error instanceof Error ? `${error.message} ${(error as { code?: unknown }).code ?? ""}` : String(error);
+  const response = (error as { response?: { status?: number; data?: { error?: unknown } } } | null)?.response;
+  const status = Number(response?.status || (error as { status?: unknown } | null)?.status || 0);
+  if (/invalid_grant|invalid_token|unauthorized_client|revoked|expired|insufficient.*(scope|permission)|account_mismatch/i.test(message)) return "needs_reconnect";
+  if (status === 401 || (status === 403 && !/rate|quota/i.test(message))) return "needs_reconnect";
+  return "unavailable";
+}
+
+export async function getCalendarConnectionStatus(email = ""): Promise<{ connected: boolean; state: CalendarIntegrationState; accountEmail: string | null; connectedAt: string | null; expectedEmail: string; accountMismatch: boolean }> {
+  let expectedEmail = normalizedEmail(email);
+  let connection: Awaited<ReturnType<typeof getCalendarConnection>> = null;
   try {
     const target = await finalInterviewCalendarTarget(email);
-    const connection = await getCalendarConnection(target.email);
+    expectedEmail = target.email;
+    connection = await getCalendarConnection(target.email);
+    if (!connection?.refreshToken) return { connected: false, state: "not_connected", accountEmail: null, connectedAt: null, expectedEmail, accountMismatch: false };
     const accountEmail = await getStoredCalendarAccountEmail(target.email);
     const accountMismatch = Boolean(accountEmail && accountEmail !== target.email);
     const authorized = accountMismatch ? null : await getAuthorizedClientWithIdentity(target.email);
-    return { connected: Boolean(authorized), accountEmail, connectedAt: connection?.connectedAt || null, expectedEmail: target.email, accountMismatch };
+    // A stored token that no longer proves the expected account can only be
+    // fixed by connecting again.
+    return { connected: Boolean(authorized), state: authorized ? "connected" : "needs_reconnect", accountEmail, connectedAt: connection.connectedAt || null, expectedEmail, accountMismatch };
   } catch (error) {
     console.warn("[Google Calendar] Connection identity check failed:", error);
-    return { connected: false, accountEmail: null, connectedAt: null, expectedEmail: normalizedEmail(email), accountMismatch: false };
+    const state: CalendarIntegrationState = connection?.refreshToken ? classifyCalendarError(error) : "not_connected";
+    return { connected: false, state, accountEmail: null, connectedAt: connection?.connectedAt || null, expectedEmail, accountMismatch: false };
   }
+}
+
+const integrationStateCache = new Map<string, { state: CalendarIntegrationState; expiresAt: number }>();
+const INTEGRATION_STATE_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * The shared HR calendar's state for dashboard alerts, cached per
+ * organization for ten minutes so a dashboard refreshing every 30 seconds
+ * does not call Google each time. Call inside the organization's request.
+ */
+export async function getCachedCalendarIntegrationState(organizationId: string): Promise<CalendarIntegrationState> {
+  const cached = integrationStateCache.get(organizationId);
+  if (cached && cached.expiresAt > Date.now()) return cached.state;
+  const { state } = await getCalendarConnectionStatus();
+  integrationStateCache.set(organizationId, { state, expiresAt: Date.now() + INTEGRATION_STATE_TTL_MS });
+  return state;
 }
 
 export type CalendarEventInput = {
@@ -308,6 +347,38 @@ export async function createFinalInterviewEvent(input: CalendarEventInput): Prom
     return { created: true, eventId: response.data.id || "", htmlLink: response.data.htmlLink || "" };
   } catch (error) {
     return { created: false, reason: "error", error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function googleErrorStatus(error: unknown) {
+  const value = error as { code?: unknown; status?: unknown; response?: { status?: unknown } } | null;
+  return Number(value?.response?.status || value?.status || value?.code || 0);
+}
+
+/** Move an existing interview event to a new time (HR reschedule). The candidate is notified by Google. */
+export async function updateFinalInterviewEvent(input: { hodEmail: string; eventId: string; date: string; startTime: string; endTime: string; timezone: string }): Promise<{ updated: true; eventId: string; htmlLink: string } | { updated: false; reason: "not_connected" | "not_found" | "error" | "demo_mode"; error?: string }> {
+  if (isDemoMode()) return { updated: false, reason: "demo_mode" };
+  try {
+    const target = await finalInterviewCalendarTarget(input.hodEmail);
+    const client = await getAuthorizedClient(target.email);
+    if (!client) return { updated: false, reason: "not_connected" };
+    const calendar = google.calendar({ version: "v3", auth: client });
+    const start = scheduledInstant(input.date, input.startTime, input.timezone);
+    const end = scheduledInstant(input.date, input.endTime, input.timezone);
+    const response = await calendar.events.patch({
+      calendarId: target.calendarId,
+      eventId: input.eventId,
+      sendUpdates: "all",
+      requestBody: {
+        start: { dateTime: start.toISOString(), timeZone: input.timezone },
+        end: { dateTime: end.toISOString(), timeZone: input.timezone },
+      },
+    });
+    return { updated: true, eventId: response.data.id || input.eventId, htmlLink: response.data.htmlLink || "" };
+  } catch (error) {
+    const status = googleErrorStatus(error);
+    if (status === 404 || status === 410) return { updated: false, reason: "not_found" };
+    return { updated: false, reason: "error", error: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -424,6 +495,9 @@ export async function deleteFinalInterviewEvent(hodEmail: string, eventId: strin
     await calendar.events.delete({ calendarId: target.calendarId, eventId, sendUpdates: "all" });
     return { deleted: true };
   } catch (error) {
+    // Already removed in Google (by HR or a previous attempt): nothing left to do.
+    const status = googleErrorStatus(error);
+    if (status === 404 || status === 410) return { deleted: true };
     return { deleted: false, reason: "error", error: error instanceof Error ? error.message : String(error) };
   }
 }

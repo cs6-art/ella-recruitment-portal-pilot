@@ -9,6 +9,7 @@ import {
   type ApplicantDecisionStage,
 } from "@/lib/applicant-workflow";
 import { canDecideApplicant } from "@/lib/access-control";
+import { hrApprovalMode } from "@/lib/auto-advance";
 import { getPublicAppBaseUrl } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
@@ -44,8 +45,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
     }
 
     const applicationId = decodeURIComponent((await params).applicationId);
+    // Approving below the role's Interview automation minimum is recorded as
+    // a manual override so the history shows HR chose to advance them.
+    const approvalMode = body.stage === "resume" && body.decision === "Approve"
+      ? await hrApprovalMode(applicationId, user.organizationId, "manual")
+      : undefined;
     // Decisions are internal workflow state and remain available in demo mode.
     // Applicant-facing email/call/booking side effects are guarded downstream.
+    // The signed-in organization scopes the lookup, so another tenant's
+    // application reference is treated as not found.
     const result = await recordApplicantDecision(
       applicationId,
       body.stage,
@@ -53,6 +61,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
       { name: user.name, email: user.email },
       body.comments,
       getPublicAppBaseUrl(request),
+      { organizationId: user.organizationId, approvalMode },
     );
 
     // Mark every server-rendered view that reflects applicant workflow totals

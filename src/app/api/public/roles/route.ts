@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
+import { isRoleOpenForSelection } from "@/lib/recruitment-role-eligibility";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetPublicRoleSummaries } from "@/lib/recruitment-target-portal";
 
@@ -11,6 +12,7 @@ export async function GET() {
     const roles = (isPostgresRecruitmentTarget()
       ? await targetPublicRoleSummaries({ liveOnly: true })
       : (await getRoleRequests({ liveOnly: true })).filter(isPublishedRoleForIntake))
+      .filter((role) => isRoleOpenForSelection(role))
       .map((role) => ({ roleId: role.roleId, jobTitle: role.jobTitle, department: role.department, jobDescription: role.jobDescription || "", postingChannels: role.postingChannels || "", applicationLink: role.applicationLink || `/apply/${encodeURIComponent(role.roleId)}` }));
     return NextResponse.json({ success: true, roles }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

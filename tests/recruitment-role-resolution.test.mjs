@@ -30,10 +30,19 @@ test("Postgres intake routes do not perform a direct Sheets role lookup", () => 
     "src/app/api/resume-screening/onedrive/import/route.ts",
   ]) {
     const route = read(file);
-    assert.match(route, /resolvePublishedRecruitmentRole\(roleId(?:,[^)]+)?\)/, `${file} must use the shared resolver`);
+    // New-work intake goes through the overdue-aware wrapper, which itself
+    // delegates to the shared resolver (asserted below).
+    assert.match(route, /resolveRecruitmentRoleForNewWork\(roleId(?:,[^)]+)?\)/, `${file} must use the shared resolver`);
     assert.doesNotMatch(route, /getRoleRequestById\(roleId\)/, `${file} must not gate target intake through Sheets`);
     assert.doesNotMatch(route, /isPublishedRoleForIntake\(role\)/, `${file} must not duplicate the source-specific gate`);
   }
+});
+
+test("the new-work resolver wraps the shared resolver and adds only the target-date rule", () => {
+  const resolver = read("src/lib/recruitment-role-resolution.ts");
+  assert.match(resolver, /export async function resolveRecruitmentRoleForNewWork/);
+  assert.match(resolver, /const role = await resolvePublishedRecruitmentRole\(roleId, organizationId\);/);
+  assert.match(resolver, /isRoleOpenForSelection\(role\)/);
 });
 
 test("target intake preserves no-charge queue-first credit timing", () => {

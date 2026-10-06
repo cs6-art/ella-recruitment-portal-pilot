@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
   try {
     const connection = await getCalendarConnectionStatus();
-    return NextResponse.json({ success: true, connected: connection.connected, accountEmail: connection.accountEmail, accountMismatch: connection.accountMismatch, connectedAt: connection.connectedAt }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ success: true, connected: connection.connected, state: connection.state, accountEmail: connection.accountEmail, expectedEmail: connection.expectedEmail, accountMismatch: connection.accountMismatch, connectedAt: connection.connectedAt }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[Google Calendar] Status check failed:", error);
     return NextResponse.json({ success: false, error: "Unable to check calendar connection." }, { status: 500 });

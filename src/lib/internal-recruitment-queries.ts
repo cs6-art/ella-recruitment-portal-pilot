@@ -538,6 +538,53 @@ export async function setRoleInterviewer(input: { externalId: string; organizati
   });
 }
 
+/** Applicants on one role still waiting in Resume Review (for the Interview automation card). */
+export async function countRoleResumeReview(roleExternalId: string, organizationId: string) {
+  const db = getDb();
+  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(applications)
+    .innerJoin(roles, eq(roles.id, applications.roleId))
+    .where(and(
+      eq(roles.externalId, roleExternalId.trim()),
+      eq(roles.organizationId, organizationId.trim()),
+      eq(applications.organizationId, organizationId.trim()),
+      eq(applications.currentStage, "resume_review"),
+      eq(applications.withdrawn, false),
+    ));
+  return row?.n ?? 0;
+}
+
+/**
+ * Store a role's Interview automation setting under `setup.interviewAutomation`.
+ * `jsonb_set` changes only that key, so a concurrent recruitment-setup save is
+ * never overwritten; the role history records who switched it and when.
+ */
+export async function setRoleInterviewAutomation(input: { externalId: string; organizationId: string; value: { enabled: boolean; minScore: number; enabledAt: string; enabledBy: string }; actorEmail: string; actorName?: string; comments: string }) {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const [role] = await tx.select({ id: roles.id, status: roles.status, organizationId: roles.organizationId }).from(roles)
+      .where(and(eq(roles.externalId, input.externalId.trim()), eq(roles.organizationId, input.organizationId.trim()))).for("update").limit(1);
+    if (!role) return null;
+    const [updated] = await tx.update(roles).set({
+      setup: sql`jsonb_set(coalesce(${roles.setup}, '{}'::jsonb), '{interviewAutomation}', ${JSON.stringify(input.value)}::jsonb, true)`,
+      updatedByEmail: input.actorEmail,
+      updatedAt: new Date(),
+    }).where(eq(roles.id, role.id)).returning({ setup: roles.setup, updatedAt: roles.updatedAt });
+    await tx.insert(roleStatusHistory).values({
+      organizationId: role.organizationId,
+      roleId: role.id,
+      previousStatus: role.status,
+      newStatus: role.status,
+      comments: input.comments,
+      action: "interview_automation_updated",
+      actionSource: "portal_postgres_target",
+      changedByEmail: input.actorEmail,
+      changedByName: input.actorName || "",
+      notificationStatus: "",
+    });
+    return updated ?? null;
+  });
+}
+
 export class RoleWriteConflictError extends Error {
   readonly code = "ROLE_WRITE_CONFLICT" as const;
 
@@ -587,7 +634,13 @@ export type ApplicationListFilters = {
   dateFrom?: Date;
   dateToExclusive?: Date;
   sort?: "oldest" | "match";
+  /** Dashboard "Actionable Alerts" drill-downs. */
+  attention?: "stalled" | "email_undelivered";
 };
+
+/** Waiting stages a dashboard alert flags once an applicant sits in them too long. */
+export const ATTENTION_STALLED_STAGES = ["resume_approved", "voice_booking_pending", "voice_scheduled", "approved_for_final"];
+export const ATTENTION_STALLED_DAYS = 5;
 
 function applicationListConditions(organizationId: string, filters: ApplicationListFilters = {}) {
   const conditions = [eq(applications.organizationId, organizationId.trim()), eq(roles.organizationId, organizationId.trim())];
@@ -646,6 +699,24 @@ function applicationListConditions(organizationId: string, filters: ApplicationL
   }
   if (filters.dateFrom) conditions.push(gte(applications.appliedAt, filters.dateFrom));
   if (filters.dateToExclusive) conditions.push(lt(applications.appliedAt, filters.dateToExclusive));
+  // These mirror the matching dashboard alert counts in dashboard-attention.ts.
+  if (filters.attention === "stalled") {
+    conditions.push(eq(applications.withdrawn, false));
+    conditions.push(inArray(applications.currentStage, ATTENTION_STALLED_STAGES));
+    conditions.push(lt(applications.updatedAt, new Date(Date.now() - ATTENTION_STALLED_DAYS * 24 * 60 * 60 * 1000)));
+  }
+  if (filters.attention === "email_undelivered") {
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    conditions.push(sql<boolean>`exists (
+      select 1 from ${applicationStatusHistory}
+      where ${applicationStatusHistory.applicationId} = ${applications.id}
+        and ${applicationStatusHistory.notificationEventType} in (${sql.join(ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES.map((type) => sql`${type}`), sql`, `)})
+        and ${applicationStatusHistory.changedAt} >= ${weekAgo}
+        and (${applicationStatusHistory.notificationStatus} = 'failed'
+          or (${applicationStatusHistory.notificationStatus} = 'pending' and ${applicationStatusHistory.changedAt} < ${dayAgo}))
+    )`);
+  }
   return conditions;
 }
 
@@ -918,7 +989,7 @@ export async function copyScreeningResult(input: { sourceApplicationId: string; 
 
 export async function getApplication(externalId: string) {
   const db = getDb();
-  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, roleTargetHiringDate: roles.targetHiringDate, roleHrCalendarEmail: roles.hrCalendarEmail, roleSetup: roles.setup, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql(), hasVoiceInterviewChoice: hasVoiceInterviewChoiceSql() }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
+  const [row] = await db.select({ application: applications, roleExternalId: roles.externalId, roleTitle: roles.title, roleTargetHiringDate: roles.targetHiringDate, roleHrCalendarEmail: roles.hrCalendarEmail, roleSetup: roles.setup, roleStatus: roles.status, roleArchive: roles.archive, departmentSnapshot: roles.departmentSnapshot, applicantEmail: applicants.primaryEmail, screeningResult: screeningResults, resumeFile: resumeFiles, hasLiveAvatarInterview: hasAvatarInterviewSql(), hasVoiceInterviewChoice: hasVoiceInterviewChoiceSql() }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).innerJoin(applicants, eq(applicants.id, applications.applicantId)).leftJoin(screeningResults, eq(screeningResults.applicationId, applications.id)).leftJoin(resumeFiles, eq(resumeFiles.id, applications.resumeFileId)).where(eq(applications.externalId, externalId)).limit(1);
   return row ?? null;
 }
 
@@ -1225,6 +1296,109 @@ export async function deleteApplication(externalId: string) {
     }));
   }
   return result;
+}
+
+/** A face-to-face interview with what HR's reschedule/cancel actions and the Google sync need. Organization-scoped. */
+export async function getFinalInterviewForHr(slotId: string, organizationId: string) {
+  const db = getDb();
+  const [row] = await db.select({
+    slot: interviewSlots,
+    applicationExternalId: applications.externalId,
+    currentStage: applications.currentStage,
+    candidateName: applications.candidateName,
+    candidateEmail: applications.email,
+    roleExternalId: roles.externalId,
+    roleTitle: roles.title,
+    roleHrCalendarEmail: roles.hrCalendarEmail,
+    roleSetup: roles.setup,
+  }).from(interviewSlots)
+    .innerJoin(applications, eq(applications.id, interviewSlots.applicationId))
+    .innerJoin(roles, eq(roles.id, applications.roleId))
+    .where(and(eq(interviewSlots.id, slotId.trim()), eq(interviewSlots.organizationId, organizationId.trim()), eq(interviewSlots.interviewType, "final")))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * HR moves a booked face-to-face interview. The portal record changes first;
+ * the caller then updates the Google event and records the sync outcome, so a
+ * Google failure never loses the new time. `slotCode` is cleared because it
+ * encodes the original time, which becomes free to offer again.
+ */
+export async function rescheduleFinalInterviewSlot(input: { slotId: string; organizationId: string; startsAt: Date; endsAt: Date; timezone: string; actorEmail: string; actorName?: string; comments: string }) {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const [slot] = await tx.select().from(interviewSlots)
+      .where(and(eq(interviewSlots.id, input.slotId.trim()), eq(interviewSlots.organizationId, input.organizationId.trim()))).for("update").limit(1);
+    if (!slot || slot.interviewType !== "final" || !slot.applicationId) return { updated: false, error: "unknown_interview" as const };
+    if (slot.status !== "booked") return { updated: false, error: "not_booked" as const };
+    const [clash] = await tx.select({ id: interviewSlots.id }).from(interviewSlots).where(and(
+      eq(interviewSlots.organizationId, slot.organizationId),
+      eq(interviewSlots.interviewType, "final"),
+      eq(interviewSlots.status, "booked"),
+      eq(interviewSlots.interviewerEmail, slot.interviewerEmail),
+      not(eq(interviewSlots.id, slot.id)),
+      lt(interviewSlots.startsAt, input.endsAt),
+      sql`${interviewSlots.endsAt} > ${input.startsAt}`,
+    )).limit(1);
+    if (clash) return { updated: false, error: "interview_conflict" as const };
+    const [updated] = await tx.update(interviewSlots).set({
+      slotCode: null,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      timezone: input.timezone,
+      calendarEventError: "",
+      updatedAt: new Date(),
+    }).where(eq(interviewSlots.id, slot.id)).returning();
+    const [application] = await tx.select({ id: applications.id, currentStage: applications.currentStage }).from(applications).where(eq(applications.id, slot.applicationId)).limit(1);
+    await tx.insert(applicationStatusHistory).values({
+      organizationId: slot.organizationId,
+      applicationId: slot.applicationId,
+      stage: "final",
+      previousStage: application?.currentStage || "",
+      newStage: application?.currentStage || "",
+      actorEmail: input.actorEmail,
+      actorName: input.actorName || "",
+      comments: input.comments,
+      source: "portal:interview_rescheduled",
+      actionRequestId: `interview-reschedule:${slot.id}:${input.startsAt.toISOString()}`,
+    }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
+    return { updated: true, error: null, slot: updated, previous: { startsAt: slot.startsAt, endsAt: slot.endsAt, timezone: slot.timezone } };
+  });
+}
+
+/**
+ * HR cancels a booked face-to-face interview: the slot is kept for history as
+ * `cancelled` (its time is released), and the applicant returns to "Approved
+ * for Face-to-Face Interview" so a new time can be booked.
+ */
+export async function cancelFinalInterviewSlot(input: { slotId: string; organizationId: string; actorEmail: string; actorName?: string; comments: string }) {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const [slot] = await tx.select().from(interviewSlots)
+      .where(and(eq(interviewSlots.id, input.slotId.trim()), eq(interviewSlots.organizationId, input.organizationId.trim()))).for("update").limit(1);
+    if (!slot || slot.interviewType !== "final" || !slot.applicationId) return { updated: false, error: "unknown_interview" as const };
+    if (slot.status !== "booked") return { updated: false, error: "not_booked" as const };
+    const [updated] = await tx.update(interviewSlots).set({ status: "cancelled", slotCode: null, updatedAt: new Date() }).where(eq(interviewSlots.id, slot.id)).returning();
+    const [application] = await tx.select({ id: applications.id, externalId: applications.externalId, currentStage: applications.currentStage }).from(applications).where(eq(applications.id, slot.applicationId)).for("update").limit(1);
+    const nextStage = application?.currentStage === "final_scheduled" ? "approved_for_final" : application?.currentStage || "";
+    if (application && nextStage !== application.currentStage) {
+      await tx.update(applications).set({ currentStage: nextStage, updatedAt: new Date() }).where(eq(applications.id, application.id));
+    }
+    await tx.insert(applicationStatusHistory).values({
+      organizationId: slot.organizationId,
+      applicationId: slot.applicationId,
+      stage: "final",
+      previousStage: application?.currentStage || "",
+      newStage: nextStage,
+      actorEmail: input.actorEmail,
+      actorName: input.actorName || "",
+      comments: input.comments,
+      source: "portal:interview_cancelled",
+      actionRequestId: `interview-cancel:${slot.id}`,
+    }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
+    return { updated: true, error: null, slot: updated, applicationExternalId: application?.externalId || "" };
+  });
 }
 
 export async function markInterviewNoShow(slotId: string, actorEmail = "", actorName = "") {
@@ -1909,13 +2083,23 @@ export async function staleVoiceStageApplications() {
   return db.select({ externalId: applications.externalId, latestResultAt: sql<string>`max(${voiceInterviewResults.createdAt})` }).from(applications).innerJoin(voiceInterviewResults, eq(voiceInterviewResults.applicationId, applications.id)).where(and(eq(applications.withdrawn, false), eq(applications.currentStage, "voice_scheduled"))).groupBy(applications.externalId).limit(LIMIT);
 }
 
-export async function applyHrDecision(input: { applicationExternalId: string; stage: "resume" | "voice" | "final"; decision: string; comments?: string; actorEmail: string; actorName?: string; actionRequestId: string }) {
+/**
+ * `organizationId` scopes the lookup to one tenant. Portal (session) callers
+ * must always pass it so a known application reference from another
+ * organization cannot be decided; only the cross-tenant n8n internal API
+ * omits it. `source` labels the history row (automatic vs. HR approvals).
+ */
+export async function applyHrDecision(input: { applicationExternalId: string; organizationId?: string; stage: "resume" | "voice" | "final"; decision: string; comments?: string; actorEmail: string; actorName?: string; actionRequestId: string; source?: string }) {
   const db = getDb();
   if (!isValidDecision(input.decision)) return { updated: false, error: "invalid_decision" as const };
   const expectedStage = input.stage === "resume" ? "resume_review" : input.stage === "voice" ? "voice_review_pending" : "final_decision_pending";
   const targetStage = input.decision === "reject" ? "rejected" : input.decision === "approve" ? (input.stage === "resume" ? "resume_approved" : input.stage === "voice" ? "approved_for_final" : "passed_final") : expectedStage;
+  const organizationId = input.organizationId?.trim();
   return db.transaction(async (tx) => {
-    const [current] = await tx.select().from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
+    const applicationMatch = organizationId
+      ? and(eq(applications.externalId, input.applicationExternalId), eq(applications.organizationId, organizationId))
+      : eq(applications.externalId, input.applicationExternalId);
+    const [current] = await tx.select().from(applications).where(applicationMatch).for("update").limit(1);
     if (!current) return { updated: false, error: "unknown_application" as const };
     if (input.stage === "resume" && input.decision === "approve") {
       const [screening] = await tx.select({ id: screeningResults.id }).from(screeningResults).where(eq(screeningResults.applicationId, current.id)).limit(1);
@@ -1927,9 +2111,55 @@ export async function applyHrDecision(input: { applicationExternalId: string; st
     const patch = input.stage === "resume" ? { resumeHrDecision: input.decision, resumeHrDecisionAt: new Date(), resumeHrReviewer: input.actorEmail, resumeHrComments: input.comments || "" } : input.stage === "voice" ? { voiceHrDecision: input.decision, voiceHrComments: input.comments || "" } : { finalHrDecision: input.decision, finalInterviewComments: input.comments || "" };
     await tx.update(applications).set({ ...patch, currentStage: targetStage, updatedAt: new Date() }).where(eq(applications.id, current.id));
     const notificationEventType = input.stage === "voice" && input.decision === "reject" ? "voice_rejection" : input.stage === "final" && input.decision === "approve" ? "final_decision_pass" : input.stage === "final" && input.decision === "reject" ? "final_decision_reject" : "";
-    await tx.insert(applicationStatusHistory).values({ organizationId: current.organizationId, applicationId: current.id, stage: input.stage, previousStage: current.currentStage, newStage: targetStage, decision: input.decision, actorEmail: input.actorEmail, actorName: input.actorName || "", comments: input.comments || "", source: "internal_api:hr_decision", actionRequestId: input.actionRequestId, notificationStatus: notificationEventType ? "pending" : "", notificationEventType, notificationRecipient: notificationEventType ? pilotEmailRecipient(current.email).to : "", notificationIntendedRecipient: notificationEventType ? current.email : "" });
+    await tx.insert(applicationStatusHistory).values({ organizationId: current.organizationId, applicationId: current.id, stage: input.stage, previousStage: current.currentStage, newStage: targetStage, decision: input.decision, actorEmail: input.actorEmail, actorName: input.actorName || "", comments: input.comments || "", source: input.source?.trim() || "internal_api:hr_decision", actionRequestId: input.actionRequestId, notificationStatus: notificationEventType ? "pending" : "", notificationEventType, notificationRecipient: notificationEventType ? pilotEmailRecipient(current.email).to : "", notificationIntendedRecipient: notificationEventType ? current.email : "" });
     return { updated: true, duplicate: false, error: null };
   });
+}
+
+/**
+ * Screened applicants still in Resume Review on roles with Interview
+ * automation switched on. The automation rule itself (threshold, enabled-at
+ * cut-off) is applied by the caller; this is the retry net for a missed
+ * post-screening hook. Optionally limited to one organization.
+ */
+export async function listAutoAdvanceCandidates(input: { organizationId?: string; limit?: number } = {}) {
+  const db = getDb();
+  const conditions = [
+    eq(applications.currentStage, "resume_review"),
+    eq(applications.withdrawn, false),
+    isNotNull(screeningResults.matchScore),
+    sql`(${roles.setup} -> 'interviewAutomation' ->> 'enabled') = 'true'`,
+  ];
+  if (input.organizationId?.trim()) conditions.push(eq(applications.organizationId, input.organizationId.trim()));
+  return db.select({ externalId: applications.externalId, organizationId: applications.organizationId })
+    .from(applications)
+    .innerJoin(roles, eq(roles.id, applications.roleId))
+    .innerJoin(screeningResults, eq(screeningResults.applicationId, applications.id))
+    .where(and(...conditions))
+    .orderBy(asc(screeningResults.screenedAt))
+    .limit(Math.max(1, Math.min(LIMIT, input.limit ?? 50)));
+}
+
+/**
+ * Applications approved at resume review whose voice invitation never got
+ * created (the stage move and the invitation are separate writes). Only rows
+ * older than a few minutes, so an approval still in flight is left alone.
+ */
+export async function listApprovedWithoutInterviewInvitation(input: { organizationId?: string; olderThanMinutes?: number; limit?: number } = {}) {
+  const db = getDb();
+  const cutoff = new Date(Date.now() - Math.max(1, input.olderThanMinutes ?? 10) * 60 * 1000);
+  const conditions = [
+    eq(applications.currentStage, "resume_approved"),
+    eq(applications.withdrawn, false),
+    lt(applications.updatedAt, cutoff),
+    sql`not exists (select 1 from ${bookingTokens} where ${bookingTokens.applicationId} = ${applications.id} and ${bookingTokens.kind} = 'voice')`,
+  ];
+  if (input.organizationId?.trim()) conditions.push(eq(applications.organizationId, input.organizationId.trim()));
+  return db.select({ externalId: applications.externalId, organizationId: applications.organizationId })
+    .from(applications)
+    .where(and(...conditions))
+    .orderBy(asc(applications.updatedAt))
+    .limit(Math.max(1, Math.min(LIMIT, input.limit ?? 50)));
 }
 
 export async function listApplicationHistory(externalId?: string) {
@@ -2752,6 +2982,23 @@ export async function markInterviewCalendarEvent(input: {
     }).where(eq(interviewSlots.id, slot.id));
     return { updated: true, duplicate: false, error: null, eventId: incomingId || slot.calendarEventId || null };
   });
+}
+
+/**
+ * Record the Google Calendar outcome of an HR reschedule or cancellation.
+ * Unlike `markInterviewCalendarEvent` (the replay-safe booking contract), this
+ * may replace the stored event, because a moved interview can need a new one.
+ */
+export async function recordInterviewCalendarSync(input: { slotId: string; organizationId: string; status: "updated" | "created" | "removed" | "failed"; eventId?: string; eventLink?: string; error?: string }) {
+  const db = getDb();
+  const patch = input.status === "failed"
+    ? { calendarEventStatus: "failed", calendarEventError: input.error || "calendar_event_failed" }
+    : input.status === "removed"
+      ? { calendarEventStatus: "removed", calendarEventError: "" }
+      : { calendarEventStatus: input.status, calendarEventError: "", calendarEventId: input.eventId || "", calendarEventLink: input.eventLink || "" };
+  const [updated] = await db.update(interviewSlots).set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(interviewSlots.id, input.slotId), eq(interviewSlots.organizationId, input.organizationId))).returning({ id: interviewSlots.id });
+  return Boolean(updated);
 }
 
 export async function createBookingToken(input: { applicationExternalId: string; kind: BookingTokenKind; tokenHash?: string; link?: string; expiresAt?: string; notify?: boolean; forceNew?: boolean }) {

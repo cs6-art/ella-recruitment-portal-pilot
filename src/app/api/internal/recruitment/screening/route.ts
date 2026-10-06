@@ -2,6 +2,7 @@ import { internalJson, readInternalJson, withInternalAuth } from "@/lib/internal
 import { record, requiredString } from "@/lib/internal-recruitment-http";
 import { listScreening, upsertScreeningResult } from "@/lib/internal-recruitment-queries";
 import { normalizeMatchScore } from "@/lib/recruitment-screening";
+import { maybeAutoAdvance } from "@/lib/auto-advance";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,5 +22,7 @@ export const POST = withInternalAuth("screening", async (request) => {
   if (rawMatchScore !== undefined && matchScore === undefined) return internalJson({ ok: false, error: "matchScore_invalid" }, 422);
   const result = await upsertScreeningResult({ applicationExternalId: String(body.applicationExternalId), matchScore, recommendation: typeof body.recommendation === "string" ? body.recommendation : undefined, summary: typeof body.summary === "string" ? body.summary : undefined, strengths: typeof body.strengths === "string" ? body.strengths : undefined, gaps: typeof body.gaps === "string" ? body.gaps : undefined, interviewQuestions: typeof body.interviewQuestions === "string" ? body.interviewQuestions : undefined, evaluationScores: body.evaluationScores, screenedAt: typeof body.screenedAt === "string" ? body.screenedAt : undefined, raw: body.raw });
   if (result.error) return internalJson({ ok: false, error: result.error }, 404);
+  // Screening is committed; apply the role's Interview automation (never throws).
+  await maybeAutoAdvance(String(body.applicationExternalId));
   return internalJson({ ok: true, migrated: true, result: result.result }, 200);
 });

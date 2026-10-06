@@ -1,5 +1,6 @@
 import { parseVoiceInterviewSlots, type VoiceInterviewSlot } from "@/lib/voice-interview-availability";
 import { scheduledInstant } from "@/lib/interview-time";
+import { isRoleTargetDatePassed } from "@/lib/recruitment-role-eligibility";
 
 // Slot status is the appointment lifecycle. Applicant outcomes such as
 // "Passed" remain on the applicant record, while the slot records whether the
@@ -162,8 +163,7 @@ export function isBeforeTargetHiringDate(date: string, targetHiringDate?: string
 
 /** A role is overdue only after its target date has fully passed in its schedule timezone. */
 export function isTargetHiringDateOverdue(targetHiringDate?: string, timezone = "Asia/Singapore", now = new Date()) {
-  const target = text(targetHiringDate);
-  return DATE.test(target) && todayInTimezone(validTimezone(timezone), now) > target;
+  return isRoleTargetDatePassed(targetHiringDate, now, validTimezone(timezone));
 }
 
 export function ruleToSlots(rule: InterviewAvailabilityRule, maxDays = 180): VoiceInterviewSlot[] {

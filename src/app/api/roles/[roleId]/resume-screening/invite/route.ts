@@ -5,6 +5,7 @@ import { z } from "zod";
 import { canManagePipeline } from "@/lib/access-control";
 import { sendApplicationInviteEmail } from "@/lib/application-invite-email";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
+import { isRoleOpenForSelection, ROLE_TARGET_DATE_PASSED_MESSAGE } from "@/lib/recruitment-role-eligibility";
 import { getPortalConfig } from "@/lib/portal-config";
 import { requestOrigin } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
@@ -50,6 +51,7 @@ export async function POST(request: Request, context: { params: Promise<{ roleId
   if (!role || !isPublishedRoleForIntake(role)) {
     return responseError("The selected role is not published for applications.", 409);
   }
+  if (!isRoleOpenForSelection(role)) return responseError(ROLE_TARGET_DATE_PASSED_MESSAGE, 409);
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return responseError("Enter the candidate's full name and email address.", 422);

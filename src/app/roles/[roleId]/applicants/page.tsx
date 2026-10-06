@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import ApplicantsList from "@/components/ApplicantsList";
+import InterviewAutomationNotice from "@/components/InterviewAutomationNotice";
 import { canViewRole, isDepartmentReviewer } from "@/lib/access-control";
 import { getApplicantMetrics, getApplicantsPage } from "@/lib/candidate-applications";
 import { getRoleRequestById } from "@/lib/google-sheets";
@@ -26,7 +27,7 @@ export default async function RoleApplicantsPage({ params }: { params: Promise<{
   if (!role || !canViewRole(user, role)) redirect("/dashboard");
   return (
     <>
-      <div className="role-applicants-context"><Link className="portal-back-link" href={`/roles/${encodeURIComponent(roleId)}`}>← Back to role details</Link><span>{role?.jobTitle || roleId}</span></div>
+      <div className="role-applicants-context"><Link className="portal-back-link" href={`/roles/${encodeURIComponent(roleId)}`}>← Back to role details</Link><span>{role?.jobTitle || roleId}</span><InterviewAutomationNotice roleId={roleId} /></div>
       <ApplicantsList applicants={applicantPage.applicants} initialTotal={applicantPage.total} scopeRoleId={roleId} historyMetrics={metrics} publishedRoles={[{ roleId, label: role?.jobTitle || roleId }]} canManageApplicants={user.canReviewRole === true} title={`${role?.jobTitle || roleId} Applicants`} description="Review candidates connected to this role." />
     </>
   );

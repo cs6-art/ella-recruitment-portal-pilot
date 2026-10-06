@@ -7,7 +7,8 @@ import { EllaCreditsError, intakeResumeBatch, MAX_FILES_PER_SUBMISSION } from "@
 import { getAuthorizedDriveClient } from "@/lib/google-drive";
 import { MAX_RESUME_FILE_BYTES } from "@/lib/resume-files";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
+import { resolveRecruitmentRoleForNewWork } from "@/lib/recruitment-role-resolution";
+import { ROLE_TARGET_DATE_PASSED_MESSAGE } from "@/lib/recruitment-role-eligibility";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
 
@@ -55,8 +56,8 @@ export async function POST(request: Request) {
   console.info("[Drive Import] request", { roleId, fileIds, fileCount: fileIds.length });
   const expectedFiles = new Map((parsed.data.files || []).map((file) => [file.id, file]));
 
-  const role = await resolvePublishedRecruitmentRole(roleId, user.organizationId);
-  if (!role) return responseError("The selected role is not available for bulk screening.", 409);
+  const { role, error: roleError } = await resolveRecruitmentRoleForNewWork(roleId, user.organizationId);
+  if (!role) return responseError(roleError === "target_date_passed" ? ROLE_TARGET_DATE_PASSED_MESSAGE : "The selected role is not available for bulk screening.", 409);
 
   const drive = await getAuthorizedDriveClient(user.email);
   if (!drive) return responseError("Connect Google Drive first.", 409, { code: "DRIVE_NOT_CONNECTED" });

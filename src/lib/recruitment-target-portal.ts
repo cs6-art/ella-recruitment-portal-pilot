@@ -47,6 +47,10 @@ import {
   applicationVoiceReview,
   getApplicationBookingNotification,
   copyScreeningResult,
+  getFinalInterviewForHr,
+  rescheduleFinalInterviewSlot,
+  cancelFinalInterviewSlot,
+  recordInterviewCalendarSync,
 } from "@/lib/internal-recruitment-queries";
 import { getDb } from "@/db/client";
 import { organizations } from "@/db/schema";
@@ -61,7 +65,7 @@ import { applicantStageLabel, type ApplicantInterviewMode } from "@/lib/applican
 import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
 import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { generateRoleId } from "@/lib/role-id";
-import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows, resolveFinalInterviewCalendarEmail } from "@/lib/google-calendar";
+import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows, resolveFinalInterviewCalendarEmail, updateFinalInterviewEvent } from "@/lib/google-calendar";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isFinalInterviewSlotDuration, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { getPortalConfigNumber } from "@/lib/portal-config";
 import { applicationLinkWithOrganization } from "@/lib/public-url";
@@ -768,6 +772,154 @@ export async function processTargetCalendarEventQueue(limit = 10) {
   return { processed: results.length, results };
 }
 
+export type InterviewChangeResult =
+  | { ok: true; message: string; calendarSync: "updated" | "created" | "removed" | "failed" | "none" }
+  | { ok: false; status: number; error: string };
+
+function addHour(time: string) {
+  const [hours, mins] = time.split(":").map(Number);
+  const total = hours * 60 + mins + 60;
+  return total >= 24 * 60 ? "" : `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/**
+ * HR moves a booked face-to-face interview (60 minutes, as every face-to-face
+ * slot is). Under the strict calendar rule the new time must be checked
+ * against the connected HR Google Calendar. The portal record changes first;
+ * a Google failure afterwards is recorded and reported, never rolled back.
+ */
+export async function targetRescheduleFinalInterview(input: { slotId: string; organizationId: string; date: string; startTime: string; timezone?: string; actor: { name: string; email: string } }): Promise<InterviewChangeResult> {
+  const context = await getFinalInterviewForHr(input.slotId, input.organizationId);
+  if (!context) return { ok: false, status: 404, error: "Interview not found." };
+  if (context.slot.status !== "booked") return { ok: false, status: 409, error: "Only a scheduled interview can be rescheduled." };
+  const timezone = text(input.timezone) || text(context.slot.timezone) || "Asia/Singapore";
+  const endTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(input.startTime) ? addHour(input.startTime) : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !endTime) return { ok: false, status: 422, error: "Choose a valid date and start time. Face-to-face interviews last one hour and must end by midnight." };
+  let startsAt: Date;
+  let endsAt: Date;
+  try {
+    startsAt = scheduledInstant(input.date, input.startTime, timezone);
+    endsAt = scheduledInstant(input.date, endTime, timezone);
+  } catch {
+    return { ok: false, status: 422, error: "Choose a valid date and start time." };
+  }
+  if (startsAt.getTime() <= Date.now()) return { ok: false, status: 422, error: "Choose a time in the future." };
+  if (startsAt.getTime() === new Date(context.slot.startsAt).getTime()) return { ok: false, status: 422, error: "Choose a different time from the current one." };
+
+  const calendarEmail = text(context.roleHrCalendarEmail);
+  const busy = await getCalendarBusyWindows({ hodEmail: calendarEmail, start: startsAt, end: endsAt });
+  if (!busy.checked) {
+    return { ok: false, status: 409, error: busy.reason === "not_connected"
+      ? "Connect or reconnect Google Calendar in Settings before rescheduling. Face-to-face interview times are checked against the HR calendar."
+      : "Google Calendar can't be reached right now, so the new time can't be checked. Please try again in a few minutes." };
+  }
+  // The interview's own event still occupies its current time; ignore that window.
+  const ownStart = new Date(context.slot.startsAt).getTime();
+  const ownEnd = new Date(context.slot.endsAt).getTime();
+  const conflict = busy.busy.some((window) => {
+    const start = Date.parse(window.start);
+    const end = Date.parse(window.end);
+    if (start === ownStart && end === ownEnd) return false;
+    return start < endsAt.getTime() && end > startsAt.getTime();
+  });
+  if (conflict) return { ok: false, status: 409, error: "The HR calendar is busy at that time. Choose another time." };
+
+  const previous = slotDateTime(context.slot.startsAt, timezone);
+  const moved = await rescheduleFinalInterviewSlot({
+    slotId: context.slot.id,
+    organizationId: input.organizationId,
+    startsAt,
+    endsAt,
+    timezone,
+    actorEmail: input.actor.email,
+    actorName: input.actor.name,
+    comments: `Face-to-face interview moved from ${previous.date} ${previous.time} to ${input.date} ${input.startTime} (${timezone}) by HR.`,
+  });
+  if (!moved.updated) {
+    return { ok: false, status: 409, error: moved.error === "interview_conflict" ? "Another face-to-face interview with this interviewer is already at that time." : "This interview can no longer be rescheduled. Refresh and try again." };
+  }
+
+  let calendarSync: "updated" | "created" | "failed" = "failed";
+  try {
+    const existingEventId = text(context.slot.calendarEventId);
+    const update = existingEventId
+      ? await updateFinalInterviewEvent({ hodEmail: calendarEmail, eventId: existingEventId, date: input.date, startTime: `${input.startTime}:00`, endTime: `${endTime}:00`, timezone })
+      : null;
+    if (update?.updated) {
+      await recordInterviewCalendarSync({ slotId: context.slot.id, organizationId: input.organizationId, status: "updated", eventId: update.eventId, eventLink: update.htmlLink || text(context.slot.calendarEventLink) });
+      calendarSync = "updated";
+    } else if (!existingEventId || update?.reason === "not_found") {
+      const setup = context.roleSetup && typeof context.roleSetup === "object" ? context.roleSetup as Record<string, unknown> : {};
+      const created = await createFinalInterviewEvent({
+        hodEmail: calendarEmail,
+        summary: `HR Interview: ${text(context.candidateName) || "Candidate"} — ${text(context.roleTitle) || text(context.roleExternalId)}`,
+        description: `HR interview for ${text(context.candidateName) || "Candidate"} (${context.applicationExternalId}).${text(context.candidateEmail) ? `\n\nCandidate email: ${text(context.candidateEmail)}` : ""}`,
+        date: input.date,
+        startTime: `${input.startTime}:00`,
+        endTime: `${endTime}:00`,
+        timezone,
+        attendeeEmails: text(context.candidateEmail) ? [text(context.candidateEmail)] : [],
+        location: text(setup.finalInterviewVenue),
+      });
+      if (created.created) {
+        await recordInterviewCalendarSync({ slotId: context.slot.id, organizationId: input.organizationId, status: "created", eventId: created.eventId, eventLink: created.htmlLink });
+        calendarSync = "created";
+      } else {
+        await recordInterviewCalendarSync({ slotId: context.slot.id, organizationId: input.organizationId, status: "failed", error: "error" in created && created.error ? created.error : created.reason });
+      }
+    } else {
+      await recordInterviewCalendarSync({ slotId: context.slot.id, organizationId: input.organizationId, status: "failed", error: update?.error || update?.reason || "calendar_update_failed" });
+    }
+  } catch (error) {
+    console.error("[Interview Calendar] Google sync after reschedule failed:", error);
+    await recordInterviewCalendarSync({ slotId: context.slot.id, organizationId: input.organizationId, status: "failed", error: error instanceof Error ? error.message : String(error) }).catch(() => undefined);
+  }
+  return {
+    ok: true,
+    calendarSync,
+    message: calendarSync === "failed"
+      ? "Interview rescheduled in the portal. Google Calendar could not be updated, so update the event there or reconnect Google Calendar in Settings."
+      : "Interview rescheduled. Google Calendar was updated and the candidate was notified.",
+  };
+}
+
+/**
+ * HR cancels a booked face-to-face interview. The applicant returns to
+ * "Approved for Face-to-Face Interview"; with `offerNewTime` they are emailed
+ * a fresh link to choose another time.
+ */
+export async function targetCancelFinalInterview(input: { slotId: string; organizationId: string; offerNewTime: boolean; reason: string; actor: { name: string; email: string } }): Promise<InterviewChangeResult> {
+  const context = await getFinalInterviewForHr(input.slotId, input.organizationId);
+  if (!context) return { ok: false, status: 404, error: "Interview not found." };
+  if (context.slot.status !== "booked") return { ok: false, status: 409, error: "Only a scheduled interview can be cancelled." };
+  const cancelled = await cancelFinalInterviewSlot({
+    slotId: context.slot.id,
+    organizationId: input.organizationId,
+    actorEmail: input.actor.email,
+    actorName: input.actor.name,
+    comments: input.reason.trim() || "Face-to-face interview cancelled by HR.",
+  });
+  if (!cancelled.updated) return { ok: false, status: 409, error: "This interview can no longer be cancelled. Refresh and try again." };
+
+  let calendarSync: "removed" | "failed" | "none" = "none";
+  const eventId = text(context.slot.calendarEventId);
+  if (eventId) {
+    const removed = await deleteFinalInterviewEvent(text(context.roleHrCalendarEmail), eventId).catch((error) => ({ deleted: false as const, reason: "error" as const, error: error instanceof Error ? error.message : String(error) }));
+    calendarSync = removed.deleted ? "removed" : "failed";
+    await recordInterviewCalendarSync({ slotId: context.slot.id, organizationId: input.organizationId, status: calendarSync, error: removed.deleted ? undefined : ("error" in removed && removed.error ? removed.error : removed.reason) }).catch(() => undefined);
+  }
+  let invited = false;
+  if (input.offerNewTime) {
+    const invitation = await createBookingToken({ applicationExternalId: context.applicationExternalId, kind: "final", expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), forceNew: true }).catch(() => null);
+    invited = Boolean(invitation?.token);
+  }
+  const parts = ["Interview cancelled."];
+  if (calendarSync === "removed") parts.push("It was removed from Google Calendar and the candidate was notified.");
+  if (calendarSync === "failed") parts.push("Google Calendar could not be updated, so remove the event there or reconnect Google Calendar in Settings.");
+  if (input.offerNewTime) parts.push(invited ? "The candidate will be emailed a link to choose a new time." : "The new booking link could not be created; send it again from the applicant page.");
+  return { ok: true, calendarSync, message: parts.join(" ") };
+}
+
 export async function targetCreateInterviewSlot(input: { slotCode?: string; roleId: string; interviewType: "AI Voice Interview" | "Final Interview"; date: string; startTime: string; endTime: string; timezone: string; organizationId?: string }) {
   let startsAt: string;
   let endsAt: string;
@@ -800,30 +952,69 @@ export async function targetUpdateApplicantProfile(input: { applicationId: strin
   return updateApplicationProfile({ externalId: input.applicationId, candidateName: input.candidateName, email: input.email, phone: input.preferredMobile, preferredMobile: input.preferredMobile, applicantCountry: input.applicantCountry });
 }
 
-export async function targetRecordApplicantDecision(input: { applicationId: string; stage: "resume" | "voice" | "final"; decision: string; comments: string; reviewer: { name: string; email: string } }) {
-  const result = await applyHrDecision({ applicationExternalId: input.applicationId, stage: input.stage, decision: input.decision === "Approve" ? "approve" : input.decision === "Reject" ? "reject" : input.decision === "Manual Review" ? "manual_review" : "pending", comments: input.comments, actorEmail: input.reviewer.email, actorName: input.reviewer.name, actionRequestId: `portal-decision:${input.applicationId}:${input.stage}:${input.decision}:${input.reviewer.email}` });
-  if (!result.updated && !("duplicate" in result && result.duplicate)) throw new Error(result.error || "Unable to record the applicant decision.");
+/** How an approval to interview was made; selects the applicant history label. */
+export type InterviewApprovalMode = "auto" | "manual" | "manual_override" | "bulk";
+
+export const INTERVIEW_APPROVAL_SOURCES: Record<InterviewApprovalMode, string> = {
+  auto: "auto:screening_condition",
+  manual: "internal_api:hr_decision",
+  manual_override: "portal:manual_override",
+  bulk: "portal:bulk_approval",
+};
+
+/**
+ * Issue the voice and Live Avatar interview invitations for an application
+ * already at `resume_approved`. Both writes reuse an existing pending token,
+ * so retries (and the n8n poller) never create a second invitation.
+ */
+export async function issueInterviewInvitations(applicationExternalId: string) {
+  const expiryDays = await getPortalConfigNumber("Booking_Link_Expiry_Days", 7);
+  const expiresAt = new Date(Date.now() + Math.max(1, Math.min(30, expiryDays)) * 24 * 60 * 60 * 1000).toISOString();
+  const invitation = await createBookingToken({ applicationExternalId, kind: "voice", expiresAt });
+  if (!invitation.token) throw new Error(invitation.error || "Unable to create the voice interview booking invitation.");
+  const avatarInvitation = await createBookingToken({ applicationExternalId, kind: "avatar", expiresAt, notify: false });
+  if (!avatarInvitation.token) throw new Error(avatarInvitation.error || "Unable to create the avatar interview invitation.");
+  return { voiceBookingNotificationHistoryId: invitation.notificationHistoryId };
+}
+
+/**
+ * The one path every resume-stage approval takes (single HR decision, bulk
+ * approval and automatic progression): an organization-scoped, idempotent
+ * stage move followed by the interview invitations.
+ */
+export async function approveForInterview(input: { applicationExternalId: string; organizationId: string; mode: InterviewApprovalMode; actor: { name: string; email: string }; comments: string; actionRequestId: string }) {
+  const result = await applyHrDecision({
+    applicationExternalId: input.applicationExternalId,
+    organizationId: input.organizationId,
+    stage: "resume",
+    decision: "approve",
+    comments: input.comments,
+    actorEmail: input.actor.email,
+    actorName: input.actor.name,
+    actionRequestId: input.actionRequestId,
+    source: INTERVIEW_APPROVAL_SOURCES[input.mode],
+  });
+  const duplicate = "duplicate" in result && result.duplicate === true;
+  if (!result.updated && !duplicate) return { ...result, invitationsIssued: false };
   // Issue the voice booking invitation as part of the approval request. The
   // n8n poller remains a recovery path, while this idempotent write removes
   // the race where approval and the five-minute poll run at the same time.
+  // A replayed request (duplicate) re-issues too: that is how a retry
+  // recovers when the stage moved but invitation creation failed.
+  const invitations = await issueInterviewInvitations(input.applicationExternalId);
+  return { ...result, invitationsIssued: true, ...invitations };
+}
+
+export async function targetRecordApplicantDecision(input: { applicationId: string; organizationId?: string; stage: "resume" | "voice" | "final"; decision: string; comments: string; reviewer: { name: string; email: string }; approvalMode?: InterviewApprovalMode }) {
+  const organizationId = input.organizationId || await targetOrganizationId();
+  const actionRequestId = `portal-decision:${input.applicationId}:${input.stage}:${input.decision}:${input.reviewer.email}`;
   if (input.stage === "resume" && input.decision === "Approve") {
-    const expiryDays = await getPortalConfigNumber("Booking_Link_Expiry_Days", 7);
-    const expiresAt = new Date(Date.now() + Math.max(1, Math.min(30, expiryDays)) * 24 * 60 * 60 * 1000).toISOString();
-    const invitation = await createBookingToken({
-      applicationExternalId: input.applicationId,
-      kind: "voice",
-      expiresAt,
-    });
-    if (!invitation.token) throw new Error(invitation.error || "Unable to create the voice interview booking invitation.");
-    const avatarInvitation = await createBookingToken({
-      applicationExternalId: input.applicationId,
-      kind: "avatar",
-      expiresAt,
-      notify: false,
-    });
-    if (!avatarInvitation.token) throw new Error(avatarInvitation.error || "Unable to create the avatar interview invitation.");
-    return { ...result, voiceBookingInvitationQueued: true, voiceBookingNotificationHistoryId: invitation.notificationHistoryId, avatarInterviewInvitationQueued: true };
+    const approval = await approveForInterview({ applicationExternalId: input.applicationId, organizationId, mode: input.approvalMode || "manual", actor: input.reviewer, comments: input.comments, actionRequestId });
+    if (!approval.updated && !("duplicate" in approval && approval.duplicate)) throw new Error(approval.error || "Unable to record the applicant decision.");
+    return { ...approval, voiceBookingInvitationQueued: true, avatarInterviewInvitationQueued: true };
   }
+  const result = await applyHrDecision({ applicationExternalId: input.applicationId, organizationId, stage: input.stage, decision: input.decision === "Approve" ? "approve" : input.decision === "Reject" ? "reject" : input.decision === "Manual Review" ? "manual_review" : "pending", comments: input.comments, actorEmail: input.reviewer.email, actorName: input.reviewer.name, actionRequestId });
+  if (!result.updated && !("duplicate" in result && result.duplicate)) throw new Error(result.error || "Unable to record the applicant decision.");
   // Approving the voice interview must invite the candidate to book the
   // face-to-face (HR) interview, the same way resume approval invites the
   // voice interview. Without this the candidate is moved to

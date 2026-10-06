@@ -606,3 +606,27 @@ export const liveInterviewIntegrityEvents = pgTable(
   },
   (t) => [index("live_interview_integrity_events_session_idx").on(t.sessionId, t.occurredAt)],
 );
+
+/** Mirrors drizzle/0039_applicant_seen_state.sql — which applicants each user has opened. */
+export const applicantSeen = pgTable(
+  "applicant_seen",
+  {
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    userEmail: text("user_email").notNull(),
+    applicationId: uuid("application_id").notNull().references(() => applications.id, { onDelete: "cascade" }),
+    seenAt: ts("seen_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ name: "applicant_seen_pkey", columns: [t.organizationId, t.userEmail, t.applicationId] }), index("applicant_seen_application_idx").on(t.applicationId)],
+);
+
+/** Mirrors drizzle/0039_applicant_seen_state.sql — when a user last marked all new applicants as read. */
+export const userNotificationState = pgTable(
+  "user_notification_state",
+  {
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    userEmail: text("user_email").notNull(),
+    applicantsClearedAt: ts("applicants_cleared_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+  },
+  (t) => [primaryKey({ name: "user_notification_state_pkey", columns: [t.organizationId, t.userEmail] })],
+);

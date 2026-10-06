@@ -1,5 +1,5 @@
 import type { RoleRequestDetails } from "@/lib/google-sheets";
-import { isPublishedRoleForIntake } from "@/lib/recruitment-role-eligibility";
+import { isPublishedRoleForIntake, isRoleOpenForSelection } from "@/lib/recruitment-role-eligibility";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetPublicRoleDetails } from "@/lib/recruitment-target-portal";
 
@@ -30,4 +30,17 @@ export async function resolvePublishedRecruitmentRole(roleId: string, organizati
     })();
 
   return role && isPublishedRoleForIntake(role) ? role : null;
+}
+
+/**
+ * Like `resolvePublishedRecruitmentRole`, for routes that start new work on a
+ * role (applications, resume uploads and imports). A role past its target
+ * hiring date is reported separately so the caller can explain why, while
+ * interviews already in progress keep using the plain resolver.
+ */
+export async function resolveRecruitmentRoleForNewWork(roleId: string, organizationId = ""): Promise<{ role: RoleRequestDetails; error?: undefined } | { role: null; error: "not_published" | "target_date_passed" }> {
+  const role = await resolvePublishedRecruitmentRole(roleId, organizationId);
+  if (!role) return { role: null, error: "not_published" };
+  if (!isRoleOpenForSelection(role)) return { role: null, error: "target_date_passed" };
+  return { role };
 }

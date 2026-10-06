@@ -8,11 +8,13 @@ import ActionFeedback from "@/components/ActionFeedback";
 import UiIcon from "@/components/UiIcon";
 import PageHeader from "@/components/ui/PageHeader";
 import { useConfirmation } from "@/components/ConfirmationModal";
+import { clientErrorMessage } from "@/lib/client-error";
 import type { ApplicantMetrics, ApplicantSummary } from "@/lib/candidate-applications";
 import Pagination from "@/components/Pagination";
 import { formatMatchScore } from "@/lib/score-format";
 import { formatPortalDateTime } from "@/lib/portal-time";
 import { isNewApplicant, writeApplicantsLastSeen } from "@/lib/new-applicants";
+import { useNewApplicantFeed } from "@/components/NewApplicantsBell";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { numericMatchScore } from "@/lib/score-format";
 
@@ -153,6 +155,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
   const [sortFilter, setSortFilter] = useState("Newest first");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  // Set only by dashboard "Actionable Alerts" links (?attention=…).
+  const [attentionFilter, setAttentionFilter] = useState<"" | "stalled" | "email_undelivered">("");
   const [refreshing, setRefreshing] = useState(false);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [refreshSequence, setRefreshSequence] = useState(0);
@@ -162,6 +166,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [approving, setApproving] = useState(false);
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   // Opening Applicants records the current visit as the viewed watermark.
   // Applicants arriving after that timestamp remain highlighted during this visit.
@@ -189,6 +194,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
     setSortFilter(params.get("sort") === "oldest" ? "Oldest first" : params.get("sort") === "match" ? "Highest match" : "Newest first");
     setDateFrom(params.get("from") || "");
     setDateTo(params.get("to") || "");
+    const attention = params.get("attention");
+    setAttentionFilter(attention === "stalled" || attention === "email_undelivered" ? attention : "");
   }, []);
   const firstFetch = useRef(true);
   useEffect(() => {
@@ -211,6 +218,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
       if (sortFilter !== "Newest first") params.set("sort", sortFilter === "Oldest first" ? "oldest" : "match");
       if (dateFrom) params.set("from", dateFrom);
       if (dateTo) params.set("to", dateTo);
+      if (attentionFilter) params.set("attention", attentionFilter);
       try {
         const response = await fetch(`/api/applicants?${params}`, { cache: "no-store", signal: controller.signal });
         const result = await response.json() as { success?: boolean; applicants?: ApplicantSummary[]; total?: number; metrics?: ApplicantMetrics; lastUpdatedAt?: string; error?: string };
@@ -232,7 +240,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
       }
     }, search.trim() ? 300 : 0);
     return () => { window.clearTimeout(timeout); controller.abort(); };
-  }, [dateFrom, dateTo, initialApplicants, initialTotal, interviewStatusFilter, interviewTypeFilter, page, pageSize, refreshSequence, resumeFilter, roleFilter, scopeRoleId, search, sortFilter, stageFilter]);
+  }, [attentionFilter, dateFrom, dateTo, initialApplicants, initialTotal, interviewStatusFilter, interviewTypeFilter, page, pageSize, refreshSequence, resumeFilter, roleFilter, scopeRoleId, search, sortFilter, stageFilter]);
   useEffect(() => {
     if (!lastUpdatedAt) return;
     setLastUpdated(lastUpdatedAt);
@@ -244,12 +252,16 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
     setSeenWatermark(seenAt);
   }, [userEmail]);
 
+  // With server read state (Postgres) a row stays NEW until this user opens
+  // that applicant; opening the list itself no longer clears anything.
+  const applicantFeed = useNewApplicantFeed(userEmail);
   const newApplicantIds = useMemo(() => {
+    if (applicantFeed.serverReadState) return new Set(applicantFeed.newApplicants.map((applicant) => applicant.applicationId));
     if (seenWatermark === null) return new Set<string>();
     return new Set(
       applicants.filter((applicant) => isNewApplicant(applicant, seenWatermark)).map((applicant) => applicant.applicationId),
     );
-  }, [applicants, seenWatermark]);
+  }, [applicantFeed.newApplicants, applicantFeed.serverReadState, applicants, seenWatermark]);
 
   const hasPublishedRoleScope = publishedRoles !== undefined;
   const roleOptions = useMemo<RoleOption[]>(() => {
@@ -325,6 +337,9 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
   const selectableVisibleApplicants = visibleApplicants.filter((applicant) => !applicant.isHistoricalDemo);
   const selectedApplicants = activeApplicants.filter((applicant) => !applicant.isHistoricalDemo && selectedIds.has(applicant.applicationId));
   const allVisibleSelected = canManageApplicants && selectableVisibleApplicants.length > 0 && selectableVisibleApplicants.every((applicant) => selectedIds.has(applicant.applicationId));
+  // Only applicants still in Resume Review can be approved for interview; the
+  // server re-checks every one and reports the rest as skipped.
+  const approvableSelected = selectedApplicants.filter((applicant) => applicant.currentStage.trim().toLowerCase() === "resume_review");
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -356,11 +371,12 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
   const summaryHr = metricsData?.hrActivity ?? finalInterviewCount;
   // Keep the pipeline headline aligned with the history-backed summary. Demo
   // history is read-only and appears only after an explicit stage filter.
-  const hasApplicantFilters = Boolean(search.trim()) || roleFilter !== "All Roles" || stageFilter !== "All Stages" || resumeFilter !== "All resume statuses" || interviewTypeFilter !== "All interview types" || interviewStatusFilter !== "All interview statuses" || Boolean(dateFrom || dateTo);
+  const hasApplicantFilters = Boolean(attentionFilter) || Boolean(search.trim()) || roleFilter !== "All Roles" || stageFilter !== "All Stages" || resumeFilter !== "All resume statuses" || interviewTypeFilter !== "All interview types" || interviewStatusFilter !== "All interview statuses" || Boolean(dateFrom || dateTo);
   const matchingApplicantCount = remoteTotal;
 
-  function writeListUrl(overrides: Partial<{ page: number; pageSize: number; search: string; role: string; stage: string; resume: string; interview: string; interviewStatus: string; sort: string; from: string; to: string }> = {}) {
+  function writeListUrl(overrides: Partial<{ page: number; pageSize: number; search: string; role: string; stage: string; resume: string; interview: string; interviewStatus: string; sort: string; from: string; to: string; attention: string }> = {}) {
     const values = {
+      attention: overrides.attention ?? attentionFilter,
       page: overrides.page ?? page,
       pageSize: overrides.pageSize ?? pageSize,
       search: overrides.search ?? search,
@@ -459,6 +475,43 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
     setDeletingId("");
   }
 
+  async function approveSelectedForInterview() {
+    const ids = [...new Set(selectedApplicants.map((applicant) => applicant.applicationId.trim()).filter(Boolean))];
+    if (ids.length === 0 || approving) return;
+    const skipped = ids.length - approvableSelected.length;
+    const approveLabel = approvableSelected.length === 1 ? "1 applicant" : `${approvableSelected.length} applicants`;
+    if (!(await confirm({
+      title: "Approve for interview?",
+      message: `${approveLabel} will be approved for interview and sent the interview invitation email.${skipped > 0 ? ` ${skipped} selected ${skipped === 1 ? "applicant is" : "applicants are"} not in Resume Review and will be skipped.` : ""} This also applies to applicants below the role's automatic interview score; they are recorded as a manual override.`,
+      confirmLabel: "Approve for Interview",
+    }))) return;
+    setApproving(true);
+    setActionError("");
+    setActionMessage("");
+    try {
+      const response = await fetch("/api/applicants/bulk-approve", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationIds: ids }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to approve the selected applicants.");
+      const failed = Number(data.counts?.failed || 0);
+      if (failed > 0 && Number(data.counts?.approved || 0) === 0) setActionError(String(data.message || "The selected applicants could not be approved."));
+      else setActionMessage(String(data.message || "Applicants approved for interview."));
+      // Keep failed rows selected so HR can retry them; clear everything else.
+      const failedIds = new Set<string>(Array.isArray(data.results) ? data.results.filter((result: { outcome?: string }) => result.outcome === "failed").map((result: { applicationId: string }) => result.applicationId) : []);
+      setSelectedIds(failedIds);
+      setRefreshSequence((sequence) => sequence + 1);
+      router.refresh();
+    } catch (error) {
+      setActionError(clientErrorMessage(error, "Unable to approve the selected applicants."));
+    } finally {
+      setApproving(false);
+    }
+  }
+
   // A new selection means the previous delete outcome no longer applies, so
   // clear the banner instead of leaving a stale error on screen.
   function clearActionFeedback() {
@@ -477,8 +530,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
   }
 
   function clearApplicantFilters() {
-    setSearch(""); setRoleFilter("All Roles"); setStageFilter("All Stages"); setResumeFilter("All resume statuses"); setInterviewTypeFilter("All interview types"); setInterviewStatusFilter("All interview statuses"); setDateFrom(""); setDateTo(""); setPage(1);
-    writeListUrl({ search: "", role: "All Roles", stage: "All Stages", resume: "All resume statuses", interview: "All interview types", interviewStatus: "All interview statuses", from: "", to: "", page: 1 });
+    setAttentionFilter(""); setSearch(""); setRoleFilter("All Roles"); setStageFilter("All Stages"); setResumeFilter("All resume statuses"); setInterviewTypeFilter("All interview types"); setInterviewStatusFilter("All interview statuses"); setDateFrom(""); setDateTo(""); setPage(1);
+    writeListUrl({ attention: "", search: "", role: "All Roles", stage: "All Stages", resume: "All resume statuses", interview: "All interview types", interviewStatus: "All interview statuses", from: "", to: "", page: 1 });
   }
 
   function toggleAllVisibleApplicants() {
@@ -522,7 +575,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
             <span className="list-result-count" aria-live="polite">{matchingApplicantCount} matching applicant{matchingApplicantCount === 1 ? "" : "s"}</span>
             {recordsLoading && <span className="list-refreshing" role="status">Updating…</span>}
           </div>
-          {canManageApplicants && <div className="bulk-selection-toolbar"><span>{selectedApplicants.length} selected</span><button type="button" className="btn btn-small btn-danger-outline" disabled={selectedApplicants.length === 0 || deletingId !== ""} onClick={() => void deleteApplicants(selectedApplicants)}>Delete selected</button></div>}
+          {canManageApplicants && <div className={`bulk-selection-toolbar${selectedApplicants.length > 0 ? " has-selection" : ""}`} role="toolbar" aria-label="Selected applicant actions"><span aria-live="polite">{selectedApplicants.length} {selectedApplicants.length === 1 ? "applicant" : "applicants"} selected</span><button type="button" className="btn btn-small btn-primary" disabled={approvableSelected.length === 0 || approving || deletingId !== ""} title={selectedApplicants.length > 0 && approvableSelected.length === 0 ? "Only applicants in Resume Review can be approved for interview." : undefined} onClick={() => void approveSelectedForInterview()}>{approving ? "Approving…" : "Approve for Interview"}</button><button type="button" className="btn btn-small btn-danger-outline" disabled={selectedApplicants.length === 0 || deletingId !== "" || approving} onClick={() => void deleteApplicants(selectedApplicants)}>Delete selected</button>{selectedApplicants.length > 0 && <button type="button" className="btn btn-small btn-secondary" disabled={approving || deletingId !== ""} onClick={() => { clearActionFeedback(); setSelectedIds(new Set()); }}>Clear</button>}</div>}
           {hasApplicantFilters && <button type="button" className="btn btn-secondary list-clear-button" onClick={clearApplicantFilters}><UiIcon name="filter" size={16} />Clear all filters</button>}
         </div>
 
@@ -540,6 +593,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
 
         {hasApplicantFilters && <div className="list-active-filters" role="group" aria-label="Active filters">
           <span>Filters:</span>
+          {attentionFilter && <span className="list-filter-chip">{attentionFilter === "stalled" ? "Alert: not moved in 5+ days" : "Alert: email not delivered"} <button type="button" className="list-filter-chip-clear" aria-label="Clear alert filter" onClick={() => { setAttentionFilter(""); setPage(1); writeListUrl({ attention: "", page: 1 }); }}>×</button></span>}
           {search.trim() && <span className="list-filter-chip">Search: {search.trim()}</span>}
           {roleFilter !== "All Roles" && <span className="list-filter-chip">Role: {roleOptions.find((role) => role.value === roleFilter)?.label || roleFilter}</span>}
           {stageFilter !== "All Stages" && <span className="list-filter-chip">Stage: {stageFilter}</span>}
@@ -551,7 +605,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
 
         {recordsLoading && <p className="applicants-loading-note" role="status" aria-live="polite">Refreshing applicant records…</p>}
         {visibleApplicants.length === 0 ? (
-          <div className="empty">No applicants match the current filters.</div>
+          <div className="empty">{attentionFilter && !recordsLoading ? "This alert refers to records that are no longer available. They may have moved on or been resolved." : "No applicants match the current filters."}</div>
         ) : (
           <div className="table-wrap">
             <table className="applicants-table">

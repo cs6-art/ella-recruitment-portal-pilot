@@ -13,7 +13,8 @@ import { assertCreditsAvailable, EllaCreditsError, recordDeduction } from "@/lib
 import { getPortalConfigValue } from "@/lib/portal-config";
 import { publicCorsOptionsResponse, withPublicCors } from "@/lib/public-cors";
 import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
-import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
+import { resolveRecruitmentRoleForNewWork } from "@/lib/recruitment-role-resolution";
+import { maybeAutoAdvance } from "@/lib/auto-advance";
 import { consumeDurableRateLimit } from "@/lib/durable-rate-limit";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { deleteResumeFile, MAX_RESUME_REQUEST_BYTES, storeResumeFile } from "@/lib/resume-files";
@@ -97,11 +98,12 @@ export async function POST(request: Request) {
     // resolver; an HR invitation's tenant always takes precedence over a
     // client-supplied value.
     const requestedOrganizationId = typeof intake.body.organizationId === "string" ? intake.body.organizationId.trim() : "";
-    const role = roleId
-      ? await resolvePublishedRecruitmentRole(roleId, invitation?.organizationId || requestedOrganizationId)
-      : null;
+    const resolved = roleId
+      ? await resolveRecruitmentRoleForNewWork(roleId, invitation?.organizationId || requestedOrganizationId)
+      : { role: null, error: "not_published" as const };
+    const role = resolved.role;
     if (!role) {
-      return responseError(request, "This role is not accepting applications.", 404);
+      return responseError(request, resolved.error === "target_date_passed" ? "This role is no longer accepting applications." : "This role is not accepting applications.", resolved.error === "target_date_passed" ? 410 : 404);
     }
 
     if (isPostgresRecruitmentTarget()) {
@@ -116,6 +118,8 @@ export async function POST(request: Request) {
       const created = await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: invitation ? "hr_invitation" : "direct", sourceDetail: invitation?.invitationId || "public", consentAt: new Date().toISOString(), creditOwnerEmail: role.requesterEmail, organizationId: role.organizationId, resume: storedResume ? { ...storedResume.record, extractedText: storedResume.extractedText } : undefined });
       if (inviteToken) await markResumeScreeningInvitationUsed(inviteToken, applicationId);
       const reused = created.screeningReused === true;
+      // A reused CV analysis is a completed screening: apply the role's Interview automation now.
+      if (reused) await maybeAutoAdvance(applicationId);
       return withPublicCors(request, NextResponse.json({ success: true, applicationId, roleId, status: reused ? "CV Analysis Complete" : "Pending CV Analysis", message: reused ? "Application submitted successfully. An existing CV analysis was reused." : "Application submitted successfully and queued for CV analysis.", screeningQueued: created.screeningQueued === true, screeningReused: reused }, { status: 201 }));
     }
 

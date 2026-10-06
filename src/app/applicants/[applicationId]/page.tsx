@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import ApplicantDetailActions from "@/components/ApplicantDetailActions";
 import ApplicantDecisionPanel from "@/components/ApplicantDecisionPanel";
 import ApplicantLiveRefresh from "@/components/ApplicantLiveRefresh";
+import MarkApplicantSeen from "@/components/MarkApplicantSeen";
 import CandidateHistoryTimeline from "@/components/CandidateHistoryTimeline";
 import LiveInterviewReview from "@/components/LiveInterviewReview";
 import UiIcon, { type UiIconName } from "@/components/UiIcon";
@@ -426,6 +427,7 @@ export default async function ApplicantDetailsPage({ params, searchParams }: { p
   // together so HR sees changes before, during, and after an interview.
   const currentStageKey = applicant.currentStage.trim().toLowerCase();
   return <main className="container page applicant-details-page">
+    <MarkApplicantSeen applicationId={applicant.applicationId} />
     <ApplicantLiveRefresh enabled={!TERMINAL_APPLICANT_STAGES.has(currentStageKey)} intervalMs={INTERVIEW_REFRESH_STAGES.has(currentStageKey) ? 30_000 : undefined} />
     <header className="applicant-detail-header"><Link href={returnTo} className="portal-back-link applicant-back-link"><UiIcon name="arrow-left" size={15} />Back to Applicants</Link><div className="applicant-detail-title-row"><div><h1>{applicant.candidateName || "Unnamed Candidate"}</h1><p>Application reference: {applicant.applicationId} · {applicant.email || "Email not provided"}</p></div><span className={applicantStageClass(applicant.currentStage)}>{applicantStageLabel(applicant.currentStage, interviewMode) || "Status not available"}</span></div><div className="applicant-detail-actions"><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}`}><UiIcon name="briefcase" size={15} />View Role</Link><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}/applicants`}><UiIcon name="applicants" size={15} />Role Applicants</Link><ApplicantDetailActions applicationId={applicant.applicationId} candidateName={applicant.candidateName} canManage={canEditApplicant(user)} /></div></header>
     <div className="applicant-detail-summary"><DetailField label="Selected Role" value={applicant.selectedRole} /><DetailField label="Department" value={applicant.department} /><DetailField label="Applied" value={dateValue(applicant.appliedAt)} /><DetailField label="Interview Type" value={interviewMode === "pending" ? "Not selected" : interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"} /><DetailField label="Match Score" value={formatMatchScore(applicant.matchScore)} />{applicant.recommendation.trim() !== applicant.nextAction.trim() && <DetailField label="Recommendation" value={applicant.recommendation} />}<DetailField label="Next Action" value={applicant.nextAction} /></div>

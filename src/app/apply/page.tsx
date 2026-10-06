@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
+import { isRoleOpenForSelection } from "@/lib/recruitment-role-eligibility";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetPublicRoleSummaries } from "@/lib/recruitment-target-portal";
 
@@ -8,8 +9,10 @@ import { targetPublicRoleSummaries } from "@/lib/recruitment-target-portal";
 export const revalidate = 60;
 
 export default async function ApplyIndexPage() {
-  const roles = isPostgresRecruitmentTarget()
+  // A role past its target hiring date no longer takes applications.
+  const roles = (isPostgresRecruitmentTarget()
     ? await targetPublicRoleSummaries({ liveOnly: true })
-    : (await getRoleRequests({ liveOnly: true })).filter(isPublishedRoleForIntake);
+    : (await getRoleRequests({ liveOnly: true })).filter(isPublishedRoleForIntake))
+    .filter((role) => isRoleOpenForSelection(role));
   return <main className="container page"><section className="card"><p className="eyebrow">McLink Careers</p><h1>Open Roles</h1><div className="role-list">{roles.length === 0 ? <p>No published roles are currently accepting applications.</p> : roles.map((role) => <article className="card" key={`${role.organizationId || "legacy"}-${role.roleId}`}><h2>{role.jobTitle}</h2><p>{role.department}</p><Link className="btn btn-primary" href={role.applicationLink || `/apply/${encodeURIComponent(role.roleId)}`}>View and apply</Link></article>)}</div></section></main>;
 }

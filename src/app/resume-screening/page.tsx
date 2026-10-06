@@ -7,6 +7,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import ResumeScreeningInviteGenerator from "@/components/ResumeScreeningInviteGenerator";
 import { canManagePipeline } from "@/lib/access-control";
 import { getRoleRequests, isPublishedRoleForIntake } from "@/lib/google-sheets";
+import { isRoleOpenForSelection } from "@/lib/recruitment-role-eligibility";
 import { isBulkResumeUatMode } from "@/lib/bulk-resume-config";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleSummaries } from "@/lib/recruitment-target-portal";
@@ -27,6 +28,8 @@ export default async function ResumeScreeningPage() {
   const roles = targetRecruitment ? await targetRoleSummaries({ liveOnly: true }) : await getRoleRequests({ liveOnly: true });
   const roleOptions = roles
     .filter(isPublishedRoleForIntake)
+    // Roles past their target hiring date stay in history but cannot take new resumes.
+    .filter((role) => isRoleOpenForSelection(role))
     .map((role) => ({ roleId: role.roleId, label: `${role.jobTitle || role.roleId} (${role.roleId})` }))
     // Keep every resume-screening role selector predictable as the published
     // role catalogue grows; IDs remain the option values.

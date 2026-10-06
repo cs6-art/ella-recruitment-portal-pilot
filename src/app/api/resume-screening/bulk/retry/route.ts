@@ -4,7 +4,8 @@ import { z } from "zod";
 
 import { canManagePipeline } from "@/lib/access-control";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
+import { resolveRecruitmentRoleForNewWork } from "@/lib/recruitment-role-resolution";
+import { ROLE_TARGET_DATE_PASSED_MESSAGE } from "@/lib/recruitment-role-eligibility";
 import { retryFailedBulkQueueItems } from "@/lib/internal-recruitment-queries";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
@@ -30,8 +31,8 @@ export async function POST(request: Request) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return responseError("Choose at least one failed resume to retry.", 422);
-  const role = await resolvePublishedRecruitmentRole(parsed.data.roleId, user.organizationId);
-  if (!role) return responseError("The selected role is not available for bulk screening.", 409);
+  const { role, error: roleError } = await resolveRecruitmentRoleForNewWork(parsed.data.roleId, user.organizationId);
+  if (!role) return responseError(roleError === "target_date_passed" ? ROLE_TARGET_DATE_PASSED_MESSAGE : "The selected role is not available for bulk screening.", 409);
 
   try {
     const retried = await retryFailedBulkQueueItems({

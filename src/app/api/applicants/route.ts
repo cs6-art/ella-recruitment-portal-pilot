@@ -11,6 +11,8 @@ import {
 } from "@/lib/applicant-workflow";
 import { candidateBodyForValidation, readCandidateIntakeRequest } from "@/lib/candidate-intake";
 import { getRoleRequestById, isPublishedRoleForIntake } from "@/lib/google-sheets";
+import { isRoleOpenForSelection, ROLE_TARGET_DATE_PASSED_MESSAGE } from "@/lib/recruitment-role-eligibility";
+import { maybeAutoAdvance } from "@/lib/auto-advance";
 import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { assertCreditsAvailable, creditCostFor, EllaCreditsError, recordDeduction } from "@/lib/ella-credits";
 import { getPortalConfigValue } from "@/lib/portal-config";
@@ -97,6 +99,7 @@ export async function GET(request: Request) {
     dateFrom,
     dateToExclusive,
     sort: sort === "oldest" || sort === "match" ? sort : undefined,
+    attention: params.get("attention") === "stalled" || params.get("attention") === "email_undelivered" ? params.get("attention") as "stalled" | "email_undelivered" : undefined,
   };
 
   try {
@@ -136,6 +139,7 @@ export async function POST(request: Request) {
     if (!role || !isPublishedRoleForIntake(role)) {
       return responseError("The selected role is not available for manual candidate intake.", 409);
     }
+    if (!isRoleOpenForSelection(role)) return responseError(ROLE_TARGET_DATE_PASSED_MESSAGE, 409);
 
     if (isPostgresRecruitmentTarget()) {
       try {
@@ -148,6 +152,8 @@ export async function POST(request: Request) {
       if (intake.resumeFile) storedResume = await storeResumeFile(intake.resumeFile, { organizationId: user.organizationId });
       const created = await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: "direct", sourceDetail: "hr_manual", consentAt: new Date().toISOString(), creditOwnerEmail: user.email, organizationId: user.organizationId, resume: storedResume ? { ...storedResume.record, extractedText: storedResume.extractedText } : undefined });
       const reused = created.screeningReused === true;
+      // A reused CV analysis is a completed screening: apply the role's Interview automation now.
+      if (reused) await maybeAutoAdvance(applicationId);
       return NextResponse.json({
         success: true,
         applicationId,

@@ -18,7 +18,7 @@ import { normalizeDateOnly, normalizeTimeOnly } from "@/lib/date-only";
 import { countActiveVoiceInterviews, isActiveVoiceInterviewStatus, MAX_CONCURRENT_VOICE_INTERVIEWS, voiceCapacitySlotId, voiceInterviewConcurrencyKey } from "@/lib/voice-interview-capacity";
 import { hasValidFutureTime, isBeforeTargetHiringDate, isCurrentCalendarMonth, isFinalInterviewSlotDuration, isStandardVoiceInterviewSlot, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { targetBookingContext, targetCreateInterviewSlot, targetDeleteApplicant, targetMarkInterviewNoShow, targetRecordApplicantDecision, targetReserveBooking, targetSendVoiceBookingInvitation, targetUpdateApplicantProfile, type TargetBookingSlotDetails, } from "@/lib/recruitment-target-portal";
+import { targetBookingContext, targetCreateInterviewSlot, targetDeleteApplicant, targetMarkInterviewNoShow, targetRecordApplicantDecision, targetReserveBooking, targetSendVoiceBookingInvitation, targetUpdateApplicantProfile, type TargetBookingSlotDetails, type InterviewApprovalMode, } from "@/lib/recruitment-target-portal";
 import { listApplicationHistory } from "@/lib/internal-recruitment-queries";
 import { countryForPhone, hasSupportedCallingCode } from "@/lib/country-codes";
 
@@ -2163,10 +2163,10 @@ export async function sendVoiceBookingInvitation(applicationId: string, reviewer
   return { bookingLink: link, notificationQueued: true };
 }
 
-export async function recordApplicantDecision(applicationId: string, stage: ApplicantDecisionStage, decision: ApplicantDecision, reviewer: { name: string; email: string }, comments: string, publicAppBaseUrl = "") {
+export async function recordApplicantDecision(applicationId: string, stage: ApplicantDecisionStage, decision: ApplicantDecision, reviewer: { name: string; email: string }, comments: string, publicAppBaseUrl = "", options: { organizationId?: string; approvalMode?: InterviewApprovalMode } = {}) {
   if (isPostgresRecruitmentTarget()) {
     if (decision === "No Show") throw new Error("No-show decisions are recorded by the voice retry workflow.");
-    return targetRecordApplicantDecision({ applicationId, stage, decision, comments, reviewer });
+    return targetRecordApplicantDecision({ applicationId, organizationId: options.organizationId, stage, decision, comments, reviewer, approvalMode: options.approvalMode });
   }
   const data = await readSheet("High_Match_Profile", "CZ");
   const found = findApplicant(data, applicationId);

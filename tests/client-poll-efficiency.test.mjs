@@ -31,8 +31,8 @@ test("EllaCreditsMeter shares one poll, backs off to five minutes, and keeps eve
 });
 
 test("the recent-applicants feed is a single shared poll for both callers", () => {
-  assert.match(bell, /useSharedPoll<RecentApplicant\[\]>\(POLL_KEY, fetchRecentApplicants, POLL_INTERVAL_MS, enabled\)/);
-  assert.match(bell, /POLL_KEY = "applicants-recent"/);
+  assert.match(bell, /useSharedPoll<ApplicantFeed>\(POLL_KEY, fetchRecentApplicants, POLL_INTERVAL_MS, enabled\)/);
+  assert.match(bell, /APPLICANT_FEED_POLL_KEY = "applicants-recent"/);
   assert.match(bell, /POLL_INTERVAL_MS = 5 \* 60_000/);
   assert.doesNotMatch(bell, /setInterval/);
   // exactly one place fetches the endpoint, and AppShell reuses the same hook

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { filterVisibleApplicants, isDepartmentReviewer } from "@/lib/access-control";
 import { getApplicants } from "@/lib/candidate-applications";
 import { applicantAppliedTime, type RecentApplicant } from "@/lib/new-applicants";
+import { listUnseenApplicants } from "@/lib/applicant-seen";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRecentApplicantSummaries } from "@/lib/recruitment-target-portal";
 import { logServerTiming, measureServerOperation } from "@/lib/server-timing";
@@ -29,6 +30,15 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (isPostgresRecruitmentTarget()) {
+      // Read state is stored per user on the server (drizzle/0039), so the
+      // feed returns only this user's unseen applicants and their total.
+      const unseen = await measureServerOperation(timings, "unseenApplicants", () => listUnseenApplicants(user.organizationId, user.email, { department: isDepartmentReviewer(user) ? user.department : "" }));
+      itemCount = unseen.applicants.length;
+      logServerTiming(new URL(request.url).pathname, startedAt, timings, { dbOperations: 3, itemCount });
+      timingLogged = true;
+      return NextResponse.json({ success: true, serverReadState: true, total: unseen.total, applicants: unseen.applicants }, { headers: { "Cache-Control": "private, no-store" } });
+    }
     const applicants = isPostgresRecruitmentTarget()
       ? await measureServerOperation(timings, "recentApplicants", () => targetRecentApplicantSummaries(isDepartmentReviewer(user) ? user.department : ""))
       : filterVisibleApplicants(await measureServerOperation(timings, "recentApplicants", getApplicants), user);

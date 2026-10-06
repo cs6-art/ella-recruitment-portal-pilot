@@ -12,6 +12,8 @@ import { getRoleRequests } from "@/lib/google-sheets";
 import { listDashboardProcessingFailures, listDashboardRecordingFailures } from "@/lib/live-interview-store";
 import { listOverdueFinalInterviews } from "@/lib/internal-recruitment-queries";
 import { collectAttentionAlerts } from "@/lib/dashboard-attention";
+import { scheduleOrganizationAutoAdvanceSweep } from "@/lib/auto-advance";
+import { getCachedCalendarIntegrationState } from "@/lib/google-calendar";
 import { scheduledInstant } from "@/lib/interview-time";
 import { targetRecentApplicantSummaries, targetRoleSummaries, targetUpcomingBookings } from "@/lib/recruitment-target-portal";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
@@ -77,6 +79,8 @@ export async function GET() {
   const postgresTarget = isPostgresRecruitmentTarget();
   const canViewApplicants = user.canReviewRole === true || user.canApproveRole === true;
   const canViewInterviews = user.canReviewRole === true;
+  // Retry net for Interview automation, run after this response is sent.
+  if (postgresTarget && canViewApplicants) scheduleOrganizationAutoAdvanceSweep(user.organizationId);
 
   const timed = <T>(name: string, operation: () => Promise<T>) => measureServerOperation(timings, name, operation);
   const roleRequestsPromise = timed("roles", () => postgresTarget ? targetRoleSummaries() : getRoleRequests());
@@ -99,7 +103,7 @@ export async function GET() {
     : Promise.resolve([] as Awaited<ReturnType<typeof listOverdueFinalInterviews>>);
 
   const attentionPromise = canViewInterviews && postgresTarget
-    ? timed("attention", () => collectAttentionAlerts(user.organizationId, { ownerEmail: user.email }))
+    ? timed("attention", () => collectAttentionAlerts(user.organizationId, { ownerEmail: user.email, calendarState: () => getCachedCalendarIntegrationState(user.organizationId) }))
     : Promise.resolve([] as Awaited<ReturnType<typeof collectAttentionAlerts>>);
 
   const notificationHealthPromise = canViewInterviews && postgresTarget

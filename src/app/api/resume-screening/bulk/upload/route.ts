@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { canManagePipeline } from "@/lib/access-control";
 import { EllaCreditsError } from "@/lib/ella-credits";
 import { intakeResumeBatch, MAX_BULK_REQUEST_BYTES, MAX_FILES_PER_SUBMISSION } from "@/lib/bulk-resume-intake";
-import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
+import { resolveRecruitmentRoleForNewWork } from "@/lib/recruitment-role-resolution";
+import { ROLE_TARGET_DATE_PASSED_MESSAGE } from "@/lib/recruitment-role-eligibility";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { logServerTiming } from "@/lib/server-timing";
@@ -54,8 +55,8 @@ export async function POST(request: Request) {
     if (!files.length) return responseError("Choose at least one PDF, DOC, or DOCX resume.", 422);
     if (files.length > MAX_FILES_PER_SUBMISSION) return responseError(`Upload up to ${MAX_FILES_PER_SUBMISSION} resumes per batch.`, 422);
 
-    const role = await resolvePublishedRecruitmentRole(roleId, user.organizationId);
-    if (!role) return responseError("The selected role is not available for bulk screening.", 409);
+    const { role, error: roleError } = await resolveRecruitmentRoleForNewWork(roleId, user.organizationId);
+    if (!role) return responseError(roleError === "target_date_passed" ? ROLE_TARGET_DATE_PASSED_MESSAGE : "The selected role is not available for bulk screening.", 409);
 
     const intake = await intakeResumeBatch({
       roleId,

@@ -1,8 +1,8 @@
 import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
-import { applicationStatusHistory, applications, bulkScreeningQueueItems, interviewSlots, oauthConnections, roleStatusHistory, roles } from "@/db/schema-recruitment";
-import { ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES } from "@/lib/internal-recruitment-queries";
+import { applicationStatusHistory, applications, bookingTokens, bulkScreeningQueueItems, interviewSlots, oauthConnections, organizationRecordingDrive, roleStatusHistory, roles } from "@/db/schema-recruitment";
+import { ATTENTION_STALLED_DAYS, ATTENTION_STALLED_STAGES, ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES } from "@/lib/internal-recruitment-queries";
 import { getCreditBalance, LIVE_AVATAR_MAX_CREDITS } from "@/lib/ella-credits";
 
 export type AttentionAlert = {
@@ -16,7 +16,7 @@ export type AttentionAlert = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Days a candidate may sit in a waiting stage before HR is nudged to follow up. */
-export const STALLED_APPLICANT_DAYS = 5;
+export const STALLED_APPLICANT_DAYS = ATTENTION_STALLED_DAYS;
 /** Days an approved role may wait for recruitment setup before HR is reminded. */
 export const STALLED_ROLE_DAYS = 3;
 
@@ -36,7 +36,7 @@ function plural(value: number, singular: string, pluralForm: string) {
  * work that has stalled, missed outcomes, and setup problems. Every check is
  * independent, so one failing query never hides the others.
  */
-export async function collectAttentionAlerts(organizationId: string, options: { ownerEmail?: string; now?: Date } = {}): Promise<AttentionAlert[]> {
+export async function collectAttentionAlerts(organizationId: string, options: { ownerEmail?: string; now?: Date; calendarState?: () => Promise<string> } = {}): Promise<AttentionAlert[]> {
   const org = organizationId.trim();
   const now = options.now ?? new Date();
   const db = getDb();
@@ -52,7 +52,7 @@ export async function collectAttentionAlerts(organizationId: string, options: { 
       const stalled = await countOf(db.select(n).from(applications).where(and(
         eq(applications.organizationId, org),
         eq(applications.withdrawn, false),
-        inArray(applications.currentStage, ["resume_approved", "voice_booking_pending", "voice_scheduled", "approved_for_final"]),
+        inArray(applications.currentStage, ATTENTION_STALLED_STAGES),
         lt(applications.updatedAt, stalledCutoff),
       )));
       if (stalled > 0) alerts.push({
@@ -60,7 +60,7 @@ export async function collectAttentionAlerts(organizationId: string, options: { 
         title: `${plural(stalled, "applicant has", "applicants have")} not moved in ${STALLED_APPLICANT_DAYS}+ days.`,
         description: "They are waiting to choose or attend an interview. Check whether their invitation was used, or follow up.",
         savedMessage: "Their records are saved.",
-        href: "/applicants",
+        href: "/applicants?attention=stalled",
         actionLabel: "Review applicants",
       });
     },
@@ -80,9 +80,9 @@ export async function collectAttentionAlerts(organizationId: string, options: { 
         id: "voice-outcome-missing",
         title: `${plural(missed, "call interview was", "call interviews were")} scheduled for a past time with no outcome.`,
         description: "No result came back. Mark it as a no-show or ask the candidate to reschedule.",
-        savedMessage: "The bookings are saved.",
-        href: "/bookings",
-        actionLabel: "Review bookings",
+        savedMessage: "The interviews are saved.",
+        href: "/bookings?type=voice&status=Scheduled",
+        actionLabel: "Open Interview Calendar",
       });
     },
     // 3. Not enough Smile Credits for the next interview.
@@ -100,12 +100,20 @@ export async function collectAttentionAlerts(organizationId: string, options: { 
     // 4. No HR Google Calendar, so face-to-face interviews cannot be booked.
     async () => {
       const connected = await countOf(db.select(n).from(oauthConnections).where(and(eq(oauthConnections.organizationId, org), eq(oauthConnections.provider, "google_calendar"))));
+      if (connected > 0 && options.calendarState && await options.calendarState() === "needs_reconnect") alerts.push({
+        id: "calendar-needs-reconnect",
+        title: "The HR Google Calendar needs to be reconnected.",
+        description: "Its access expired or was removed, so candidates cannot be offered face-to-face interview times until it is reconnected.",
+        savedMessage: "Interviews already booked are saved.",
+        href: "/settings#calendar-settings-title",
+        actionLabel: "Reconnect calendar",
+      });
       if (connected === 0) alerts.push({
         id: "calendar-disconnected",
         title: "No HR Google Calendar is connected.",
         description: "Face-to-face interviews cannot be offered to candidates until a calendar is connected.",
         savedMessage: "Nothing has been lost.",
-        href: "/settings",
+        href: "/settings#calendar-settings-title",
         actionLabel: "Connect calendar",
       });
     },
@@ -121,7 +129,7 @@ export async function collectAttentionAlerts(organizationId: string, options: { 
         title: `${plural(failed, "resume", "resumes")} could not be screened.`,
         description: "These uploads failed in the last 7 days. Open Resume Screening to retry or re-upload them.",
         savedMessage: "The uploaded files are saved.",
-        href: "/resume-screening",
+        href: "/resume-screening?status=Failed",
         actionLabel: "Review resume screening",
       });
     },
@@ -154,7 +162,7 @@ export async function collectAttentionAlerts(organizationId: string, options: { 
         title: `${plural(total, "email has", "emails have")} not been delivered.`,
         description: "An invitation, confirmation or job-posted email did not go out. Check the email connection, then resend from the applicant record.",
         savedMessage: "The applicant records are saved.",
-        href: "/applicants",
+        href: "/applicants?attention=email_undelivered",
         actionLabel: "Review applicants",
       });
     },
@@ -170,8 +178,37 @@ export async function collectAttentionAlerts(organizationId: string, options: { 
         title: `${plural(waiting, "approved role is", "approved roles are")} not published yet.`,
         description: "Finish recruitment setup and publish the role so candidates can apply.",
         savedMessage: "The role requests are saved.",
-        href: "/roles",
+        href: "/roles?status=Approved",
         actionLabel: "Review role requests",
+      });
+    },
+    // 8. Candidates hold Live Avatar invitations but recordings have nowhere to
+    // go, so their interview would refuse to start ("temporarily unavailable").
+    async () => {
+      const waiting = await countOf(db.select(n).from(bookingTokens).where(and(
+        eq(bookingTokens.organizationId, org),
+        eq(bookingTokens.kind, "avatar"),
+        inArray(bookingTokens.status, ["pending", "active"]),
+      )));
+      if (waiting === 0) return;
+      const [destination] = await db.select({ accountEmail: organizationRecordingDrive.googleAccountEmail, folderId: organizationRecordingDrive.folderId })
+        .from(organizationRecordingDrive).where(eq(organizationRecordingDrive.organizationId, org)).limit(1);
+      const account = String(destination?.accountEmail || "").trim().toLowerCase();
+      const connected = account && destination?.folderId
+        ? await countOf(db.select(n).from(oauthConnections).where(and(
+          eq(oauthConnections.organizationId, org),
+          eq(oauthConnections.provider, "google_drive_recordings"),
+          eq(oauthConnections.userEmail, account),
+          sql`${oauthConnections.refreshTokenEnc} <> ''`,
+        )))
+        : 0;
+      if (connected === 0) alerts.push({
+        id: "recording-drive-missing",
+        title: "Live Avatar interviews can't start: recording storage is not set up.",
+        description: `${plural(waiting, "candidate has", "candidates have")} a Live Avatar invitation. Connect Google Drive and choose a recording folder so their interviews can start.`,
+        savedMessage: "The invitations are saved.",
+        href: "/settings#recording-drive-settings-title",
+        actionLabel: "Set up recording storage",
       });
     },
   ];

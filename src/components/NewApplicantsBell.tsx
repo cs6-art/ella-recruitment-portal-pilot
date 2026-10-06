@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import UiIcon from "./UiIcon";
 import styles from "./NewApplicantsBell.module.css";
-import { useSharedPoll } from "@/lib/client-poll";
+import { refreshSharedPoll, useSharedPoll } from "@/lib/client-poll";
 import { formatPortalDateTime } from "@/lib/portal-time";
 import {
   APPLICANTS_SEEN_EVENT,
@@ -18,14 +18,34 @@ import {
   writeApplicantsLastSeen,
 } from "@/lib/new-applicants";
 
-const POLL_KEY = "applicants-recent";
+export const APPLICANT_FEED_POLL_KEY = "applicants-recent";
+const POLL_KEY = APPLICANT_FEED_POLL_KEY;
 const POLL_INTERVAL_MS = 5 * 60_000;
 
-async function fetchRecentApplicants(): Promise<RecentApplicant[] | null> {
-  const response = await fetch("/api/applicants/recent", { credentials: "same-origin" });
+/**
+ * `serverReadState` feeds (Postgres) already contain only this user's unseen
+ * applicants, with read state stored per user on the server. The legacy
+ * Sheets feed returns recent applicants and the browser watermark decides.
+ */
+type ApplicantFeed = { serverReadState: boolean; total: number; applicants: RecentApplicant[] };
+
+async function fetchRecentApplicants(): Promise<ApplicantFeed | null> {
+  const response = await fetch("/api/applicants/recent", { credentials: "same-origin", cache: "no-store" });
   if (!response.ok) return null;
   const data = await response.json().catch(() => null);
-  return data?.success && Array.isArray(data.applicants) ? (data.applicants as RecentApplicant[]) : null;
+  if (!data?.success || !Array.isArray(data.applicants)) return null;
+  const applicants = data.applicants as RecentApplicant[];
+  return { serverReadState: data.serverReadState === true, total: Number(data.total) || applicants.length, applicants };
+}
+
+/** "Mark all as read" for the signed-in user only, then refresh every badge. */
+export async function markAllApplicantsRead(userEmail?: string) {
+  const response = await fetch("/api/notifications/applicants/read-all", { method: "POST", credentials: "same-origin" });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to mark applicants as read.");
+  // Legacy (Sheets) mode keeps its browser watermark in step.
+  if (data.recorded !== true) writeApplicantsLastSeen(userEmail);
+  refreshSharedPoll(POLL_KEY);
 }
 
 /**
@@ -42,8 +62,9 @@ export function useNewApplicantFeed(userEmail?: string, enabled = true) {
   const pathname = usePathname();
   const [lastSeen, setLastSeen] = useState<number>(() => readApplicantsLastSeen(userEmail));
 
-  const { data, refresh } = useSharedPoll<RecentApplicant[]>(POLL_KEY, fetchRecentApplicants, POLL_INTERVAL_MS, enabled);
-  const recent = useMemo(() => (enabled ? data ?? [] : []), [enabled, data]);
+  const { data, refresh } = useSharedPoll<ApplicantFeed>(POLL_KEY, fetchRecentApplicants, POLL_INTERVAL_MS, enabled);
+  const serverReadState = enabled && data?.serverReadState === true;
+  const recent = useMemo(() => (enabled ? data?.applicants ?? [] : []), [enabled, data]);
   const load = useCallback(() => { void refresh(); }, [refresh]);
 
   // Re-read the watermark on navigation (and shortly after, so a visit to
@@ -63,31 +84,48 @@ export function useNewApplicantFeed(userEmail?: string, enabled = true) {
   }, [pathname, userEmail]);
 
   const newApplicants = useMemo(
-    () => recent.filter((applicant) => applicantAppliedTime(applicant.appliedAt, applicant.applicationId) > lastSeen),
-    [recent, lastSeen],
+    () => serverReadState ? recent : recent.filter((applicant) => applicantAppliedTime(applicant.appliedAt, applicant.applicationId) > lastSeen),
+    [recent, lastSeen, serverReadState],
   );
+  const count = serverReadState ? data?.total ?? newApplicants.length : newApplicants.length;
   return {
     recent,
     newApplicants,
-    count: newApplicants.length,
-    badge: applicantNotificationBadge(newApplicants.length),
-    hasNotifications: hasApplicantNotifications(newApplicants.length),
+    serverReadState,
+    count,
+    badge: applicantNotificationBadge(count),
+    hasNotifications: hasApplicantNotifications(count),
     reload: load,
   };
 }
 
 export default function NewApplicantsBell({ userEmail }: { userEmail?: string }) {
-  const { newApplicants, count, badge } = useNewApplicantFeed(userEmail);
+  const { newApplicants, count, badge, serverReadState } = useNewApplicantFeed(userEmail);
   const [open, setOpen] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
+  const [markError, setMarkError] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
   const wasOpen = useRef(false);
 
-  // Looking at the bell counts as seeing the applicants. Mark them seen when the
-  // panel closes (not when it opens, so the list stays visible while reading).
+  // Legacy (Sheets) mode only: closing the panel counts as seeing the list.
+  // With server read state an applicant stops being new only once opened, or
+  // through "Mark all as read".
   useEffect(() => {
-    if (wasOpen.current && !open) writeApplicantsLastSeen(userEmail);
+    if (!serverReadState && wasOpen.current && !open) writeApplicantsLastSeen(userEmail);
     wasOpen.current = open;
-  }, [open, userEmail]);
+  }, [open, serverReadState, userEmail]);
+
+  async function markAll() {
+    setMarkingAll(true);
+    setMarkError("");
+    try {
+      await markAllApplicantsRead(userEmail);
+    } catch (error) {
+      setMarkError(error instanceof Error ? error.message : "Unable to mark applicants as read.");
+    } finally {
+      setMarkingAll(false);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -122,10 +160,12 @@ export default function NewApplicantsBell({ userEmail }: { userEmail?: string })
         <div className={styles.panel} role="dialog" aria-label="New applicants">
           <div className={styles.panelHeader}>
             <strong>New applicants</strong>
-            <span>{count > 0 ? `${count} since your last visit` : "You're all caught up"}</span>
+            <span>{count > 0 ? `${count} you haven't opened yet` : "You're all caught up"}</span>
+            {count > 0 && <button type="button" className={styles.markAll} disabled={markingAll} onClick={() => void markAll()}>{markingAll ? "Marking…" : "Mark all as read"}</button>}
           </div>
+          {markError && <p className={styles.error} role="alert">{markError}</p>}
           {count === 0 ? (
-            <p className={styles.empty}>No new applicants since you last opened the Applicants page.</p>
+            <p className={styles.empty}>No new applicants. New ones appear here until you open them.</p>
           ) : (
             <ul className={styles.list}>
               {newApplicants.slice(0, 12).map((applicant) => (

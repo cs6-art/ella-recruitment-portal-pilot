@@ -6,9 +6,13 @@ import { exchangeCodeAndStore, verifyOAuthState } from "@/lib/google-calendar";
 import { getFinalInterviewCalendarConfig } from "@/lib/google-sheets";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
-function calendarErrorReason(error: unknown): string {
+function calendarErrorReason(error: unknown, expectedEmail = ""): string {
   const message = error instanceof Error ? error.message : String(error);
-  if (/calendar_account_mismatch|CalendarAccountMismatchError/i.test(message)) return "The Google account selected is not the expected HR account. Sign out of other Google accounts, choose the HR account, and connect again.";
+  // The shared HR calendar expects the configured "HR calendar account"; a
+  // personal calendar expects the signed-in user's own account.
+  if (/calendar_account_mismatch|CalendarAccountMismatchError/i.test(message)) return expectedEmail
+    ? `The Google account you chose is not the calendar account this portal expects. Choose ${expectedEmail} and connect again.`
+    : "The Google account you chose is not the calendar account this portal expects. Choose the correct account and connect again.";
   // Keep provider and storage diagnostics useful to HR without exposing raw
   // OAuth responses, tokens, spreadsheet IDs, or other server details.
   if (/redirect_uri_mismatch/i.test(message)) return "The Google OAuth callback URL is not authorized for this portal domain.";
@@ -59,7 +63,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("[Google Calendar] Token exchange failed:", error);
     settingsUrl.searchParams.set("calendar", "error");
-    settingsUrl.searchParams.set("calendar_reason", calendarErrorReason(error));
+    settingsUrl.searchParams.set("calendar_reason", calendarErrorReason(error, email));
   }
 
   return NextResponse.redirect(settingsUrl);

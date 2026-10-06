@@ -14,6 +14,7 @@ import { buildCloudImportRequest, selectedCloudFiles, type CloudImportSelection 
 import { formatPortalDateTime } from "@/lib/portal-time";
 import { MAX_CAMPAIGN_FILES, MAX_FILES_PER_SUBMISSION, MAX_RESUME_FILE_BYTES } from "@/lib/bulk-resume-limits";
 import { clientErrorMessage } from "@/lib/client-error";
+import InterviewAutomationNotice from "@/components/InterviewAutomationNotice";
 
 type RoleOption = { roleId: string; label: string };
 type QueueItem = {
@@ -90,6 +91,11 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [queueSearch, setQueueSearch] = useState("");
   const [queueStatus, setQueueStatus] = useState("All statuses");
+  // Dashboard alerts link here with ?status=Failed.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("status") || "";
+    if (statusOrder.includes(requested)) setQueueStatus(requested);
+  }, []);
   const [queueSource, setQueueSource] = useState("All sources");
   const [queuePage, setQueuePage] = useState(1);
   const [queuePageSize, setQueuePageSize] = useState(10);
@@ -720,11 +726,12 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
             </select>
             <small>Screening results are compared with this role&apos;s requirements.</small>
             {selectedRole && <small>Selected role: {selectedRole.label} · Role reference: {selectedRole.roleId}</small>}
+            {roleId && <InterviewAutomationNotice roleId={roleId} variant="upload" />}
             {roleOptions.length === 0 && <small className="bulk-screening-role-empty">There are no published roles available. Publish a role before adding resumes.</small>}
           </label>
           <div className="bulk-screening-action">
             <div className="bulk-screening-source-option">
-              <small>{driveStatus === null ? "Checking Google Drive connection…" : driveStatus.connected ? `Google Drive connected${driveStatus.accountEmail ? ` as ${driveStatus.accountEmail}` : ""}` : "Google Drive is not connected"}</small>
+              <small>{driveStatus === null ? "Checking Google Drive connection…" : driveStatus.connected ? `Google Drive connected${driveStatus.accountEmail ? ` as ${driveStatus.accountEmail}` : ""}` : "Google Drive is not connected. You can keep uploading files from your computer; connect Drive only if you want to import from it."}</small>
             {driveStatus?.connected
               ? <button type="button" className="btn btn-secondary btn-with-icon" disabled={!roleId || uploading || driveImporting} onClick={() => setCloudPicker("google")}><GoogleDriveIcon />Choose from Google Drive</button>
               : roleId ? <a className="btn btn-secondary btn-with-icon" href="/api/auth/google-drive/connect"><GoogleDriveIcon />Connect Google Drive</a> : <button type="button" className="btn btn-secondary btn-with-icon" disabled><GoogleDriveIcon />Choose a role first</button>}

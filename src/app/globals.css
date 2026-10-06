@@ -969,6 +969,7 @@ a { color: inherit; text-decoration: none; }
 .summary-available { color: #176ba6; background: #e8f3ff; }
 .summary-booked { color: #176b43; background: #e4f5eb; }
 .summary-completed { color: #176ba6; background: #e8f3ff; }
+.summary-open { color: #5b3fa8; background: #efeafc; }
 .summary-blocked { color: #8d5423; background: #fff2dd; }
 .summary-no-show { color: #a53f3f; background: #fde9e9; }
 .summary-cancelled { color: #72808c; background: #f0f2f4; }
@@ -6921,3 +6922,51 @@ textarea:focus { border-color: var(--color-link); box-shadow: var(--focus-ring);
 .auth-form label.auth-consent { flex-direction: row; align-items: flex-start; gap: 12px; font-weight: 400; color: var(--muted); line-height: 1.5; }
 .auth-form label.auth-consent input { width: 18px; min-height: 18px; height: 18px; margin: 2px 0 0; flex: none; }
 .auth-consent a { color: var(--navy); font-weight: 700; text-decoration: underline; }
+
+/* Interview automation (role page) */
+.interview-automation-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.interview-automation-header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.interview-automation-state { flex: none; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+.interview-automation-state.is-on { background: #e7f6ec; color: #067647; }
+.interview-automation-state.is-off { background: #f1f4f8; color: var(--muted); }
+.interview-automation-body { display: grid; gap: 10px; padding: 0 20px 18px; }
+.interview-automation-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--navy); font-weight: 600; }
+.interview-automation-switch input[type="checkbox"] { width: 18px; height: 18px; min-height: 0; margin: 0; }
+.interview-automation-switch input[type="number"] { width: 72px; min-height: 0; padding: 6px 8px; }
+.interview-automation-note, .interview-automation-waiting { margin: 0; color: var(--muted); font-size: 13px; }
+.interview-automation-waiting a { color: var(--blue); font-weight: 700; }
+.interview-automation-actions { display: flex; justify-content: flex-end; }
+@media (max-width: 640px) { .interview-automation-body { padding-inline: 16px; } .interview-automation-header { flex-direction: column; } }
+.interview-automation-chip { display: inline-flex; align-items: center; margin-left: auto; padding: 4px 10px; border-radius: 999px; background: #e7f6ec; color: #067647; font-size: 12px; font-weight: 800; text-decoration: none; }
+.interview-automation-chip:hover, .interview-automation-chip:focus-visible { background: #d3efdc; }
+.interview-automation-upload-note { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: #e7f6ec; color: #065f3b; font-size: 12px; }
+.interview-automation-upload-note a { color: inherit; font-weight: 800; text-decoration: underline; }
+
+/* Applicants: keep the selection toolbar in view while applicants are selected */
+.applicants-card .list-toolbar-header:has(.bulk-selection-toolbar.has-selection) { position: sticky; top: 64px; z-index: 30; background: #fff; box-shadow: 0 6px 14px rgba(14, 68, 113, .08); }
+.bulk-selection-toolbar.has-selection { flex-wrap: wrap; color: var(--navy); }
+@media (max-width: 640px) { .applicants-card .list-toolbar-header:has(.bulk-selection-toolbar.has-selection) { top: 56px; } .bulk-selection-toolbar.has-selection { white-space: normal; } }
+.list-filter-chip-clear { margin-left: 4px; padding: 0 4px; border: 0; background: transparent; color: inherit; font-size: 14px; font-weight: 800; line-height: 1; cursor: pointer; }
+
+/* Dashboard alerts: the whole card is the link */
+.dashboard-alert-link { color: inherit; text-decoration: none; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease; }
+.dashboard-alert-link:hover { border-color: #e2b65b; box-shadow: 0 4px 14px rgba(129, 85, 0, .12); }
+.dashboard-alert-link:focus-visible { outline: var(--focus-outline); outline-offset: 2px; }
+.dashboard-alert-copy strong, .dashboard-alert-copy small, .dashboard-alert-description { display: block; }
+.dashboard-alert-description { margin: 3px 0; color: #53647a; font-size: 14px; line-height: 1.45; }
+.dashboard-alerts { scroll-margin-top: 80px; }
+.dashboard-alerts:focus { outline: none; }
+
+/* Interview Calendar: Google sync state and HR interview changes */
+.calendar-sync-badge { display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px; background: #f1f4f8; color: var(--muted); font-size: 11px; font-weight: 700; }
+.calendar-sync-badge.is-synced { background: #e7f6ec; color: #067647; }
+.calendar-sync-badge.is-failed { background: #fff4df; color: #815500; }
+.interview-change-actions { display: grid; gap: 8px; margin-top: 8px; }
+.interview-change-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.booking-inline-action.is-danger { color: #b42318; }
+.interview-reschedule-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.interview-reschedule-form label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: var(--navy); }
+.interview-reschedule-form small, .interview-reschedule-form .interview-change-buttons { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.calendar-connection-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; padding: 10px 14px; border: 1px solid #f1d9a6; border-radius: 10px; background: #fff8ea; color: #5c4210; font-size: 13px; }
+.calendar-connection-banner span { flex: 1 1 260px; }
+@media (max-width: 640px) { .interview-reschedule-form { grid-template-columns: 1fr; } }

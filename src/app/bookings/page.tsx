@@ -15,9 +15,9 @@ export const dynamic = "force-dynamic";
 
 function BookingsLoading() {
   return <main className="container page bookings-page" aria-busy="true">
-    <PageHeader className="bookings-header" eyebrow="INTERVIEW OPERATIONS" title="Interview Calendars" description="Loading schedules and availability..." />
-    <section className="card" aria-label="Loading interview calendars">
-      <div className="empty">Loading interview calendars...</div>
+    <PageHeader className="bookings-header" eyebrow="INTERVIEW OPERATIONS" title="Interview Calendar" description="Loading schedules and availability..." />
+    <section className="card" aria-label="Loading the interview calendar">
+      <div className="empty">Loading the interview calendar...</div>
     </section>
   </main>;
 }

@@ -7,13 +7,14 @@ import ActionFeedback from "@/components/ActionFeedback";
 import GoogleCalendarIcon from "@/components/GoogleCalendarIcon";
 import StatusBadge from "@/components/ui/StatusBadge";
 
-type Status = "loading" | "connected" | "mismatch" | "not_connected" | "error";
+type Status = "loading" | "connected" | "mismatch" | "needs_reconnect" | "unavailable" | "not_connected" | "error";
 type NoticeKind = "success" | "warning" | "error";
 
 export default function GoogleCalendarConnect({ canManage = false }: { canManage?: boolean }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("loading");
   const [connectedAccountEmail, setConnectedAccountEmail] = useState("");
+  const [expectedEmail, setExpectedEmail] = useState("");
   const [disconnecting, setDisconnecting] = useState(false);
   const [notice, setNotice] = useState("");
   const [noticeKind, setNoticeKind] = useState<NoticeKind>("success");
@@ -38,7 +39,13 @@ export default function GoogleCalendarConnect({ canManage = false }: { canManage
       .then((res) => res.json())
       .then((data) => {
         setConnectedAccountEmail(typeof data.accountEmail === "string" ? data.accountEmail : "");
-        setStatus(data.success && data.connected ? "connected" : data.success && data.accountMismatch ? "mismatch" : "not_connected");
+        setExpectedEmail(typeof data.expectedEmail === "string" ? data.expectedEmail : "");
+        setStatus(!data.success ? "error"
+          : data.connected ? "connected"
+          : data.accountMismatch ? "mismatch"
+          : data.state === "needs_reconnect" ? "needs_reconnect"
+          : data.state === "unavailable" ? "unavailable"
+          : "not_connected");
       })
       .catch(() => { setStatus("error"); setNotice("Unable to check Google Calendar connection status."); setNoticeKind("error"); });
   }, []);
@@ -60,7 +67,7 @@ export default function GoogleCalendarConnect({ canManage = false }: { canManage
     <section className="card calendar-connect-card">
       <div className="card-header">
         <h2>Shared HR Google Calendar</h2>
-        {status === "connected" ? <StatusBadge value="Connected" /> : status === "mismatch" ? <StatusBadge value="Account mismatch" /> : null}
+        {status === "connected" ? <StatusBadge value="Connected" /> : status === "mismatch" ? <StatusBadge value="Account mismatch" /> : status === "needs_reconnect" ? <StatusBadge value="Needs reconnecting" /> : null}
       </div>
       <div className="calendar-connect-body">
         {notice ? <ActionFeedback kind={noticeKind} className="calendar-connect-notice">{notice}</ActionFeedback> : null}
@@ -78,9 +85,20 @@ export default function GoogleCalendarConnect({ canManage = false }: { canManage
             <p className="calendar-connect-warning">This account is not being used for Face-to-Face interview bookings because it does not match the shared HR calendar configuration.</p>
             {canManage && <a className="btn btn-primary btn-with-icon" href="/api/auth/google-calendar/connect"><GoogleCalendarIcon />Reconnect Google Calendar</a>}
           </>
+        ) : status === "needs_reconnect" ? (
+          <>
+            <p className="calendar-connect-warning">Google Calendar needs to be reconnected. Its access expired or was removed, so Face-to-Face interview times can&apos;t be offered until it is reconnected. Interviews already booked are still saved in the portal.</p>
+            {expectedEmail && <p>Reconnect with the HR calendar account: <strong>{expectedEmail}</strong></p>}
+            {canManage ? <a className="btn btn-primary btn-with-icon" href="/api/auth/google-calendar/connect"><GoogleCalendarIcon />Reconnect Google Calendar</a> : <p>Ask a settings administrator to reconnect it.</p>}
+          </>
+        ) : status === "unavailable" ? (
+          <>
+            <p className="calendar-connect-warning">Google Calendar can&apos;t be reached right now. This is usually temporary; refresh the page in a few minutes. Interviews already booked are still saved in the portal.</p>
+          </>
         ) : (
           <>
             <p>The shared HR Google Calendar is not connected yet.</p>
+            {expectedEmail && canManage && <p>Connect with the HR calendar account: <strong>{expectedEmail}</strong>. You can change this account in Settings → &quot;HR calendar account&quot;.</p>}
             {canManage ? <a className="btn btn-primary btn-with-icon" href="/api/auth/google-calendar/connect"><GoogleCalendarIcon />Connect Google Calendar</a> : <p>A settings administrator must connect it before Face-to-Face interview availability can be checked.</p>}
           </>
         )}

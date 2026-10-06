@@ -34,7 +34,7 @@ depends on their assigned access. The short version of the process:
    hiring decisions, including any face-to-face interview.
 
 The main menu items are Dashboard, Role Requests, Resume Screening, Applicants,
-Bookings, Settings, Credits, User Accounts, and Profile (opened from your name at
+Interview Calendar, Settings, Credits, User Accounts, and Profile (opened from your name at
 the bottom of the menu). Menu items you are not allowed to use do not appear for
 you. The Smile assistant (this chat) is available from every page.
 
@@ -721,7 +721,7 @@ scheduled date, time, and timezone on the applicant record. The candidate
 receives a confirmation and both sides see the same time because the timezone is
 recorded.
 
-HR availability: in **Bookings**, choose **+ HR Availability**, choose an approved
+HR availability: in **Interview Calendar**, choose **+ HR Availability**, choose an approved
 role, and choose **Refresh availability** to check the shared HR calendar, then
 share the booking link with the candidate. If a candidate does not attend, open
 the date details, find the appointment, and choose **Mark No Show** after the
@@ -850,8 +850,10 @@ not charged. Failed or invalid resume screening is not charged.
 Buying credits: open **Credits** in the menu, choose a pack under **Buy Smile
 Credits**, and continue to the secure checkout. Credits are added as soon as the
 payment is confirmed, and each purchase appears in the credit history. Packs are
-priced at S$0.40 per credit, for example Starter (10 credits), Standard (50
-credits) and Bulk (100 credits). If purchases show as unavailable, contact an
+priced at S$0.40 per credit: Starter (50 credits, S$20), Standard (100 credits,
+S$40) and Bulk (2,000 credits, S$800, with a 10% bonus). You can also use the
+custom picker to buy any whole number of credits from 1 to 10,000. If purchases
+show as unavailable, contact an
 administrator. Only people with the Manage Smile Credits permission (McLink) can
 add credits manually. The Credits page also shows the history of every charge and
 top-up for the organisation.
@@ -878,13 +880,13 @@ decisions; edit portal settings; manage user accounts; and manage Smile Credits.
   review applicants or use HR operational tools.
 - **HR / Recruiter** — reviews role details, edits Recruitment Setup, screens
   candidates, arranges interviews, and manages the hiring list. Usually sees Role
-  Requests, Resume Screening, Applicants, and Bookings. HR does not give final
+  Requests, Resume Screening, Applicants, and Interview Calendar. HR does not give final
   management approval.
 - **Management** — reviews the business need and approves, returns, holds, or
   rejects role requests, and can review organization-wide records and applicants.
   Management is view-only across the rest of the portal: it does not create role
   requests and does not use the HR operational tools (Recruitment Setup, Resume
-  Screening, Bookings).
+  Screening, Interview Calendar).
 - **HOD / Department Head** — read-only visibility (plus interview participation)
   scoped to their own department. May also be given the ability to create
   requests. Does not manage the company-wide pipeline unless HR grants more

@@ -7,7 +7,8 @@ import { EllaCreditsError, intakeResumeBatch, MAX_FILES_PER_SUBMISSION } from "@
 import { downloadMicrosoftDriveFile, getAuthorizedGraphToken, getMicrosoftDriveItem } from "@/lib/microsoft-drive";
 import { MAX_RESUME_FILE_BYTES } from "@/lib/resume-files";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
-import { resolvePublishedRecruitmentRole } from "@/lib/recruitment-role-resolution";
+import { resolveRecruitmentRoleForNewWork } from "@/lib/recruitment-role-resolution";
+import { ROLE_TARGET_DATE_PASSED_MESSAGE } from "@/lib/recruitment-role-eligibility";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { publicErrorMessage } from "@/lib/safe-error";
 
@@ -43,8 +44,8 @@ export async function POST(request: Request) {
   const { roleId } = parsed.data;
   const fileIds = [...new Set(parsed.data.fileIds)];
 
-  const role = await resolvePublishedRecruitmentRole(roleId, user.organizationId);
-  if (!role) return responseError("The selected role is not available for bulk screening.", 409);
+  const { role, error: roleError } = await resolveRecruitmentRoleForNewWork(roleId, user.organizationId);
+  if (!role) return responseError(roleError === "target_date_passed" ? ROLE_TARGET_DATE_PASSED_MESSAGE : "The selected role is not available for bulk screening.", 409);
 
   const token = await getAuthorizedGraphToken(user.email);
   if (!token) return responseError("Connect OneDrive first (or reconnect if Microsoft access was revoked or expired).", 409, { code: "ONEDRIVE_NOT_CONNECTED" });
