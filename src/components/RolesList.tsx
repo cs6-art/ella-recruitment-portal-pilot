@@ -481,7 +481,7 @@ export default function RolesList({
             {refreshing && <span className="roles-refreshing" role="status">Updating…</span>}
           </div>
 
-          <button type="button" className="btn btn-secondary" disabled={exporting || loading || totalRoles === 0} aria-busy={exporting} onClick={() => void exportRoles()}>{exporting ? "Exporting…" : "Export to Excel"}</button>
+          <button type="button" className="btn btn-secondary" disabled={exporting || loading || totalRoles === 0} aria-busy={exporting} onClick={() => void exportRoles()}><UiIcon name="excel" size={17} />{exporting ? "Exporting…" : "Export to Excel"}</button>
 
           {selectableRoles.length > 0 && <div className="bulk-selection-toolbar"><span>{selectedRoles.length} selected</span><button type="button" className="btn btn-danger-outline" disabled={selectedRoles.length === 0 || deletingRoleId !== ""} onClick={() => void deleteRoles(selectedRoles)}>Delete selected</button></div>}
 

@@ -19,6 +19,7 @@ export type UiIconName =
   | "filter"
   | "calendar"
   | "document"
+  | "excel"
   | "microphone"
   | "check"
   | "clock"
@@ -63,6 +64,7 @@ export default function UiIcon({ name, size = 18, strokeWidth = 1.8, className }
       {name === "filter" && <path d="M4 6h16M7 12h10M10 18h4" />}
       {name === "calendar" && <><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M7.5 3.5v3M16.5 3.5v3M3.5 9.5h17" /></>}
       {name === "document" && <><path d="M6 3.5h8l4 4V20.5H6z" /><path d="M14 3.5v4h4M8.5 12h7M8.5 15.5h7" /></>}
+      {name === "excel" && <><path d="M9 3.5h8a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H9z" fill="#e8f3eb" stroke="#217346" /><path d="M13.5 8.5h4M13.5 12h4M13.5 15.5h4M15.5 8.5v7" stroke="#217346" /><rect x="3" y="6.5" width="10.5" height="12" rx="1.3" fill="#217346" stroke="#217346" /><path d="m5.8 9.5 4.8 6m0-6-4.8 6" stroke="#fff" strokeWidth="1.6" /></>}
       {name === "microphone" && <><rect x="8" y="3.5" width="8" height="12" rx="4" /><path d="M5 12a7 7 0 0 0 14 0M12 19v2.5M8.5 21.5h7" /></>}
       {name === "check" && <path d="m5 12 4.5 4.5L19 7" />}
       {name === "clock" && <><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3 2" /></>}
