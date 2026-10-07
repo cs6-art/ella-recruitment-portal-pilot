@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import InterviewAutomationCard from "@/components/InterviewAutomationCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { STANDARD_AVATAR_SYSTEM_PROMPT_TEMPLATE } from "@/lib/avatar-prompt";
 import RoleInterviewerPicker from "@/components/RoleInterviewerPicker";
@@ -688,6 +689,10 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
           {updatedAt && <small>Last saved {formatDate(updatedAt)}{updatedBy ? ` by ${updatedBy}` : ""}</small>}
         </div>
         <span className="setup-readonly">{conflict ? "Refresh required" : editable ? "Editable by HR reviewers" : "Read-only"}</span>
+      </div>
+
+      <div className="recruitment-setup-automation">
+        <InterviewAutomationCard roleId={roleId} editable={canReview} placement="setup" />
       </div>
 
       {error && <ValidationSummary error={error} title="Setup save failed" issues={validationIssues} summaryRef={errorSummaryRef} />}

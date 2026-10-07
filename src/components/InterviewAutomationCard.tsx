@@ -10,13 +10,14 @@ import { formatPortalDateTime } from "@/lib/portal-time";
 
 type Automation = { enabled: boolean; minScore: number; enabledAt: string; enabledBy: string };
 type AutomationResponse = { success?: boolean; error?: string; automation?: Automation; waitingForReview?: number; roleOpen?: boolean };
+const AUTOMATION_UPDATED_EVENT = "smile:interview-automation-updated";
 
 /**
  * Role-level "Interview automation": applicants whose screening score meets
- * the minimum are invited to interview without waiting for HR. Saved on its
- * own (not part of Recruitment Setup) so it can change while the role is live.
+ * the minimum are invited to interview without waiting for HR. It has its own
+ * save action so HR can change it while the role is live.
  */
-export default function InterviewAutomationCard({ roleId, editable }: { roleId: string; editable: boolean }) {
+export default function InterviewAutomationCard({ roleId, editable, placement = "details" }: { roleId: string; editable: boolean; placement?: "details" | "setup" }) {
   const { confirm } = useConfirmation();
   const [state, setState] = useState<AutomationResponse | null>(null);
   const [enabled, setEnabled] = useState(false);
@@ -39,6 +40,18 @@ export default function InterviewAutomationCard({ roleId, editable }: { roleId: 
       .then((data) => { if (active && data) apply(data); })
       .catch(() => undefined);
     return () => { active = false; };
+  }, [roleId]);
+
+  useEffect(() => {
+    function syncOtherAutomationCards(event: Event) {
+      const detail = (event as CustomEvent<{ roleId: string; data: AutomationResponse }>).detail;
+      if (detail?.roleId !== roleId || !detail.data.automation) return;
+      setState(detail.data);
+      setEnabled(detail.data.automation.enabled);
+      setMinScore(String(detail.data.automation.minScore));
+    }
+    window.addEventListener(AUTOMATION_UPDATED_EVENT, syncOtherAutomationCards);
+    return () => window.removeEventListener(AUTOMATION_UPDATED_EVENT, syncOtherAutomationCards);
   }, [roleId]);
 
   // Postgres-only feature: nothing renders until the role's setting loads.
@@ -71,6 +84,7 @@ export default function InterviewAutomationCard({ roleId, editable }: { roleId: 
       const data: AutomationResponse = await response.json().catch(() => ({}));
       if (!response.ok || !data.success) throw new Error(data.error || "Unable to save Interview automation.");
       apply(data);
+      window.dispatchEvent(new CustomEvent(AUTOMATION_UPDATED_EVENT, { detail: { roleId, data } }));
       setMessage({ kind: "success", text: enabled ? "Interview automation is on." : "Interview automation is off. New applicants wait for HR review." });
     } catch (caught) {
       setMessage({ kind: "error", text: clientErrorMessage(caught, "Unable to save Interview automation.") });
@@ -80,10 +94,11 @@ export default function InterviewAutomationCard({ roleId, editable }: { roleId: 
   }
 
   const reviewHref = `/roles/${encodeURIComponent(roleId)}/applicants?stage=${encodeURIComponent("Resume Review")}&sort=match`;
-  return <section id="interview-automation" className="card role-section interview-automation-card" aria-labelledby="interview-automation-title">
+  const setupPlacement = placement === "setup";
+  return <section id={setupPlacement ? "recruitment-setup-interview-automation" : "interview-automation"} className={`card role-section interview-automation-card${setupPlacement ? " interview-automation-card-in-setup" : ""}`} aria-labelledby={setupPlacement ? "recruitment-setup-interview-automation-title" : "interview-automation-title"}>
     <div className="card-header interview-automation-header">
       <div>
-        <h2 id="interview-automation-title">Interview automation</h2>
+        <h2 id={setupPlacement ? "recruitment-setup-interview-automation-title" : "interview-automation-title"}>Interview automation</h2>
         <p>Invite applicants to interview automatically when their screening score meets a minimum.</p>
       </div>
       <span className={`interview-automation-state ${saved.enabled ? "is-on" : "is-off"}`}>{saved.enabled ? `On · ${saved.minScore}%+` : "Off"}</span>
