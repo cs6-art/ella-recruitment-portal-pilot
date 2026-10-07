@@ -12,6 +12,7 @@ import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 import { getPublicAppBaseUrl } from "@/lib/public-url";
 import { sendTeamInvitationEmail } from "@/lib/registration";
+import { listReleasedEmailKeys, withoutReleasedEmails } from "@/lib/released-emails";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,7 +89,9 @@ export async function POST(request: Request) {
     // An address may register into only one organization.
     const others = await getDb().select({ id: organizations.id, name: organizations.name, allowedEmails: organizations.allowedEmails, allowedDomains: organizations.allowedDomains }).from(organizations);
     const domain = email.split("@")[1] || "";
-    const conflict = others.find((other) => other.id !== organizationId && (other.allowedEmails.includes(email) || other.allowedDomains.includes(domain)));
+    // An organization that deactivated this person has released the address.
+    const released = await listReleasedEmailKeys([email]);
+    const conflict = withoutReleasedEmails(others, released).find((other) => other.id !== organizationId && (other.allowedEmails.includes(email) || other.allowedDomains.includes(domain)));
     if (conflict) return fail("That email address already belongs to another organization.", 409);
     await getDb().update(organizations).set({ allowedEmails: [...organization.allowedEmails, email], updatedAt: new Date() }).where(eq(organizations.id, organizationId));
     const inviteLink = new URL(`${getPublicAppBaseUrl(request)}/`);

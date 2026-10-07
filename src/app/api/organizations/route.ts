@@ -11,6 +11,7 @@ import { isPlatformAdmin } from "@/lib/access-control";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organization-accounts";
 import { grantWelcomeCredits } from "@/lib/organization-welcome-credits";
 import { getOrganizationReadiness } from "@/lib/organization-readiness";
+import { listReleasedEmailKeys, withoutReleasedEmails } from "@/lib/released-emails";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -46,7 +47,9 @@ function normalizeDomain(value: string) {
  * matches before domain matches.
  */
 async function ruleConflict(rules: ReturnType<typeof cleanRules>, ownId: string) {
-  const all = await getDb().select({ id: organizations.id, name: organizations.name, allowedDomains: organizations.allowedDomains, allowedEmails: organizations.allowedEmails }).from(organizations);
+  const rows = await getDb().select({ id: organizations.id, name: organizations.name, allowedDomains: organizations.allowedDomains, allowedEmails: organizations.allowedEmails }).from(organizations);
+  // An address another organization has deactivated is released for reuse.
+  const all = withoutReleasedEmails(rows, await listReleasedEmailKeys(rules.allowedEmails));
   for (const other of all.filter((row) => row.id !== ownId)) {
     const otherDomains = other.allowedDomains.map(normalizeDomain);
     const otherEmails = other.allowedEmails.map((email) => email.trim().toLowerCase());

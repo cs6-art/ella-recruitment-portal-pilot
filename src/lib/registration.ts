@@ -12,6 +12,7 @@ import { grantWelcomeCredits } from "@/lib/organization-welcome-credits";
 import { claimOrganizationOwnershipIfNone, findPostgresDirectoryUser, upsertPostgresDirectoryUser } from "@/lib/postgres-directory";
 import { runWithTenantDatabase } from "@/lib/tenant-database";
 import { fetchWithTimeout, timeoutFromEnv } from "@/lib/fetch-with-timeout";
+import { listReleasedEmailKeys, withoutReleasedEmails } from "@/lib/released-emails";
 
 export const PASSWORD_MIN_LENGTH = 10;
 export const PASSWORD_MAX_LENGTH = 128;
@@ -86,7 +87,8 @@ export async function resolveRegistrationOrganization(email: string): Promise<st
     .select({ id: organizations.id, allowedDomains: organizations.allowedDomains, allowedEmails: organizations.allowedEmails })
     .from(organizations)
     .where(eq(organizations.active, true));
-  return matchRegistrationOrganization(email, rows);
+  const released = await listReleasedEmailKeys([email]);
+  return matchRegistrationOrganization(email, withoutReleasedEmails(rows, released));
 }
 
 /**
