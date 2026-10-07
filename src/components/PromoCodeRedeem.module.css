@@ -1,0 +1,55 @@
+.promo {
+  display: grid;
+  gap: 10px;
+  margin: 0 22px 16px;
+  padding: 14px 16px;
+  border: 1px dashed #b9cfe4;
+  border-radius: 10px;
+  background: #f7fbff;
+}
+
+.form { display: grid; gap: 6px; }
+.label { color: var(--navy, #0e4471); font-weight: 700; font-size: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--line, #dfe5ec);
+  border-radius: 8px;
+  font: inherit;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.input::placeholder { text-transform: none; letter-spacing: normal; }
+.help { color: var(--muted, #5e6b78); font-size: 12px; }
+
+@media (max-width: 520px) {
+  .promo { margin: 0 14px 14px; }
+  .row :global(.btn) { width: 100%; }
+}
+
+/* Promo code management (McLink credit managers). */
+.managerForm {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  align-items: end;
+  padding: 0 22px 16px;
+}
+.managerForm label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--navy, #0e4471); }
+.managerForm small { font-weight: 400; color: var(--muted, #5e6b78); }
+.managerForm input, .managerForm select { padding: 8px 10px; border: 1px solid var(--line, #dfe5ec); border-radius: 8px; font: inherit; }
+.managerWide { grid-column: span 2; }
+.managerFeedback { padding: 0 22px 12px; }
+.managerEmpty { padding: 0 22px 18px; color: var(--muted, #5e6b78); }
+.managerTableWrap { overflow-x: auto; padding: 0 22px 20px; }
+.managerTable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.managerTable th, .managerTable td { padding: 8px 10px; border-bottom: 1px solid var(--line, #dfe5ec); text-align: left; vertical-align: top; }
+.managerTable td small { display: block; color: var(--muted, #5e6b78); }
+.managerActions { display: flex; flex-wrap: wrap; gap: 6px; }
+.managerUses { margin: 0; padding-left: 18px; }
+
+@media (max-width: 520px) {
+  .managerWide { grid-column: auto; }
+}

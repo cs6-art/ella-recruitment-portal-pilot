@@ -16,6 +16,8 @@ import { getSetupReadiness } from "@/lib/recruitment-setup-readiness";
 import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
 import type { RoleAiDraft } from "@/lib/role-ai-draft-schema";
 import { clientErrorMessage } from "@/lib/client-error";
+import { InterviewTypeOptions, saveRoleInterviewType } from "@/components/InterviewTypeCard";
+import { DEFAULT_ROLE_INTERVIEW_TYPE, type RoleInterviewType } from "@/lib/interview-type";
 
 type RoleRequestFormProps = {
   user: {
@@ -29,6 +31,9 @@ type RoleRequestFormProps = {
   canApproveRole?: boolean;
   /** HR creates, configures, and publishes a role from this single form. */
   unified?: boolean;
+  /** HR (and the Postgres portal) can choose the role's Interview type here. */
+  canSetInterviewType?: boolean;
+  initialInterviewType?: RoleInterviewType;
 };
 
 const QUESTION_NUMBERS = [1, 2, 3, 4, 5] as const;
@@ -146,8 +151,16 @@ const fieldLabels: Record<string, string> = {
   setup_venue: "Face-to-face interview venue",
 };
 
-export default function RoleRequestForm({ user, roleId, status = "", initialValues, canApproveRole = false, unified = false }: RoleRequestFormProps) {
+export default function RoleRequestForm({ user, roleId, status = "", initialValues, canApproveRole = false, unified = false, canSetInterviewType = false, initialInterviewType = DEFAULT_ROLE_INTERVIEW_TYPE }: RoleRequestFormProps) {
   const router = useRouter();
+  const [interviewType, setInterviewType] = useState<RoleInterviewType>(initialInterviewType);
+  // Saved through the role's own audited endpoint once the role exists. A
+  // failure never undoes the role save: the role keeps its previous (or the
+  // default "Both") type and HR can change it from the role page.
+  async function persistInterviewType(savedRoleId: string, isNewRole: boolean) {
+    if (!canSetInterviewType || !savedRoleId || (!isNewRole && interviewType === initialInterviewType)) return;
+    try { await saveRoleInterviewType(savedRoleId, interviewType); } catch (interviewTypeError) { console.error("[Role Request Form] Interview type save failed:", interviewTypeError); }
+  }
   const initialForm = useMemo<FormState>(() => ({
     ...initial,
     ...initialValues,
@@ -176,7 +189,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
   const draftClientId = useRef(globalThis.crypto.randomUUID());
   const initialFormKey = useMemo(() => JSON.stringify(initialForm), [initialForm]);
   const [savedFormKey, setSavedFormKey] = useState(initialFormKey);
-  const hasChanges = JSON.stringify(form) !== savedFormKey;
+  const hasChanges = JSON.stringify(form) !== savedFormKey || interviewType !== initialInterviewType;
 
   useEffect(() => {
     setSavedFormKey(initialFormKey);
@@ -505,6 +518,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
     if (draftSaveInFlight.current) await draftSaveInFlight.current;
     await autosaveDraft();
     if (draftSaveInFlight.current) await draftSaveInFlight.current;
+    await persistInterviewType(roleId || draftRoleId, !roleId);
     router.push("/roles");
   }
 
@@ -610,6 +624,10 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
 
       const savedRoleId = result.roleId || effectiveRoleId || "";
       let finalStatus = result.status || "Pending HR Discussion";
+      if (savedRoleId) {
+        setStage("Saving the interview type…");
+        await persistInterviewType(savedRoleId, !isEditing || isAutoDraft);
+      }
       // An approver submitting a new request is the reviewer too, so approve it
       // in the same step instead of leaving a formality to click through. If
       // this fails the request simply stays pending for a manual approval.
@@ -772,6 +790,14 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
               <label htmlFor="reasonForRequest">Reason for Request <strong className="required-mark">*</strong></label>
               <textarea id="reasonForRequest" {...fieldErrorProps("reasonForRequest")} required value={form.reasonForRequest} onChange={(event) => update("reasonForRequest", event.target.value)} placeholder="Why is this additional or replacement staff member needed?" />
             </div>
+
+            {canSetInterviewType && (
+              <fieldset className="field full interview-type-field">
+                <legend>Interview Type <strong className="required-mark">*</strong></legend>
+                <small className="field-help">Which AI interview applicants for this role can be sent. You can change it later from the role page.</small>
+                <InterviewTypeOptions name="interviewType" value={interviewType} disabled={loading} onChange={setInterviewType} />
+              </fieldset>
+            )}
           </div>
         </section>
 

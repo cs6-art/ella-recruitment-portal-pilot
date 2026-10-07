@@ -146,6 +146,13 @@ function buildNotificationEmail(eventType: string | null | undefined, context: N
 
   switch (key) {
     case "voice_booking_invitation": {
+      // HR sent only a Live Avatar interview (no call option): its own,
+      // editable wording ("avatar_interview_invitation") with the avatar link
+      // as the one action. The queue passes that event's saved template.
+      if (!link && avatarLink) {
+        const avatar = renderEventEmail("avatar_interview_invitation", templateValues, context.template);
+        return { ...base, subject: avatar.subject, signoff: emailSignoff(companyName), heading: "Your Live Avatar interview", message: avatar.body, cta: "Start your Live Avatar interview", ctaLink: avatarLink, secondaryCta: "", secondaryCtaLink: "" };
+      }
       const { subject, body } = renderEventEmail(key, templateValues, context.template);
       return {
         ...base,

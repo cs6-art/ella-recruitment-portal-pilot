@@ -68,7 +68,7 @@ test("template validation rejects unknown placeholders, markup, empty text, mult
 
 test("only the emails an active sender delivers are offered for editing", async () => {
   const { EMAIL_EVENTS } = await import("../src/lib/email-templates.ts");
-  assert.deepEqual(EMAIL_EVENTS.filter((event) => event.editable).map((event) => event.key), ["voice_booking_invitation", "voice_booking_confirmation", "job_posted"]);
+  assert.deepEqual(EMAIL_EVENTS.filter((event) => event.editable).map((event) => event.key), ["voice_booking_invitation", "avatar_interview_invitation", "voice_booking_confirmation", "job_posted"]);
   const route = read("src/app/api/email-templates/route.ts");
   assert.match(route, /EMAIL_EVENTS\.filter\(\(event\) => event\.editable\)/);
   assert.match(route, /canEditSettings !== true/);

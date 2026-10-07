@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 
 import EllaCreditsPanel from "@/components/EllaCreditsPanel";
 import EllaCreditsPurchase from "@/components/EllaCreditsPurchase";
+import PromoCodeManager from "@/components/PromoCodeManager";
 import PageHeader from "@/components/ui/PageHeader";
-import { canManageCredits } from "@/lib/access-control";
+import { canManageAllOrganizationCredits, canManageCredits } from "@/lib/access-control";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -21,10 +22,11 @@ export default async function CreditsPage() {
           className="settings-header"
           eyebrow="SMILE CREDITS"
           title="Credits"
-          description="Purchase credits securely, review your organization’s credit history, or manage authorized manual top-ups."
+          description="Purchase credits securely, redeem a promo code, review your organization’s credit history, or manage authorized manual top-ups."
         />
         <EllaCreditsPurchase />
         <EllaCreditsPanel canManage={canManage} />
+        {canManageAllOrganizationCredits(user) && <PromoCodeManager />}
       </main>
     </>
   );

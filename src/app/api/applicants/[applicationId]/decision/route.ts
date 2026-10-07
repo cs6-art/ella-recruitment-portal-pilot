@@ -10,6 +10,7 @@ import {
 } from "@/lib/applicant-workflow";
 import { canDecideApplicant } from "@/lib/access-control";
 import { hrApprovalMode } from "@/lib/auto-advance";
+import { DECISION_COMMENT_MAX_LENGTH, decisionComment } from "@/lib/applicant-decision-rules";
 import { getPublicAppBaseUrl } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
@@ -19,11 +20,14 @@ const decisions = new Set<ApplicantDecision>(["Approve", "Reject", "Manual Revie
 const decisionSchema = z.object({
   stage: z.enum(["resume", "voice", "final"]),
   decision: z.enum(["Approve", "Reject", "Manual Review"]),
-  comments: z.string().trim().min(1).max(5000),
+  // Optional for Approve; a reason is still required to Reject (see decisionComment).
+  comments: z.string().max(DECISION_COMMENT_MAX_LENGTH + 500).optional().default(""),
 });
 
 function publicDecisionError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
+  if (/insufficient_credits/i.test(message)) return "Not enough Smile Credits for an interview. Top up credits, then approve again.";
+  if (/screening_required/i.test(message)) return "This applicant hasn't been screened yet. Use Send Phone Interview or Send Avatar Interview to skip screening, or wait for screening to finish.";
   if (/booking_tokens|booking token|booking invitation|avatar interview invitation|voice interview invitation/i.test(message)) {
     return "The decision could not finish because the interview invitation is not ready. Please try again; existing invitations are reused safely.";
   }
@@ -43,6 +47,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
     if (!stages.has(body.stage) || !decisions.has(body.decision)) {
       return NextResponse.json({ error: "Choose a valid workflow stage and decision." }, { status: 400 });
     }
+    const note = decisionComment(body.decision, body.comments);
+    if (!note.ok) return NextResponse.json({ error: note.error }, { status: 422 });
 
     const applicationId = decodeURIComponent((await params).applicationId);
     // Approving below the role's Interview automation minimum is recorded as
@@ -59,7 +65,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
       body.stage,
       body.decision,
       { name: user.name, email: user.email },
-      body.comments,
+      note.comment,
       getPublicAppBaseUrl(request),
       { organizationId: user.organizationId, approvalMode },
     );

@@ -119,6 +119,8 @@ const HISTORY_SOURCE_LABELS: Record<string, string> = {
   "internal_api": "System Update",
   "internal_api:booking": "Interview Booked",
   "internal_api:voice_booking_invitation": "Booking Invitation Queued",
+  "internal_api:avatar_interview_invitation": "Live Avatar Interview Invitation Queued",
+  "portal:screening_skipped": "Resume screening skipped by HR",
   "internal_api:voice_result": "Live Avatar Interview Result Recorded",
   "internal_api:hr_decision": "Decision Recorded by HR",
   "auto:screening_condition": "Automatically approved — screening condition met",

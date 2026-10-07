@@ -6,12 +6,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { canDecideApplicant } from "@/lib/access-control";
+import { decisionComment } from "@/lib/applicant-decision-rules";
 import { MAX_BULK_APPROVAL, summarizeBulkApproval, type BulkApprovalOutcome } from "@/lib/bulk-approval";
 import { getApplication } from "@/lib/internal-recruitment-queries";
 import { isManualOverride, readInterviewAutomation } from "@/lib/interview-automation";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
-import { approveForInterview } from "@/lib/recruitment-target-portal";
+import { approveForInterview, sendInterviewInvitation } from "@/lib/recruitment-target-portal";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -21,6 +22,9 @@ export const maxDuration = 60;
 const bodySchema = z.object({
   applicationIds: z.array(z.string().trim().min(1).max(200)).min(1).max(MAX_BULK_APPROVAL),
   comment: z.string().trim().max(2000).optional().default(""),
+  // "approve" keeps the screened-only rule; "voice"/"avatar" send that
+  // interview and may skip resume screening (recorded in the history).
+  action: z.enum(["approve", "voice", "avatar"]).optional().default("approve"),
 });
 
 const ALREADY_APPROVED_STAGES = new Set(["resume_approved", "voice_booking_pending"]);
@@ -43,12 +47,21 @@ export async function POST(request: Request) {
 
   const batchId = crypto.randomUUID();
   const ids = [...new Set(parsed.data.applicationIds)];
-  const comments = parsed.data.comment || "Approved for interview by HR.";
+  // Same comment rule as a single approval: optional.
+  const note = decisionComment("Approve", parsed.data.comment);
+  const comments = note.ok ? note.comment : "";
+  const action = parsed.data.action;
   const results: { applicationId: string; outcome: BulkApprovalOutcome }[] = [];
 
   for (const applicationId of ids) {
     let outcome: BulkApprovalOutcome;
     try {
+      if (action !== "approve") {
+        const sent = await sendInterviewInvitation({ applicationExternalId: applicationId, organizationId: user.organizationId, kind: action, actor: { name: user.name, email: user.email }, comments, base: "bulk" });
+        outcome = sent.outcome === "sent" ? "approved" : sent.outcome;
+        results.push({ applicationId, outcome });
+        continue;
+      }
       const row = await getApplication(applicationId);
       const stage = row?.application.currentStage || "";
       if (!row || row.application.organizationId !== user.organizationId) outcome = "not_found";
@@ -71,6 +84,7 @@ export async function POST(request: Request) {
           : result.error === "screening_required" ? "screening_pending"
           : result.error === "invalid_transition" ? "already_approved"
           : result.error === "unknown_application" ? "not_found"
+          : result.error === "insufficient_credits" ? "insufficient_credits"
           : "failed";
       }
     } catch (error) {
@@ -82,6 +96,6 @@ export async function POST(request: Request) {
 
   revalidatePath("/applicants");
   revalidatePath("/dashboard");
-  const summary = summarizeBulkApproval(results.map((result) => result.outcome));
+  const summary = summarizeBulkApproval(results.map((result) => result.outcome), action);
   return NextResponse.json({ success: true, batchId, ...summary, results });
 }

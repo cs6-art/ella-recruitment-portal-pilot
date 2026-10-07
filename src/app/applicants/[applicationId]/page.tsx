@@ -28,6 +28,8 @@ import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { getLiveInterviewReview, type LiveInterviewReview as LiveReview } from "@/lib/live-interview-store";
 import { INTERVIEW_STATE_LABELS } from "@/lib/live-interview";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { getRole } from "@/lib/internal-recruitment-queries";
+import { DEFAULT_ROLE_INTERVIEW_TYPE, readRoleInterviewType, ROLE_INTERVIEW_TYPE_LABELS } from "@/lib/interview-type";
 
 export const dynamic = "force-dynamic";
 
@@ -331,7 +333,7 @@ function CombinedScreeningEvidence({ applicant, liveReview, liveReviewUnavailabl
   const avatarInvitationStatus = liveReview
     ? liveReview.interviewState === "completed" ? "Used — interview completed" : "Used — interview session started"
     : bookingInvitationStatus({ tokenLink: applicant.voiceBookingLink, notificationStatus: applicant.voiceBookingNotificationStatus, isScheduled: false });
-  return <section className="card applicant-detail-card applicant-screening-evidence-card">
+  return <section id="applicant-screening-evidence" className="card applicant-detail-card applicant-screening-evidence-card">
     <DetailCardHeader icon="document" title="AI Screening Evidence" description={`CV analysis and ${isInterviewFormatPending ? "interview" : isAvatarInterview ? "Live Avatar" : "voice interview"} evidence to support a consistent review.`} />
     <div className="applicant-detail-content">
       <div className="applicant-evidence-subsection">
@@ -422,6 +424,10 @@ export default async function ApplicantDetailsPage({ params, searchParams }: { p
   const liveReviewResult = await loadLiveInterviewReview(applicant.applicationId, user.organizationId);
   const liveReview = liveReviewResult.review;
   const interviewMode: ApplicantInterviewMode = liveReview ? "avatar" : applicant.interviewMode;
+  // The role's Interview type decides which "Send … Interview" actions HR sees.
+  const roleInterviewType = isPostgresRecruitmentTarget()
+    ? readRoleInterviewType((await getRole(applicant.roleId, user.organizationId).catch(() => null))?.setup)
+    : DEFAULT_ROLE_INTERVIEW_TYPE;
 
   // Poll interview-choice, active-interview, review, and final-booking stages
   // together so HR sees changes before, during, and after an interview.
@@ -430,11 +436,11 @@ export default async function ApplicantDetailsPage({ params, searchParams }: { p
     <MarkApplicantSeen applicationId={applicant.applicationId} />
     <ApplicantLiveRefresh enabled={!TERMINAL_APPLICANT_STAGES.has(currentStageKey)} intervalMs={INTERVIEW_REFRESH_STAGES.has(currentStageKey) ? 30_000 : undefined} />
     <header className="applicant-detail-header"><Link href={returnTo} className="portal-back-link applicant-back-link"><UiIcon name="arrow-left" size={15} />Back to Applicants</Link><div className="applicant-detail-title-row"><div><h1>{applicant.candidateName || "Unnamed Candidate"}</h1><p>Application reference: {applicant.applicationId} · {applicant.email || "Email not provided"}</p></div><span className={applicantStageClass(applicant.currentStage)}>{applicantStageLabel(applicant.currentStage, interviewMode) || "Status not available"}</span></div><div className="applicant-detail-actions"><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}`}><UiIcon name="briefcase" size={15} />View Role</Link><Link className="btn btn-secondary" href={`/roles/${encodeURIComponent(applicant.roleId)}/applicants`}><UiIcon name="applicants" size={15} />Role Applicants</Link><ApplicantDetailActions applicationId={applicant.applicationId} candidateName={applicant.candidateName} canManage={canEditApplicant(user)} /></div></header>
-    <div className="applicant-detail-summary"><DetailField label="Selected Role" value={applicant.selectedRole} /><DetailField label="Department" value={applicant.department} /><DetailField label="Applied" value={dateValue(applicant.appliedAt)} /><DetailField label="Interview Type" value={interviewMode === "pending" ? "Not selected" : interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"} /><DetailField label="Match Score" value={formatMatchScore(applicant.matchScore)} />{applicant.recommendation.trim() !== applicant.nextAction.trim() && <DetailField label="Recommendation" value={applicant.recommendation} />}<DetailField label="Next Action" value={applicant.nextAction} /></div>
+    <div className="applicant-detail-summary"><DetailField label="Selected Role" value={applicant.selectedRole} /><DetailField label="Department" value={applicant.department} /><DetailField label="Applied" value={dateValue(applicant.appliedAt)} /><DetailField label="Interview Type" value={interviewMode === "pending" ? `Not selected (role: ${ROLE_INTERVIEW_TYPE_LABELS[roleInterviewType]})` : interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"} /><DetailField label="Match Score" value={formatMatchScore(applicant.matchScore)} />{applicant.recommendation.trim() !== applicant.nextAction.trim() && <DetailField label="Recommendation" value={applicant.recommendation} />}<DetailField label="Next Action" value={applicant.nextAction} /></div>
     <div className="applicant-detail-grid"><div className="applicant-detail-main">
       <CombinedScreeningEvidence applicant={applicant} liveReview={liveReview} liveReviewUnavailable={liveReviewResult.unavailable} canRetryLiveReview={canDecideApplicant(user)} />
       <AiGradingCriteria applicant={applicant} liveReview={liveReview} />
-      <ApplicantDecisionPanel applicationId={applicant.applicationId} currentStage={applicant.currentStage} resumeDecision={applicant.resumeDecision} resumeComments={resumeComments} voiceDecision={applicant.voiceDecision} voiceComments={voiceComments} voiceStatus={applicant.voiceCallStatus || applicant.voiceStatus} finalInterviewStatus={applicant.finalInterviewStatus} finalStatus={applicant.finalStatus} finalComments={finalComments} finalBookingLink={applicant.finalBookingLink} voiceBookingLink={interviewMode === "voice" ? externalUrl(applicant.voiceBookingLink) : ""} voiceRetryEligible={!/(?:^|[^a-z])failed(?:[^a-z]|$)|blocked|system[_ -]?failure|provider[_ -]?failure|technical[_ -]?failure|dispatch[_ -]?fail/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus}`) && /no[_ -]?answer|no[_ -]?show|incomplete|not connected|voicemail|busy|declined|cancell?ed/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus} ${applicant.voiceBookingStatus}`)} canReview={canDecideApplicant(user)} interviewMode={interviewMode} />
+      <ApplicantDecisionPanel applicationId={applicant.applicationId} roleInterviewType={roleInterviewType} screened={!isPostgresRecruitmentTarget() || applicant.resumeStatus.trim().toLowerCase() === "processed"} canSendInterview={isPostgresRecruitmentTarget()} currentStage={applicant.currentStage} resumeDecision={applicant.resumeDecision} resumeComments={resumeComments} voiceDecision={applicant.voiceDecision} voiceComments={voiceComments} voiceStatus={applicant.voiceCallStatus || applicant.voiceStatus} finalInterviewStatus={applicant.finalInterviewStatus} finalStatus={applicant.finalStatus} finalComments={finalComments} finalBookingLink={applicant.finalBookingLink} voiceBookingLink={interviewMode === "voice" ? externalUrl(applicant.voiceBookingLink) : ""} voiceRetryEligible={!/(?:^|[^a-z])failed(?:[^a-z]|$)|blocked|system[_ -]?failure|provider[_ -]?failure|technical[_ -]?failure|dispatch[_ -]?fail/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus}`) && /no[_ -]?answer|no[_ -]?show|incomplete|not connected|voicemail|busy|declined|cancell?ed/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus} ${applicant.voiceBookingStatus}`)} canReview={canDecideApplicant(user)} interviewMode={interviewMode} />
       <section className="card applicant-detail-card"><DetailCardHeader icon="document" title="Resume / CV" description="The candidate's submitted resume document." /><ResumeResource value={applicant.resumeText} fileId={applicant.resumeFileId} fileName={applicant.resumeFileName} expiresAt={applicant.resumeFileExpiresAt} /></section>
       <section className="card applicant-detail-card"><DetailCardHeader icon="microphone" title="Interview Questions" description="Questions prepared for the candidate's interview." /><InterviewQuestions value={applicant.interviewQuestions} /></section>
       <CandidateHistoryTimeline history={history} interviewMode={liveReview ? "avatar" : applicant.interviewMode} />

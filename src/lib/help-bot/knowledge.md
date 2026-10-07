@@ -36,7 +36,8 @@ depends on their assigned access. The short version of the process:
 The main menu items are Dashboard, Role Requests, Resume Screening, Applicants,
 Interview Calendar, Settings, Credits, User Accounts, and Profile (opened from your name at
 the bottom of the menu). Menu items you are not allowed to use do not appear for
-you. The Smile assistant (this chat) is available from every page.
+you. The Smile assistant (this chat) is available from every page: select the
+smiling blue robot in the bottom-right corner.
 
 ## Quick answers for common portal questions
 
@@ -609,14 +610,16 @@ the candidate starts when ready.
 2. A camera and microphone check runs first.
 3. Smile greets them, confirms who they are, and asks the role's approved interview
    questions one at a time, in order, exactly as written. The whole session lasts up
-   to 5 minutes, so not every question may be reached if answers are long.
+   to 20 minutes, so not every question may be reached if answers are very long.
 4. Smile closes politely. The interview is recorded (audio, video and responses)
    and transcribed, and the recruitment team reviews it. It is not an automated
    hiring decision.
 
 Smile can answer in English, Filipino/Tagalog, Taglish or Mandarin, following the
-candidate's language. The interview costs 20 Smile Credits, reserved when the
-candidate starts it and released again if it cannot start.
+candidate's language. The interview costs 2 Smile Credits per started minute (up
+to 40 credits for the 20-minute maximum). Up to 40 credits are reserved when the
+candidate starts it, only the minutes used are charged, and the reservation is
+released if it cannot start.
 
 If the organisation has not connected its Google Drive recording folder, or the
 folder is not ready, the interview cannot start and the candidate sees a message
@@ -695,7 +698,8 @@ Status History lists each change with who made it; steps the portal takes on its
 own show as **Automatic update**.
 
 **HR Decisions** are recorded separately for the AI CV analysis and for the
-interview review. Each has **Approve** or **Reject**, and a comment is required.
+interview review. Each has **Approve** or **Reject**. A note is optional when
+approving; rejecting needs a short reason.
 Approval moves the candidate to **Approved for Face-to-Face Interview** and
 generates the HR interview booking invitation. A rejection stops the candidate at
 that stage. As with resume screening, the AI result is evidence for a human
@@ -721,9 +725,9 @@ scheduled date, time, and timezone on the applicant record. The candidate
 receives a confirmation and both sides see the same time because the timezone is
 recorded.
 
-HR availability: in **Interview Calendar**, choose **+ HR Availability**, choose an approved
-role, and choose **Refresh availability** to check the shared HR calendar, then
-share the booking link with the candidate. If a candidate does not attend, open
+HR availability: in **Interview Calendar**, choose **+ HR Exception Slot** to add an
+extra face-to-face time for an approved role when the shared HR calendar has no
+suitable time, then share the booking link with the candidate. If a candidate does not attend, open
 the date details, find the appointment, and choose **Mark No Show** after the
 interview start time, then confirm.
 
@@ -999,6 +1003,75 @@ your address by name.
 
 **Booking link does not work.** Booking links are single-use and personal. If a
 link is expired or already used, generate or request a new invitation.
+
+---
+
+## Interview type for a role (Voice only, Avatar only, or Both)
+
+Each role has an **Interview Type** that decides which AI interview its applicants
+can be sent. HR chooses it in the Role Request form (create or edit) and can change it
+later on the role page in the **Interview type** card.
+
+- **Voice Interview only** — applicants get the AI phone interview: they book a time
+  and Smile calls them. Only **Send Phone Interview** is shown for these applicants.
+- **Avatar Interview only** — applicants get the Live Avatar video interview, which
+  they start from the email link. Only **Send Avatar Interview** is shown.
+- **Both** — HR chooses **Send Phone Interview** or **Send Avatar Interview** for each
+  applicant. Approving an applicant from the AI CV Analysis offers the candidate both
+  and lets them choose. "Both" does not mean the applicant must do two interviews.
+
+Roles created before this setting existed use **Both**, so nothing changes for them.
+Approving an applicant (one at a time, in bulk, or through Interview automation)
+always follows the role's interview type. Changing the type does not affect
+invitations already sent. Only HR can change it, and the change is recorded in the
+role's Status History.
+
+## Sending an interview directly (Send Phone Interview / Send Avatar Interview)
+
+On an applicant in Resume Review, HR can choose **Send Phone Interview** or **Send
+Avatar Interview** (the buttons shown follow the role's interview type). This works
+even before resume screening has finished: screening is then skipped, nothing is
+charged for it, and the history says "Resume screening skipped by HR". The history
+also records "Voice Interview sent by HR" or "Avatar Interview sent by HR". On the
+Applicants list you can select several applicants and use the same buttons; anyone
+who already has an active interview invitation, or whose role does not use that
+interview type, is skipped and the summary says why. For a role set to **Both**, while
+the applicant has not booked or started yet, **Change interview type** lets HR switch
+to the other interview; the old link stops working.
+
+## Interview automation
+
+On the role page, **Interview automation** can invite applicants to interview
+automatically when their screening score meets a minimum (for example 80%). It only
+applies to applicants screened after it was switched on; everyone else waits for HR
+review. The invitation follows the role's interview type.
+
+## Promo codes (free Smile Credits)
+
+A promo code adds **210 Smile Credits** to your organisation's shared balance.
+
+1. Open **Credits** in the menu.
+2. In the **Credit Balance** section, find **Have a promo code?**
+3. Type the code and select **Redeem**.
+
+When it works you see "Promo code applied. 210 credits have been added to your
+account." The balance updates straight away and the credit history shows a
+**Promotional Credits** entry of +210 with the code as the reference. Each
+organisation can use a promotion once. Messages you may see: "This promo code is not
+valid." (check the spelling, or the code was disabled), "This promo code has
+expired.", "This promo code has already been used." (all its uses are taken), and
+"Your organization has already redeemed this promotion." Promo codes are created and
+disabled only by McLink credit managers, from the **Promo Codes** section of the
+Credits page.
+
+## Getting help and sending feedback (support email)
+
+Select the smiling robot in the bottom-right corner to open Smile, then the **Help &
+Feedback** tab. It shows the support team's email (HRSG: hrsg@mclinkgroup.com) with
+**Copy email** and **Open email app** buttons. To send feedback, choose a topic
+(Question, Report an issue, Suggestion), type your message and select **Continue in
+email**: your email app opens with the message filled in, and nothing is sent until
+you press Send there. Include the page you were on and what you were trying to do.
 
 ---
 

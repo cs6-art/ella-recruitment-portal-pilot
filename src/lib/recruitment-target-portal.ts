@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { and, eq } from "drizzle-orm";
 import { evaluationFieldPreferencesFromStored } from "@/lib/recruitment-setup-schema";
+import { isManualOverride, readInterviewAutomation } from "@/lib/interview-automation";
+import { approvalInterviewKinds, readRoleInterviewType, roleAllowsInterview, type RoleInterviewType } from "@/lib/interview-type";
 
 import {
   getApplication,
@@ -51,12 +53,13 @@ import {
   rescheduleFinalInterviewSlot,
   cancelFinalInterviewSlot,
   recordInterviewCalendarSync,
+  skipPendingScreening,
 } from "@/lib/internal-recruitment-queries";
 import { getDb } from "@/db/client";
 import { organizations } from "@/db/schema";
 import { users } from "@/db/schema-recruitment";
-import { classifyVoiceInterviewBillingOutcome } from "@/lib/ella-credit-math";
-import { creditCostFor } from "@/lib/ella-credits";
+import { assertCreditsAvailable, creditCostFor } from "@/lib/ella-credits";
+import { classifyVoiceInterviewBillingOutcome, EllaCreditsError, LIVE_AVATAR_MAX_MINUTES } from "@/lib/ella-credit-math";
 import { applicantVoiceTimezone } from "@/lib/applicant-timezone";
 import { extractStoredResumeText, type ResumeFileKind, type ResumeFileRecord } from "@/lib/resume-files";
 import { scheduledInstant } from "@/lib/interview-time";
@@ -967,13 +970,28 @@ export const INTERVIEW_APPROVAL_SOURCES: Record<InterviewApprovalMode, string> =
  * already at `resume_approved`. Both writes reuse an existing pending token,
  * so retries (and the n8n poller) never create a second invitation.
  */
-export async function issueInterviewInvitations(applicationExternalId: string) {
+/**
+ * The invitations a resume approval sends, following the role's Interview
+ * type: "both" issues the call booking link with the Live Avatar option
+ * (the candidate picks), "voice" only the call booking link, and "avatar"
+ * only the Live Avatar link, emailed on its own.
+ */
+export async function issueInterviewInvitations(applicationExternalId: string, interviewType?: RoleInterviewType) {
+  const type = interviewType ?? readRoleInterviewType((await getApplication(applicationExternalId))?.roleSetup);
   const expiryDays = await getPortalConfigNumber("Booking_Link_Expiry_Days", 7);
   const expiresAt = new Date(Date.now() + Math.max(1, Math.min(30, expiryDays)) * 24 * 60 * 60 * 1000).toISOString();
+  const kinds = approvalInterviewKinds(type);
+  if (!kinds.includes("voice")) {
+    const avatarOnly = await createBookingToken({ applicationExternalId, kind: "avatar", expiresAt, notify: true });
+    if (!avatarOnly.token) throw new Error(avatarOnly.error || "Unable to create the avatar interview invitation.");
+    return { voiceBookingNotificationHistoryId: null, avatarNotificationHistoryId: avatarOnly.notificationHistoryId };
+  }
   const invitation = await createBookingToken({ applicationExternalId, kind: "voice", expiresAt });
   if (!invitation.token) throw new Error(invitation.error || "Unable to create the voice interview booking invitation.");
-  const avatarInvitation = await createBookingToken({ applicationExternalId, kind: "avatar", expiresAt, notify: false });
-  if (!avatarInvitation.token) throw new Error(avatarInvitation.error || "Unable to create the avatar interview invitation.");
+  if (kinds.includes("avatar")) {
+    const avatarInvitation = await createBookingToken({ applicationExternalId, kind: "avatar", expiresAt, notify: false });
+    if (!avatarInvitation.token) throw new Error(avatarInvitation.error || "Unable to create the avatar interview invitation.");
+  }
   return { voiceBookingNotificationHistoryId: invitation.notificationHistoryId };
 }
 
@@ -983,6 +1001,15 @@ export async function issueInterviewInvitations(applicationExternalId: string) {
  * stage move followed by the interview invitations.
  */
 export async function approveForInterview(input: { applicationExternalId: string; organizationId: string; mode: InterviewApprovalMode; actor: { name: string; email: string }; comments: string; actionRequestId: string }) {
+  // Approval invites the candidate to the role's interview type(s); require
+  // the credits of the cheapest offered interview (the phone one when it is
+  // offered) so the candidate is not invited into an interview that cannot
+  // run. (Credits are held later, at booking/start.)
+  const row = await getApplication(input.applicationExternalId);
+  const interviewType = readRoleInterviewType(row?.application.organizationId === input.organizationId ? row.roleSetup : undefined);
+  if (!(await interviewCreditsCovered(input.organizationId, interviewType === "avatar" ? "avatar" : "voice"))) {
+    return { updated: false as const, duplicate: false as const, error: "insufficient_credits" as const, invitationsIssued: false };
+  }
   const result = await applyHrDecision({
     applicationExternalId: input.applicationExternalId,
     organizationId: input.organizationId,
@@ -1001,8 +1028,109 @@ export async function approveForInterview(input: { applicationExternalId: string
   // the race where approval and the five-minute poll run at the same time.
   // A replayed request (duplicate) re-issues too: that is how a retry
   // recovers when the stage moved but invitation creation failed.
-  const invitations = await issueInterviewInvitations(input.applicationExternalId);
+  const invitations = await issueInterviewInvitations(input.applicationExternalId, interviewType);
   return { ...result, invitationsIssued: true, ...invitations };
+}
+
+export type InterviewInvitationKind = "voice" | "avatar";
+export type InterviewInvitationOutcome = "sent" | "already_invited" | "interview_exists" | "not_eligible" | "not_found" | "not_allowed_for_role" | "insufficient_credits" | "failed";
+
+const INTERVIEW_INVITE_STAGES = new Set(["resume_review", "resume_approved", "voice_booking_pending"]);
+
+/** The unexpired, unused phone / Live Avatar invitations the candidate can still act on (newest first). */
+function activeInterviewKinds(tokens: Awaited<ReturnType<typeof listApplicationBookingTokens>>): InterviewInvitationKind[] {
+  const now = Date.now();
+  const kinds = tokens.filter((token) => (token.kind === "voice" || token.kind === "avatar")
+    && ["pending", "active"].includes(token.status)
+    && (!token.expiresAt || token.expiresAt.getTime() > now)).map((token) => token.kind as InterviewInvitationKind);
+  return [...new Set(kinds)];
+}
+
+/**
+ * Whether the organization can cover the interview it is about to send. This
+ * is a check, not a hold: credits are still reserved when the candidate books
+ * a call (phone) or starts the interview (Live Avatar, up to its 20-minute
+ * cap), so sending many invitations never locks credits for days. It stops HR
+ * inviting a candidate into an interview that would then fail to start.
+ */
+export async function interviewCreditsCovered(organizationId: string, kind: InterviewInvitationKind): Promise<boolean> {
+  try {
+    if (kind === "avatar") await assertCreditsAvailable(LIVE_AVATAR_MAX_MINUTES, "live_avatar_interview", { organizationId });
+    else await assertCreditsAvailable(1, "phone_interview", { organizationId });
+    return true;
+  } catch (error) {
+    if (error instanceof EllaCreditsError) return false;
+    throw error;
+  }
+}
+
+/**
+ * HR sends a phone (AI voice) or Live Avatar interview directly. Resume
+ * screening is optional: an unscreened applicant is approved without a
+ * screening result, the history records "Resume screening skipped by HR", and
+ * any screening still queued for them is cancelled (no late result, no charge).
+ * Only one live invitation may exist at a time. With `switchType`, HR replaces
+ * a not-yet-used invitation of the other type (nothing booked or started).
+ */
+export async function sendInterviewInvitation(input: { applicationExternalId: string; organizationId: string; kind: InterviewInvitationKind; actor: { name: string; email: string }; comments?: string; base?: Extract<InterviewApprovalMode, "manual" | "bulk">; switchType?: boolean }): Promise<{ outcome: InterviewInvitationOutcome; activeKind?: InterviewInvitationKind; canSwitch?: boolean; switched?: boolean; screeningSkipped?: boolean; interviewType?: RoleInterviewType }> {
+  const id = input.applicationExternalId.trim();
+  const row = await getApplication(id);
+  if (!row || row.application.organizationId !== input.organizationId) return { outcome: "not_found" };
+  // The role decides which interview HR may send (Voice only / Avatar only / Both).
+  const interviewType = readRoleInterviewType(row.roleSetup);
+  if (!roleAllowsInterview(interviewType, input.kind)) return { outcome: "not_allowed_for_role", interviewType };
+  const stage = row.application.currentStage;
+  if (row.application.withdrawn || !INTERVIEW_INVITE_STAGES.has(stage)) {
+    return { outcome: stage === "rejected" || stage === "withdrawn" || row.application.withdrawn ? "not_eligible" : "interview_exists" };
+  }
+  if (row.hasLiveAvatarInterview) return { outcome: "interview_exists", activeKind: "avatar" };
+  const activeKinds = activeInterviewKinds(await listApplicationBookingTokens(id));
+  // Only this type is active: nothing to switch. Another type is active: HR may switch.
+  const switching = activeKinds.length > 0 && activeKinds.some((kind) => kind !== input.kind);
+  // (input.kind is allowed by the role here, so a switch always lands on an allowed type.)
+  if (activeKinds.length > 0 && (!switching || !input.switchType)) {
+    return { outcome: "already_invited", activeKind: activeKinds.find((kind) => kind !== input.kind) || activeKinds[0], canSwitch: switching };
+  }
+  if (!(await interviewCreditsCovered(input.organizationId, input.kind))) return { outcome: "insufficient_credits" };
+
+  const screened = Boolean(row.screeningResult);
+  if (stage === "resume_review") {
+    const automation = readInterviewAutomation(row.roleSetup);
+    const mode: InterviewApprovalMode = isManualOverride(automation, row.screeningResult?.matchScore) ? "manual_override" : input.base || "manual";
+    const note = input.comments?.trim();
+    const result = await applyHrDecision({
+      applicationExternalId: id,
+      organizationId: input.organizationId,
+      stage: "resume",
+      decision: "approve",
+      comments: screened
+        ? `${input.kind === "avatar" ? "Avatar" : "Voice"} Interview sent by HR.${note ? ` ${note}` : ""}`
+        : `Resume screening skipped by HR. ${input.kind === "avatar" ? "Avatar" : "Voice"} Interview sent by HR.${note ? ` ${note}` : ""}`,
+      actorEmail: input.actor.email,
+      actorName: input.actor.name,
+      actionRequestId: `send-interview:resume:${id}`,
+      source: screened ? INTERVIEW_APPROVAL_SOURCES[mode] : "portal:screening_skipped",
+      allowWithoutScreening: true,
+    });
+    const duplicate = "duplicate" in result && result.duplicate === true;
+    if (!result.updated && !duplicate) return { outcome: result.error === "invalid_transition" ? "interview_exists" : "failed" };
+    if (!screened) await skipPendingScreening(id, input.organizationId);
+  }
+  const expiryDays = await getPortalConfigNumber("Booking_Link_Expiry_Days", 7);
+  const expiresAt = new Date(Date.now() + Math.max(1, Math.min(30, expiryDays)) * 24 * 60 * 60 * 1000).toISOString();
+  const invitation = await createBookingToken({
+    applicationExternalId: id,
+    kind: input.kind,
+    expiresAt,
+    notify: true,
+    exclusiveInterview: !switching,
+    replaceInterview: switching ? { actorEmail: input.actor.email, actorName: input.actor.name } : undefined,
+  });
+  if (invitation.error === "interview_already_invited") return { outcome: "already_invited", activeKind: ("activeKind" in invitation ? invitation.activeKind : input.kind) as InterviewInvitationKind, canSwitch: ("activeKind" in invitation ? invitation.activeKind : input.kind) !== input.kind };
+  if (invitation.error === "interview_already_started") return { outcome: "interview_exists" };
+  if (!invitation.token) return { outcome: "failed" };
+  if (!invitation.created) return { outcome: "already_invited", activeKind: input.kind, canSwitch: false };
+  return { outcome: "sent", switched: switching, screeningSkipped: stage === "resume_review" && !screened };
 }
 
 export async function targetRecordApplicantDecision(input: { applicationId: string; organizationId?: string; stage: "resume" | "voice" | "final"; decision: string; comments: string; reviewer: { name: string; email: string }; approvalMode?: InterviewApprovalMode }) {
@@ -1370,7 +1498,8 @@ function targetApplicantSummary(row: TargetApplicationRow) {
       // HR decisions are a separate workflow step. They must never make an
       // application appear AI-screened when no screening result exists.
       cvRecommendation: text(screening?.recommendation),
-      resumeStatus: screening ? "Processed" : "",
+      // HR approved without a screening result: screening was deliberately skipped.
+      resumeStatus: screening ? "Processed" : text(application.resumeHrDecision).toLowerCase() === "approve" ? "Screening skipped" : "",
       voiceStatus: text(application.voiceHrDecision),
       finalInterviewStatus: text(application.finalHrDecision),
       finalStatus: stageLabel,

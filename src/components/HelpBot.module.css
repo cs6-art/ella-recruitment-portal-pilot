@@ -1,29 +1,55 @@
-.launcher {
+/* Floating mascot launcher (page-mascot). One control: the mascot button. */
+.mascotLauncher {
   position: fixed;
-  right: clamp(16px, 3vw, 28px);
-  bottom: clamp(16px, 3vw, 28px);
+  right: clamp(12px, 2.5vw, 24px);
+  bottom: clamp(10px, 2.5vw, 20px);
   z-index: 60;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 18px 12px 14px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: var(--navy);
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: var(--elevation-3);
+  width: 72px;
+  height: 72px;
 }
 
-.launcher:hover { background: #0b3a61; }
-.launcher:focus-visible { outline: var(--focus-outline); outline-offset: 2px; }
-.launcherLabel { font-size: 0.92rem; }
+.mascotFloat {
+  display: block;
+  animation: smileFloat 3.6s ease-in-out infinite;
+  filter: drop-shadow(0 6px 10px rgba(14, 68, 113, 0.22));
+}
+
+.mascotOpen .mascotFloat { animation-play-state: paused; }
+
+.mascotButton { border-radius: 24px; }
+.mascotButton:focus-visible { outline: var(--focus-outline); outline-offset: 2px; }
+
+@keyframes smileFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.greetingBubble {
+  position: absolute;
+  right: calc(100% + 6px);
+  top: 14px;
+  padding: 7px 12px;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--navy);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--elevation-2, 0 4px 12px rgba(23, 32, 51, 0.12));
+  pointer-events: none;
+  animation: smileBubbleIn 0.25s ease-out;
+}
+
+@keyframes smileBubbleIn {
+  from { opacity: 0; transform: translateX(6px); }
+  to { opacity: 1; transform: translateX(0); }
+}
 
 .panel {
   position: fixed;
   right: clamp(16px, 3vw, 28px);
-  bottom: calc(clamp(16px, 3vw, 28px) + 64px);
+  bottom: calc(clamp(10px, 2.5vw, 20px) + 84px);
   z-index: 60;
   display: flex;
   flex-direction: column;
@@ -194,10 +220,91 @@
     bottom: 8px;
     height: min(70vh, 520px);
   }
-  .launcher { right: 12px; bottom: 12px; }
-  .launcherLabel { display: none; }
+  .mascotLauncher { width: 60px; height: 60px; right: 10px; bottom: 10px; }
+  .mascotLauncher :global(button) { width: 60px !important; height: 60px !important; }
+  .mascotOpen { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dot { animation: none; }
+  .dot, .mascotFloat, .greetingBubble { animation: none; }
 }
+
+/* Tabs: "Ask Smile" and "Help & Feedback". */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  flex: 1;
+  padding: 9px 10px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+.tab[aria-selected="true"] { color: var(--navy); border-bottom-color: var(--blue); }
+.tab:focus-visible { outline: var(--focus-outline); outline-offset: -2px; }
+
+.tabPanel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+.helpTab { display: flex; flex-direction: column; gap: 12px; }
+
+.helpCard, .feedbackForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+.helpCard p { margin: 0; color: var(--muted); line-height: 1.5; }
+
+.supportRow { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--soft); }
+.supportLabel { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); }
+.supportEmail { font-weight: 600; color: var(--blue); word-break: break-all; }
+
+.helpActions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.secondaryButton, .primaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.secondaryButton { border: 1px solid var(--line); background: var(--surface); color: var(--navy); }
+.secondaryButton:hover { border-color: var(--blue); background: #f0f6ff; }
+.primaryButton { border: none; background: var(--blue); color: #fff; }
+.primaryButton:disabled { opacity: 0.5; cursor: not-allowed; }
+.secondaryButton:focus-visible, .primaryButton:focus-visible, .inlineLink:focus-visible { outline: var(--focus-outline); outline-offset: 2px; }
+
+.feedbackField { display: flex; flex-direction: column; gap: 4px; }
+.feedbackField span { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+.feedbackField select, .feedbackField textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+}
+.feedbackField textarea { resize: vertical; min-height: 84px; }
+.feedbackNote { margin: 0; font-size: 0.75rem; color: var(--muted); }
+
+.inlineLink { padding: 0; border: none; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+
+.srStatus { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

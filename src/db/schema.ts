@@ -134,6 +134,39 @@ export const creditAccountLedger = pgTable(
   (table) => [index("credit_account_ledger_account_time_idx").on(table.accountId, table.entryTime), unique("credit_account_ledger_account_source_key").on(table.accountId, table.sourceEntryId)],
 );
 
+/** Promo codes that add Smile Credits to an organization wallet (migration 0040). */
+export const promoCodes = pgTable("promo_codes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  code: text("code").notNull().unique(),
+  credits: integer("credits").notNull(),
+  organizationId: uuid("organization_id").references(() => organizations.id),
+  maxRedemptions: integer("max_redemptions"),
+  redemptionCount: integer("redemption_count").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  active: boolean("active").notNull().default(true),
+  note: text("note").notNull().default(""),
+  createdByEmail: text("created_by_email").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  disabledByEmail: text("disabled_by_email").notNull().default(""),
+  disabledAt: timestamp("disabled_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const promoCodeRedemptions = pgTable(
+  "promo_code_redemptions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    promoCodeId: uuid("promo_code_id").notNull().references(() => promoCodes.id),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    credits: integer("credits").notNull(),
+    redeemedByEmail: text("redeemed_by_email").notNull().default(""),
+    redeemedByName: text("redeemed_by_name").notNull().default(""),
+    ledgerSourceEntryId: text("ledger_source_entry_id").notNull(),
+    redeemedAt: timestamp("redeemed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("promo_code_redemptions_code_org_uidx").on(table.promoCodeId, table.organizationId), index("promo_code_redemptions_org_idx").on(table.organizationId, table.redeemedAt)],
+);
+
 export type CreditLedgerRow = typeof creditLedger.$inferSelect;
 export type NewCreditLedgerRow = typeof creditLedger.$inferInsert;
 

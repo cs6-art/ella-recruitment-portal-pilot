@@ -9,6 +9,8 @@ import { canEditRoleRequest, canViewRole } from "@/lib/access-control";
 import { getRoleRequestById } from "@/lib/google-sheets";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { targetRoleDetails } from "@/lib/recruitment-target-portal";
+import { getRole } from "@/lib/internal-recruitment-queries";
+import { DEFAULT_ROLE_INTERVIEW_TYPE, readRoleInterviewType } from "@/lib/interview-type";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +45,9 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
     ? await targetRoleDetails(roleId)
     : await getRoleRequestById(roleId, { fresh: true });
   if (!role || !canViewRole(user, role) || !canEditRoleRequest(user, role)) redirect(`/roles/${encodeURIComponent(roleId)}`);
+  const interviewType = isPostgresRecruitmentTarget()
+    ? readRoleInterviewType((await getRole(roleId, user.organizationId))?.setup)
+    : DEFAULT_ROLE_INTERVIEW_TYPE;
 
   const initialValues: Partial<RoleRequestFormValues> = {
     requestType: role.requestType || "Staff Addition",
@@ -147,6 +152,8 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
           roleId={role.roleId}
           status={role.status}
           initialValues={initialValues}
+          canSetInterviewType={isPostgresRecruitmentTarget() && user.canReviewRole === true}
+          initialInterviewType={interviewType}
         />
         {user.canReviewRole === true && !["Approved", "Recruitment Setup", "Job Posted"].includes(role.status) && <InterviewAutomationCard roleId={role.roleId} editable />}
         <RecruitmentSetupEditor

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import RoleRequestForm from "@/components/RoleRequestForm";
 import PageHeader from "@/components/ui/PageHeader";
+import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import {
   COOKIE_NAME,
   getActiveSessionUser,
@@ -44,6 +45,7 @@ export default async function NewRolePage() {
           }}
           canApproveRole={user.canApproveRole === true}
           unified={user.canReviewRole === true && user.canApproveRole === true}
+          canSetInterviewType={isPostgresRecruitmentTarget() && user.canReviewRole === true}
         />
       </main>
     </>

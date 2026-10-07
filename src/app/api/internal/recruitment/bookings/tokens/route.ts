@@ -15,7 +15,7 @@ export const POST = withInternalAuth("booking", async (request) => {
   // invitation email offers as a second option. It never sends its own email.
   if (body.kind !== "voice" && body.kind !== "final" && body.kind !== "avatar") return internalJson({ ok: false, error: "invalid_booking_kind" }, 422);
   const result = await createBookingToken({ applicationExternalId: String(body.applicationExternalId), kind: body.kind, tokenHash: typeof body.tokenHash === "string" ? body.tokenHash : undefined, link: typeof body.link === "string" ? body.link : undefined, expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : undefined });
-  if (result.error) return internalJson({ ok: false, error: result.error }, 404);
+  if (result.error) return internalJson({ ok: false, error: result.error }, result.error === "interview_type_not_allowed" ? 409 : 404);
   return internalJson({ ok: true, migrated: true, created: result.created, token: result.token, notificationHistoryId: result.notificationHistoryId }, result.created ? 201 : 200);
 });
 

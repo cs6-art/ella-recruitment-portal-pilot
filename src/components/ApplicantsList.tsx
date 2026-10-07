@@ -356,6 +356,8 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
   // Only applicants still in Resume Review can be approved for interview; the
   // server re-checks every one and reports the rest as skipped.
   const approvableSelected = selectedApplicants.filter((applicant) => applicant.currentStage.trim().toLowerCase() === "resume_review");
+  // A phone or Live Avatar interview can be sent before any interview has started.
+  const invitableSelected = selectedApplicants.filter((applicant) => ["resume_review", "resume_approved", "voice_booking_pending"].includes(applicant.currentStage.trim().toLowerCase()));
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -526,16 +528,19 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
     setDeletingId("");
   }
 
-  async function approveSelectedForInterview() {
+  // One bulk endpoint for approving (screened applicants) and for sending a
+  // phone or Live Avatar interview directly (screening may be skipped).
+  async function runSelectedAction(action: "approve" | "voice" | "avatar") {
     const ids = [...new Set(selectedApplicants.map((applicant) => applicant.applicationId.trim()).filter(Boolean))];
     if (ids.length === 0 || approving) return;
-    const skipped = ids.length - approvableSelected.length;
-    const approveLabel = approvableSelected.length === 1 ? "1 applicant" : `${approvableSelected.length} applicants`;
-    if (!(await confirm({
-      title: "Approve for interview?",
-      message: `${approveLabel} will be approved for interview and sent the interview invitation email.${skipped > 0 ? ` ${skipped} selected ${skipped === 1 ? "applicant is" : "applicants are"} not in Resume Review and will be skipped.` : ""} This also applies to applicants below the role's automatic interview score; they are recorded as a manual override.`,
-      confirmLabel: "Approve for Interview",
-    }))) return;
+    const eligible = action === "approve" ? approvableSelected : invitableSelected;
+    const skipped = ids.length - eligible.length;
+    const countLabel = eligible.length === 1 ? "1 applicant" : `${eligible.length} applicants`;
+    const skippedNote = skipped > 0 ? ` ${skipped} selected ${skipped === 1 ? "applicant is" : "applicants are"} past this step and will be skipped.` : "";
+    const confirmation = action === "approve"
+      ? { title: "Approve for interview?", message: `${countLabel} will be approved for interview and sent the interview invitation email.${skippedNote} This also applies to applicants below the role's automatic interview score; they are recorded as a manual override.`, confirmLabel: "Approve for Interview" }
+      : { title: `Send ${action === "avatar" ? "Live Avatar" : "phone"} interview?`, message: `Send a ${action === "avatar" ? "Live Avatar" : "phone"} interview to ${countLabel}? Applicants who haven't been screened skip resume screening.${skippedNote} Anyone who already has an active interview invitation is skipped.`, confirmLabel: "Send Interview" };
+    if (!(await confirm(confirmation))) return;
     setApproving(true);
     setActionError("");
     setActionMessage("");
@@ -544,20 +549,20 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ applicationIds: ids }),
+        body: JSON.stringify({ applicationIds: ids, action }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to approve the selected applicants.");
+      if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to update the selected applicants.");
       const failed = Number(data.counts?.failed || 0);
-      if (failed > 0 && Number(data.counts?.approved || 0) === 0) setActionError(String(data.message || "The selected applicants could not be approved."));
-      else setActionMessage(String(data.message || "Applicants approved for interview."));
+      if (failed > 0 && Number(data.counts?.approved || 0) === 0) setActionError(String(data.message || "The selected applicants could not be updated."));
+      else setActionMessage(String(data.message || "Done."));
       // Keep failed rows selected so HR can retry them; clear everything else.
       const failedIds = new Set<string>(Array.isArray(data.results) ? data.results.filter((result: { outcome?: string }) => result.outcome === "failed").map((result: { applicationId: string }) => result.applicationId) : []);
       setSelectedIds(failedIds);
       setRefreshSequence((sequence) => sequence + 1);
       router.refresh();
     } catch (error) {
-      setActionError(clientErrorMessage(error, "Unable to approve the selected applicants."));
+      setActionError(clientErrorMessage(error, "Unable to update the selected applicants."));
     } finally {
       setApproving(false);
     }
@@ -627,7 +632,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
             {recordsLoading && <span className="list-refreshing" role="status">Updating…</span>}
           </div>
           <button type="button" className="btn btn-secondary" disabled={exporting || recordsLoading || matchingApplicantCount === 0} aria-busy={exporting} onClick={() => void exportApplicants()}><UiIcon name="excel" size={17} />{exporting ? "Exporting…" : "Export to Excel"}</button>
-          {canManageApplicants && <div className={`bulk-selection-toolbar${selectedApplicants.length > 0 ? " has-selection" : ""}`} role="toolbar" aria-label="Selected applicant actions"><span aria-live="polite">{selectedApplicants.length} {selectedApplicants.length === 1 ? "applicant" : "applicants"} selected</span><button type="button" className="btn btn-small btn-primary" disabled={approvableSelected.length === 0 || approving || deletingId !== ""} title={selectedApplicants.length > 0 && approvableSelected.length === 0 ? "Only applicants in Resume Review can be approved for interview." : undefined} onClick={() => void approveSelectedForInterview()}>{approving ? "Approving…" : "Approve for Interview"}</button><button type="button" className="btn btn-small btn-danger-outline" disabled={selectedApplicants.length === 0 || deletingId !== "" || approving} onClick={() => void deleteApplicants(selectedApplicants)}>Delete selected</button>{selectedApplicants.length > 0 && <button type="button" className="btn btn-small btn-secondary" disabled={approving || deletingId !== ""} onClick={() => { clearActionFeedback(); setSelectedIds(new Set()); }}>Clear</button>}</div>}
+          {canManageApplicants && <div className={`bulk-selection-toolbar${selectedApplicants.length > 0 ? " has-selection" : ""}`} role="toolbar" aria-label="Selected applicant actions"><span aria-live="polite">{selectedApplicants.length} {selectedApplicants.length === 1 ? "applicant" : "applicants"} selected</span><button type="button" className="btn btn-small btn-primary" disabled={approvableSelected.length === 0 || approving || deletingId !== ""} title={selectedApplicants.length > 0 && approvableSelected.length === 0 ? "Only applicants in Resume Review can be approved for interview." : undefined} onClick={() => void runSelectedAction("approve")}>{approving ? "Working…" : "Approve for Interview"}</button><button type="button" className="btn btn-small btn-secondary" disabled={invitableSelected.length === 0 || approving || deletingId !== ""} onClick={() => void runSelectedAction("voice")}>Send Phone Interview</button><button type="button" className="btn btn-small btn-secondary" disabled={invitableSelected.length === 0 || approving || deletingId !== ""} onClick={() => void runSelectedAction("avatar")}>Send Avatar Interview</button><button type="button" className="btn btn-small btn-danger-outline" disabled={selectedApplicants.length === 0 || deletingId !== "" || approving} onClick={() => void deleteApplicants(selectedApplicants)}>Delete selected</button>{selectedApplicants.length > 0 && <button type="button" className="btn btn-small btn-secondary" disabled={approving || deletingId !== ""} onClick={() => { clearActionFeedback(); setSelectedIds(new Set()); }}>Clear</button>}</div>}
           {hasApplicantFilters && <button type="button" className="btn btn-secondary list-clear-button" onClick={clearApplicantFilters}><UiIcon name="filter" size={16} />Clear all filters</button>}
         </div>
 
@@ -675,7 +680,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
                     <td data-label="Role"><strong>{applicant.selectedRole || "Role not provided"}</strong><span className="applicant-subtext">{applicant.roleId || "Role reference not available"}</span></td>
                     <td data-label="Applied">{applicant.appliedAt ? formatDate(applicant.appliedAt) : "Date not provided"}</td>
                     <td data-label="Interview Type">{applicant.interviewMode === "pending" ? "Not selected" : applicant.interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"}</td>
-                    <td data-label="Match"><strong className="applicant-score">{scoreValue(applicant.matchScore)}</strong>{applicant.recommendation && <span className="applicant-subtext">{applicant.recommendation}</span>}</td>
+                    <td data-label="Match"><strong className="applicant-score">{!applicant.matchScore && applicant.resumeStatus === "Screening skipped" ? "Screening skipped" : scoreValue(applicant.matchScore)}</strong>{applicant.recommendation && <span className="applicant-subtext">{applicant.recommendation}</span>}</td>
                     <td data-label="Current Status"><span className={stageClass(applicant.currentStage)}>{applicantStageLabel(applicant.currentStage, applicant.interviewMode) || "Pending HR Review"}</span></td>
                     <td data-label="Next Action">{applicant.nextAction || "No next action available"}</td>
                     <td data-label="Action"><div className="applicant-table-actions"><Link href={applicantDetailHref(applicant.applicationId)}>View</Link>{canManageApplicants && !applicant.isHistoricalDemo && <><Link href={`/applicants/${encodeURIComponent(applicant.applicationId)}/edit`}>Edit</Link><button type="button" className="table-danger-action" disabled={deletingIds.has(applicant.applicationId) || deletingId === "bulk"} onClick={() => void deleteApplicants([applicant])}>{deletingIds.has(applicant.applicationId) ? "Deleting..." : "Delete"}</button></>}{applicant.isHistoricalDemo && <span className="applicant-readonly-label">Read-only demo history</span>}</div></td>

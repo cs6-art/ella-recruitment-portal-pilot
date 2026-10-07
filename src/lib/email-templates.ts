@@ -5,7 +5,7 @@
  * break a booking link.
  */
 
-export type EditableEmailEvent = "voice_booking_invitation" | "voice_booking_confirmation" | "final_booking_invitation" | "job_posted";
+export type EditableEmailEvent = "voice_booking_invitation" | "avatar_interview_invitation" | "voice_booking_confirmation" | "final_booking_invitation" | "job_posted";
 
 export type EmailPlaceholder = "candidate_name" | "role_title" | "role_phrase" | "company_name" | "interview_time" | "ai_notice" | "recipient_name" | "role_id" | "department" | "requested_by" | "interview_type";
 
@@ -71,6 +71,25 @@ export const EMAIL_EVENTS: EmailEventDefinition[] = [
     placeholders: ["candidate_name", "role_title", "role_phrase", "company_name", "ai_notice"],
     subject: "Schedule your AI voice interview | {{company_name}}",
     body: `Dear {{candidate_name}},\n\nWe are pleased to invite you to the next interview step for {{role_phrase}}. Please use one of the secure options below to choose a suitable time. Each link expires automatically and can be used once.\n\nSmile, {{company_name}}'s AI interview assistant, will conduct the voice interview and ask focused questions about your experience. We look forward to speaking with you.\n\n{{ai_notice}}`,
+  },
+  {
+    // Sent when HR uses "Send Avatar Interview" (a Live Avatar interview on its
+    // own, without the phone option). Delivered as the interview invitation email.
+    key: "avatar_interview_invitation",
+    label: "Live Avatar Interview Invitation",
+    audience: "Candidate",
+    when: "Sent when HR sends a Live Avatar interview on its own. Contains the button that starts the interview.",
+    editable: true,
+    buttons: { primary: "Start your Live Avatar interview" },
+    placeholders: ["candidate_name", "role_title", "role_phrase", "company_name", "ai_notice"],
+    subject: "Your Live Avatar interview | {{company_name}}",
+    body: `Dear {{candidate_name}},
+
+We are pleased to invite you to the next interview step for {{role_phrase}}. Please use the button below to start your Live Avatar interview when you are ready. You will need a quiet place, a camera and a microphone. The link can be used once and expires automatically.
+
+Smile, {{company_name}}'s AI interview assistant, will ask focused questions about your experience. We look forward to meeting you.
+
+{{ai_notice}}`,
   },
   {
     key: "voice_booking_confirmation",

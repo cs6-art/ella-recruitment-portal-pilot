@@ -169,7 +169,9 @@ test("opening Applicants clears row highlights immediately and counts only persi
   assert.doesNotMatch(list, /readApplicantsLastSeen\(userEmail\)/);
   assert.match(list, /applicant\.resumeStatus\.trim\(\)\.toLowerCase\(\) === "processed"/);
   assert.match(target, /cvRecommendation: text\(screening\?\.recommendation\)/);
-  assert.match(target, /resumeStatus: screening \? "Processed" : ""/);
+  // Without a screening result an applicant is never "Processed"; HR approval
+  // without one is shown as a deliberate skip.
+  assert.match(target, /resumeStatus: screening \? "Processed" : text\(application\.resumeHrDecision\)\.toLowerCase\(\) === "approve" \? "Screening skipped" : ""/);
   assert.match(candidateData, /if \(finalStatus\.includes\("withdrawn"\)\) return "withdrawn"/);
   assert.match(target, /aggregateApplicationsByStage\(await targetOrganizationId\(\), filters\)/);
   assert.match(target, /screened: sum\("screened"\)/);
@@ -458,7 +460,8 @@ test("candidate intake forms and decisions expose the required fields", () => {
   // HR decisions are Approve / Reject only — the "Return for review" action was removed.
   assert.doesNotMatch(decisionPanel, /Return for review/);
   assert.doesNotMatch(decisionPanel, /Manual Review/);
-  assert.match(decisionPanel, /Comments \*/);
+  // Notes are optional for approval; rejecting still needs a reason.
+  assert.match(decisionPanel, /Note <small>\(optional; required to reject\)<\/small>/);
   assert.match(decisionPanel, /disabled=\{busy \|\|/);
   assert.doesNotMatch(route, /findDuplicateCandidateApplication|DUPLICATE_APPLICATION/);
   assert.match(route, /canReviewRole !== true/);

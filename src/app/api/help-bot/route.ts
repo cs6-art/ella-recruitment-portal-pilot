@@ -6,6 +6,7 @@ import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate
 import { retrieveContext } from "@/lib/help-bot/knowledge";
 import { cleanHelpBotAnswer, directHelpAnswer, HELP_BOT_SYSTEM_PROMPT, buildUserPrompt, type HelpUserContext } from "@/lib/help-bot/prompt";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
+import { supportContact } from "@/lib/support-contact";
 import { runHelpBotConversation } from "@/lib/help-bot/conversation";
 import type { LiveToolDependencies } from "@/lib/help-bot/live-tools";
 import { getCreditBalance } from "@/lib/ella-credits";
@@ -57,7 +58,9 @@ function sanitizeHistory(value: unknown): ClientMessage[] {
 
 export async function GET() {
   const enabled = isEnabled();
-  return NextResponse.json({ success: true, enabled, configured: enabled && isConfigured() });
+  // The support contact is shown in the "Help & Feedback" tab, which works
+  // even while the AI answers are not configured.
+  return NextResponse.json({ success: true, enabled, configured: enabled && isConfigured(), support: supportContact() });
 }
 
 export async function POST(request: Request) {

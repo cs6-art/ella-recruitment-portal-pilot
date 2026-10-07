@@ -41,8 +41,8 @@ demo mode. It is not used in production. See
   incomplete, 5 no answer), video interview 20 (reserved when it starts).
 - **Edit the automated emails** (subject, message, button text, header image) in Settings.
 
-The end-user guide is [docs/McLink-Recruitment-Portal-User-Manual.html](docs/McLink-Recruitment-Portal-User-Manual.html)
-(and the `.pdf`). The in-portal help assistant reads
+The end-user guide is [docs/Smile-Recruitment-Portal-User-Manual.md](docs/Smile-Recruitment-Portal-User-Manual.md)
+(also as a `.pdf` in the same folder). The in-portal help assistant reads
 [src/lib/help-bot/knowledge.md](src/lib/help-bot/knowledge.md); keep the two in step.
 
 ## Run it locally

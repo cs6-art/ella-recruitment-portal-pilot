@@ -59,7 +59,7 @@ model) are always included; up to four scored sections are added.
 ## Knowledge source
 
 - **File:** `src/lib/help-bot/knowledge.md` — the *only* approved source.
-- Authored from `docs/McLink-Recruitment-Portal-User-Manual.html`,
+- Authored from `docs/Smile-Recruitment-Portal-User-Manual.md`,
   `docs/WORKING-RECRUITMENT-WORKFLOW.md`, and `docs/access-control-matrix.md`,
   rewritten into plain user-facing FAQ answers. Internal identifiers (webhook
   URLs, workflow IDs, spreadsheet IDs, credential names) are intentionally

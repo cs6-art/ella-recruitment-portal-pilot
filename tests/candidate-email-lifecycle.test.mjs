@@ -21,7 +21,8 @@ test("screening, voice result, retry, and final decision paths enqueue typed eve
 
 test("booking invitation and confirmation events retain redirectable intended-recipient audit data", () => {
   const query = read("src/lib/internal-recruitment-queries.ts");
-  assert.match(query, /notificationEventType: input\.kind === "voice" \? "voice_booking_invitation" : "final_booking_invitation"/);
+  // Voice and (explicitly emailed) Live Avatar invitations share the enabled interview invitation email.
+  assert.match(query, /notificationEventType: input\.kind === "final" \? "final_booking_invitation" : "voice_booking_invitation"/);
   assert.match(query, /notificationEventType: slot\.interviewType === "voice" \? "voice_booking_confirmation" : "final_booking_confirmation"/);
   assert.match(query, /const confirmationIsEmailed = false/);
   assert.match(query, /notificationStatus: confirmationIsEmailed \? "pending" : "skipped"/);

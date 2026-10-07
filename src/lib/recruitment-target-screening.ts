@@ -31,7 +31,8 @@ export async function processTargetBulkScreening(input: {
 
   let context = await getBulkScreeningContext(dedupeKey);
   if (!context) return { status: "failed" as const, error: "unknown_queue" };
-  if (context.item.status === "screened") return { status: "duplicate" as const, dedupeKey };
+  // Screened already, or HR skipped screening: never run the AI or charge again.
+  if (context.item.status === "screened" || context.item.status === "skipped") return { status: "duplicate" as const, dedupeKey };
   if (context.item.status === "queued" || context.item.status === "failed") {
     const claimed = await claimBulkQueueItem(dedupeKey);
     if (!claimed) {

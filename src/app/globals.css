@@ -6974,3 +6974,22 @@ textarea:focus { border-color: var(--color-link); box-shadow: var(--focus-ring);
 .calendar-connection-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; padding: 10px 14px; border: 1px solid #f1d9a6; border-radius: 10px; background: #fff8ea; color: #5c4210; font-size: 13px; }
 .calendar-connection-banner span { flex: 1 1 260px; }
 @media (max-width: 640px) { .interview-reschedule-form { grid-template-columns: 1fr; } }
+
+/* Applicant decision: optional note and direct interview actions */
+.applicant-decision-hint { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: #f1f6fb; color: var(--navy); font-size: 13px; }
+.applicant-decision-comments small { color: var(--muted); font-weight: 400; }
+.applicant-decision-actions { flex-wrap: wrap; }
+.applicant-interview-switch { display: grid; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.applicant-interview-switch p { margin: 0; color: var(--muted); font-size: 13px; }
+.applicant-inline-link { padding: 0; border: 0; background: none; color: var(--blue); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+
+/* Role "Interview type" choice (role form and role page). */
+.interview-type-field { border: 0; margin: 0; padding: 0; min-width: 0; }
+.interview-type-field legend { padding: 0; margin-bottom: 4px; font-weight: 600; }
+.interview-type-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 8px; }
+.interview-type-option { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.interview-type-option.is-selected { border-color: var(--blue); background: #f0f6ff; box-shadow: 0 0 0 1px var(--blue) inset; }
+.interview-type-option input { margin-top: 3px; }
+.interview-type-option span { display: grid; gap: 2px; }
+.interview-type-option small { color: var(--muted); font-size: 0.8rem; line-height: 1.4; }
+.interview-type-option:focus-within { outline: var(--focus-outline); outline-offset: 2px; }

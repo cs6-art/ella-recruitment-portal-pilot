@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import PromoCodeRedeem from "@/components/PromoCodeRedeem";
 import ValidationSummary from "@/components/ValidationSummary";
 import { ELLA_CREDITS_REFRESH_EVENT, requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 import { historyActorLabel } from "@/lib/applicant-stage-labels";
@@ -57,7 +58,7 @@ type LedgerResponse = {
 };
 
 type ActivityTypeFilter = "all" | "added" | "used";
-type ActivityEventFilter = "all" | "manual" | "cv_analysis" | "voice_interview" | "live_avatar_interview";
+type ActivityEventFilter = "all" | "manual" | "promo_code" | "cv_analysis" | "voice_interview" | "live_avatar_interview";
 
 const defaultPricing = { cvAnalysis: 1, phoneInterview: 10, phoneInterviewNoAnswer: 5, phoneInterviewIncomplete: 8, liveAvatarInterview: 2, liveAvatarMaxMinutes: 20, discountThreshold: 2000, discountPercent: 10 };
 
@@ -66,6 +67,7 @@ const eventLabels: Record<string, string> = {
   manual_adjustment: "Manual adjustment",
   volume_discount: "Volume bonus",
   welcome_credit: "Welcome credits",
+  promo_code: "Promotional Credits",
   cv_analysis: "CV analysis",
   phone_interview: "Voice interview",
   phone_interview_no_answer: "Voice interview",
@@ -85,6 +87,7 @@ function eventFilterFor(event: string): ActivityEventFilter {
   if (event === "cv_analysis") return "cv_analysis";
   if (event.startsWith("phone_interview")) return "voice_interview";
   if (event === "live_avatar_interview") return "live_avatar_interview";
+  if (event === "promo_code") return "promo_code";
   return "manual";
 }
 
@@ -246,6 +249,9 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
           <div className={styles.stat}><b>{nf.format(data.totals.consumed)}</b><span>Total consumed</span></div>
         </div>
 
+        {/* Promo codes always apply to the signed-in user's own organization. */}
+        {!viewingOtherOrganization && <PromoCodeRedeem onRedeemed={async (credits) => { requestEllaCreditsRefresh(credits); await load(""); }} />}
+
         {(saveError || message) && <div className={styles.feedback}>
           {saveError && <ValidationSummary error={saveError} title="Update failed" />}
           {message && <ActionFeedback kind="success">{message}</ActionFeedback>}
@@ -283,6 +289,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
             <select aria-label="Filter credit activity event" value={activityEvent} onChange={(event) => { setActivityEvent(event.target.value as ActivityEventFilter); setActivityPage(1); }}>
               <option value="all">All events</option>
               <option value="manual">Manual changes</option>
+              <option value="promo_code">Promotional credits</option>
               <option value="cv_analysis">CV analysis</option>
               <option value="voice_interview">Voice interviews</option>
               <option value="live_avatar_interview">Live Avatar interviews</option>

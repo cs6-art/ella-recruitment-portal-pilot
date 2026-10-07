@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lt, lte, not, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, ilike, inArray, isNotNull, isNull, lt, lte, not, or, sql } from "drizzle-orm";
 
 import { getTenantDb as getDb } from "@/db/client";
 import { appendPostgresLedgerEntryOnExecutor } from "@/lib/ella-credits-postgres";
@@ -20,6 +20,7 @@ import { pilotOutboundEmailEnabled } from "@/lib/pilot-email-policy";
 import { avatarInterviewLink } from "@/lib/public-url";
 import { STALE_PROCESSING_MS } from "@/lib/bulk-resume-config";
 import type { LiveAvatarEvaluation, LiveAvatarTranscriptTurn } from "@/lib/live-avatar-screening";
+import { readRoleInterviewType, roleAllowsInterview } from "@/lib/interview-type";
 import { evaluateVoiceInterview } from "@/lib/voice-interview-evaluation";
 import { MAX_CONCURRENT_VOICE_INTERVIEWS } from "@/lib/voice-interview-capacity";
 import {
@@ -582,6 +583,41 @@ export async function setRoleInterviewAutomation(input: { externalId: string; or
       notificationStatus: "",
     });
     return updated ?? null;
+  });
+}
+
+/**
+ * Store a role's Interview type ("voice" | "avatar" | "both") under
+ * `setup.interviewType`. Like Interview automation, `jsonb_set` changes only
+ * that key and the role history records who changed it. A no-op change
+ * writes nothing.
+ */
+export async function setRoleInterviewType(input: { externalId: string; organizationId: string; value: "voice" | "avatar" | "both"; actorEmail: string; actorName?: string; comments: string }) {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const [role] = await tx.select({ id: roles.id, status: roles.status, organizationId: roles.organizationId, setup: roles.setup }).from(roles)
+      .where(and(eq(roles.externalId, input.externalId.trim()), eq(roles.organizationId, input.organizationId.trim()))).for("update").limit(1);
+    if (!role) return null;
+    const current = (role.setup && typeof role.setup === "object" && !Array.isArray(role.setup) ? (role.setup as Record<string, unknown>).interviewType : undefined);
+    if (current === input.value) return { setup: role.setup, changed: false };
+    const [updated] = await tx.update(roles).set({
+      setup: sql`jsonb_set(coalesce(${roles.setup}, '{}'::jsonb), '{interviewType}', ${JSON.stringify(input.value)}::jsonb, true)`,
+      updatedByEmail: input.actorEmail,
+      updatedAt: new Date(),
+    }).where(eq(roles.id, role.id)).returning({ setup: roles.setup });
+    await tx.insert(roleStatusHistory).values({
+      organizationId: role.organizationId,
+      roleId: role.id,
+      previousStatus: role.status,
+      newStatus: role.status,
+      comments: input.comments,
+      action: "interview_type_updated",
+      actionSource: "portal_postgres_target",
+      changedByEmail: input.actorEmail,
+      changedByName: input.actorName || "",
+      notificationStatus: "",
+    });
+    return { setup: updated?.setup ?? role.setup, changed: true };
   });
 }
 
@@ -1459,9 +1495,12 @@ export async function markInterviewNoShow(slotId: string, actorEmail = "", actor
 export async function upsertScreeningResult(input: { applicationExternalId: string; matchScore?: number | null; recommendation?: string; summary?: string; strengths?: string; gaps?: string; interviewQuestions?: string; evaluationScores?: unknown; screenedAt?: string; raw?: unknown }) {
   const db = getDb();
   return db.transaction(async (tx) => {
-      const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, email: applications.email, creditOwnerEmail: applications.creditOwnerEmail, requesterName: roles.requesterName }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
+      const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, email: applications.email, creditOwnerEmail: applications.creditOwnerEmail, requesterName: roles.requesterName, resumeHrDecision: applications.resumeHrDecision }).from(applications).innerJoin(roles, eq(roles.id, applications.roleId)).where(eq(applications.externalId, input.applicationExternalId)).limit(1);
       if (!application) return { result: null, error: "unknown_application" as const };
       const [existing] = await tx.select({ id: screeningResults.id, matchScore: screeningResults.matchScore }).from(screeningResults).where(eq(screeningResults.applicationId, application.id)).for("update").limit(1);
+      // HR approved this applicant without a screening result, i.e. skipped
+      // screening on purpose: a late callback adds no result and no charge.
+      if (!existing && application.resumeHrDecision.trim().toLowerCase() === "approve") return { result: null, error: null, skippedByHr: true as const };
     // A partial or retried callback must never erase a previously persisted
     // grade just because its score was omitted or encoded as an empty value.
       const resultValues = { matchScore: input.matchScore ?? existing?.matchScore ?? null, recommendation: input.recommendation || "", summary: input.summary || "", strengths: input.strengths || "", gaps: input.gaps || "", interviewQuestions: input.interviewQuestions || "", evaluationScores: (input.evaluationScores ?? []) as object, screenedAt: isoOrNull(input.screenedAt), raw: (input.raw ?? null) as object | null };
@@ -2093,7 +2132,7 @@ export async function staleVoiceStageApplications() {
  * organization cannot be decided; only the cross-tenant n8n internal API
  * omits it. `source` labels the history row (automatic vs. HR approvals).
  */
-export async function applyHrDecision(input: { applicationExternalId: string; organizationId?: string; stage: "resume" | "voice" | "final"; decision: string; comments?: string; actorEmail: string; actorName?: string; actionRequestId: string; source?: string }) {
+export async function applyHrDecision(input: { applicationExternalId: string; organizationId?: string; stage: "resume" | "voice" | "final"; decision: string; comments?: string; actorEmail: string; actorName?: string; actionRequestId: string; source?: string; allowWithoutScreening?: boolean }) {
   const db = getDb();
   if (!isValidDecision(input.decision)) return { updated: false, error: "invalid_decision" as const };
   const expectedStage = input.stage === "resume" ? "resume_review" : input.stage === "voice" ? "voice_review_pending" : "final_decision_pending";
@@ -2105,7 +2144,9 @@ export async function applyHrDecision(input: { applicationExternalId: string; or
       : eq(applications.externalId, input.applicationExternalId);
     const [current] = await tx.select().from(applications).where(applicationMatch).for("update").limit(1);
     if (!current) return { updated: false, error: "unknown_application" as const };
-    if (input.stage === "resume" && input.decision === "approve") {
+    // HR may deliberately skip resume screening (allowWithoutScreening); the
+    // caller records that in the history source. No screening result is created.
+    if (input.stage === "resume" && input.decision === "approve" && !input.allowWithoutScreening) {
       const [screening] = await tx.select({ id: screeningResults.id }).from(screeningResults).where(eq(screeningResults.applicationId, current.id)).limit(1);
       if (!screening) return { updated: false, error: "screening_required" as const };
     }
@@ -2156,7 +2197,8 @@ export async function listApprovedWithoutInterviewInvitation(input: { organizati
     eq(applications.currentStage, "resume_approved"),
     eq(applications.withdrawn, false),
     lt(applications.updatedAt, cutoff),
-    sql`not exists (select 1 from ${bookingTokens} where ${bookingTokens.applicationId} = ${applications.id} and ${bookingTokens.kind} = 'voice')`,
+    // An "Avatar Interview only" role invites with an avatar token alone.
+    sql`not exists (select 1 from ${bookingTokens} where ${bookingTokens.applicationId} = ${applications.id} and ${bookingTokens.kind} in ('voice', 'avatar'))`,
   ];
   if (input.organizationId?.trim()) conditions.push(eq(applications.organizationId, input.organizationId.trim()));
   return db.select({ externalId: applications.externalId, organizationId: applications.organizationId })
@@ -2164,6 +2206,22 @@ export async function listApprovedWithoutInterviewInvitation(input: { organizati
     .where(and(...conditions))
     .orderBy(asc(applications.updatedAt))
     .limit(Math.max(1, Math.min(LIMIT, input.limit ?? 50)));
+}
+
+/**
+ * HR skipped resume screening: stop any screening still queued or running for
+ * this application so it neither charges a credit nor adds a late result.
+ */
+export async function skipPendingScreening(applicationExternalId: string, organizationId: string) {
+  const db = getDb();
+  const [application] = await db.select({ id: applications.id }).from(applications)
+    .where(and(eq(applications.externalId, applicationExternalId.trim()), eq(applications.organizationId, organizationId.trim()))).limit(1);
+  if (!application) return 0;
+  const skipped = await db.update(bulkScreeningQueueItems)
+    .set({ status: "skipped", errorMessage: "Resume screening skipped by HR.", processedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(bulkScreeningQueueItems.applicationId, application.id), inArray(bulkScreeningQueueItems.status, ["queued", "processing"])))
+    .returning({ id: bulkScreeningQueueItems.id });
+  return skipped.length;
 }
 
 export async function listApplicationHistory(externalId?: string) {
@@ -2576,7 +2634,9 @@ export async function finalizeBulkScreening(input: {
       .where(eq(bulkScreeningQueueItems.dedupeKey, input.dedupeKey.trim()))
       .for("update").limit(1);
     if (!queue) return { processed: false, duplicate: false, error: "unknown_queue" as const };
-    if (queue.status === "screened") return { processed: false, duplicate: true, error: null };
+    // "skipped" = HR skipped screening while this item waited or was running:
+    // finish quietly with no result, history or credit charge.
+    if (queue.status === "screened" || queue.status === "skipped") return { processed: false, duplicate: true, error: null };
     if (queue.status !== "processing") return { processed: false, duplicate: false, error: "queue_not_claimed" as const };
 
     // Legacy queue rows already have an application. New bulk rows deliberately
@@ -2639,6 +2699,15 @@ export async function finalizeBulkScreening(input: {
     const [existing] = await tx.select({ id: screeningResults.id }).from(screeningResults)
       .where(eq(screeningResults.applicationId, application.id)).limit(1);
     if (existing) return { processed: false, duplicate: true, error: null };
+    // HR may approve an existing applicant without a screening result while
+    // this worker is already running. The decision and queue status are
+    // separate writes, so re-check the locked application before inserting a
+    // result or charging credits.
+    if (application.resumeHrDecision.trim().toLowerCase() === "approve") {
+      await tx.update(bulkScreeningQueueItems).set({ status: "skipped", errorMessage: "Resume screening skipped by HR.", processedAt: new Date(), updatedAt: new Date() })
+        .where(eq(bulkScreeningQueueItems.id, queue.id));
+      return { processed: false, duplicate: true, error: null, skippedByHr: true as const };
+    }
 
     const [result] = await tx.insert(screeningResults).values({
       organizationId: application.organizationId,
@@ -3005,13 +3074,62 @@ export async function recordInterviewCalendarSync(input: { slotId: string; organ
   return Boolean(updated);
 }
 
-export async function createBookingToken(input: { applicationExternalId: string; kind: BookingTokenKind; tokenHash?: string; link?: string; expiresAt?: string; notify?: boolean; forceNew?: boolean }) {
+export async function createBookingToken(input: { applicationExternalId: string; kind: BookingTokenKind; tokenHash?: string; link?: string; expiresAt?: string; notify?: boolean; forceNew?: boolean; exclusiveInterview?: boolean; replaceInterview?: { actorEmail: string; actorName?: string } }) {
   const db = getDb();
   return db.transaction(async (tx) => {
     // Lock before the lookup so concurrent workflow retries cannot create two
     // random tokens for the same application and interview type.
-    const [application] = await tx.select({ id: applications.id, organizationId: applications.organizationId, currentStage: applications.currentStage, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
+    const [application] = await tx.select({ id: applications.id, roleId: applications.roleId, organizationId: applications.organizationId, currentStage: applications.currentStage, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
     if (!application) return { token: null, created: false, notificationHistoryId: null, error: "unknown_application" as const };
+    // Keep the rule at the shared token boundary too, including internal API
+    // callers. Lock the role so a concurrent interview-type change cannot
+    // race a new invitation into existence under the old setting.
+    if (input.kind === "voice" || input.kind === "avatar") {
+      const [role] = await tx.select({ setup: roles.setup }).from(roles).where(eq(roles.id, application.roleId)).for("update").limit(1);
+      if (!role) return { token: null, created: false, notificationHistoryId: null, error: "unknown_application_role" as const };
+      const interviewType = readRoleInterviewType(role.setup);
+      if (!roleAllowsInterview(interviewType, input.kind)) return { token: null, created: false, notificationHistoryId: null, error: "interview_type_not_allowed" as const, interviewType };
+    }
+    // HR "Send interview": at most one live phone or Live Avatar invitation.
+    // Checked under the application row lock, so two clicks (or two HR users)
+    // cannot both create one.
+    if ((input.exclusiveInterview || input.replaceInterview) && (input.kind === "voice" || input.kind === "avatar")) {
+      const live = await tx.select({ id: bookingTokens.id, kind: bookingTokens.kind }).from(bookingTokens).where(and(
+        eq(bookingTokens.applicationId, application.id),
+        inArray(bookingTokens.kind, ["voice", "avatar"]),
+        inArray(bookingTokens.status, ["pending", "active"]),
+        or(isNull(bookingTokens.expiresAt), gt(bookingTokens.expiresAt, new Date()))!,
+      ));
+      if (live.length > 0 && !input.replaceInterview) return { token: null, created: false, notificationHistoryId: null, error: "interview_already_invited" as const, activeKind: live[0].kind };
+      if (input.replaceInterview) {
+        // Switching interview type is only safe before anything is booked or
+        // started: no booked call (so no credit hold) and no Live Avatar session.
+        const [bookedCall] = await tx.select({ id: interviewSlots.id }).from(interviewSlots)
+          .where(and(eq(interviewSlots.applicationId, application.id), eq(interviewSlots.interviewType, "voice"), inArray(interviewSlots.status, ["booked", "completed"]))).limit(1);
+        const [session] = await tx.select({ id: liveInterviewSessions.id }).from(liveInterviewSessions).where(eq(liveInterviewSessions.applicationId, application.id)).limit(1);
+        if (bookedCall || session || application.currentStage !== "voice_booking_pending") {
+          return { token: null, created: false, notificationHistoryId: null, error: "interview_already_started" as const };
+        }
+        if (live.length > 0) {
+          await tx.update(bookingTokens).set({ status: "revoked" }).where(inArray(bookingTokens.id, live.map((token) => token.id)));
+          // An invitation email still waiting to go out would carry a dead link.
+          await tx.update(applicationStatusHistory)
+            .set({ notificationStatus: "not_configured", notificationError: "Not sent: replaced by a new interview invitation." })
+            .where(and(eq(applicationStatusHistory.applicationId, application.id), eq(applicationStatusHistory.notificationEventType, "voice_booking_invitation"), eq(applicationStatusHistory.notificationStatus, "pending")));
+        }
+        await tx.insert(applicationStatusHistory).values({
+          organizationId: application.organizationId,
+          applicationId: application.id,
+          stage: "voice",
+          previousStage: application.currentStage,
+          newStage: application.currentStage,
+          actorEmail: input.replaceInterview.actorEmail,
+          actorName: input.replaceInterview.actorName || "",
+          comments: `Interview changed to ${input.kind === "avatar" ? "a Live Avatar interview" : "a phone interview"} by HR. The previous invitation link no longer works.`,
+          source: "portal:interview_switched",
+        });
+      }
+    }
     // A deliberate HR re-invitation closes the previous appointment/token.
     // No voice-call attempt is created here; that only happens after the
     // candidate books a replacement slot.
@@ -3025,7 +3143,12 @@ export async function createBookingToken(input: { applicationExternalId: string;
     // used, expired, revoked, or otherwise terminally consumed, a deliberate
     // re-invitation must receive a fresh token and notification identity.
     const [existingToken] = await tx.select().from(bookingTokens)
-      .where(and(eq(bookingTokens.applicationId, application.id), eq(bookingTokens.kind, input.kind), inArray(bookingTokens.status, ["pending", "active"])))
+      .where(and(
+        eq(bookingTokens.applicationId, application.id),
+        eq(bookingTokens.kind, input.kind),
+        inArray(bookingTokens.status, ["pending", "active"]),
+        or(isNull(bookingTokens.expiresAt), gt(bookingTokens.expiresAt, new Date()))!,
+      ))
       .orderBy(desc(bookingTokens.createdAt)).limit(1);
     if (existingToken) {
       const [existingHistory] = await tx.select({ id: applicationStatusHistory.id }).from(applicationStatusHistory)
@@ -3044,25 +3167,30 @@ export async function createBookingToken(input: { applicationExternalId: string;
       const [existing] = await tx.select().from(bookingTokens).where(eq(bookingTokens.tokenHash, tokenHash)).limit(1);
       return { token: existing ?? null, created: false, notificationHistoryId: null, error: null };
     }
-    const nextStage = input.kind === "voice" && application.currentStage === "resume_approved"
+    // An explicitly emailed Live Avatar invitation (sent on its own, without a
+    // call link) moves the application forward exactly like a voice one.
+    const avatarEmailed = input.kind === "avatar" && input.notify === true;
+    const nextStage = (input.kind === "voice" || avatarEmailed) && application.currentStage === "resume_approved"
       ? "voice_booking_pending"
       : application.currentStage;
     if (nextStage !== application.currentStage) {
       await tx.update(applications).set({ currentStage: nextStage, updatedAt: new Date() }).where(eq(applications.id, application.id));
     }
-    if (input.notify === false || input.kind === "avatar") {
+    if (input.notify === false || (input.kind === "avatar" && !avatarEmailed)) {
       return { token, created: true, notificationHistoryId: null, error: null };
     }
     const [history] = await tx.insert(applicationStatusHistory).values({
       organizationId: application.organizationId,
       applicationId: application.id,
-      stage: input.kind,
+      stage: input.kind === "avatar" ? "voice" : input.kind,
       previousStage: application.currentStage,
       newStage: nextStage,
-      source: `internal_api:${input.kind}_booking_invitation`,
+      source: input.kind === "avatar" ? "internal_api:avatar_interview_invitation" : `internal_api:${input.kind}_booking_invitation`,
       actionRequestId: `booking-invitation:${input.kind}:${input.applicationExternalId}:${tokenHash}`,
       notificationStatus: "pending",
-      notificationEventType: input.kind === "voice" ? "voice_booking_invitation" : "final_booking_invitation",
+      // A Live Avatar-only invitation uses the same (enabled) interview
+      // invitation email; its copy switches to the avatar link when no call link exists.
+      notificationEventType: input.kind === "final" ? "final_booking_invitation" : "voice_booking_invitation",
       notificationRecipient: pilotEmailRecipient(application.email).to,
       notificationIntendedRecipient: application.email,
     }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId }).returning({ id: applicationStatusHistory.id });
@@ -3245,10 +3373,12 @@ export async function notificationQueue(stage?: string) {
       summary: notificationSummary(history.notificationEventType, history.comments),
       email: notificationEmail(history.notificationEventType, {
         companyName: emailContexts.get(history.organizationId)?.companyName,
-        template: emailContexts.get(history.organizationId)?.templates.get(String(history.notificationEventType)),
+        // A Live Avatar-only invitation uses its own editable wording.
+        template: emailContexts.get(history.organizationId)?.templates.get(history.source === "internal_api:avatar_interview_invitation" ? "avatar_interview_invitation" : String(history.notificationEventType)),
         candidateName: context.candidateName,
         roleTitle: context.roleTitle,
-        bookingLink: context.notificationLink,
+        // A Live Avatar-only invitation must never pick up an older call link.
+        bookingLink: history.source === "internal_api:avatar_interview_invitation" ? "" : context.notificationLink,
         avatarLink: context.avatarLink,
         scheduledLabel: scheduledLabel(context.bookedSlotStartsAt, context.bookedSlotTimezone),
         interviewMode: mode,
