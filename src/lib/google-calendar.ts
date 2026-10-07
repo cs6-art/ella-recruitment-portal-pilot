@@ -438,6 +438,16 @@ export type CalendarBusyWindowsResult =
   | { checked: true; busy: CalendarBusyWindow[] }
   | { checked: false; busy: CalendarBusyWindow[]; reason: "not_connected" | "error"; error?: string };
 
+const FREE_BUSY_CHUNK_MS = 60 * 24 * 60 * 60 * 1000;
+
+function freeBusyChunks(start: Date, end: Date): Array<[Date, Date]> {
+  const chunks: Array<[Date, Date]> = [];
+  for (let cursor = start.getTime(); cursor < end.getTime(); cursor += FREE_BUSY_CHUNK_MS) {
+    chunks.push([new Date(cursor), new Date(Math.min(cursor + FREE_BUSY_CHUNK_MS, end.getTime()))]);
+  }
+  return chunks.length ? chunks : [[start, end]];
+}
+
 /**
  * Reads one bounded free/busy range so recurring candidate slots do not cause
  * one Google request per generated time. A failed lookup is non-blocking here;
@@ -450,22 +460,28 @@ export async function getCalendarBusyWindows(input: { hodEmail: string; start: D
     if (!client) return { checked: false, busy: [], reason: "not_connected" };
     const calendar = google.calendar({ version: "v3", auth: client });
     try {
-      const response = await calendar.freebusy.query({
-        requestBody: {
-          timeMin: input.start.toISOString(),
-          timeMax: input.end.toISOString(),
-          items: [{ id: target.calendarId }],
-        },
-      });
-      const calendarResult = response.data.calendars?.[target.calendarId];
-      // Google can return HTTP 200 with a per-calendar failure. Never expose
-      // an unreadable calendar as an empty, successfully checked calendar.
-      if (!calendarResult || calendarResult.errors?.length) {
-        return { checked: false, busy: [], reason: "error", error: "Google Calendar availability could not be read." };
+      // Google rejects free/busy ranges longer than a few months, so a long
+      // lookahead (the Interview Calendar asks for 180 days) is read in chunks.
+      const busy: CalendarBusyWindow[] = [];
+      for (const [chunkStart, chunkEnd] of freeBusyChunks(input.start, input.end)) {
+        const response = await calendar.freebusy.query({
+          requestBody: {
+            timeMin: chunkStart.toISOString(),
+            timeMax: chunkEnd.toISOString(),
+            items: [{ id: target.calendarId }],
+          },
+        });
+        const calendarResult = response.data.calendars?.[target.calendarId];
+        // Google can return HTTP 200 with a per-calendar failure. Never expose
+        // an unreadable calendar as an empty, successfully checked calendar.
+        if (!calendarResult || calendarResult.errors?.length) {
+          const reasons = (calendarResult?.errors || []).map((entry) => entry.reason).filter(Boolean).join(", ");
+          return { checked: false, busy: [], reason: "error", error: `Google Calendar availability could not be read${reasons ? ` (${reasons})` : ""}.` };
+        }
+        busy.push(...(calendarResult.busy || [])
+          .filter((window): window is { start: string; end: string } => Boolean(window.start && window.end))
+          .map((window) => ({ start: window.start, end: window.end })));
       }
-      const busy = (calendarResult.busy || [])
-        .filter((window): window is { start: string; end: string } => Boolean(window.start && window.end))
-        .map((window) => ({ start: window.start, end: window.end }));
       return { checked: true, busy };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

@@ -37,6 +37,7 @@ export async function GET() {
         }
         const result = await resultPromise;
         const status = calendarLookupStatus(result);
+        if (!result.checked && result.reason === "error") console.warn(`[Bookings Calendar] Busy lookup failed for ${role.roleId}:`, result.error);
         return [role.roleId, { busy: result.checked ? result.busy : [], connected: status === "error" ? null : status === "ready", status }] as const;
       }));
 
