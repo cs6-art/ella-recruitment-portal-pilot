@@ -527,13 +527,26 @@ Credits are added as soon as the payment is confirmed.
 ### Open Smile
 
 Select the **smiling blue robot** in the bottom-right corner of any page. A short
-"Hi! Need help?" greeting appears the first time. The robot is a small full-body
-helper: it follows your cursor with its head, reacts when you click it, and
-occasionally walks along the bottom of the page, saying hello when it stops. It
-stands still while you point at it or while Smile is open. If you would rather it
-stayed in its corner, untick **Let Smile walk around the page** on the **Help &
-Feedback** tab. Select the robot again (or the
-**X**, or press **Esc**) to close. With a keyboard, press **Tab** until the robot
+"Hi! Need help?" greeting appears when you point at it. The robot is a small
+full-body helper that watches what you do:
+
+- **It explains things as you go.** Tick a box, choose an option, click a button
+  or click into a field and Smile walks over, stands beside it and says a short
+  line about it. For example, ticking **Interview automation** tells you who will
+  be invited automatically once you save. It also says a one-line welcome the
+  first time you open each page in a session, and reacts after some actions, such
+  as redeeming a promo code. It stays quiet when a pop-up window is open.
+- **It stays out of your way.** If you stop moving the mouse for about 8 seconds,
+  or the mouse leaves the window, Smile steps off to the right edge of the screen.
+  As soon as you move the mouse again it walks back to where it was. It never
+  blocks the control it is talking about, and it stands still while you point at
+  it.
+- **It reacts to you.** Its head follows your cursor, and it reacts when you
+  click it.
+
+Prefer a quiet page? On the **Help & Feedback** tab, untick **Show Smile's tips as
+I use the portal** and/or **Let Smile move around (it steps aside when I'm idle)**.
+Select the robot again (or the **X**, or press **Esc**) to close. With a keyboard, press **Tab** until the robot
 is highlighted, then press **Enter**.
 
 ### Ask Smile
@@ -550,8 +563,10 @@ On the **Help & Feedback** tab:
 - **Support email**: HRSG, **hrsg@mclinkgroup.com**.
 - **Copy email**: copies the address.
 - **Open email app**: starts a new email to support.
-- **Let Smile walk around the page**: untick to keep the robot in its corner
-  (remembered on your computer).
+- **Show Smile's tips as I use the portal**: untick to stop the spoken tips.
+- **Let Smile move around (it steps aside when I'm idle)**: untick to keep the
+  robot in its corner and never walk to a control. If tips are on, it still speaks
+  from its corner. Both choices are remembered on your computer.
 - **Send feedback**: choose a topic (**Question**, **Report an issue** or
   **Suggestion**), type your message and select **Continue in email**. Your email
   app opens with the message filled in. Nothing is sent until you press **Send**

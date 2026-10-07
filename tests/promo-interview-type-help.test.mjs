@@ -154,12 +154,16 @@ test("Smile Bot has one mascot launcher and a Help & Feedback tab", () => {
   assert.doesNotMatch(bot, /styles\.launcher\b/, "the old pill launcher is replaced, not duplicated");
   assert.match(bot, /setAttribute\("aria-label", open \? "Close Smile help assistant" : "Open Smile help assistant"\)/);
   assert.match(bot, />Help &amp; Feedback</);
-  // Roaming: walks on its own, can be switched off, never with reduced motion, stops when pointed at.
+  // Movement: steps aside when idle or when the pointer leaves, returns when it is back; opt-outs exist.
   assert.match(bot, /prefersReducedMotion\(\)/);
   assert.match(bot, /ROAM_PREF_KEY/);
-  assert.match(bot, /Let Smile walk around the page/);
-  assert.match(bot, /freezeWalk\(\); setHovering\(true\)/);
-  assert.match(bot, /if \(open \|\| hovering \|\| !roam \|\| prefersReducedMotion\(\)\)/);
+  assert.match(bot, /TIPS_PREF_KEY/);
+  assert.match(bot, /Show Smile&apos;s tips as I use the portal/);
+  assert.match(bot, /Let Smile move around \(it steps aside when I&apos;m idle\)/);
+  assert.match(bot, /IDLE_AWAY_MS/);
+  assert.match(bot, /document\.documentElement\.addEventListener\("mouseleave", leave\)/);
+  assert.match(bot, /const comeBack = \(\) => \{/);
+  assert.doesNotMatch(bot, /ROAM_MAX_DISTANCE|Math\.random\(\)/, "no random wandering any more");
   assert.match(bot, /Need help or found an issue\?/);
   assert.match(bot, /Copy email/);
   assert.match(read("src/components/HelpBot.module.css"), /@media \(prefers-reduced-motion: reduce\)[^}]*\.mascotFloat/);

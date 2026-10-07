@@ -1,27 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Mascot } from "page-mascot";
 
 import UiIcon from "./UiIcon";
+import { useSmileGuide, type GuideSay } from "./useSmileGuide";
 import { HELP_BOT_STARTER_QUESTIONS } from "@/lib/help-bot/prompt";
 import { DEFAULT_SUPPORT_EMAIL, DEFAULT_SUPPORT_NAME, FEEDBACK_MESSAGE_MAX_LENGTH, FEEDBACK_TOPICS, feedbackMailto, type SupportContact } from "@/lib/support-contact";
+import { BUBBLE_HEADROOM, bubbleAlign, bubbleDuration, IDLE_AWAY_MS, pageIntroFor, placeBeside, type BubbleAlign, type Placement } from "@/lib/smile-tips";
 import styles from "./HelpBot.module.css";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type Tab = "ask" | "help";
 const STARTER_RETURN_DELAY_MS = 4_000;
-const GREETING_SEEN_KEY = "smile-bot:greeting-seen";
-const GREETING_VISIBLE_MS = 6_000;
+// Preferences (per browser). "off" turns the behaviour off.
 const ROAM_PREF_KEY = "smile-bot:roam";
+const TIPS_PREF_KEY = "smile-bot:tips";
+const INTRO_SEEN_PREFIX = "smile-bot:intro:";
 const MASCOT_SIZE = 96;
 const MASCOT_SIZE_SMALL = 76;
-// How far Smile may wander left of its corner, and how often it moves.
-const ROAM_MAX_DISTANCE = 420;
-const ROAM_MIN_WAIT_MS = 9_000;
-const ROAM_MAX_WAIT_MS = 22_000;
-const WALK_SPEED_PX_PER_S = 70;
-const ARRIVAL_LINES = ["Any questions? Feel free to ask me!", "Need help? I'm here.", "Hi! Need help?"];
+const WALK_SPEED_PX_PER_S = 300;
+const AWAY_SPEED_PX_PER_S = 180;
+// Share of the robot tucked off the screen edge while it is out of the way.
+const AWAY_HIDDEN_SHARE = 0.55;
+
+type Spot = { x: number; y: number };
+type Bubble = { text: string; align: BubbleAlign; below: boolean; guiding: boolean };
 
 function prefersReducedMotion() {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -74,7 +79,7 @@ async function copyText(text: string) {
   }
 }
 
-function HelpAndFeedback({ support, roam, onRoamChange }: { support: SupportContact; roam: boolean; onRoamChange: (value: boolean) => void }) {
+function HelpAndFeedback({ support, roam, onRoamChange, tips, onTipsChange }: { support: SupportContact; roam: boolean; onRoamChange: (value: boolean) => void; tips: boolean; onTipsChange: (value: boolean) => void }) {
   const [topic, setTopic] = useState<string>(FEEDBACK_TOPICS[0]);
   const [message, setMessage] = useState("");
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
@@ -129,10 +134,17 @@ function HelpAndFeedback({ support, roam, onRoamChange }: { support: SupportCont
       <p className={styles.feedbackNote}>This opens your email app with your message filled in. Nothing is sent until you press Send there.</p>
     </form>
 
-    <label className={styles.roamToggle}>
-      <input type="checkbox" checked={roam} onChange={(event) => onRoamChange(event.target.checked)} />
-      <span>Let Smile walk around the page</span>
-    </label>
+    <div className={styles.roamGroup}>
+      <strong>Smile on the page</strong>
+      <label className={styles.roamToggle}>
+        <input type="checkbox" checked={tips} onChange={(event) => onTipsChange(event.target.checked)} />
+        <span>Show Smile&apos;s tips as I use the portal</span>
+      </label>
+      <label className={styles.roamToggle}>
+        <input type="checkbox" checked={roam} onChange={(event) => onRoamChange(event.target.checked)} />
+        <span>Let Smile move around (it steps aside when I&apos;m idle)</span>
+      </label>
+    </div>
   </div>;
 }
 
@@ -147,19 +159,30 @@ export default function HelpBot() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showStarters, setShowStarters] = useState(true);
-  const [greeting, setGreeting] = useState(false);
-  const [greetingText, setGreetingText] = useState(ARRIVAL_LINES[2]);
-  // Roaming: Smile occasionally walks along the bottom edge. `offset` is how far
-  // left of its corner it stands; `walkMs` is the current walk duration.
+  const pathname = usePathname();
+  // Smile stands at `pos` (offset from its corner: x left, y up). When the user
+  // is idle, or the pointer leaves the window, it steps out of the way; when the
+  // pointer is back it returns to its `anchor` (the corner, or beside the last
+  // control it spoke about).
   const [roam, setRoam] = useState(true);
-  const [offset, setOffset] = useState(0);
+  const [tips, setTips] = useState(true);
+  const [pos, setPos] = useState<Spot>({ x: 0, y: 0 });
   const [walkMs, setWalkMs] = useState(0);
   const [walking, setWalking] = useState(false);
   const [small, setSmall] = useState(false);
-  const [hovering, setHovering] = useState(false);
-  const offsetRef = useRef(0);
+  const [bubble, setBubble] = useState<Bubble | null>(null);
+  const posRef = useRef<Spot>({ x: 0, y: 0 });
+  const anchorRef = useRef<Spot>({ x: 0, y: 0 });
+  const anchorScrollRef = useRef(0);
+  const awayRef = useRef(false);
+  const hoverRef = useRef(false);
+  const bubbleRef = useRef<Bubble | null>(null);
+  const openRef = useRef(false);
+  const roamRef = useRef(true);
+  const smallRef = useRef(false);
   const roamerRef = useRef<HTMLSpanElement | null>(null);
-  const moveCount = useRef(0);
+  const bubbleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const launcherRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -183,8 +206,13 @@ export default function HelpBot() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => { openRef.current = open; roamRef.current = roam; smallRef.current = small; bubbleRef.current = bubble; });
+
   useEffect(() => {
-    try { if (window.localStorage.getItem(ROAM_PREF_KEY) === "off") setRoam(false); } catch { /* storage blocked */ }
+    try {
+      if (window.localStorage.getItem(ROAM_PREF_KEY) === "off") setRoam(false);
+      if (window.localStorage.getItem(TIPS_PREF_KEY) === "off") setTips(false);
+    } catch { /* storage blocked */ }
     const query = window.matchMedia("(max-width: 520px)");
     const sync = () => setSmall(query.matches);
     sync();
@@ -192,73 +220,207 @@ export default function HelpBot() {
     return () => query.removeEventListener("change", sync);
   }, []);
 
-  const changeRoam = useCallback((value: boolean) => {
-    setRoam(value);
-    try { window.localStorage.setItem(ROAM_PREF_KEY, value ? "on" : "off"); } catch { /* storage blocked */ }
+  const remember = useCallback((key: string, value: boolean) => {
+    try { window.localStorage.setItem(key, value ? "on" : "off"); } catch { /* storage blocked */ }
+  }, []);
+  const changeRoam = useCallback((value: boolean) => { setRoam(value); remember(ROAM_PREF_KEY, value); }, [remember]);
+  const changeTips = useCallback((value: boolean) => { setTips(value); remember(TIPS_PREF_KEY, value); }, [remember]);
+
+  const mascotSize = () => (smallRef.current ? MASCOT_SIZE_SMALL : MASCOT_SIZE);
+  const homeBox = () => launcherRef.current?.getBoundingClientRect() ?? null;
+  const robotBox = () => roamerRef.current?.getBoundingClientRect() ?? null;
+
+  /** Walk to `next` (offsets from the corner). Returns the walk time in ms; 0 means it did not move. */
+  const moveTo = useCallback((next: Spot, speed: number) => {
+    if (!roamRef.current || prefersReducedMotion()) return 0;
+    const distance = Math.hypot(next.x - posRef.current.x, next.y - posRef.current.y);
+    if (distance < 3) return 0;
+    const duration = Math.round((distance / speed) * 1000);
+    posRef.current = next;
+    setWalkMs(duration);
+    setWalking(true);
+    setPos(next);
+    return duration;
+  }, []);
+
+  const toSpot = useCallback((left: number, top: number): Spot | null => {
+    const home = homeBox();
+    return home ? { x: Math.round(home.left - left), y: Math.round(home.top - top) } : null;
   }, []);
 
   // Stop where it stands (mid-walk) so a moving robot is never hard to click.
   const freezeWalk = useCallback(() => {
-    const launcher = launcherRef.current;
-    const roamer = roamerRef.current;
-    if (!launcher || !roamer) return;
-    const current = Math.max(0, Math.round(launcher.getBoundingClientRect().left - roamer.getBoundingClientRect().left));
-    offsetRef.current = current;
+    const robot = robotBox();
+    const spot = robot ? toSpot(robot.left, robot.top) : null;
+    if (!spot) return;
+    posRef.current = spot;
     setWalkMs(0);
     setWalking(false);
-    setOffset(current);
+    setPos(spot);
+  }, [toSpot]);
+
+  const hideBubble = useCallback(() => {
+    if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+    if (sayTimer.current) clearTimeout(sayTimer.current);
+    bubbleTimer.current = null;
+    sayTimer.current = null;
+    setBubble(null);
   }, []);
 
-  const walkTo = useCallback((target: number, speed = WALK_SPEED_PX_PER_S) => {
-    const distance = Math.abs(target - offsetRef.current);
-    if (distance < 4) return;
-    offsetRef.current = target;
-    setWalkMs(Math.round((distance / speed) * 1000));
-    setWalking(true);
-    setOffset(target);
+  const showBubble = useCallback((text: string, left: number, top: number, side: Placement["side"] | "home", guiding: boolean) => {
+    const align = bubbleAlign(left, mascotSize(), window.innerWidth, side);
+    const next: Bubble = { text, align, below: top < BUBBLE_HEADROOM - 4, guiding };
+    if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+    setBubble(next);
+    bubbleTimer.current = setTimeout(() => { bubbleTimer.current = null; setBubble(null); }, bubbleDuration(text));
   }, []);
 
-  // Wander: wait, pick a new spot along the bottom edge, walk there, and
-  // sometimes say hello. Paused while Smile is open, hovered, focused or the
-  // tab is hidden; never runs with reduced motion or when the user turned it off.
-  useEffect(() => {
-    if (!enabled) return;
-    if (open || hovering || !roam || prefersReducedMotion()) {
-      // Go home (the corner) so the panel and the robot line up.
-      if (open || !roam || prefersReducedMotion()) walkTo(0, 220);
-      return;
+  // Smile speaks: walk beside the control (when movement is on), then say it.
+  const say = useCallback(({ text, rect }: GuideSay) => {
+    if (openRef.current) return;
+    hideBubble();
+    let left = 0, top = 0, side: Placement["side"] | "home" = "home", wait = 0;
+    const here = robotBox();
+    if (here) { left = here.left; top = here.top; }
+    if (rect && roamRef.current && !prefersReducedMotion()) {
+      const size = mascotSize();
+      const place = placeBeside({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }, { width: window.innerWidth, height: window.innerHeight }, size);
+      const spot = toSpot(place.left, place.top);
+      if (spot) {
+        awayRef.current = false;
+        anchorRef.current = spot;
+        anchorScrollRef.current = window.scrollY;
+        wait = moveTo(spot, WALK_SPEED_PX_PER_S);
+        left = place.left; top = place.top; side = place.side;
+      }
     }
-    let timer: ReturnType<typeof setTimeout>;
-    const schedule = () => {
-      timer = setTimeout(() => {
-        if (document.hidden) { schedule(); return; }
-        const size = small ? MASCOT_SIZE_SMALL : MASCOT_SIZE;
-        const rightGap = small ? 10 : 24;
-        // Keep the whole robot, and its greeting bubble, on screen.
-        const room = Math.max(0, window.innerWidth - rightGap - size - 90);
-        const limit = Math.min(ROAM_MAX_DISTANCE, room);
-        if (limit < 40) { schedule(); return; }
-        let target = Math.round(Math.random() * limit);
-        if (Math.abs(target - offsetRef.current) < 80) target = offsetRef.current > limit / 2 ? 0 : limit;
-        walkTo(target);
-        moveCount.current += 1;
-      }, ROAM_MIN_WAIT_MS + Math.random() * (ROAM_MAX_WAIT_MS - ROAM_MIN_WAIT_MS));
-    };
-    schedule();
-    return () => clearTimeout(timer);
-  }, [enabled, open, hovering, roam, small, walkTo, offset]);
+    sayTimer.current = setTimeout(() => { sayTimer.current = null; showBubble(text, left, top, side, true); }, wait + 40);
+  }, [hideBubble, moveTo, showBubble, toSpot]);
 
-  // A one-time "Hi! Need help?" bubble per browser session, then only on hover/focus.
+  const pathRef = useRef(pathname || "");
+  useSmileGuide({ enabled: enabled === true && tips && !open, path: pathname || "", onSay: say });
+
+  // Step out of the way when idle (or the pointer leaves the window) and come
+  // back to the anchor the moment the pointer is detected or moves again.
   useEffect(() => {
-    if (!enabled) return;
-    let seen = false;
-    try { seen = window.sessionStorage.getItem(GREETING_SEEN_KEY) === "1"; } catch { /* storage blocked */ }
-    if (seen) return;
-    try { window.sessionStorage.setItem(GREETING_SEEN_KEY, "1"); } catch { /* storage blocked */ }
-    const show = window.setTimeout(() => setGreeting(true), 1_200);
-    const hide = window.setTimeout(() => setGreeting(false), 1_200 + GREETING_VISIBLE_MS);
-    return () => { window.clearTimeout(show); window.clearTimeout(hide); };
-  }, [enabled]);
+    if (!enabled || !roam || prefersReducedMotion()) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastActivity = 0;
+
+    const stepAway = () => {
+      if (openRef.current || hoverRef.current || bubbleRef.current || awayRef.current || document.hidden) {
+        if (!awayRef.current && !document.hidden && !openRef.current) schedule();
+        return;
+      }
+      const home = homeBox();
+      if (!home) return;
+      awayRef.current = true;
+      // Tuck most of the robot off the right edge of the screen, at the bottom.
+      const tuckedLeft = window.innerWidth - mascotSize() * (1 - AWAY_HIDDEN_SHARE);
+      moveTo({ x: Math.round(home.left - tuckedLeft), y: 0 }, AWAY_SPEED_PX_PER_S);
+    };
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(stepAway, IDLE_AWAY_MS);
+    };
+    const comeBack = () => {
+      if (!awayRef.current) return;
+      awayRef.current = false;
+      // Beside a control that has since scrolled away makes no sense: use the corner.
+      if (Math.abs(window.scrollY - anchorScrollRef.current) > 160) anchorRef.current = { x: 0, y: 0 };
+      moveTo(anchorRef.current, 260);
+    };
+    const active = () => {
+      const now = Date.now();
+      if (now - lastActivity < 150) return;
+      lastActivity = now;
+      comeBack();
+      schedule();
+    };
+    const leave = () => {
+      if (timer) clearTimeout(timer);
+      // Cannot be seen: step aside right away.
+      timer = setTimeout(stepAway, 400);
+    };
+    const onScroll = () => {
+      if (!awayRef.current && (anchorRef.current.x !== 0 || anchorRef.current.y !== 0) && Math.abs(window.scrollY - anchorScrollRef.current) > 160) {
+        anchorRef.current = { x: 0, y: 0 };
+        moveTo({ x: 0, y: 0 }, 260);
+      }
+    };
+    const onMouseOut = (event: MouseEvent) => { if (!event.relatedTarget) leave(); };
+
+    schedule();
+    window.addEventListener("pointermove", active, { passive: true });
+    window.addEventListener("pointerdown", active, { passive: true });
+    window.addEventListener("keydown", active);
+    window.addEventListener("wheel", active, { passive: true });
+    window.addEventListener("touchstart", active, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("blur", leave);
+    window.addEventListener("focus", active);
+    document.addEventListener("mouseout", onMouseOut);
+    document.documentElement.addEventListener("mouseleave", leave);
+    document.documentElement.addEventListener("mouseenter", active);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("pointermove", active);
+      window.removeEventListener("pointerdown", active);
+      window.removeEventListener("keydown", active);
+      window.removeEventListener("wheel", active);
+      window.removeEventListener("touchstart", active);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("blur", leave);
+      window.removeEventListener("focus", active);
+      document.removeEventListener("mouseout", onMouseOut);
+      document.documentElement.removeEventListener("mouseleave", leave);
+      document.documentElement.removeEventListener("mouseenter", active);
+    };
+  }, [enabled, roam, moveTo]);
+
+  // Turning movement off: go back to the corner and stay.
+  useEffect(() => {
+    if (roam) return;
+    awayRef.current = false;
+    anchorRef.current = { x: 0, y: 0 };
+    posRef.current = { x: 0, y: 0 };
+    setWalkMs(0); setWalking(false); setPos({ x: 0, y: 0 });
+  }, [roam]);
+
+  // Opening Smile: bring it back if it was away, and keep it off the panel.
+  useEffect(() => {
+    if (!open) return;
+    hideBubble();
+    if (awayRef.current) { awayRef.current = false; moveTo(anchorRef.current, 260); }
+    const robot = robotBox();
+    if (!robot || window.innerWidth <= 520) return;
+    const panel = { left: window.innerWidth - 440, top: window.innerHeight - 118 - 560, bottom: window.innerHeight - 104 };
+    if (robot.right > panel.left && robot.bottom > panel.top && robot.top < panel.bottom) {
+      const spot = toSpot(panel.left - mascotSize() - 8, robot.top);
+      if (spot) { anchorRef.current = spot; moveTo(spot, 300); }
+    }
+  }, [open, hideBubble, moveTo, toSpot]);
+
+  // New page: drop back to the corner and introduce the page once per session.
+  useEffect(() => {
+    if (!enabled || !pathname || pathRef.current === pathname) { pathRef.current = pathname || ""; if (!enabled) return; }
+    const intro = tips ? pageIntroFor(pathname || "") : null;
+    anchorRef.current = { x: 0, y: 0 };
+    if (!awayRef.current) moveTo({ x: 0, y: 0 }, 400);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (intro) {
+      let seen = false;
+      try { seen = window.sessionStorage.getItem(INTRO_SEEN_PREFIX + intro.key) === "1"; } catch { /* storage blocked */ }
+      if (!seen) {
+        try { window.sessionStorage.setItem(INTRO_SEEN_PREFIX + intro.key, "1"); } catch { /* storage blocked */ }
+        timer = setTimeout(() => { if (!openRef.current && !awayRef.current) say({ text: intro.text, key: intro.key, rect: null }); }, 1_500);
+      }
+    }
+    return () => { if (timer) clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, pathname]);
+
+  useEffect(() => () => { if (bubbleTimer.current) clearTimeout(bubbleTimer.current); if (sayTimer.current) clearTimeout(sayTimer.current); }, []);
 
   // page-mascot renders its own button labelled "Boop the …". It is the one
   // launcher, so give it the Smile Bot name and disclosure state instead.
@@ -333,32 +495,34 @@ export default function HelpBot() {
     <>
       <div
         ref={launcherRef}
+        data-smile-ignore
         className={`${styles.mascotLauncher} ${open ? styles.mascotOpen : ""}`}
         // The mascot's own click plays its reaction (and a hop); the click then
         // bubbles here and toggles the panel, so there is a single launcher.
-        onClick={() => { setGreeting(false); setOpen((current) => !current); }}
-        onMouseEnter={() => { freezeWalk(); setHovering(true); if (!open) { setGreetingText(ARRIVAL_LINES[2]); setGreeting(true); } }}
-        onMouseLeave={() => { setHovering(false); setGreeting(false); }}
-        onFocus={() => { freezeWalk(); setHovering(true); if (!open) { setGreetingText(ARRIVAL_LINES[2]); setGreeting(true); } }}
-        onBlur={() => { setHovering(false); setGreeting(false); }}
+        onClick={() => { hideBubble(); setOpen((current) => !current); }}
+        onMouseEnter={() => {
+          hoverRef.current = true;
+          freezeWalk();
+          if (!open && !bubbleRef.current) { const box = robotBox(); if (box) showBubble("Hi! Need help?", box.left, box.top, "home", false); }
+        }}
+        onMouseLeave={() => {
+          hoverRef.current = false;
+          // Pointed at it mid-walk? Put it back where it belongs.
+          if (!awayRef.current && (posRef.current.x !== anchorRef.current.x || posRef.current.y !== anchorRef.current.y)) moveTo(anchorRef.current, 240);
+        }}
+        onFocus={() => { hoverRef.current = true; freezeWalk(); }}
+        onBlur={() => { hoverRef.current = false; }}
         style={{ width: small ? MASCOT_SIZE_SMALL : MASCOT_SIZE, height: small ? MASCOT_SIZE_SMALL : MASCOT_SIZE }}
       >
         <span
           ref={roamerRef}
-          className={styles.roamer}
-          style={{ transform: `translateX(${-offset}px)`, transitionDuration: `${walkMs}ms` }}
-          onTransitionEnd={(event) => {
-            if (event.target !== event.currentTarget) return;
-            setWalking(false);
-            // Say something on arrival every few stops.
-            if (!open && moveCount.current % 3 === 0 && offsetRef.current > 0) {
-              setGreetingText(ARRIVAL_LINES[moveCount.current % ARRIVAL_LINES.length]);
-              setGreeting(true);
-              window.setTimeout(() => setGreeting(false), 3_500);
-            }
-          }}
+          className={`${styles.roamer} ${bubble?.guiding ? styles.roamerGuiding : ""}`}
+          style={{ transform: `translate(${-pos.x}px, ${-pos.y}px)`, transitionDuration: `${walkMs}ms` }}
+          onTransitionEnd={(event) => { if (event.target === event.currentTarget) setWalking(false); }}
         >
-          {greeting && !open && <span className={styles.greetingBubble} aria-hidden="true">{greetingText}</span>}
+          {bubble && !open && (
+            <span className={`${styles.greetingBubble} ${bubble.align === "start" ? styles.bubbleStart : bubble.align === "end" ? styles.bubbleEnd : ""} ${bubble.below ? styles.bubbleBelow : ""}`} role="status">{bubble.text}</span>
+          )}
           <span className={`${styles.mascotFloat} ${walking ? styles.mascotWalking : ""}`}>
             <Mascot directions="/mascot/smile-directions.webp" reactions="/mascot/smile-reactions.webp" size={small ? MASCOT_SIZE_SMALL : MASCOT_SIZE} label="Smile help assistant" className={styles.mascotButton} />
           </span>
@@ -384,7 +548,7 @@ export default function HelpBot() {
 
           <div id="smile-tabpanel" role="tabpanel" aria-labelledby={tab === "ask" ? "smile-tab-ask" : "smile-tab-help"} className={styles.tabPanel}>
             {tab === "help" ? (
-              <div className={styles.body} ref={scrollRef}><HelpAndFeedback support={support} roam={roam} onRoamChange={changeRoam} /></div>
+              <div className={styles.body} ref={scrollRef}><HelpAndFeedback support={support} roam={roam} onRoamChange={changeRoam} tips={tips} onTipsChange={changeTips} /></div>
             ) : (
               <>
                 <div className={styles.body} ref={scrollRef}>

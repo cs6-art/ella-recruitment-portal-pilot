@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
+import { smileSay } from "@/lib/smile-say";
 import styles from "./PromoCodeRedeem.module.css";
 
 /**
@@ -16,6 +17,7 @@ export default function PromoCodeRedeem({ onRedeemed }: { onRedeemed: (credits: 
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   // Guards against a double click before React re-renders the disabled button.
   const inFlight = useRef(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
   async function redeem() {
     const value = code.trim();
@@ -32,10 +34,13 @@ export default function PromoCodeRedeem({ onRedeemed }: { onRedeemed: (credits: 
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.success !== true) {
-        setFeedback({ kind: "error", text: typeof data.error === "string" && data.error ? data.error : "The promo code could not be applied. Please try again." });
+        const failure = typeof data.error === "string" && data.error ? data.error : "The promo code could not be applied. Please try again.";
+        setFeedback({ kind: "error", text: failure });
+        smileSay(failure, rootRef.current);
         return;
       }
       setFeedback({ kind: "success", text: String(data.message || "Promo code applied.") });
+      smileSay(`Done! ${String(data.message || "Promo code applied.")}`, rootRef.current);
       setCode("");
       await onRedeemed(Number(data.credits) || 0);
     } catch {
@@ -46,7 +51,7 @@ export default function PromoCodeRedeem({ onRedeemed }: { onRedeemed: (credits: 
     }
   }
 
-  return <div className={styles.promo}>
+  return <div className={styles.promo} ref={rootRef}>
     <form className={styles.form} onSubmit={(event) => { event.preventDefault(); void redeem(); }}>
       <label htmlFor="smile-promo-code" className={styles.label}>Have a promo code?</label>
       <div className={styles.row}>

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import { clientErrorMessage } from "@/lib/client-error";
+import { smileSay } from "@/lib/smile-say";
 import { ROLE_INTERVIEW_TYPE_DESCRIPTIONS, ROLE_INTERVIEW_TYPE_LABELS, ROLE_INTERVIEW_TYPES, type RoleInterviewType } from "@/lib/interview-type";
 
 /** The three Interview type choices as a radio group (role form and role page). */
@@ -42,6 +43,7 @@ export default function InterviewTypeCard({ roleId }: { roleId: string }) {
   const [state, setState] = useState<State | null>(null);
   const [value, setValue] = useState<RoleInterviewType>("both");
   const [saving, setSaving] = useState(false);
+  const cardRef = useRef<HTMLElement | null>(null);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
@@ -63,6 +65,7 @@ export default function InterviewTypeCard({ roleId }: { roleId: string }) {
       const saved = await saveRoleInterviewType(roleId, value);
       setState({ interviewType: saved, editable: true });
       setMessage({ kind: "success", text: `Interview type saved: ${ROLE_INTERVIEW_TYPE_LABELS[saved]}. It applies to interviews sent from now on.` });
+      smileSay(`Saved: ${ROLE_INTERVIEW_TYPE_LABELS[saved]}. It applies to interviews sent from now on.`, cardRef.current);
     } catch (caught) {
       setMessage({ kind: "error", text: clientErrorMessage(caught, "Unable to save the interview type.") });
     } finally {
@@ -70,7 +73,7 @@ export default function InterviewTypeCard({ roleId }: { roleId: string }) {
     }
   }
 
-  return <section id="interview-type" className="card role-section interview-type-card" aria-labelledby="interview-type-title">
+  return <section ref={cardRef} id="interview-type" className="card role-section interview-type-card" aria-labelledby="interview-type-title">
     <div className="card-header interview-automation-header">
       <div>
         <h2 id="interview-type-title">Interview type</h2>

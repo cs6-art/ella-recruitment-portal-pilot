@@ -46,14 +46,17 @@
   right: 50%;
   bottom: calc(100% - 4px);
   transform: translateX(50%);
-  padding: 7px 12px;
+  width: max-content;
+  max-width: 250px;
+  padding: 8px 12px;
   border-radius: 14px;
   background: var(--surface);
   border: 1px solid var(--line);
   color: var(--navy);
   font-size: 0.85rem;
   font-weight: 600;
-  white-space: nowrap;
+  line-height: 1.4;
+  white-space: normal;
   box-shadow: var(--elevation-2, 0 4px 12px rgba(23, 32, 51, 0.12));
   pointer-events: none;
   animation: smileBubbleIn 0.25s ease-out;
@@ -70,6 +73,18 @@
   border-bottom: 1px solid var(--line);
   transform: translateX(-50%) rotate(45deg);
 }
+/* Grows to the right of the robot (used when the robot stands to the right of a control). */
+.bubbleStart { left: 0; right: auto; transform: none; }
+.bubbleStart::after { left: 38px; }
+/* Grows to the left of the robot. */
+.bubbleEnd { right: 0; left: auto; transform: none; }
+.bubbleEnd::after { left: auto; right: 24px; transform: rotate(45deg); }
+/* Not enough room above the robot: speak below it. */
+.bubbleBelow { bottom: auto; top: calc(100% - 4px); }
+.bubbleBelow::after { bottom: auto; top: -6px; border: 0; border-left: 1px solid var(--line); border-top: 1px solid var(--line); }
+
+/* While Smile is speaking about a control it never blocks that control. */
+.roamerGuiding { pointer-events: none; }
 
 @keyframes smileBubbleIn {
   from { opacity: 0; margin-bottom: -6px; }
@@ -341,3 +356,5 @@
 
 .roamToggle { display: flex; align-items: center; gap: 8px; padding: 2px 4px; font-size: 0.85rem; color: var(--ink); cursor: pointer; }
 .roamToggle input { width: 16px; height: 16px; }
+
+.roamGroup { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font-size: 0.88rem; }

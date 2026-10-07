@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import { useConfirmation } from "@/components/ConfirmationModal";
 import { clientErrorMessage } from "@/lib/client-error";
+import { smileSay } from "@/lib/smile-say";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
 type Automation = { enabled: boolean; minScore: number; enabledAt: string; enabledBy: string };
@@ -23,6 +24,7 @@ export default function InterviewAutomationCard({ roleId, editable, placement = 
   const [enabled, setEnabled] = useState(false);
   const [minScore, setMinScore] = useState("80");
   const [saving, setSaving] = useState(false);
+  const cardRef = useRef<HTMLElement | null>(null);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   function apply(data: AutomationResponse) {
@@ -86,6 +88,7 @@ export default function InterviewAutomationCard({ roleId, editable, placement = 
       apply(data);
       window.dispatchEvent(new CustomEvent(AUTOMATION_UPDATED_EVENT, { detail: { roleId, data } }));
       setMessage({ kind: "success", text: enabled ? "Interview automation is on." : "Interview automation is off. New applicants wait for HR review." });
+      smileSay(enabled ? `Automation is on. Applicants I screen from now on who score ${score}% or more are invited automatically.` : "Automation is off. New applicants wait for your review.", cardRef.current);
     } catch (caught) {
       setMessage({ kind: "error", text: clientErrorMessage(caught, "Unable to save Interview automation.") });
     } finally {
@@ -95,7 +98,7 @@ export default function InterviewAutomationCard({ roleId, editable, placement = 
 
   const reviewHref = `/roles/${encodeURIComponent(roleId)}/applicants?stage=${encodeURIComponent("Resume Review")}&sort=match`;
   const setupPlacement = placement === "setup";
-  return <section id={setupPlacement ? "recruitment-setup-interview-automation" : "interview-automation"} className={`card role-section interview-automation-card${setupPlacement ? " interview-automation-card-in-setup" : ""}`} aria-labelledby={setupPlacement ? "recruitment-setup-interview-automation-title" : "interview-automation-title"}>
+  return <section ref={cardRef} id={setupPlacement ? "recruitment-setup-interview-automation" : "interview-automation"} className={`card role-section interview-automation-card${setupPlacement ? " interview-automation-card-in-setup" : ""}`} aria-labelledby={setupPlacement ? "recruitment-setup-interview-automation-title" : "interview-automation-title"}>
     <div className="card-header interview-automation-header">
       <div>
         <h2 id={setupPlacement ? "recruitment-setup-interview-automation-title" : "interview-automation-title"}>Interview automation</h2>
