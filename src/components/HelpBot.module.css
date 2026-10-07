@@ -1,19 +1,29 @@
-/* Floating mascot launcher (page-mascot). One control: the mascot button. */
+/* Floating mascot launcher (page-mascot). One control: the mascot button.
+   The container stays in the bottom-right corner; the roamer inside it walks
+   left along the bottom edge and back. */
 .mascotLauncher {
   position: fixed;
-  right: clamp(12px, 2.5vw, 24px);
-  bottom: clamp(10px, 2.5vw, 20px);
+  right: clamp(10px, 2vw, 24px);
+  bottom: clamp(6px, 1.5vw, 14px);
   z-index: 60;
-  width: 72px;
-  height: 72px;
+}
+
+.roamer {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transition-property: transform;
+  transition-timing-function: linear;
 }
 
 .mascotFloat {
   display: block;
   animation: smileFloat 3.6s ease-in-out infinite;
-  filter: drop-shadow(0 6px 10px rgba(14, 68, 113, 0.22));
+  filter: drop-shadow(0 6px 8px rgba(14, 68, 113, 0.2));
 }
 
+/* Walking: a quick two-beat bob and sway instead of the idle float. */
+.mascotWalking { animation: smileStep 0.42s ease-in-out infinite; transform-origin: 50% 90%; }
 .mascotOpen .mascotFloat { animation-play-state: paused; }
 
 .mascotButton { border-radius: 24px; }
@@ -21,15 +31,23 @@
 
 @keyframes smileFloat {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes smileStep {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  25% { transform: translateY(-5px) rotate(0deg); }
+  50% { transform: translateY(0) rotate(3deg); }
+  75% { transform: translateY(-5px) rotate(0deg); }
 }
 
 .greetingBubble {
   position: absolute;
-  right: calc(100% + 6px);
-  top: 14px;
+  right: 50%;
+  bottom: calc(100% - 4px);
+  transform: translateX(50%);
   padding: 7px 12px;
-  border-radius: 14px 14px 4px 14px;
+  border-radius: 14px;
   background: var(--surface);
   border: 1px solid var(--line);
   color: var(--navy);
@@ -40,16 +58,28 @@
   pointer-events: none;
   animation: smileBubbleIn 0.25s ease-out;
 }
+.greetingBubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  transform: translateX(-50%) rotate(45deg);
+}
 
 @keyframes smileBubbleIn {
-  from { opacity: 0; transform: translateX(6px); }
-  to { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; margin-bottom: -6px; }
+  to { opacity: 1; margin-bottom: 0; }
 }
 
 .panel {
   position: fixed;
   right: clamp(16px, 3vw, 28px);
-  bottom: calc(clamp(10px, 2.5vw, 20px) + 84px);
+  bottom: calc(clamp(6px, 1.5vw, 14px) + 104px);
   z-index: 60;
   display: flex;
   flex-direction: column;
@@ -220,13 +250,13 @@
     bottom: 8px;
     height: min(70vh, 520px);
   }
-  .mascotLauncher { width: 60px; height: 60px; right: 10px; bottom: 10px; }
-  .mascotLauncher :global(button) { width: 60px !important; height: 60px !important; }
+  .mascotLauncher { right: 10px; bottom: 6px; }
   .mascotOpen { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dot, .mascotFloat, .greetingBubble { animation: none; }
+  .dot, .mascotFloat, .mascotWalking, .greetingBubble { animation: none; }
+  .roamer { transition: none; }
 }
 
 /* Tabs: "Ask Smile" and "Help & Feedback". */
@@ -308,3 +338,6 @@
 .inlineLink { padding: 0; border: none; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
 
 .srStatus { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.roamToggle { display: flex; align-items: center; gap: 8px; padding: 2px 4px; font-size: 0.85rem; color: var(--ink); cursor: pointer; }
+.roamToggle input { width: 16px; height: 16px; }

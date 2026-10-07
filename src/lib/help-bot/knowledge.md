@@ -37,7 +37,9 @@ The main menu items are Dashboard, Role Requests, Resume Screening, Applicants,
 Interview Calendar, Settings, Credits, User Accounts, and Profile (opened from your name at
 the bottom of the menu). Menu items you are not allowed to use do not appear for
 you. The Smile assistant (this chat) is available from every page: select the
-smiling blue robot in the bottom-right corner.
+smiling blue robot in the bottom-right corner. The robot may walk along the bottom
+of the page; it stops when you point at it, and you can turn walking off with
+**Let Smile walk around the page** in the Help & Feedback tab.
 
 ## Quick answers for common portal questions
 

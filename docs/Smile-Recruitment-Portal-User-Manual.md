@@ -527,7 +527,12 @@ Credits are added as soon as the payment is confirmed.
 ### Open Smile
 
 Select the **smiling blue robot** in the bottom-right corner of any page. A short
-"Hi! Need help?" greeting appears the first time. Select the robot again (or the
+"Hi! Need help?" greeting appears the first time. The robot is a small full-body
+helper: it follows your cursor with its head, reacts when you click it, and
+occasionally walks along the bottom of the page, saying hello when it stops. It
+stands still while you point at it or while Smile is open. If you would rather it
+stayed in its corner, untick **Let Smile walk around the page** on the **Help &
+Feedback** tab. Select the robot again (or the
 **X**, or press **Esc**) to close. With a keyboard, press **Tab** until the robot
 is highlighted, then press **Enter**.
 
@@ -545,6 +550,8 @@ On the **Help & Feedback** tab:
 - **Support email**: HRSG, **hrsg@mclinkgroup.com**.
 - **Copy email**: copies the address.
 - **Open email app**: starts a new email to support.
+- **Let Smile walk around the page**: untick to keep the robot in its corner
+  (remembered on your computer).
 - **Send feedback**: choose a topic (**Question**, **Report an issue** or
   **Suggestion**), type your message and select **Continue in email**. Your email
   app opens with the message filled in. Nothing is sent until you press **Send**

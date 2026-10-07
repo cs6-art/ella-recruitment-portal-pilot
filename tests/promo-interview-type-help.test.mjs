@@ -154,6 +154,12 @@ test("Smile Bot has one mascot launcher and a Help & Feedback tab", () => {
   assert.doesNotMatch(bot, /styles\.launcher\b/, "the old pill launcher is replaced, not duplicated");
   assert.match(bot, /setAttribute\("aria-label", open \? "Close Smile help assistant" : "Open Smile help assistant"\)/);
   assert.match(bot, />Help &amp; Feedback</);
+  // Roaming: walks on its own, can be switched off, never with reduced motion, stops when pointed at.
+  assert.match(bot, /prefersReducedMotion\(\)/);
+  assert.match(bot, /ROAM_PREF_KEY/);
+  assert.match(bot, /Let Smile walk around the page/);
+  assert.match(bot, /freezeWalk\(\); setHovering\(true\)/);
+  assert.match(bot, /if \(open \|\| hovering \|\| !roam \|\| prefersReducedMotion\(\)\)/);
   assert.match(bot, /Need help or found an issue\?/);
   assert.match(bot, /Copy email/);
   assert.match(read("src/components/HelpBot.module.css"), /@media \(prefers-reduced-motion: reduce\)[^}]*\.mascotFloat/);

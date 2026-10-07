@@ -13,6 +13,19 @@ type Tab = "ask" | "help";
 const STARTER_RETURN_DELAY_MS = 4_000;
 const GREETING_SEEN_KEY = "smile-bot:greeting-seen";
 const GREETING_VISIBLE_MS = 6_000;
+const ROAM_PREF_KEY = "smile-bot:roam";
+const MASCOT_SIZE = 96;
+const MASCOT_SIZE_SMALL = 76;
+// How far Smile may wander left of its corner, and how often it moves.
+const ROAM_MAX_DISTANCE = 420;
+const ROAM_MIN_WAIT_MS = 9_000;
+const ROAM_MAX_WAIT_MS = 22_000;
+const WALK_SPEED_PX_PER_S = 70;
+const ARRIVAL_LINES = ["Any questions? Feel free to ask me!", "Need help? I'm here.", "Hi! Need help?"];
+
+function prefersReducedMotion() {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
 
 type HelpBotConfig = { enabled: boolean; configured: boolean; support: SupportContact };
 let helpBotConfigPromise: Promise<HelpBotConfig> | null = null;
@@ -61,7 +74,7 @@ async function copyText(text: string) {
   }
 }
 
-function HelpAndFeedback({ support }: { support: SupportContact }) {
+function HelpAndFeedback({ support, roam, onRoamChange }: { support: SupportContact; roam: boolean; onRoamChange: (value: boolean) => void }) {
   const [topic, setTopic] = useState<string>(FEEDBACK_TOPICS[0]);
   const [message, setMessage] = useState("");
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
@@ -115,6 +128,11 @@ function HelpAndFeedback({ support }: { support: SupportContact }) {
       <button type="submit" className={styles.primaryButton} disabled={!message.trim()}>Continue in email</button>
       <p className={styles.feedbackNote}>This opens your email app with your message filled in. Nothing is sent until you press Send there.</p>
     </form>
+
+    <label className={styles.roamToggle}>
+      <input type="checkbox" checked={roam} onChange={(event) => onRoamChange(event.target.checked)} />
+      <span>Let Smile walk around the page</span>
+    </label>
   </div>;
 }
 
@@ -130,6 +148,18 @@ export default function HelpBot() {
   const [error, setError] = useState("");
   const [showStarters, setShowStarters] = useState(true);
   const [greeting, setGreeting] = useState(false);
+  const [greetingText, setGreetingText] = useState(ARRIVAL_LINES[2]);
+  // Roaming: Smile occasionally walks along the bottom edge. `offset` is how far
+  // left of its corner it stands; `walkMs` is the current walk duration.
+  const [roam, setRoam] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const [walkMs, setWalkMs] = useState(0);
+  const [walking, setWalking] = useState(false);
+  const [small, setSmall] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const offsetRef = useRef(0);
+  const roamerRef = useRef<HTMLSpanElement | null>(null);
+  const moveCount = useRef(0);
 
   const launcherRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -152,6 +182,71 @@ export default function HelpBot() {
       });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    try { if (window.localStorage.getItem(ROAM_PREF_KEY) === "off") setRoam(false); } catch { /* storage blocked */ }
+    const query = window.matchMedia("(max-width: 520px)");
+    const sync = () => setSmall(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  const changeRoam = useCallback((value: boolean) => {
+    setRoam(value);
+    try { window.localStorage.setItem(ROAM_PREF_KEY, value ? "on" : "off"); } catch { /* storage blocked */ }
+  }, []);
+
+  // Stop where it stands (mid-walk) so a moving robot is never hard to click.
+  const freezeWalk = useCallback(() => {
+    const launcher = launcherRef.current;
+    const roamer = roamerRef.current;
+    if (!launcher || !roamer) return;
+    const current = Math.max(0, Math.round(launcher.getBoundingClientRect().left - roamer.getBoundingClientRect().left));
+    offsetRef.current = current;
+    setWalkMs(0);
+    setWalking(false);
+    setOffset(current);
+  }, []);
+
+  const walkTo = useCallback((target: number, speed = WALK_SPEED_PX_PER_S) => {
+    const distance = Math.abs(target - offsetRef.current);
+    if (distance < 4) return;
+    offsetRef.current = target;
+    setWalkMs(Math.round((distance / speed) * 1000));
+    setWalking(true);
+    setOffset(target);
+  }, []);
+
+  // Wander: wait, pick a new spot along the bottom edge, walk there, and
+  // sometimes say hello. Paused while Smile is open, hovered, focused or the
+  // tab is hidden; never runs with reduced motion or when the user turned it off.
+  useEffect(() => {
+    if (!enabled) return;
+    if (open || hovering || !roam || prefersReducedMotion()) {
+      // Go home (the corner) so the panel and the robot line up.
+      if (open || !roam || prefersReducedMotion()) walkTo(0, 220);
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      timer = setTimeout(() => {
+        if (document.hidden) { schedule(); return; }
+        const size = small ? MASCOT_SIZE_SMALL : MASCOT_SIZE;
+        const rightGap = small ? 10 : 24;
+        // Keep the whole robot, and its greeting bubble, on screen.
+        const room = Math.max(0, window.innerWidth - rightGap - size - 90);
+        const limit = Math.min(ROAM_MAX_DISTANCE, room);
+        if (limit < 40) { schedule(); return; }
+        let target = Math.round(Math.random() * limit);
+        if (Math.abs(target - offsetRef.current) < 80) target = offsetRef.current > limit / 2 ? 0 : limit;
+        walkTo(target);
+        moveCount.current += 1;
+      }, ROAM_MIN_WAIT_MS + Math.random() * (ROAM_MAX_WAIT_MS - ROAM_MIN_WAIT_MS));
+    };
+    schedule();
+    return () => clearTimeout(timer);
+  }, [enabled, open, hovering, roam, small, walkTo, offset]);
 
   // A one-time "Hi! Need help?" bubble per browser session, then only on hover/focus.
   useEffect(() => {
@@ -239,17 +334,34 @@ export default function HelpBot() {
       <div
         ref={launcherRef}
         className={`${styles.mascotLauncher} ${open ? styles.mascotOpen : ""}`}
-        // The mascot's own click plays its reaction; the click then bubbles
-        // here and toggles the panel, so there is a single launcher.
+        // The mascot's own click plays its reaction (and a hop); the click then
+        // bubbles here and toggles the panel, so there is a single launcher.
         onClick={() => { setGreeting(false); setOpen((current) => !current); }}
-        onMouseEnter={() => { if (!open) setGreeting(true); }}
-        onMouseLeave={() => setGreeting(false)}
-        onFocus={() => { if (!open) setGreeting(true); }}
-        onBlur={() => setGreeting(false)}
+        onMouseEnter={() => { freezeWalk(); setHovering(true); if (!open) { setGreetingText(ARRIVAL_LINES[2]); setGreeting(true); } }}
+        onMouseLeave={() => { setHovering(false); setGreeting(false); }}
+        onFocus={() => { freezeWalk(); setHovering(true); if (!open) { setGreetingText(ARRIVAL_LINES[2]); setGreeting(true); } }}
+        onBlur={() => { setHovering(false); setGreeting(false); }}
+        style={{ width: small ? MASCOT_SIZE_SMALL : MASCOT_SIZE, height: small ? MASCOT_SIZE_SMALL : MASCOT_SIZE }}
       >
-        {greeting && !open && <span className={styles.greetingBubble} aria-hidden="true">Hi! Need help?</span>}
-        <span className={styles.mascotFloat}>
-          <Mascot directions="/mascot/smile-directions.webp" reactions="/mascot/smile-reactions.webp" size={72} label="Smile help assistant" className={styles.mascotButton} />
+        <span
+          ref={roamerRef}
+          className={styles.roamer}
+          style={{ transform: `translateX(${-offset}px)`, transitionDuration: `${walkMs}ms` }}
+          onTransitionEnd={(event) => {
+            if (event.target !== event.currentTarget) return;
+            setWalking(false);
+            // Say something on arrival every few stops.
+            if (!open && moveCount.current % 3 === 0 && offsetRef.current > 0) {
+              setGreetingText(ARRIVAL_LINES[moveCount.current % ARRIVAL_LINES.length]);
+              setGreeting(true);
+              window.setTimeout(() => setGreeting(false), 3_500);
+            }
+          }}
+        >
+          {greeting && !open && <span className={styles.greetingBubble} aria-hidden="true">{greetingText}</span>}
+          <span className={`${styles.mascotFloat} ${walking ? styles.mascotWalking : ""}`}>
+            <Mascot directions="/mascot/smile-directions.webp" reactions="/mascot/smile-reactions.webp" size={small ? MASCOT_SIZE_SMALL : MASCOT_SIZE} label="Smile help assistant" className={styles.mascotButton} />
+          </span>
         </span>
       </div>
 
@@ -272,7 +384,7 @@ export default function HelpBot() {
 
           <div id="smile-tabpanel" role="tabpanel" aria-labelledby={tab === "ask" ? "smile-tab-ask" : "smile-tab-help"} className={styles.tabPanel}>
             {tab === "help" ? (
-              <div className={styles.body} ref={scrollRef}><HelpAndFeedback support={support} /></div>
+              <div className={styles.body} ref={scrollRef}><HelpAndFeedback support={support} roam={roam} onRoamChange={changeRoam} /></div>
             ) : (
               <>
                 <div className={styles.body} ref={scrollRef}>

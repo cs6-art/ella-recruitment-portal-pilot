@@ -26,6 +26,7 @@ const COLORS = {
 
 const DIRECTIONS = [[-1, -1], [0, -1], [1, -1], [-1, 0], [0, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
 const REACTIONS = ["blink", "heart", "sparkle", "surprised", "wink", "bashful", "sleepy", "dizzy", "delighted"];
+const REACTION_POSES = ["down", "cheer", "cheer", "out", "wave", "shy", "slump", "out", "cheer"];
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -37,66 +38,103 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-/** Head, antenna, ears and visor. (dx, dy) nudges the head toward the pointer. */
-function drawRobot(ctx, ox, oy, dx, dy) {
-  const cx = ox + CELL / 2 + dx * 7;
-  const cy = oy + CELL / 2 + 10 + dy * 5;
-  const w = 168;
-  const h = 142;
+/**
+ * Full-body robot: legs, body with a chest light, arms, neck, head, antenna,
+ * ears and visor. (dx, dy) turns the head toward the pointer; `pose` moves the
+ * arms. Returns where to draw the face (the visor centre).
+ */
+const HAND = { down: [[-62, 40], [62, 40]], wave: [[-62, 40], [74, -34]], cheer: [[-70, -30], [70, -30]], out: [[-82, 6], [82, 6]], shy: [[-24, 24], [24, 24]], slump: [[-60, 46], [60, 46]] };
 
-  // Soft ground shadow (does not move with the head).
-  ctx.fillStyle = "rgba(14, 68, 113, 0.16)";
-  ctx.beginPath();
-  ctx.ellipse(ox + CELL / 2, oy + CELL - 22, 62, 9, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Antenna, tilting slightly with the head.
-  ctx.strokeStyle = COLORS.shellDark;
-  ctx.lineWidth = 7;
+function limb(ctx, x1, y1, x2, y2) {
   ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - h / 2 + 4);
-  ctx.lineTo(cx + dx * 9, cy - h / 2 - 26 + dy * 3);
-  ctx.stroke();
-  ctx.fillStyle = COLORS.glow;
   ctx.strokeStyle = COLORS.shellDark;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.arc(cx + dx * 9, cy - h / 2 - 32 + dy * 3, 11, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  ctx.lineWidth = 19;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.strokeStyle = COLORS.shellLight;
+  ctx.lineWidth = 11;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+}
 
-  // Ears.
+function drawRobot(ctx, ox, oy, dx, dy, pose = "down") {
+  const cx = ox + CELL / 2;
+  const top = oy;
+  const slump = pose === "slump" ? 8 : 0;
+
+  // Ground shadow.
+  ctx.fillStyle = "rgba(14, 68, 113, 0.16)";
+  ctx.beginPath(); ctx.ellipse(cx, top + 242, 56, 8, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Legs and feet.
   for (const side of [-1, 1]) {
-    ctx.fillStyle = COLORS.shellDark;
-    roundRect(ctx, cx + side * (w / 2) - 13 + side * 4 - dx * 3, cy - 24, 26, 48, 12);
-    ctx.fill();
+    limb(ctx, cx + side * 21, top + 208, cx + side * 21, top + 226);
+    ctx.fillStyle = COLORS.shell;
+    ctx.strokeStyle = COLORS.shellDark;
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.ellipse(cx + side * 24, top + 233, 19, 9, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
 
-  // Head shell with a gentle vertical gradient.
-  const gradient = ctx.createLinearGradient(cx, cy - h / 2, cx, cy + h / 2);
-  gradient.addColorStop(0, COLORS.shellLight);
-  gradient.addColorStop(0.45, COLORS.shell);
-  gradient.addColorStop(1, "#1a6fe0");
-  ctx.fillStyle = gradient;
+  // Arms behind the body edge, hands in front.
+  const [[lx, ly], [rx, ry]] = HAND[pose] || HAND.down;
+  const shoulderY = top + 168 + slump;
+  limb(ctx, cx - 44, shoulderY, cx + lx, shoulderY + ly + 14);
+  limb(ctx, cx + 44, shoulderY, cx + rx, shoulderY + ry + 14);
+  ctx.fillStyle = COLORS.white;
+  ctx.strokeStyle = COLORS.shellDark;
+  ctx.lineWidth = 4;
+  for (const [hx, hy] of [[lx, ly], [rx, ry]]) {
+    ctx.beginPath(); ctx.arc(cx + hx, shoulderY + hy + 14, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+
+  // Body with a glowing chest light.
+  const bodyGradient = ctx.createLinearGradient(cx, top + 148, cx, top + 214);
+  bodyGradient.addColorStop(0, "#5aa9ff");
+  bodyGradient.addColorStop(1, "#1a6fe0");
+  ctx.fillStyle = bodyGradient;
   ctx.strokeStyle = COLORS.shellDark;
   ctx.lineWidth = 6;
-  roundRect(ctx, cx - w / 2, cy - h / 2, w, h, 54);
-  ctx.fill();
-  ctx.stroke();
+  roundRect(ctx, cx - 43, top + 148 + slump, 86, 66 - slump, 30);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+  ctx.beginPath(); ctx.ellipse(cx - 18, top + 162 + slump, 15, 6, -0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.save();
+  ctx.fillStyle = COLORS.glow;
+  ctx.shadowColor = "rgba(127, 227, 255, 0.9)";
+  ctx.shadowBlur = 12;
+  ctx.beginPath(); ctx.arc(cx, top + 186 + slump, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = COLORS.shellDark; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.arc(cx, top + 186 + slump, 10, 0, Math.PI * 2); ctx.stroke();
 
-  // Highlight.
-  ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
-  ctx.beginPath();
-  ctx.ellipse(cx - w / 4, cy - h / 2 + 20, 30, 10, -0.25, 0, Math.PI * 2);
-  ctx.fill();
+  // Head (turns a little toward the pointer; drops when sleepy).
+  const hx = cx + dx * 5;
+  const hy = top + 90 + dy * 3 + slump;
+  ctx.fillStyle = COLORS.shellDark;
+  roundRect(ctx, cx - 12, hy + 38, 24, 22, 6); ctx.fill();
 
-  // Visor (face screen), shifted further than the head for a 3D turn.
-  const vx = cx + dx * 9;
-  const vy = cy + 6 + dy * 7;
+  ctx.strokeStyle = COLORS.shellDark;
+  ctx.lineWidth = 7; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(hx, hy - 50); ctx.lineTo(hx + dx * 8, hy - 72); ctx.stroke();
+  ctx.fillStyle = COLORS.glow;
+  ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.arc(hx + dx * 8, hy - 78, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+  for (const side of [-1, 1]) {
+    ctx.fillStyle = COLORS.shell;
+    ctx.strokeStyle = COLORS.shellDark; ctx.lineWidth = 5;
+    roundRect(ctx, hx + side * 62 - 9 - dx * 2 * side * 0, hy - 20, 18, 42, 9); ctx.fill(); ctx.stroke();
+  }
+
+  const headGradient = ctx.createLinearGradient(hx, hy - 52, hx, hy + 52);
+  headGradient.addColorStop(0, "#ffffff");
+  headGradient.addColorStop(1, "#c6d7ee");
+  ctx.fillStyle = headGradient;
+  ctx.strokeStyle = COLORS.shellDark; ctx.lineWidth = 6;
+  roundRect(ctx, hx - 62, hy - 52, 124, 104, 42); ctx.fill(); ctx.stroke();
+
+  const vx = hx + dx * 8;
+  const vy = hy + 2 + dy * 5;
   ctx.fillStyle = COLORS.visor;
-  roundRect(ctx, vx - 60, vy - 40, 120, 80, 34);
-  ctx.fill();
+  roundRect(ctx, vx - 49, vy - 33, 98, 66, 28); ctx.fill();
   return { fx: vx, fy: vy };
 }
 
@@ -182,6 +220,8 @@ function cheeks(ctx, fx, fy) {
 
 function drawFace(ctx, fx, fy, reaction) {
   ctx.save();
+  // The visor is smaller than on the head-only robot: scale the face about its centre.
+  ctx.translate(fx, fy); ctx.scale(0.78, 0.78); ctx.translate(-fx, -fy);
   glowStyle(ctx);
   const lx = fx - 24;
   const rx = fx + 24;
@@ -234,7 +274,7 @@ await sheet("smile-directions.webp", (ctx, ox, oy, index) => {
   drawFace(ctx, fx + dx * 4, fy + dy * 3, "idle");
 });
 await sheet("smile-reactions.webp", (ctx, ox, oy, index) => {
-  const { fx, fy } = drawRobot(ctx, ox, oy, 0, 0);
+  const { fx, fy } = drawRobot(ctx, ox, oy, 0, 0, REACTION_POSES[index]);
   drawFace(ctx, fx, fy, REACTIONS[index]);
 });
 // A single static frame for places that need a plain image (manual, previews).
