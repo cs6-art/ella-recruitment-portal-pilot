@@ -9,7 +9,7 @@ import { clientErrorMessage } from "@/lib/client-error";
 import { formatPortalDateTime } from "@/lib/portal-time";
 
 type Automation = { enabled: boolean; minScore: number; enabledAt: string; enabledBy: string };
-type AutomationResponse = { success?: boolean; error?: string; automation?: Automation; waitingForReview?: number; roleOpen?: boolean };
+type AutomationResponse = { success?: boolean; error?: string; automation?: Automation; waitingForReview?: number; roleOpen?: boolean; roleLive?: boolean };
 const AUTOMATION_UPDATED_EVENT = "smile:interview-automation-updated";
 
 /**
@@ -113,7 +113,8 @@ export default function InterviewAutomationCard({ roleId, editable, placement = 
       <p className="interview-automation-note">
         {saved.enabled
           ? <>On since {formatPortalDateTime(saved.enabledAt, false)}{saved.enabledBy ? ` by ${saved.enabledBy}` : ""}. Applies only to applicants screened since then; everyone else stays in HR review.</>
-          : state.roleOpen ? "Off. Every applicant waits for HR review." : "Available once the role is approved and before its target hiring date."}
+          : state.roleOpen ? "Off. Every applicant waits for HR review." : "Not available for a rejected role or one past its target hiring date."}
+        {state.roleOpen && !state.roleLive && " This role isn't live yet: the condition starts working once it is approved and published, and applicants are screened."}
       </p>
       {waiting > 0 && <p className="interview-automation-waiting">{waiting} {waiting === 1 ? "applicant is" : "applicants are"} waiting for review. <Link href={reviewHref}>Review them →</Link></p>}
       {editable && canChange && <div className="interview-automation-actions"><button type="button" className="btn btn-primary btn-small" disabled={!dirty || saving} onClick={() => void save()}>{saving ? "Saving…" : "Save"}</button></div>}

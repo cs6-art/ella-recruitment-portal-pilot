@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { canManageCredits } from "../src/lib/access-control.ts";
+import { canManageAllOrganizationCredits, canManageCredits } from "../src/lib/access-control.ts";
 import { applyAccessRolePolicy, getAccessRolePreset } from "../src/lib/access-roles.ts";
 
 const perms = (value) => {
@@ -50,4 +50,11 @@ test("legacy Admin flags are normalized to credits-only", () => {
     canManageCredits: true,
     canReviewDepartmentRole: false,
   });
+});
+
+test("only McLink credit managers can manage other organizations' credits", () => {
+  const mclink = "00000000-0000-4000-8000-000000000001";
+  assert.equal(canManageAllOrganizationCredits({ organizationId: mclink, canManageCredits: true }), true);
+  assert.equal(canManageAllOrganizationCredits({ organizationId: mclink, canManageCredits: false }), false);
+  assert.equal(canManageAllOrganizationCredits({ organizationId: "11111111-1111-4111-8111-111111111111", canManageCredits: true }), false);
 });

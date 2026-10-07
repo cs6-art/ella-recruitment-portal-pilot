@@ -17,7 +17,11 @@ export const dynamic = "force-dynamic";
 
 type Context = { params: Promise<{ roleId: string }> };
 
-const LIVE_ROLE_STATUSES = new Set(["approved", "recruitment_setup", "job_posted"]);
+// The condition can be set from the Role Request stage onward. It only acts once
+// the role is live (checked again when an applicant is screened), so a rejected
+// role is the only status that cannot take it.
+const CLOSED_ROLE_STATUSES = new Set(["rejected"]);
+const roleAcceptsSetting = (role: { status: string; targetHiringDate: string | null }) => !CLOSED_ROLE_STATUSES.has(role.status.toLowerCase()) && isRoleOpenForSelection({ targetHiringDate: role.targetHiringDate });
 const bodySchema = z.object({ enabled: z.boolean(), minScore: z.coerce.number().int().min(1).max(100) });
 
 async function loadRole(context: Context) {
@@ -38,7 +42,8 @@ function payload(setup: unknown, waitingForReview: number, role: { status: strin
     success: true,
     automation: readInterviewAutomation(setup),
     waitingForReview,
-    roleOpen: LIVE_ROLE_STATUSES.has(role.status.toLowerCase()) && isRoleOpenForSelection({ targetHiringDate: role.targetHiringDate }),
+    roleOpen: roleAcceptsSetting(role),
+    roleLive: ["approved", "recruitment_setup", "job_posted"].includes(role.status.toLowerCase()),
   };
 }
 
@@ -61,8 +66,8 @@ export async function PUT(request: Request, context: Context) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ success: false, error: "Enter a minimum score from 1 to 100." }, { status: 422 });
-  if (parsed.data.enabled && (!LIVE_ROLE_STATUSES.has(role.status.toLowerCase()) || !isRoleOpenForSelection({ targetHiringDate: role.targetHiringDate }))) {
-    return NextResponse.json({ success: false, error: "Interview automation is only available for approved roles that are still open." }, { status: 409 });
+  if (parsed.data.enabled && !roleAcceptsSetting(role)) {
+    return NextResponse.json({ success: false, error: "Interview automation isn't available for a rejected role or one past its target hiring date." }, { status: 409 });
   }
 
   try {

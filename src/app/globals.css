@@ -1061,11 +1061,11 @@ a { color: inherit; text-decoration: none; }
 .user-accounts-guide { margin-bottom: 24px; }
 .user-accounts-guide > div { min-width: 0; }
 .user-accounts-guide p { max-width: 100%; }
-.user-account-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }
-.user-account-stats .stat-card { display: grid; align-content: space-between; gap: 12px; min-height: 108px; padding: 18px 20px; }
+.user-account-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin: 28px 0; }
+.user-account-stats .stat-card { display: grid; align-content: space-between; gap: 12px; min-height: 112px; padding: 20px 22px; }
 .user-account-stats .stat-card span { color: var(--muted); font-size: 12px; }
 .user-account-stats .stat-card strong { color: var(--navy); font-size: 28px; line-height: 1; }
-.organization-admin-card { margin-top: 0; }
+.organization-admin-card { margin-top: 0; margin-bottom: 28px; }
 .organization-card-header, .directory-card-header { align-items: flex-start; gap: 24px; }
 .organization-card-heading, .directory-card-heading { min-width: 0; }
 .organization-card-heading p, .directory-card-heading p { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
@@ -1095,7 +1095,7 @@ a { color: inherit; text-decoration: none; }
 .organization-card-note { display: block; margin: 0; padding: 16px var(--user-account-card-padding) 20px; color: var(--muted); font-size: 13px; line-height: 1.55; }
 .user-account-modal-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(10, 31, 50, .48); backdrop-filter: blur(3px); }
 .user-account-modal-backdrop .user-account-form-card { width: min(720px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; margin-top: 0; box-shadow: 0 24px 80px rgba(5, 37, 68, .28); }
-.user-account-list-card { margin-top: 22px; }
+.user-account-list-card { margin-top: 0; }
 .user-account-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 22px; padding: 22px; }
 .user-account-permissions { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; margin: 0; padding: 16px; border: 1px solid #dce6f0; border-radius: 10px; }
 .user-account-permissions legend { padding: 0 5px; color: var(--navy); font-size: 13px; font-weight: 800; }
@@ -5959,7 +5959,8 @@ textarea:focus-visible {
 .resume-screening-steps li { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 10px 12px; border: 1px solid #dce8f1; border-radius: 9px; color: #51677c; background: #fbfdff; font-size: 12px; }
 .resume-screening-steps li > span { display: grid; flex: 0 0 24px; width: 24px; height: 24px; place-items: center; border-radius: 50%; color: #315779; background: #e8f0f7; font-size: 11px; font-weight: 800; }
 .resume-screening-steps li.is-current { border-color: #82acd0; color: var(--navy); background: #f2f8fd; }
-.resume-screening-steps li.is-current > span, .resume-screening-steps li.is-complete > span { color: #fff; background: var(--blue); }
+.resume-screening-steps li.is-current > span { color: #fff; background: var(--blue); }
+.resume-screening-steps li.is-complete > span { border: 1px solid #aac9e3; color: #315779; background: #fff; }
 .resume-screening-steps li.is-complete { color: #315779; }
 .bulk-screening-browse-hint { justify-self: center; margin-top: 5px; padding: 7px 13px; border-radius: 7px; color: #fff !important; background: var(--blue); font-weight: 700; }
 .bulk-screening-file-list { display: grid; gap: 0; border: 1px solid #dce8f1; border-radius: 10px; overflow: hidden; }
@@ -6010,10 +6011,10 @@ textarea:focus-visible {
 .user-account-permissions { grid-template-columns: 1fr; }
 .form-stack .field, .form-grid .field, .grid-2 .field { width: 100%; }
 .field input, .field select, .field textarea { width: 100%; box-sizing: border-box; min-height: 44px; }
-.field textarea { min-height: 110px; }
 /* The full-width text-box sizing above must not stretch tickboxes and radio
    buttons that sit inside a .field label, such as the application consent. */
 .field input[type="checkbox"], .field input[type="radio"] { width: 18px; height: 18px; min-height: 0; flex: 0 0 auto; padding: 0; accent-color: var(--blue); box-shadow: none; }
+.field textarea { min-height: 110px; }
 .field label { line-height: 1.4; }
 .field-optional { color: var(--muted); font-weight: 500; }
 .rule-chip { display: inline-block; margin: 2px 6px 2px 0; padding: 2px 9px; border-radius: 999px; background: #eaf2fb; color: var(--navy); font-size: 12px; font-weight: 600; }
@@ -6929,16 +6930,17 @@ textarea:focus { border-color: var(--color-link); box-shadow: var(--focus-ring);
 .interview-automation-state { flex: none; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; }
 .interview-automation-state.is-on { background: #e7f6ec; color: #067647; }
 .interview-automation-state.is-off { background: #f1f4f8; color: var(--muted); }
+.role-details-page > .interview-automation-card { margin-bottom: 24px; }
 .recruitment-setup-automation { margin: 20px clamp(16px, 3vw, 24px) 24px; }
 .interview-automation-card-in-setup { margin: 0; box-shadow: none; }
-.interview-automation-body { display: grid; gap: 10px; padding: 0 20px 18px; }
+.interview-automation-body { display: grid; gap: 12px; padding: 4px 20px 22px; }
 .interview-automation-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--navy); font-weight: 600; }
 .interview-automation-switch input[type="checkbox"] { width: 18px; height: 18px; min-height: 0; margin: 0; }
 .interview-automation-switch input[type="number"] { width: 72px; min-height: 0; padding: 6px 8px; }
 .interview-automation-note, .interview-automation-waiting { margin: 0; color: var(--muted); font-size: 13px; }
 .interview-automation-waiting a { color: var(--blue); font-weight: 700; }
 .interview-automation-actions { display: flex; justify-content: flex-end; }
-@media (max-width: 640px) { .interview-automation-body { padding-inline: 16px; } .interview-automation-header { flex-direction: column; } }
+@media (max-width: 640px) { .role-details-page > .interview-automation-card { margin-bottom: 18px; } .interview-automation-body { padding: 4px 16px 18px; } .interview-automation-header { flex-direction: column; } }
 .interview-automation-chip { display: inline-flex; align-items: center; margin-left: auto; padding: 4px 10px; border-radius: 999px; background: #e7f6ec; color: #067647; font-size: 12px; font-weight: 800; text-decoration: none; }
 .interview-automation-chip:hover, .interview-automation-chip:focus-visible { background: #d3efdc; }
 .interview-automation-upload-note { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: #e7f6ec; color: #065f3b; font-size: 12px; }

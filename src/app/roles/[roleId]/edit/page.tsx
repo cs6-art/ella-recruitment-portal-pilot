@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
 import PageHeader from "@/components/ui/PageHeader";
+import InterviewAutomationCard from "@/components/InterviewAutomationCard";
 import RecruitmentSetupEditor from "@/components/RecruitmentSetupEditor";
 import RoleRequestForm, { type RoleRequestFormValues } from "@/components/RoleRequestForm";
 import { canEditRoleRequest, canViewRole } from "@/lib/access-control";
@@ -147,6 +148,7 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
           status={role.status}
           initialValues={initialValues}
         />
+        {user.canReviewRole === true && !["Approved", "Recruitment Setup", "Job Posted"].includes(role.status) && <InterviewAutomationCard roleId={role.roleId} editable />}
         <RecruitmentSetupEditor
           roleId={role.roleId}
           status={role.status}

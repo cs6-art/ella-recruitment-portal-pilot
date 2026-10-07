@@ -41,7 +41,10 @@ test("every authenticated user can read organization credit history while mutati
   const panel = read("src/components/EllaCreditsPanel.tsx");
   const getRoute = route.split("export async function POST")[0];
   assert.doesNotMatch(getRoute, /canManageCredits\(user\)/);
-  assert.match(route, /organizationId: user\.organizationId/);
+  // Defaults to the caller's own organization; another org needs McLink credit-manager access.
+  assert.match(route, /return \{ id: user\.organizationId \}/);
+  assert.match(route, /if \(!canManageAllOrganizationCredits\(user\)\) return \{ error:[^}]*status: 403 \}/);
+  assert.match(route, /organizationId: target\.id/);
   assert.match(route, /export async function POST[\s\S]*?canManageCredits\(user\)/);
   assert.match(panel, /canManage = false/);
   assert.match(panel, /\{canManage && <div className=\{styles\.form\}>/);

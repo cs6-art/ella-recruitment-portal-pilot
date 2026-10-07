@@ -137,6 +137,15 @@ export function canManageCredits(user: Pick<SessionUser, "canManageCredits">): b
   return user.canManageCredits === true;
 }
 
+/**
+ * McLink staff with the Smile Credits capability can view and top up any
+ * organization's shared balance (every member of that org draws on it).
+ * Client-org credit managers stay limited to their own organization.
+ */
+export function canManageAllOrganizationCredits(user: Pick<SessionUser, "canManageCredits" | "organizationId">): boolean {
+  return canManageCredits(user) && user.organizationId === MCLINK_ORGANIZATION_ID;
+}
+
 export function canUseRecruitmentSetup(status: string): boolean {
   return ["Approved", "Recruitment Setup", "Job Posted"].includes(status.trim());
 }

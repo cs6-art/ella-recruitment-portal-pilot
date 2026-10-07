@@ -32,7 +32,7 @@ export default function ActionFeedback({ kind, children, className = "", dismiss
       feedbackRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       feedbackRef.current?.focus({ preventScroll: true });
     });
-    const timeout = dismissAfterMs ?? defaultDismissAfter[kind];
+    const timeout = dismissAfterMs === undefined ? defaultDismissAfter[kind] : dismissAfterMs;
     const timer = timeout === null ? undefined : window.setTimeout(() => setVisible(false), timeout);
     return () => {
       window.cancelAnimationFrame(frame);

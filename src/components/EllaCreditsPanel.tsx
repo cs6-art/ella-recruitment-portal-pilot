@@ -35,7 +35,11 @@ type LedgerEntry = {
   note: string;
 };
 
+type CreditOrganization = { id: string; name: string; active: boolean };
+
 type LedgerResponse = {
+  organizationId?: string;
+  organizations?: CreditOrganization[];
   balance: number;
   totals: { toppedUp: number; consumed: number };
   entries: LedgerEntry[];
@@ -106,13 +110,21 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
   const [activitySearch, setActivitySearch] = useState("");
   const [activityType, setActivityType] = useState<ActivityTypeFilter>("all");
   const [activityEvent, setActivityEvent] = useState<ActivityEventFilter>("all");
+  // Empty = the signed-in user's own organization. Only McLink credit managers
+  // receive an organization list, so only they can pick another one.
+  const [targetOrganizationId, setTargetOrganizationId] = useState("");
+  const [organizationOptions, setOrganizationOptions] = useState<CreditOrganization[]>([]);
+  const [ownOrganizationId, setOwnOrganizationId] = useState("");
 
-  async function load() {
+  async function load(organizationId = targetOrganizationId) {
     try {
-      const response = await fetch("/api/ella-credits", { credentials: "same-origin", cache: "no-store" });
+      const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
+      const response = await fetch(`/api/ella-credits${query}`, { credentials: "same-origin", cache: "no-store" });
       const body = await response.json();
       if (!response.ok || body.success !== true) throw new Error(body.error || "Unable to load Credits.");
-      setData({ balance: body.balance, totals: body.totals, entries: body.entries || [], pricing: { ...defaultPricing, ...(body.pricing || {}) } });
+      if (Array.isArray(body.organizations)) setOrganizationOptions(body.organizations);
+      if (!organizationId && body.organizationId) setOwnOrganizationId(body.organizationId);
+      setData({ organizationId: body.organizationId, balance: body.balance, totals: body.totals, entries: body.entries || [], pricing: { ...defaultPricing, ...(body.pricing || {}) } });
       setError("");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load Credits.");
@@ -123,10 +135,21 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
 
   useEffect(() => {
     void load();
-    const onRefresh = () => void load();
+    // Purchases and AI usage elsewhere only affect the viewer's own org.
+    const onRefresh = () => void load("");
     window.addEventListener(ELLA_CREDITS_REFRESH_EVENT, onRefresh);
     return () => window.removeEventListener(ELLA_CREDITS_REFRESH_EVENT, onRefresh);
   }, []);
+
+  function selectOrganization(organizationId: string) {
+    const next = organizationId === ownOrganizationId ? "" : organizationId;
+    setTargetOrganizationId(next);
+    setMessage("");
+    setSaveError("");
+    setActivityPage(1);
+    setLoading(true);
+    void load(next);
+  }
 
   async function submit() {
     setSaving(true);
@@ -140,7 +163,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: parsedAmount, note: note.trim() }),
+        body: JSON.stringify({ amount: parsedAmount, note: note.trim(), ...(targetOrganizationId ? { organizationId: targetOrganizationId } : {}) }),
       });
       const body = await response.json();
       if (!response.ok || body.success !== true) throw new Error(body.error || "Unable to update the balance.");
@@ -148,7 +171,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
       setAmount("");
       setNote("");
       await load();
-      requestEllaCreditsRefresh();
+      if (!targetOrganizationId) requestEllaCreditsRefresh();
     } catch (submitError) {
       setSaveError(submitError instanceof Error ? submitError.message : "Unable to update the balance.");
     } finally {
@@ -157,6 +180,9 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
   }
 
   const balance = data?.balance ?? 0;
+  const selectedOrganizationId = targetOrganizationId || ownOrganizationId;
+  const selectedOrganization = organizationOptions.find((organization) => organization.id === selectedOrganizationId);
+  const viewingOtherOrganization = Boolean(targetOrganizationId);
   const pricing = data?.pricing;
   const headlineTone = balance <= 0 ? styles.empty : balance < 50 ? styles.low : "";
   const normalizedSearch = activitySearch.trim().toLowerCase();
@@ -195,6 +221,20 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
           </div>
         )}
       </div>
+
+      {canManage && organizationOptions.length > 1 && <div className={styles.orgPicker}>
+        <label htmlFor="smile-credit-organization">Organization</label>
+        <select id="smile-credit-organization" value={selectedOrganizationId} disabled={loading || saving} onChange={(event) => selectOrganization(event.target.value)}>
+          {organizationOptions.map((organization) => (
+            <option key={organization.id} value={organization.id}>
+              {organization.name}{organization.id === ownOrganizationId ? " (your organization)" : ""}{organization.active ? "" : " — inactive"}
+            </option>
+          ))}
+        </select>
+        <small>{viewingOtherOrganization
+          ? `Showing ${selectedOrganization?.name || "this organization"}'s shared balance. Credits you add here are available to every member of ${selectedOrganization?.name || "that organization"}.`
+          : "As McLink credit manager you can view and top up any organization's shared balance."}</small>
+      </div>}
 
       {loading && !data && <div className={styles.loading}>Loading Credits…</div>}
       {error && <div className={styles.feedback}><ActionFeedback kind="error">{error}</ActionFeedback></div>}

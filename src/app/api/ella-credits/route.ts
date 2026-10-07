@@ -1,8 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { canManageCredits } from "@/lib/access-control";
+import { getDb, isDatabaseConfigured } from "@/db/client";
+import { organizations } from "@/db/schema";
+import { canManageAllOrganizationCredits, canManageCredits } from "@/lib/access-control";
 import { getCreditBalance, getCreditPricing, recordTopUp } from "@/lib/ella-credits";
 import { getDirectoryUsers } from "@/lib/google-sheets";
 import { getPostgresDirectoryUsers } from "@/lib/postgres-directory";
@@ -26,7 +29,36 @@ const topUpSchema = z.object({
     .max(1_000_000, "Amount is out of range."),
   note: z.string().trim().min(1, "A reason is required.").max(500),
   reference: z.string().trim().max(200).optional(),
+  organizationId: z.string().trim().uuid("Choose a valid organization.").optional(),
 });
+
+type CreditOrganization = { id: string; name: string; active: boolean };
+
+async function listCreditOrganizations(): Promise<CreditOrganization[]> {
+  if (!isDatabaseConfigured()) return [];
+  return await getDb()
+    .select({ id: organizations.id, name: organizations.name, active: organizations.active })
+    .from(organizations)
+    .orderBy(asc(organizations.name));
+}
+
+type SessionUserValue = NonNullable<Awaited<ReturnType<typeof currentUser>>>;
+
+// Resolves which organization's shared balance a request targets. Everyone
+// defaults to their own org; only McLink credit managers may name another one.
+async function resolveTargetOrganization(user: SessionUserValue, requested: string | null | undefined): Promise<{ id: string; name?: string } | { error: string; status: number }> {
+  const organizationId = requested?.trim();
+  if (!organizationId || organizationId === user.organizationId) return { id: user.organizationId };
+  if (!canManageAllOrganizationCredits(user)) return { error: "You can only manage your own organization's credits.", status: 403 };
+  if (!isDatabaseConfigured()) return { error: "Organization credits are unavailable.", status: 503 };
+  const [organization] = await getDb()
+    .select({ id: organizations.id, name: organizations.name })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
+    .limit(1);
+  if (!organization) return { error: "Organization not found.", status: 404 };
+  return { id: organization.id, name: organization.name };
+}
 
 async function currentUser() {
   return await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
@@ -55,21 +87,31 @@ async function displayCreditActors<T extends { actorName: string; actorEmail: st
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
   try {
     // Every authenticated member can inspect the immutable, organization-
     // scoped ledger. Mutation remains restricted to canManageCredits below.
-    const [{ balance, totals, entries }, pricing] = await Promise.all([getCreditBalance({ organizationId: user.organizationId, ownerEmail: user.email }), getCreditPricing()]);
+    // McLink credit managers may also open another organization's ledger.
+    const target = await resolveTargetOrganization(user, new URL(request.url).searchParams.get("organizationId"));
+    if ("error" in target) return NextResponse.json({ success: false, error: target.error }, { status: target.status });
+    const crossOrganization = canManageAllOrganizationCredits(user);
+    const [{ balance, totals, entries }, pricing, organizationList] = await Promise.all([
+      getCreditBalance({ organizationId: target.id, ownerEmail: user.email }),
+      getCreditPricing(),
+      crossOrganization ? listCreditOrganizations() : Promise.resolve(undefined),
+    ]);
     return NextResponse.json({
       success: true,
+      organizationId: target.id,
+      ...(organizationList ? { organizations: organizationList } : {}),
       balance,
       totals,
       // Both storage backends can return a different natural row order. The
       // activity feed is explicitly newest-first so the UI always shows the
       // latest credit changes at the top.
-      entries: (await displayCreditActors(entries, user.organizationId))
+      entries: (await displayCreditActors(entries, target.id))
         .slice()
         .sort((left, right) => {
           const leftTime = Date.parse(left.timestamp);
@@ -102,12 +144,14 @@ export async function POST(request: Request) {
         { status: 422 },
       );
     }
+    const target = await resolveTargetOrganization(user, parsed.data.organizationId);
+    if ("error" in target) return NextResponse.json({ success: false, error: target.error }, { status: target.status });
     // Stable idempotency key so a double-submit (network retry) does not add
     // credits twice: actor + amount + reason + reference, per 15-minute window.
     const window = Math.floor(Date.now() / (15 * 60 * 1000));
     const idempotencyKey =
       request.headers.get("Idempotency-Key")?.trim() ||
-      `manual:${user.email}:${parsed.data.amount}:${parsed.data.note}:${parsed.data.reference || ""}:${window}`;
+      `manual:${target.id}:${user.email}:${parsed.data.amount}:${parsed.data.note}:${parsed.data.reference || ""}:${window}`;
 
     const { balance, totals, bonus } = await recordTopUp({
       amount: parsed.data.amount,
@@ -117,13 +161,15 @@ export async function POST(request: Request) {
       idempotencyKey,
       actorName: user.name,
       actorEmail: user.email,
-      organizationId: user.organizationId,
+      organizationId: target.id,
     });
+    const recipient = target.name ? ` to ${target.name}` : "";
     const message = bonus > 0
-      ? `Added ${parsed.data.amount} credits plus a ${bonus}-credit volume discount. Balance is now ${balance}.`
-      : `Added ${parsed.data.amount} credits. Balance is now ${balance}.`;
+      ? `Added ${parsed.data.amount} credits${recipient} plus a ${bonus}-credit volume discount. Balance is now ${balance}.`
+      : `Added ${parsed.data.amount} credits${recipient}. Balance is now ${balance}.`;
     return NextResponse.json({
       success: true,
+      organizationId: target.id,
       balance,
       totals,
       bonus,

@@ -353,6 +353,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     const availableSlots = Math.max(0, MAX_CAMPAIGN_FILES - files.length);
     const limited = incoming.length > availableSlots;
     setFiles([...files, ...incoming.slice(0, availableSlots)]);
+    setUploadMessage("");
     const messages = [
       unsupported ? `${unsupported} file${unsupported === 1 ? "" : "s"} not added: use PDF, DOC, or DOCX.` : "",
       empty ? `${empty} empty file${empty === 1 ? "" : "s"} not added.` : "",
@@ -366,6 +367,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
 
   function removeFile(target: File) {
     setFiles((current) => current.filter((file) => file !== target));
+    setUploadMessage("");
   }
 
   // Fires exactly one MAX_FILES_PER_SUBMISSION-sized request and reports a
@@ -671,6 +673,11 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   // batches submitted so far, so it can look "finished" between batches
   // before later ones are even sent. Gate on queueRunning too.
   const batchFinished = !queueRunning && batchTotal > 0 && batchTerminal.queued === 0 && batchTerminal.processing === 0;
+  const currentStep = !roleId
+    ? 1
+    : !uploading && !queueRunning && (files.length > 0 || batchTotal === 0)
+      ? 2
+      : 3;
   const failedFiles = useMemo(() => {
     const failedIds = [...activeBatch.keys()].filter((queueId) => {
       const item = submissionItems.find((entry) => queueIdentity(entry) === queueId) || items.find((entry) => queueIdentity(entry) === queueId);
@@ -711,9 +718,11 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
       </div>
 
       <ol className="resume-screening-steps" aria-label="Resume screening steps">
-        <li className={roleId ? "is-complete" : "is-current"}><span>1</span><strong>Choose a role</strong></li>
-        <li className={files.length ? "is-current" : roleId ? "is-next" : "is-next"}><span>2</span><strong>Add resumes</strong></li>
-        <li className={items.length || batchTotal ? "is-current" : "is-next"}><span>3</span><strong>Review progress</strong></li>
+        {["Choose a role", "Add resumes", "Review progress"].map((label, index) => {
+          const step = index + 1;
+          const state = step === currentStep ? "is-current" : step < currentStep ? "is-complete" : "is-next";
+          return <li key={label} className={state} aria-current={state === "is-current" ? "step" : undefined}><span>{step}</span><strong>{label}</strong></li>;
+        })}
       </ol>
 
       <div className="bulk-screening-body">
@@ -824,7 +833,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
             Submitting batch {Math.min(queueProgress.done + (queueRunning ? 1 : 0), queueProgress.total)} of {queueProgress.total}. Keep this page open while the remaining batches are submitted.
           </ActionFeedback>
         )}
-        {uploadMessage && <ActionFeedback kind="success" className="bulk-screening-action-feedback" ariaLive="polite">{uploading || driveImporting ? <LoadingLabel>{uploadMessage}</LoadingLabel> : uploadMessage}</ActionFeedback>}
+        {uploadMessage && <ActionFeedback kind="success" className="bulk-screening-action-feedback" ariaLive="polite" dismissAfterMs={null}>{uploading || driveImporting ? <LoadingLabel>{uploadMessage}</LoadingLabel> : uploadMessage}</ActionFeedback>}
         {warning && <ActionFeedback kind="warning" className="bulk-screening-action-feedback">{warning}</ActionFeedback>}
         {retryingSavedFailures && <ActionFeedback kind="success" className="bulk-screening-action-feedback" ariaLive="polite"><LoadingLabel>Retrying failed resumes…</LoadingLabel></ActionFeedback>}
         {retryableFailureCount > 0 && !uploading && !queueRunning && !retryingSavedFailures && !batchFinished && (

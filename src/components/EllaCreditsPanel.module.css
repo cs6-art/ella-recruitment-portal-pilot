@@ -67,6 +67,19 @@
 .amountField, .noteField { width: auto; }
 .form button { align-self: start; min-height: 42px; margin-top: 22px; white-space: nowrap; }
 
+.orgPicker { display: grid; gap: 6px; max-width: 520px; padding: 0 22px 14px; }
+.orgPicker label { color: var(--navy, #17324d); font-size: 12px; font-weight: 800; }
+.orgPicker select {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #cbd9e7;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--navy, #17324d);
+  font: inherit;
+}
+.orgPicker small { color: var(--muted, #5e6b78); font-size: 11px; line-height: 1.4; }
+
 .feedback { padding: 0 22px 8px; }
 
 .activity {
