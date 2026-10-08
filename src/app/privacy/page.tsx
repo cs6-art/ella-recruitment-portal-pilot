@@ -19,7 +19,7 @@ export default function PrivacyNoticePage() {
         <li>Your resume or CV, and the text extracted from it.</li>
         <li>Results of the screening and interviews: scores, summaries and the recruiter&apos;s decisions.</li>
         <li>If you take an AI interview: a transcript of the conversation and a video and audio recording. The interview page asks for your agreement to the recording, camera and microphone before it starts.</li>
-        <li>If you take a phone interview: the name, email address and phone number taken from your application, and the full call report returned to us by the phone interview provider, including the transcript and any call recording it contains.</li>
+        <li>If you take a phone interview: the name, email address and phone number taken from your application, and the call report returned to us by Vapi, including the transcript.</li>
       </ul>
 
       <h3>How we use it</h3>
@@ -27,7 +27,7 @@ export default function PrivacyNoticePage() {
         <li>To assess your suitability for the role you applied for, and to contact you about it, including by email and phone.</li>
         <li>Artificial intelligence helps to read resumes and to run and summarise interviews. Its output is a recommendation only: a member of the recruitment team reviews it and makes every hiring decision.</li>
         <li>We do not use your name, age, gender, ethnicity, religion, accent, appearance or similar personal characteristics to score you.</li>
-        <li>Phone interviews are placed by Vapi, which acts as our data processor. Vapi&apos;s privacy policy says it may keep call recordings, transcripts and logs, and may use them to help train and improve its AI models. How long they are kept depends on the settings in place, and Vapi deletes them on request.</li>
+        <li>We use Vapi for phone interviews, and Vapi acts as our data processor. Vapi&apos;s privacy policy allows it to use call data to help train its AI models, and we are confirming with Vapi that data processed for us is excluded from that.</li>
       </ul>
 
       <h3>Who can see it</h3>
@@ -77,7 +77,7 @@ export default function PrivacyNoticePage() {
       <ul>
         <li>When you select resumes from Google Drive for screening, the text of those files is sent to the OpenAI API (model gpt-4.1-mini) through our workflow automation service, n8n, solely to extract and score the resume for the role. Interview transcripts are analysed in the same way using the OpenAI API (model gpt-4o-mini by default). Interview video and audio are handled by our live-interview provider (LiveAvatar). That provider does not receive Google user data other than what the interview itself contains. Phone interviews are placed by Vapi, which receives the name, email address and phone number recorded on the application, along with the role details and interview questions it needs to run the call. For resumes imported from Google Drive, our workflow automation (n8n) takes the phone number and email address from the resume text and the name from the file name when it creates the application.</li>
         <li>For OpenAI and LiveAvatar, we use the providers under their business terms, under which data sent through the API is not used to train or improve their models. We do not enable any setting that allows training on this data. Vapi&apos;s terms are different, as described in Part 1 and above.</li>
-        <li>We do not use Google user data, including raw, aggregated or derived data, to create, train or improve any generalized or foundational AI or machine-learning model ourselves. Phone interviews are the exception to the no-third-party rule: the name, email address and phone number recorded on an application imported from Google Drive are passed to Vapi, which may keep call data and use it for model training under its own privacy policy. We are confirming with Vapi that this data is excluded from training, and this statement will be updated when that is confirmed.</li>
+        <li>We do not use Google user data, including raw, aggregated or derived data, to create, train or improve any generalized or foundational AI or machine-learning model ourselves. Phone interviews are the exception to the no-third-party rule: the name, email address and phone number recorded on an application imported from Google Drive are passed to Vapi. Vapi&apos;s privacy policy allows training on call data, and we are confirming with Vapi that this data is excluded. This statement will be updated when that is confirmed.</li>
         <li>We do not self-host these models. Data sent to the AI providers is limited to what is needed for the single task, and is not shared with any other third party.</li>
         <li>AI output is a recommendation only; a person at the organization reviews it and makes every hiring decision.</li>
       </ul>

@@ -131,7 +131,7 @@ Thank you for your review. We have corrected the scope mismatch and made the fol
 | Provider | Plan / tier | Endpoint | Data received | Training |
 | --- | --- | --- | --- | --- |
 | OpenAI | API, paid pay-as-you-go (business API terms) | api.openai.com, model gpt-4.1-mini (resume screening); gpt-4o-mini by default (interview analysis) | Text of resume files the user selects with the Google Picker (drive.file); interview transcripts | Not used for training under OpenAI API terms. No opt-in to data sharing. |
-| Vapi (phone interview platform) | Voice AI platform, plan [confirm] | [confirm Vapi endpoint] | Candidate name and phone number taken from the application. Those details can come from a resume selected in Google Drive (drive.file). The call transcript comes back to us. | [Confirm Vapi data-use and training terms before sending.] |
+| Vapi (phone interview platform) | Voice AI platform, plan [confirm] | [confirm Vapi endpoint] | Name, email address and phone number recorded on the application, and the role details and interview questions needed to run the call. For resumes imported from Google Drive (drive.file), our workflow automation (n8n) takes the phone number and email address from the resume text and the name from the file name when the application is created. The call transcript comes back to us. | Vapi's privacy policy allows training on call data. [Before sending: obtain Vapi's written confirmation that data from Google sources is excluded from training.] |
 | n8n (workflow automation, our instance) | Service that routes resume files and application data between the portal, Google and OpenAI | n8n.srv1457709.hstgr.cloud | Resume files and extracted resume text | Passes data to OpenAI only for screening; not used for training. [Confirm hosting provider before sending.] |
 
 
@@ -139,7 +139,7 @@ Other providers (not receiving Google user data): LiveAvatar (live interview vid
 
 **Self-hosted or offline models:** None.
 
-**Limited Use:** Google user data is used only to provide the user-facing features, is not sold, is not used for advertising, and is never used to create, train or improve generalized AI/ML models. Raw or derived data is not transferred to any service that trains on it.
+**Limited Use:** Google user data is used only to provide the user-facing features, is not sold, is not used for advertising, and is never used by us to create, train or improve generalized AI/ML models. Raw or derived data is not transferred to any service we know trains on it, except that Vapi, our phone interview provider, receives the name, email address and phone number of applicants whose details came from Google Drive resumes (see the processor table above). [Before sending: obtain Vapi's written confirmation that this data is excluded from training, or remove that exception and stop sending Drive-derived details to Vapi.]
 
 **Demo video:** *(Manual item 1.)*
 

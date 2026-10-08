@@ -82,8 +82,9 @@ test("the policy pages no longer make the claims the code does not support", () 
   assert.match(privacy, /Vapi/);
   assert.match(privacy, /HeyGen/);
   assert.match(privacy, /HitPay/);
-  assert.match(privacy, /full call report/);
-  assert.match(privacy, /may use them to help train and improve its AI models/);
+  assert.match(privacy, /call report returned to us by Vapi/);
+  assert.doesNotMatch(privacy, /zero data retention|disclosure/i);
+  assert.match(privacy, /we are confirming with Vapi that data processed for us is excluded/);
   assert.doesNotMatch(privacy, /we do not allow any third party to do so/);
   assert.match(privacy, /hosted checkout page/);
   assert.match(privacy, /Recording folder connection \(organization-level\)/);
