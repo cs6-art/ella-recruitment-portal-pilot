@@ -14,10 +14,10 @@ These are the only scopes any user is asked for. Every consent URL is built from
 | --- | --- | --- | --- |
 | `https://www.googleapis.com/auth/drive.file` | Bulk Resume Screening → Connect Google Drive; Settings → Google Drive for Live Avatar recordings | Opening only the resumes the user picks in the Google Picker; saving recordings into the folder the user picks | Non-sensitive (Google Drive API scope table) |
 | `https://www.googleapis.com/auth/userinfo.email` | Every Google connect | Confirming the token belongs to the account that started the connection | Read the label on the Data Access page |
-| `https://www.googleapis.com/auth/calendar.freebusy` | Settings → Connect Google Calendar | Checking interview availability (`freebusy.query`) only | Read the label on the Data Access page |
+| `https://www.googleapis.com/auth/calendar.events.freebusy` | Settings → Connect Google Calendar | Checking interview availability (`freebusy.query`) only | Read the label on the Data Access page |
 | `https://www.googleapis.com/auth/calendar.events` | Settings → Connect Google Calendar | Creating, moving and cancelling the interview event (`events.insert`, `events.patch`, `events.delete`) only | Read the label on the Data Access page |
 
-The portal never reads calendar event contents. The old fallbacks that listed events (for availability when `calendar.freebusy` was missing, and to guess the account owner) have been removed. A calendar connection without both calendar scopes must reconnect.
+The portal never reads calendar event contents. The old fallbacks that listed events (for availability when `calendar.events.freebusy` was missing, and to guess the account owner) have been removed. A calendar connection without both calendar scopes must reconnect.
 
 Not requested from users: `drive.readonly`, `drive.metadata.readonly`, full `drive`, `spreadsheets`, or any other Google scope.
 
@@ -39,7 +39,7 @@ Exactly these four scopes, and nothing else:
 1. `https://www.googleapis.com/auth/userinfo.email`
 2. `https://www.googleapis.com/auth/drive.file`
 3. `https://www.googleapis.com/auth/calendar.events`
-4. `https://www.googleapis.com/auth/calendar.freebusy`
+4. `https://www.googleapis.com/auth/calendar.events.freebusy`
 
 Remove `drive.readonly`, `drive.metadata.readonly`, `drive`, `spreadsheets` and any other scope if listed, then save. The Data Access page shows each scope's tier (non-sensitive, sensitive or restricted). Expect no restricted scope. If one appears, stop and check before submitting.
 
@@ -81,7 +81,7 @@ Target length is 6 to 8 minutes. Record in this order, in one take if you can.
 5. **Google Calendar (about 1.5 min).**
    - Go to Settings → Google Calendar and click **Connect Google Calendar**. Choose the demo account.
    - Expand every permission and hold for 5 to 8 seconds with `client_id` visible.
-   - Say: "calendar.freebusy checks when the recruiter is free. calendar.events creates, moves and cancels the interview event. The portal does not read other events."
+   - Say: "calendar.events.freebusy checks when the recruiter is free. calendar.events creates, moves and cancels the interview event. The portal does not read other events."
    - Schedule a face-to-face interview, or book a slot from the candidate's booking link to show the availability check.
    - Open Google Calendar in a new tab and show the event. Reschedule it in the portal and show the event moved.
 6. **Google Drive for interview recordings (about 1 min).**
@@ -120,7 +120,7 @@ Hello Google Developer Team,
 
 Thank you for your review. We have corrected the scope mismatch and made the following updates.
 
-**Scopes:** The application no longer requests `drive.readonly` or any other restricted Drive scope. Production now requests exactly the four scopes configured in Cloud Console: `userinfo.email`, `drive.file`, `calendar.events` and `calendar.freebusy`. Resume import uses the Google Picker with `drive.file`, so the app can open only the files the user selects. `calendar.freebusy` is used only to check interview availability, and `calendar.events` only to create, update and cancel interview events. Users who connected Drive under the old scope must reconnect, and their old tokens are not used.
+**Scopes:** The application no longer requests `drive.readonly` or any other restricted Drive scope. Production now requests exactly the four scopes configured in Cloud Console: `userinfo.email`, `drive.file`, `calendar.events` and `calendar.events.freebusy`. Resume import uses the Google Picker with `drive.file`, so the app can open only the files the user selects. `calendar.events.freebusy` is used only to check interview availability, and `calendar.events` only to create, update and cancel interview events. Users who connected Drive under the old scope must reconnect, and their old tokens are not used.
 
 **Server-side access:** Our own service account (not a user consent flow) stores uploaded resumes in a folder it creates in our Shared Drive using `drive.file`, and keeps our recruitment records in spreadsheets we own. No user is asked for Google Sheets access.
 

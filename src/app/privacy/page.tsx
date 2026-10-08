@@ -49,7 +49,7 @@ export default function PrivacyNoticePage() {
       <h3>What we access and why</h3>
       <ul>
         <li><strong>Your Google email address</strong> (userinfo.email): to show which Google account is connected.</li>
-        <li><strong>Google Calendar</strong> (calendar.events, calendar.freebusy): to read when you are free or busy and to create, update and cancel interview events on your calendar.</li>
+        <li><strong>Google Calendar</strong> (calendar.events, calendar.events.freebusy): to read when you are free or busy and to create, update and cancel interview events on your calendar.</li>
         <li><strong>Google Drive</strong> (drive.file): to read only the resume files you select in the Google file chooser, and to store and read files the portal itself creates, such as interview recordings. The portal cannot see or list any other file in your Drive.</li>
       </ul>
       <p>The portal does not ask you for access to Google Sheets or to any other Google service. Recruitment records that the portal keeps in spreadsheets are written by the portal&apos;s own service account to spreadsheets we own, not to your Google account.</p>

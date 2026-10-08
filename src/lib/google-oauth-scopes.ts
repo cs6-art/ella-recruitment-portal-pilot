@@ -14,7 +14,7 @@ export const GOOGLE_SCOPE = {
   userinfoEmail: "https://www.googleapis.com/auth/userinfo.email",
   driveFile: "https://www.googleapis.com/auth/drive.file",
   calendarEvents: "https://www.googleapis.com/auth/calendar.events",
-  calendarFreebusy: "https://www.googleapis.com/auth/calendar.freebusy",
+  calendarEventsFreebusy: "https://www.googleapis.com/auth/calendar.events.freebusy",
   spreadsheets: "https://www.googleapis.com/auth/spreadsheets",
 } as const;
 
@@ -30,7 +30,7 @@ export const USER_OAUTH_SCOPES: Record<UserOAuthFlow, readonly string[]> = {
   // Settings -> Live Avatar recordings: saved into a folder picked in the Picker.
   recordingDrive: [GOOGLE_SCOPE.driveFile, GOOGLE_SCOPE.userinfoEmail],
   // Final interviews: freebusy checks availability, events creates/moves/cancels the interview.
-  calendar: [GOOGLE_SCOPE.calendarEvents, GOOGLE_SCOPE.calendarFreebusy, GOOGLE_SCOPE.userinfoEmail],
+  calendar: [GOOGLE_SCOPE.calendarEvents, GOOGLE_SCOPE.calendarEventsFreebusy, GOOGLE_SCOPE.userinfoEmail],
 };
 
 /** Exactly what Google Auth Platform -> Data Access should list. */

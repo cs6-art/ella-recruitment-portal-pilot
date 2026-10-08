@@ -10,7 +10,7 @@ import { checkGrantedScopes, USER_OAUTH_SCOPES } from "@/lib/google-oauth-scopes
 
 configureGoogleApiTimeout();
 
-// calendar.freebusy: availability checks only. calendar.events: creating,
+// calendar.events.freebusy: availability checks only. calendar.events: creating,
 // moving and cancelling interview events only. userinfo.email: token
 // introspection only includes the authorized account email when the email
 // scope was granted, so a token for another Google account is never stored
@@ -141,7 +141,7 @@ export async function exchangeCodeAndStore(code: string, email: string, requestO
   const expectedEmail = normalizedEmail(email);
   const authorizedEmail = normalizedEmail(tokenInfo.email || "");
   if (!authorizedEmail || authorizedEmail !== expectedEmail) throw new CalendarAccountMismatchError();
-  // Both calendar scopes are required: without calendar.freebusy the portal
+  // Both calendar scopes are required: without calendar.events.freebusy the portal
   // cannot check availability, and it never falls back to reading events.
   const scopes = checkGrantedScopes("calendar", tokenInfo.scopes);
   if (!scopes.ok) throw new CalendarScopeError([...scopes.missing.map((scope) => `missing ${scope}`), ...scopes.unapproved.map((scope) => `unapproved ${scope}`)].join(", "));
@@ -188,7 +188,7 @@ async function getAuthorizedClientWithIdentity(email: string): Promise<Authorize
     console.warn("[Google Calendar] Stored OAuth token does not belong to the expected HR account.");
     return null;
   }
-  // Tokens from before calendar.freebusy was required, or with permissions the
+  // Tokens from before calendar.events.freebusy was required, or with permissions the
   // portal no longer asks for, need a reconnect rather than a workaround.
   if (!checkGrantedScopes("calendar", tokenInfo.scopes).ok) {
     console.warn("[Google Calendar] Stored OAuth token does not carry the approved calendar scopes; HR must reconnect.");
@@ -409,7 +409,7 @@ export async function checkCalendarAvailability(input: Pick<CalendarEventInput, 
       if (conflict) return { available: false, checked: true, reason: "conflict", busyUntil: conflict.end || undefined };
       return { available: true, checked: true };
     } catch (error) {
-      // Availability comes only from calendar.freebusy; event contents are never read.
+      // Availability comes only from calendar.events.freebusy; event contents are never read.
       return { available: false, checked: false, reason: "error", error: error instanceof Error ? error.message : String(error) };
     }
   } catch (error) {
@@ -468,7 +468,7 @@ export async function getCalendarBusyWindows(input: { hodEmail: string; start: D
       }
       return { checked: true, busy };
     } catch (error) {
-      // Availability comes only from calendar.freebusy; event contents are never read.
+      // Availability comes only from calendar.events.freebusy; event contents are never read.
       return { checked: false, busy: [], reason: "error", error: error instanceof Error ? error.message : String(error) };
     }
   } catch (error) {

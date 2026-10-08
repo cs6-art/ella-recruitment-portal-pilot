@@ -30,7 +30,7 @@ function sourceFiles(dir) {
 test("the approved user OAuth scopes are exactly what Google Cloud Console declares", () => {
   assert.deepEqual([...APPROVED_USER_OAUTH_SCOPES].sort(), [
     `${AUTH}calendar.events`,
-    `${AUTH}calendar.freebusy`,
+    `${AUTH}calendar.events.freebusy`,
     `${AUTH}drive.file`,
     `${AUTH}userinfo.email`,
   ]);
@@ -47,7 +47,7 @@ test("resume import requests drive.file + userinfo.email and no restricted Drive
 });
 
 test("calendar scopes are requested only by the calendar flow", () => {
-  assert.deepEqual([...USER_OAUTH_SCOPES.calendar].sort(), [GOOGLE_SCOPE.calendarEvents, GOOGLE_SCOPE.calendarFreebusy, GOOGLE_SCOPE.userinfoEmail].sort());
+  assert.deepEqual([...USER_OAUTH_SCOPES.calendar].sort(), [GOOGLE_SCOPE.calendarEvents, GOOGLE_SCOPE.calendarEventsFreebusy, GOOGLE_SCOPE.userinfoEmail].sort());
   for (const flow of ["resumeDrive", "recordingDrive"]) {
     assert.equal(USER_OAUTH_SCOPES[flow].some((scope) => scope.includes("calendar")), false, flow);
   }
@@ -77,10 +77,10 @@ test("old drive.readonly connections are rejected and must reconnect", () => {
   assert.equal(checkGrantedScopes("resumeDrive", ["openid", GOOGLE_SCOPE.userinfoEmail, GOOGLE_SCOPE.driveFile]).ok, true);
 });
 
-test("calendar connections without calendar.freebusy must reconnect", () => {
+test("calendar connections without calendar.events.freebusy must reconnect", () => {
   const legacy = checkGrantedScopes("calendar", [GOOGLE_SCOPE.calendarEvents, GOOGLE_SCOPE.userinfoEmail]);
   assert.equal(legacy.ok, false);
-  assert.deepEqual(legacy.missing, [GOOGLE_SCOPE.calendarFreebusy]);
+  assert.deepEqual(legacy.missing, [GOOGLE_SCOPE.calendarEventsFreebusy]);
   assert.equal(checkGrantedScopes("calendar", [...USER_OAUTH_SCOPES.calendar]).ok, true);
   assert.equal(checkGrantedScopes("calendar", [...USER_OAUTH_SCOPES.calendar, `${AUTH}calendar`]).ok, false);
 });
