@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 
-import { createOAuthState } from "@/lib/google-calendar";
+import { createDriveOAuthState } from "@/lib/drive-oauth-state";
 import { deleteDriveConnection, getDriveConnection, saveDriveConnection } from "@/lib/drive-tokens";
 import { configureGoogleApiTimeout } from "@/lib/google-api-options";
 import { checkGrantedScopes, USER_OAUTH_SCOPES } from "@/lib/google-oauth-scopes";
@@ -34,8 +34,6 @@ export class DriveScopeError extends Error {
   }
 }
 
-export { verifyOAuthState } from "@/lib/google-calendar";
-
 function normalizedEmail(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -58,7 +56,7 @@ function newOAuthClient(requestOrigin?: string) {
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
-export function getDriveConsentUrl(email: string, requestOrigin?: string): string {
+export function getDriveConsentUrl(email: string, requestOrigin: string, organizationId: string): string {
   return newOAuthClient(requestOrigin).generateAuthUrl({
     access_type: "offline",
     prompt: "select_account consent",
@@ -66,7 +64,7 @@ export function getDriveConsentUrl(email: string, requestOrigin?: string): strin
     // Never fold in permissions granted to this client earlier (such as the
     // retired Drive-wide read scope): the token must carry only DRIVE_SCOPES.
     include_granted_scopes: false,
-    state: createOAuthState(email),
+    state: createDriveOAuthState(email, organizationId),
     login_hint: email,
   });
 }

@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many Drive connection attempts. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
 
   try {
-    const url = getDriveConsentUrl(user.email, new URL(request.url).origin);
+    const url = getDriveConsentUrl(user.email, new URL(request.url).origin, user.organizationId);
     return NextResponse.redirect(url);
   } catch (error) {
     console.error("[Google Drive] Failed to build consent URL:", error);

@@ -16,8 +16,8 @@ test("Google Drive is a separate OAuth connection from the calendar one", () => 
   assert.match(tokens, /TAB = "Drive_Connections"/);
   assert.match(tokens, /"drive-token-encryption"/);
   assert.match(tokens, /aes-256-gcm/);
-  // reuses the shared, generic OAuth state helper
-  assert.match(drive, /from "@\/lib\/google-calendar"/);
+  // Consent binds the callback to the initiating user's organization.
+  assert.match(drive, /from "@\/lib\/drive-oauth-state"/);
 });
 
 test("Drive auth routes are HR-gated and per-user", () => {
