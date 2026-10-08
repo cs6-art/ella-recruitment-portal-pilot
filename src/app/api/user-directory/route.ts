@@ -135,6 +135,17 @@ function validateAccountRules(user: DirectoryUser, currentEmail: string, origina
   return "";
 }
 
+/** Roles and permissions are McLink-administrator controls. A change from anyone else is refused, not silently dropped. */
+function permissionsChanged(input: z.infer<typeof userSchema>, current: DirectoryUser) {
+  return input.accessRole.trim() !== (current.accessRole || "").trim()
+    || input.canCreateRole !== Boolean(current.canCreateRole)
+    || input.canReviewRole !== Boolean(current.canReviewRole)
+    || input.canApproveRole !== Boolean(current.canApproveRole)
+    || input.canEditSettings !== Boolean(current.canEditSettings)
+    || input.canManageCredits !== Boolean(current.canManageCredits)
+    || input.canReviewDepartmentRole !== Boolean(current.canReviewDepartmentRole);
+}
+
 async function saveAccount(request: Request, originalEmail?: string) {
   const access = await requireAdmin(request);
   if ("error" in access) return access.error;
@@ -172,6 +183,7 @@ async function saveAccount(request: Request, originalEmail?: string) {
     if (!platformAdmin) {
       const current = users.find((existing) => existing.email === normalizedOriginalEmail);
       if (!current) return responseError("The account being edited no longer exists.", 404);
+      if (permissionsChanged(user, current)) return responseError("Only a McLink platform administrator can change roles and permissions. Nothing was saved.", 403);
       Object.assign(normalizedUser, current, { email: current.email, fullName: normalizedUser.fullName, department: normalizedUser.department, active: normalizedUser.active });
     }
     if (!canManageTeam(target.organizationId, access.user, platformAdmin, users)) {
