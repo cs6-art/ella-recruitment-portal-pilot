@@ -4,6 +4,7 @@ import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account"
 import { cachedSheetsRead, invalidateSheetsCache } from "@/lib/sheets-cache";
 import { deleteOAuthConnection, readOAuthConnection, saveOAuthConnection } from "@/lib/oauth-connection-store";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { persistentDriveRefreshToken } from "@/lib/drive-oauth-flow";
 
 /**
  * Per-HR-user Google Drive OAuth tokens, stored separately from the calendar
@@ -126,7 +127,7 @@ async function saveDriveConnectionFromSheet(input: { email: string; accessToken:
   // Google only returns a refresh_token on the first consent. Never blank out
   // an existing one on a re-authorization that omits it.
   const previousRefreshToken = existingIndex >= 0 ? decrypt(text(rows[existingIndex][2])) : "";
-  const refreshToken = input.refreshToken || previousRefreshToken;
+  const refreshToken = persistentDriveRefreshToken(input.refreshToken, previousRefreshToken);
 
   const values = [
     normalized,
@@ -176,7 +177,7 @@ export async function saveDriveConnection(input: { email: string; accessToken: s
   if (!isPostgresRecruitmentTarget()) return saveDriveConnectionFromSheet(input);
   // The provider only returns a refresh token on first consent; never blank an existing one.
   const existing = await readOAuthConnection("google_drive", input.email);
-  const refreshToken = input.refreshToken || (existing ? decrypt(existing.refreshTokenEnc) : "");
+  const refreshToken = persistentDriveRefreshToken(input.refreshToken, existing ? decrypt(existing.refreshTokenEnc) : "");
   await saveOAuthConnection("google_drive", input.email, {
     accessTokenEnc: encrypt(input.accessToken),
     refreshTokenEnc: encrypt(refreshToken),

@@ -177,6 +177,8 @@ export async function disconnectDrive(email: string): Promise<void> {
 
 export function driveOAuthErrorReason(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
+  if (/drive_refresh_token_missing/i.test(message)) return "Google did not grant persistent Drive access. Connect again and approve access on the Google consent screen.";
+  if (/drive_connection_not_persisted/i.test(message)) return "The portal could not confirm the saved Drive connection. Please connect again.";
   if (/drive_account_mismatch|DriveAccountMismatchError/i.test(message)) return "The Google account selected is not the one you signed in with. Choose your own account and connect again.";
   if (/drive_scope_not_approved/i.test(message)) return "Google returned different Drive permissions than the portal asks for. Remove the portal under your Google Account's third-party access, then connect again.";
   if (/redirect_uri_mismatch/i.test(message)) return "The Google OAuth callback URL is not authorized for this portal domain.";
