@@ -114,7 +114,9 @@ export async function GET(request: Request) {
     if ("error" in target) return target.error;
     const users = await listOrganizationUsers(target.organizationId);
     const platformAdmin = isPlatformAdmin(access.user);
-    return NextResponse.json({ success: true, users, platformAdmin, canManageTeam: canManageTeam(target.organizationId, access.user, platformAdmin, users) }, { headers: { "Cache-Control": "no-store" } });
+    // Only HR reviewers reach this route (requireAdmin), so they may change roles and permissions of other accounts.
+    const canEditPermissions = platformAdmin || canAdministerAccess(access.user);
+    return NextResponse.json({ success: true, users, platformAdmin, canEditPermissions, canManageTeam: canManageTeam(target.organizationId, access.user, platformAdmin, users) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[API User Directory] GET failed:", error);
     return responseError("Unable to load user accounts.", 500);
@@ -135,7 +137,7 @@ function validateAccountRules(user: DirectoryUser, currentEmail: string, origina
   return "";
 }
 
-/** Roles and permissions are McLink-administrator controls. A change from anyone else is refused, not silently dropped. */
+/** True when a save would change the access role or any permission. */
 function permissionsChanged(input: z.infer<typeof userSchema>, current: DirectoryUser) {
   return input.accessRole.trim() !== (current.accessRole || "").trim()
     || input.canCreateRole !== Boolean(current.canCreateRole)
@@ -180,11 +182,27 @@ async function saveAccount(request: Request, originalEmail?: string) {
     const isDefaultOrganization = target.organizationId === DEFAULT_ORGANIZATION_ID;
     const users = await listOrganizationUsers(target.organizationId);
     const normalizedOriginalEmail = originalEmail?.trim().toLowerCase();
+    const normalizedCurrentEmail = access.user.email.trim().toLowerCase();
     if (!platformAdmin) {
       const current = users.find((existing) => existing.email === normalizedOriginalEmail);
       if (!current) return responseError("The account being edited no longer exists.", 404);
-      if (permissionsChanged(user, current)) return responseError("Only a McLink platform administrator can change roles and permissions. Nothing was saved.", 403);
-      Object.assign(normalizedUser, current, { email: current.email, fullName: normalizedUser.fullName, department: normalizedUser.department, active: normalizedUser.active });
+      // HR may change access for other accounts, but not for their own: nobody raises their own access.
+      if (normalizedOriginalEmail === normalizedCurrentEmail && permissionsChanged(user, current)) return responseError("You cannot change your own role or permissions. Ask another HR reviewer.", 403);
+      // Keep the stored identity; take the editor's role and permission choices, already normalized by applyAccessRolePolicy.
+      Object.assign(normalizedUser, current, {
+        email: current.email,
+        fullName: normalizedUser.fullName,
+        department: normalizedUser.department,
+        active: normalizedUser.active,
+        accessRole: normalizedUser.accessRole,
+        canCreateRole: normalizedUser.canCreateRole,
+        canReviewRole: normalizedUser.canReviewRole,
+        canApproveRole: normalizedUser.canApproveRole,
+        canEditSettings: normalizedUser.canEditSettings,
+        canManageUsers: normalizedUser.canManageUsers,
+        canManageCredits: normalizedUser.canManageCredits,
+        canReviewDepartmentRole: normalizedUser.canReviewDepartmentRole,
+      });
     }
     if (!canManageTeam(target.organizationId, access.user, platformAdmin, users)) {
       return responseError("Only the organization owner can manage team members.", 403);
