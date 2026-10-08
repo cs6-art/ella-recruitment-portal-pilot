@@ -83,6 +83,8 @@ test("the policy pages no longer make the claims the code does not support", () 
   assert.match(privacy, /HeyGen/);
   assert.match(privacy, /HitPay/);
   assert.match(privacy, /full call report/);
+  assert.match(privacy, /may use them to help train and improve its AI models/);
+  assert.doesNotMatch(privacy, /we do not allow any third party to do so/);
   assert.match(privacy, /hosted checkout page/);
   assert.match(privacy, /Recording folder connection \(organization-level\)/);
 });
