@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { readOAuthConnection } from "@/lib/oauth-connection-store";
 import { getOrganizationRecordingDrive } from "@/lib/organization-recording-drive";
-import { recordingDriveScopesApproved } from "@/lib/recording-drive-oauth";
+import { getRecordingDriveClient, recordingDriveScopesApproved } from "@/lib/recording-drive-oauth";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,26 @@ export async function GET() {
       : null;
     // A connection holding outdated Drive permissions is not used; Settings shows a reconnect.
     const reconnectRequired = Boolean(connection?.refreshTokenEnc) && !recordingDriveScopesApproved(connection?.scope || "");
-    const connected = Boolean(connection?.refreshTokenEnc) && !reconnectRequired;
+    let connected = false;
+    if (connection?.refreshTokenEnc && !reconnectRequired && config?.googleAccountEmail) {
+      try {
+        // Saved credentials alone do not mean Google still grants access. This
+        // checks the access token with Google, refreshing it when necessary.
+        connected = Boolean(await getRecordingDriveClient(user.organizationId, config.googleAccountEmail));
+      } catch (error) {
+        const oauthError = error as {
+          message?: string;
+          response?: { status?: number; data?: { error?: string } };
+        };
+        const code = oauthError.response?.data?.error;
+        const revoked = code === "invalid_grant" || code === "invalid_token"
+          || oauthError.response?.status === 401
+          || /invalid_grant|invalid_token|token has been expired or revoked/i.test(oauthError.message || "");
+        // Network failures and server errors must not be treated as revoked
+        // consent. Keep the saved folder so reconnecting can restore it.
+        if (!revoked) throw error;
+      }
+    }
     return NextResponse.json({
       success: true,
       connected,
