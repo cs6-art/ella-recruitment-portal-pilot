@@ -19,6 +19,7 @@ export default function PrivacyNoticePage() {
         <li>Your resume or CV, and the text extracted from it.</li>
         <li>Results of the screening and interviews: scores, summaries and the recruiter&apos;s decisions.</li>
         <li>If you take an AI interview: a transcript of the conversation and a video and audio recording. The interview page asks for your agreement to the recording, camera and microphone before it starts.</li>
+        <li>If you take a phone interview: the phone number and name taken from your application, and the full call report returned to us by the phone interview provider, including the transcript and any call recording it contains.</li>
       </ul>
 
       <h3>How we use it</h3>
@@ -29,13 +30,13 @@ export default function PrivacyNoticePage() {
       </ul>
 
       <h3>Who can see it</h3>
-      <p>The recruitment team of the organization you applied to. To provide the service, your information is processed by trusted providers acting for us: our hosting provider (Vercel), our database provider (Neon), our workflow automation service (n8n), Google (storage, calendar and email), and the AI and interview providers we use (OpenAI and LiveAvatar).</p>
+      <p>The recruitment team of the organization you applied to. To provide the service, your information is processed by trusted providers acting for us: our hosting provider (Vercel), our database provider (Neon), our workflow automation service (n8n), Google (storage, calendar and email), our AI provider (OpenAI), our phone interview provider (Vapi), and our video interview provider (LiveAvatar, provided by HeyGen).</p>
 
       <h3>How long we keep it</h3>
       <ul>
         <li>Resume files stored by the portal are deleted 30 days after upload.</li>
         <li>Interview recordings are deleted once they are older than the period your organization sets in Settings. The period can be between 7 and 365 days. Where your organization has not set one, the platform default of 90 days applies.</li>
-        <li>Your application record, transcript and results are kept while the organization needs them for this recruitment, and are removed when the organization deletes your application.</li>
+        <li>Your application record, interview transcripts, phone call reports and results are kept while the organization needs them for this recruitment, and are removed when the organization deletes your application.</li>
       </ul>
 
       <h3>Your choices</h3>
@@ -73,12 +74,15 @@ export default function PrivacyNoticePage() {
 
       <h3>Use of AI with Google user data</h3>
       <ul>
-        <li>When you select resumes from Google Drive for screening, the text of those files is sent to the OpenAI API (model gpt-4.1-mini) through our workflow automation service, n8n, solely to extract and score the resume for the role. Interview transcripts are analysed in the same way using the OpenAI API (model gpt-4o-mini by default). Interview video and audio are handled by our live-interview provider (LiveAvatar). That provider does not receive Google user data other than what the interview itself contains.</li>
+        <li>When you select resumes from Google Drive for screening, the text of those files is sent to the OpenAI API (model gpt-4.1-mini) through our workflow automation service, n8n, solely to extract and score the resume for the role. Interview transcripts are analysed in the same way using the OpenAI API (model gpt-4o-mini by default). Interview video and audio are handled by our live-interview provider (LiveAvatar). That provider does not receive Google user data other than what the interview itself contains. Phone interviews are placed by Vapi, which receives the candidate&apos;s name and phone number taken from the application; those details can come from a resume selected in Google Drive.</li>
         <li>We use these providers under their business API terms. Under those terms, data sent through the API is not used to train or improve their models. We do not enable any setting that allows training on this data.</li>
         <li>We do not use Google user data, including raw, aggregated or derived data, to create, train or improve any generalized or foundational AI or machine-learning model, and we do not allow any third party to do so.</li>
         <li>We do not self-host these models. Data sent to the AI providers is limited to what is needed for the single task, and is not shared with any other third party.</li>
         <li>AI output is a recommendation only; a person at the organization reviews it and makes every hiring decision.</li>
       </ul>
+
+      <h3>Payments</h3>
+      <p>When an organization buys Smile Credits, payment is taken on the hosted checkout page of our payment provider, HitPay. Card details are entered there, and we do not receive or store them.</p>
 
       <h3>Retention and deletion</h3>
       <ul>

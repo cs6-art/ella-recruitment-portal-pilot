@@ -79,5 +79,10 @@ test("the policy pages no longer make the claims the code does not support", () 
   assert.doesNotMatch(privacy, /unless the organization sets a different period/);
   assert.doesNotMatch(privacy, /tokens are deleted when you disconnect\./);
   assert.match(privacy, /n8n/);
+  assert.match(privacy, /Vapi/);
+  assert.match(privacy, /HeyGen/);
+  assert.match(privacy, /HitPay/);
+  assert.match(privacy, /full call report/);
+  assert.match(privacy, /hosted checkout page/);
   assert.match(privacy, /Recording folder connection \(organization-level\)/);
 });

@@ -131,6 +131,7 @@ Thank you for your review. We have corrected the scope mismatch and made the fol
 | Provider | Plan / tier | Endpoint | Data received | Training |
 | --- | --- | --- | --- | --- |
 | OpenAI | API, paid pay-as-you-go (business API terms) | api.openai.com, model gpt-4.1-mini (resume screening); gpt-4o-mini by default (interview analysis) | Text of resume files the user selects with the Google Picker (drive.file); interview transcripts | Not used for training under OpenAI API terms. No opt-in to data sharing. |
+| Vapi (phone interview platform) | Voice AI platform, plan [confirm] | [confirm Vapi endpoint] | Candidate name and phone number taken from the application. Those details can come from a resume selected in Google Drive (drive.file). The call transcript comes back to us. | [Confirm Vapi data-use and training terms before sending.] |
 | n8n (workflow automation, our instance) | Service that routes resume files and application data between the portal, Google and OpenAI | n8n.srv1457709.hstgr.cloud | Resume files and extracted resume text | Passes data to OpenAI only for screening; not used for training. [Confirm hosting provider before sending.] |
 
 
