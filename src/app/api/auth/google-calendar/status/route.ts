@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getCalendarConnection } from "@/lib/calendar-tokens";
-import { getCalendarConnectionStatus } from "@/lib/google-calendar";
+import { calendarScopesApproved, getCalendarConnectionStatus } from "@/lib/google-calendar";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export async function GET(request: Request) {
@@ -12,7 +12,9 @@ export async function GET(request: Request) {
   if (new URL(request.url).searchParams.get("self") === "1") {
     try {
       const own = await getCalendarConnection(user.email);
-      return NextResponse.json({ success: true, connected: Boolean(own?.refreshToken), accountEmail: user.email, connectedAt: own?.connectedAt || "" }, { headers: { "Cache-Control": "no-store" } });
+      // A personal connection without the approved calendar scopes is not used for scheduling.
+      const reconnectRequired = Boolean(own?.refreshToken) && !calendarScopesApproved(own?.scope || "");
+      return NextResponse.json({ success: true, connected: Boolean(own?.refreshToken) && !reconnectRequired, reconnectRequired, accountEmail: user.email, connectedAt: own?.connectedAt || "" }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
       console.error("[Google Calendar] Personal status check failed:", error);
       return NextResponse.json({ success: false, error: "Unable to check calendar connection." }, { status: 500 });

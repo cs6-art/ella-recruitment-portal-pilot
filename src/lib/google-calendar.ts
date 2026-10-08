@@ -6,22 +6,33 @@ import { getFinalInterviewCalendarConfig } from "@/lib/google-sheets";
 import { scheduledInstant } from "@/lib/interview-time";
 import { isDemoMode } from "@/lib/demo-mode";
 import { configureGoogleApiTimeout } from "@/lib/google-api-options";
+import { checkGrantedScopes, USER_OAUTH_SCOPES } from "@/lib/google-oauth-scopes";
 
 configureGoogleApiTimeout();
 
-const CALENDAR_SCOPES = [
-  "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/calendar.freebusy",
-  // Token introspection only includes the authorized account email when the
-  // email scope was granted. This prevents a token for another Google account
-  // from being stored under the HR role's expected email address.
-  "https://www.googleapis.com/auth/userinfo.email",
-];
+// calendar.freebusy: availability checks only. calendar.events: creating,
+// moving and cancelling interview events only. userinfo.email: token
+// introspection only includes the authorized account email when the email
+// scope was granted, so a token for another Google account is never stored
+// under the HR role's expected email address. Defined in google-oauth-scopes.ts.
+const CALENDAR_SCOPES = USER_OAUTH_SCOPES.calendar;
+
+/** True when a stored connection carries exactly the approved calendar scopes. */
+export function calendarScopesApproved(scope: string) {
+  return checkGrantedScopes("calendar", scope).ok;
+}
 
 export class CalendarAccountMismatchError extends Error {
   constructor() {
     super("calendar_account_mismatch");
     this.name = "CalendarAccountMismatchError";
+  }
+}
+
+export class CalendarScopeError extends Error {
+  constructor(detail: string) {
+    super(`calendar_scope_not_approved: ${detail}`);
+    this.name = "CalendarScopeError";
   }
 }
 
@@ -111,7 +122,8 @@ export function getGoogleConsentUrl(email: string, requestOrigin?: string): stri
   return client.generateAuthUrl({
     access_type: "offline",
     prompt: "select_account consent", // lets HR choose the intended Google account and renews the refresh token
-    scope: CALENDAR_SCOPES,
+    scope: [...CALENDAR_SCOPES],
+    include_granted_scopes: false,
     state: createOAuthState(email),
     login_hint: email,
   });
@@ -129,12 +141,16 @@ export async function exchangeCodeAndStore(code: string, email: string, requestO
   const expectedEmail = normalizedEmail(email);
   const authorizedEmail = normalizedEmail(tokenInfo.email || "");
   if (!authorizedEmail || authorizedEmail !== expectedEmail) throw new CalendarAccountMismatchError();
+  // Both calendar scopes are required: without calendar.freebusy the portal
+  // cannot check availability, and it never falls back to reading events.
+  const scopes = checkGrantedScopes("calendar", tokenInfo.scopes);
+  if (!scopes.ok) throw new CalendarScopeError([...scopes.missing.map((scope) => `missing ${scope}`), ...scopes.unapproved.map((scope) => `unapproved ${scope}`)].join(", "));
   await saveCalendarConnection({
     email,
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token || undefined,
     tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : "",
-    scope: tokens.scope || CALENDAR_SCOPES.join(" "),
+    scope: tokenInfo.scopes.join(" "),
   });
 }
 
@@ -142,8 +158,9 @@ type AuthorizedCalendar = { client: InstanceType<typeof google.auth.OAuth2>; acc
 
 /**
  * Returns a calendar client only when its OAuth token belongs to the expected
- * HR email. Existing tokens without the email scope are treated as invalid so
- * HR must reconnect instead of silently using an unknown account.
+ * HR email and carries the approved calendar scopes. Existing tokens without
+ * the email or free/busy scope are treated as invalid so HR must reconnect
+ * instead of silently using an unknown account or a broader workaround.
  */
 async function getAuthorizedClientWithIdentity(email: string): Promise<AuthorizedCalendar | null> {
   const connection = await getCalendarConnection(email);
@@ -171,12 +188,18 @@ async function getAuthorizedClientWithIdentity(email: string): Promise<Authorize
     console.warn("[Google Calendar] Stored OAuth token does not belong to the expected HR account.");
     return null;
   }
+  // Tokens from before calendar.freebusy was required, or with permissions the
+  // portal no longer asks for, need a reconnect rather than a workaround.
+  if (!checkGrantedScopes("calendar", tokenInfo.scopes).ok) {
+    console.warn("[Google Calendar] Stored OAuth token does not carry the approved calendar scopes; HR must reconnect.");
+    return null;
+  }
   if (refreshedCredentials) {
     await saveCalendarConnection({
       email,
       accessToken: refreshedCredentials.access_token || "",
       tokenExpiresAt: refreshedCredentials.expiry_date ? new Date(refreshedCredentials.expiry_date).toISOString() : "",
-      scope: refreshedCredentials.scope || CALENDAR_SCOPES.join(" "),
+      scope: tokenInfo.scopes.join(" "),
     });
   }
   return { client, accountEmail };
@@ -219,26 +242,8 @@ async function getStoredCalendarAccountEmail(email: string): Promise<string | nu
       // still safely report disconnected when Google does not reveal an email.
     }
   }
-  if (!accountEmail) {
-    try {
-      // Calendar tokens created before identity introspection was added do not
-      // include an email/profile scope. The events API still returns the
-      // authenticated calendar owner's address without exposing event data;
-      // use that owner identity for the read-only Settings status card.
-      const events = await google.calendar({ version: "v3", auth: client }).events.list({
-        calendarId: "primary",
-        maxResults: 10,
-        showDeleted: false,
-        singleEvents: false,
-        fields: "items(organizer,creator)",
-      });
-      const owner = (events.data.items || []).find((event) => event.organizer?.self || event.creator?.self);
-      accountEmail = normalizedEmail(owner?.organizer?.email || owner?.creator?.email || "");
-    } catch {
-      // Empty calendars or restricted legacy tokens may not expose event
-      // metadata; leave the account unknown rather than guessing.
-    }
-  }
+  // Calendar events are never read to work out who owns a token: a token that
+  // does not reveal its email is left unknown and the card asks for a reconnect.
   return accountEmail || null;
 }
 
@@ -404,29 +409,8 @@ export async function checkCalendarAvailability(input: Pick<CalendarEventInput, 
       if (conflict) return { available: false, checked: true, reason: "conflict", busyUntil: conflict.end || undefined };
       return { available: true, checked: true };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!/insufficient authentication scopes|insufficient permission/i.test(message)) {
-        return { available: false, checked: false, reason: "error", error: message };
-      }
-
-      // Older connections may have calendar.events but not calendar.freebusy.
-      // Read event windows as a compatible fallback until HR reconnects.
-      const events = await calendar.events.list({
-        calendarId: target.calendarId,
-        timeMin: start.toISOString(),
-        timeMax: end.toISOString(),
-        singleEvents: true,
-        showDeleted: false,
-        maxResults: 2500,
-      });
-      const conflict = (events.data.items || []).find((event) => {
-        const eventStart = event.start?.dateTime || event.start?.date;
-        const eventEnd = event.end?.dateTime || event.end?.date;
-        if (!eventStart || !eventEnd) return false;
-        return Date.parse(eventStart) < end.getTime() && Date.parse(eventEnd) > start.getTime();
-      });
-      if (conflict) return { available: false, checked: true, reason: "conflict", busyUntil: conflict.end?.dateTime || conflict.end?.date || undefined };
-      return { available: true, checked: true };
+      // Availability comes only from calendar.freebusy; event contents are never read.
+      return { available: false, checked: false, reason: "error", error: error instanceof Error ? error.message : String(error) };
     }
   } catch (error) {
     return { available: false, checked: false, reason: "error", error: error instanceof Error ? error.message : String(error) };
@@ -484,22 +468,8 @@ export async function getCalendarBusyWindows(input: { hodEmail: string; start: D
       }
       return { checked: true, busy };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!/insufficient authentication scopes|insufficient permission/i.test(message)) {
-        return { checked: false, busy: [], reason: "error", error: message };
-      }
-      const events = await calendar.events.list({
-        calendarId: target.calendarId,
-        timeMin: input.start.toISOString(),
-        timeMax: input.end.toISOString(),
-        singleEvents: true,
-        showDeleted: false,
-        maxResults: 2500,
-      });
-      const busy = (events.data.items || []).map((event) => ({ start: event.start?.dateTime || event.start?.date, end: event.end?.dateTime || event.end?.date }))
-        .filter((window): window is { start: string; end: string } => Boolean(window.start && window.end))
-        .map((window) => ({ start: window.start, end: window.end }));
-      return { checked: true, busy };
+      // Availability comes only from calendar.freebusy; event contents are never read.
+      return { checked: false, busy: [], reason: "error", error: error instanceof Error ? error.message : String(error) };
     }
   } catch (error) {
     return { checked: false, busy: [], reason: "error", error: error instanceof Error ? error.message : String(error) };

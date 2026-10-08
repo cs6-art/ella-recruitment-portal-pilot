@@ -53,9 +53,11 @@ Nothing in the code is environment-specific — every difference is an env var.
 
 ## 3. Google Drive — new resume folder
 
-1. Create a folder (Shared Drive preferred — a service account has no storage quota of its own).
-2. Share it with `GOOGLE_SERVICE_ACCOUNT_EMAIL` as **Editor**.
-3. Keep its folder ID for `RESUME_STORAGE_DRIVE_FOLDER_ID`. If you also use the Drive-poller bulk
+1. Create a Shared Drive (a service account has no storage quota of its own).
+2. Add `GOOGLE_SERVICE_ACCOUNT_EMAIL` as a **Content manager**.
+3. Use the Shared Drive ID for `RESUME_STORAGE_DRIVE_FOLDER_ID`. The service account holds only
+   `drive.file`, creates its own "Smile Resume Storage" folder there, and stores resumes in it.
+   Confirm with `node --env-file=<env> tools/scripts/verify-resume-storage-drive-file.mjs`. If you also use the Drive-poller bulk
    flow, make a second folder for `GOOGLE_BULK_RESUME_DRIVE_FOLDER_ID` (configured in n8n).
 
 ## 4. Google OAuth — reuse the existing Web client

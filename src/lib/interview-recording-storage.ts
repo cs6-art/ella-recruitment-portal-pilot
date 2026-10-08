@@ -10,6 +10,7 @@
 import { google } from "googleapis";
 
 import { getGoogleServiceAccountPrivateKey } from "@/lib/google-service-account";
+import { SERVICE_ACCOUNT_SCOPES } from "@/lib/google-oauth-scopes";
 import { getOrganizationRecordingDrive } from "@/lib/organization-recording-drive";
 import { getRecordingDriveClient, validateRecordingDriveFolder } from "@/lib/recording-drive-oauth";
 
@@ -32,7 +33,7 @@ function legacyAuth() {
   authClient = new google.auth.JWT({
     email,
     key,
-    scopes: ["https://www.googleapis.com/auth/drive.file"],
+    scopes: [...SERVICE_ACCOUNT_SCOPES.legacyRecordingStorage],
   });
   return authClient;
 }

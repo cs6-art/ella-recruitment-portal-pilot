@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import { createOAuthState } from "@/lib/google-calendar";
 import { deleteDriveConnection, getDriveConnection, saveDriveConnection } from "@/lib/drive-tokens";
 import { configureGoogleApiTimeout } from "@/lib/google-api-options";
+import { checkGrantedScopes, USER_OAUTH_SCOPES } from "@/lib/google-oauth-scopes";
 
 configureGoogleApiTimeout();
 
@@ -15,19 +16,21 @@ configureGoogleApiTimeout();
  * `google-calendar.ts`; reuses its signed OAuth state.
  */
 
-const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-
-export const DRIVE_SCOPES = [
-  DRIVE_FILE_SCOPE,
-  // So token introspection returns the account email — lets us verify the
-  // token belongs to the HR user who started the connection.
-  "https://www.googleapis.com/auth/userinfo.email",
-];
+// drive.file + userinfo.email (the email lets us verify the token belongs to
+// the HR user who started the connection). Defined in google-oauth-scopes.ts.
+export const DRIVE_SCOPES = USER_OAUTH_SCOPES.resumeDrive;
 
 export class DriveAccountMismatchError extends Error {
   constructor() {
     super("drive_account_mismatch");
     this.name = "DriveAccountMismatchError";
+  }
+}
+
+export class DriveScopeError extends Error {
+  constructor(detail: string) {
+    super(`drive_scope_not_approved: ${detail}`);
+    this.name = "DriveScopeError";
   }
 }
 
@@ -59,7 +62,10 @@ export function getDriveConsentUrl(email: string, requestOrigin?: string): strin
   return newOAuthClient(requestOrigin).generateAuthUrl({
     access_type: "offline",
     prompt: "select_account consent",
-    scope: DRIVE_SCOPES,
+    scope: [...DRIVE_SCOPES],
+    // Never fold in permissions granted to this client earlier (such as the
+    // retired Drive-wide read scope): the token must carry only DRIVE_SCOPES.
+    include_granted_scopes: false,
     state: createOAuthState(email),
     login_hint: email,
   });
@@ -72,12 +78,14 @@ export async function exchangeDriveCodeAndStore(code: string, email: string, req
   const tokenInfo = await client.getTokenInfo(tokens.access_token);
   const authorizedEmail = normalizedEmail(tokenInfo.email || "");
   if (!authorizedEmail || authorizedEmail !== normalizedEmail(email)) throw new DriveAccountMismatchError();
+  const scopes = checkGrantedScopes("resumeDrive", tokenInfo.scopes);
+  if (!scopes.ok) throw new DriveScopeError([...scopes.missing.map((scope) => `missing ${scope}`), ...scopes.unapproved.map((scope) => `unapproved ${scope}`)].join(", "));
   await saveDriveConnection({
     email,
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token || undefined,
     tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : "",
-    scope: tokens.scope || DRIVE_SCOPES.join(" "),
+    scope: tokenInfo.scopes.join(" "),
   });
 }
 
@@ -96,15 +104,20 @@ export async function getDrivePickerAccessToken(email: string): Promise<string |
 }
 
 // Connections made before the move to `drive.file` hold the old broad
-// read-only Drive token. Treat them as disconnected so HR re-consents to the
-// narrower scope instead of silently continuing on the old one.
-function hasPickerScope(scope: string) {
-  return scope.split(/\s+/).includes(DRIVE_FILE_SCOPE);
+// Drive-wide read-only token. They are never used: the stored token is deleted and
+// HR reconnects, consenting to drive.file only.
+async function discardStaleConnection(email: string, reason: string) {
+  console.warn("[Google Drive] Discarding a Drive connection with outdated permissions; HR must reconnect.", { reason });
+  await deleteDriveConnection(email);
 }
 
 async function authorizeDrive(email: string) {
   const connection = await getDriveConnection(email);
-  if (!connection?.refreshToken || !hasPickerScope(connection.scope)) return null;
+  if (!connection?.refreshToken) return null;
+  if (!checkGrantedScopes("resumeDrive", connection.scope).ok) {
+    await discardStaleConnection(email, "stored scope");
+    return null;
+  }
 
   const client = newOAuthClient();
   const expiresAt = connection.tokenExpiresAt ? Date.parse(connection.tokenExpiresAt) : 0;
@@ -127,12 +140,17 @@ async function authorizeDrive(email: string) {
     console.warn("[Google Drive] Stored OAuth token no longer belongs to the connecting HR user.");
     return null;
   }
+  // Google's own view of the live token is authoritative over the stored string.
+  if (!checkGrantedScopes("resumeDrive", tokenInfo.scopes).ok) {
+    await discardStaleConnection(email, "live token scope");
+    return null;
+  }
   if (refreshed) {
     await saveDriveConnection({
       email,
       accessToken: refreshed.access_token || "",
       tokenExpiresAt: refreshed.expiry_date ? new Date(refreshed.expiry_date).toISOString() : "",
-      scope: refreshed.scope || DRIVE_SCOPES.join(" "),
+      scope: tokenInfo.scopes.join(" "),
     });
   }
   return { drive: google.drive({ version: "v3", auth: client }), accessToken };
@@ -145,10 +163,14 @@ export function getDrivePickerConfig() {
   return { apiKey, projectNumber };
 }
 
-export async function getDriveConnectionStatus(email: string): Promise<{ connected: boolean; accountEmail: string; connectedAt: string }> {
+export async function getDriveConnectionStatus(email: string): Promise<{ connected: boolean; reconnectRequired: boolean; accountEmail: string; connectedAt: string }> {
   const connection = await getDriveConnection(email);
-  if (!connection?.refreshToken || !hasPickerScope(connection.scope)) return { connected: false, accountEmail: "", connectedAt: "" };
-  return { connected: true, accountEmail: connection.email, connectedAt: connection.connectedAt };
+  if (!connection?.refreshToken) return { connected: false, reconnectRequired: false, accountEmail: "", connectedAt: "" };
+  if (!checkGrantedScopes("resumeDrive", connection.scope).ok) {
+    await discardStaleConnection(email, "stored scope");
+    return { connected: false, reconnectRequired: true, accountEmail: "", connectedAt: "" };
+  }
+  return { connected: true, reconnectRequired: false, accountEmail: connection.email, connectedAt: connection.connectedAt };
 }
 
 export async function disconnectDrive(email: string): Promise<void> {
@@ -158,6 +180,7 @@ export async function disconnectDrive(email: string): Promise<void> {
 export function driveOAuthErrorReason(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/drive_account_mismatch|DriveAccountMismatchError/i.test(message)) return "The Google account selected is not the one you signed in with. Choose your own account and connect again.";
+  if (/drive_scope_not_approved/i.test(message)) return "Google returned different Drive permissions than the portal asks for. Remove the portal under your Google Account's third-party access, then connect again.";
   if (/redirect_uri_mismatch/i.test(message)) return "The Google OAuth callback URL is not authorized for this portal domain.";
   if (/invalid_grant|authorization.*expired|code.*expired/i.test(message)) return "The Google authorization expired. Please connect again.";
   if (/access_denied|unauthorized_client|forbidden|insufficient/i.test(message)) return "Google did not grant Drive access for this account.";

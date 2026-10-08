@@ -8,6 +8,7 @@ import { clientErrorMessage } from "@/lib/client-error";
 
 type StorageStatus = {
   connected: boolean;
+  reconnectRequired?: boolean;
   accountEmail: string;
   folderConfigured: boolean;
   folderName: string;
@@ -133,6 +134,7 @@ export default function RecordingDriveConnect() {
         if (!response.ok || data.success !== true) throw new Error(data.error || "Unable to check Google Drive status.");
         setStatus({
           connected: data.connected === true,
+          reconnectRequired: data.reconnectRequired === true,
           accountEmail: typeof data.accountEmail === "string" ? data.accountEmail : "",
           folderConfigured: data.folderConfigured === true,
           folderName: typeof data.folderName === "string" ? data.folderName : "",
@@ -290,7 +292,9 @@ export default function RecordingDriveConnect() {
       {error && <ActionFeedback kind="error">{error}</ActionFeedback>}
       {message && <ActionFeedback kind="success">{message}</ActionFeedback>}
       {!loading && !status.connected && <>
-        <p>Connect a Google account for this organization. Interview recordings will be saved to a folder you select.</p>
+        <p>{status.reconnectRequired
+          ? "Reconnect Google Drive. The saved connection has permissions the portal no longer uses, so it is paused until you connect again."
+          : "Connect a Google account for this organization. Interview recordings will be saved to a folder you select."}</p>
         <a className="btn btn-primary" href="/api/auth/google-recording-drive/connect">Connect Google Drive</a>
       </>}
       {!loading && status.connected && <>

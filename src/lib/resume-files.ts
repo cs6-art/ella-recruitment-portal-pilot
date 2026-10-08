@@ -12,6 +12,7 @@ import { getPortalConfigValue } from "@/lib/portal-config";
 import { createPdfTextParser } from "@/lib/pdf-text-parser";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { configureGoogleApiTimeout } from "@/lib/google-api-options";
+import { SERVICE_ACCOUNT_SCOPES } from "@/lib/google-oauth-scopes";
 
 configureGoogleApiTimeout();
 
@@ -68,15 +69,15 @@ function drive() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const key = getGoogleServiceAccountPrivateKey();
   if (!email || !key) throw new Error("GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY is not configured.");
-  // drive.file alone can read app-created PDFs while returning 404 for an
-  // existing Shared Drive root. Read-only metadata access lets us verify the
-  // approved destination without granting unrestricted Drive write access.
-  const auth = new google.auth.JWT({ email, key, scopes: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive.readonly"] });
+  // drive.file only: the service account reaches the storage folder and the
+  // resumes it creates, never anything else in the Shared Drive.
+  const auth = new google.auth.JWT({ email, key, scopes: [...SERVICE_ACCOUNT_SCOPES.resumeStorage] });
   driveClient = google.drive({ version: "v3", auth });
   return driveClient;
 }
 
-async function resumeFolderId(environment: BulkResumeEnvironment = "production") {
+/** The configured Shared Drive (or folder) that holds the app's storage folder. */
+async function resumeStorageRootId(environment: BulkResumeEnvironment = "production") {
   if (environment === "uat") {
     requireBulkResumeUatConfig();
     return process.env.BULK_RESUME_UAT_DRIVE_FOLDER_ID!.trim();
@@ -93,6 +94,75 @@ async function resumeFolderId(environment: BulkResumeEnvironment = "production")
   const folderId = (await getPortalConfigValue("Resume_Storage_Drive_Folder_ID")).trim();
   if (!folderId) throw new Error("Resume storage Drive folder is not configured (Settings -> Infrastructure or RESUME_STORAGE_DRIVE_FOLDER_ID).");
   return folderId;
+}
+
+const FOLDER_MIME = "application/vnd.google-apps.folder";
+const STORAGE_FOLDER_NAME = "Smile Resume Storage";
+// appProperties are private to this app, so nothing else can mark a folder as ours.
+const STORAGE_FOLDER_MARKER = { key: "smileStorage", value: "resumes" } as const;
+
+function storageUnavailable(rootId: string) {
+  return new Error(`Resume storage is unavailable to the service account (${rootId}). Make the service account a Content manager of the Shared Drive and set RESUME_STORAGE_DRIVE_FOLDER_ID to the Shared Drive ID.`);
+}
+
+/**
+ * The app's own storage folders inside the configured root, oldest first.
+ * Under drive.file the root itself cannot be read (Drive returns 404 for a
+ * Shared Drive root the app did not create), but children the app created can
+ * be listed, so this works without any broader Drive scope.
+ */
+async function findStorageFolders(rootId: string) {
+  const response = await drive().files.list({
+    q: `'${rootId}' in parents and mimeType = '${FOLDER_MIME}' and appProperties has { key='${STORAGE_FOLDER_MARKER.key}' and value='${STORAGE_FOLDER_MARKER.value}' } and trashed = false`,
+    fields: "files(id, createdTime, capabilities(canAddChildren))",
+    orderBy: "createdTime",
+    pageSize: 10,
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
+  });
+  return (response.data.files || []).filter((folder): folder is typeof folder & { id: string } => Boolean(folder.id));
+}
+
+const storageFolderByRoot = new Map<string, Promise<string>>();
+
+/**
+ * Resumes are stored in a folder this service account creates and owns inside
+ * the configured Shared Drive, so least-privilege drive.file covers every
+ * read, write and delete. If two instances create it at once, both settle on
+ * the oldest folder; cleanup scans every marked folder.
+ */
+function ensureStorageFolder(rootId: string) {
+  let pending = storageFolderByRoot.get(rootId);
+  if (!pending) {
+    pending = (async () => {
+      let [folder] = await findStorageFolders(rootId);
+      if (!folder) {
+        await drive().files.create({
+          supportsAllDrives: true,
+          requestBody: {
+            name: STORAGE_FOLDER_NAME,
+            mimeType: FOLDER_MIME,
+            parents: [rootId],
+            appProperties: { [STORAGE_FOLDER_MARKER.key]: STORAGE_FOLDER_MARKER.value },
+          },
+          fields: "id",
+        });
+        [folder] = await findStorageFolders(rootId);
+      }
+      if (!folder || folder.capabilities?.canAddChildren === false) throw new Error("storage folder not writable");
+      return folder.id;
+    })().catch((error) => {
+      storageFolderByRoot.delete(rootId);
+      console.error("[Resume Storage] storage folder unavailable", { rootId, error: error instanceof Error ? error.message : String(error) });
+      throw storageUnavailable(rootId);
+    });
+    storageFolderByRoot.set(rootId, pending);
+  }
+  return pending;
+}
+
+function inAnyParent(parentIds: string[]) {
+  return `(${parentIds.map((id) => `'${id}' in parents`).join(" or ")})`;
 }
 
 function safeFileName(value: string) {
@@ -216,14 +286,18 @@ function recordFromDriveFile(file: DriveFileFields): ResumeFileRecord | null {
 /** Remove expired resumes from the Drive storage folder. */
 export async function cleanupExpiredResumeFiles(now = Date.now()) {
   const client = drive();
-  const folderId = await resumeFolderId();
+  const rootId = await resumeStorageRootId();
+  // Resumes stored before the app folder existed sit directly in the root.
+  // drive.file lists only files this service account created, so nothing
+  // else in the Shared Drive is ever seen or touched.
+  const parents = [rootId, ...(await findStorageFolders(rootId)).map((folder) => folder.id)];
   let scanned = 0;
   let deleted = 0;
   let pageToken: string | undefined;
 
   do {
     const response = await client.files.list({
-      q: `'${folderId}' in parents and trashed = false`,
+      q: `${inAnyParent(parents)} and trashed = false`,
       fields: "nextPageToken, files(id, name, mimeType, size, createdTime, properties)",
       pageSize: 200,
       pageToken,
@@ -270,29 +344,20 @@ export async function storeResumeFile(file: File, options: { environment?: BulkR
   // Queue history can predate the current jobId contract. Reuse a matching
   // non-expired Drive object when it is already present, so re-submitting a
   // resume after a lost historical queue write does not create another file.
-  const folderId = await resumeFolderId(options.environment);
+  const rootId = await resumeStorageRootId(options.environment);
   const organizationId = options.organizationId?.trim() || "";
-  console.info("[Resume Storage] destination", { folderId, fileName, authentication: "service_account" });
   // Source retrieval uses the user's OAuth connection; destination storage
   // uses the service account. Report these failures separately.
-  await drive().files.get({
-    fileId: folderId,
-    fields: "id,mimeType,capabilities(canAddChildren)",
-    supportsAllDrives: true,
-  }).then(({ data }) => {
-    if (data.mimeType !== "application/vnd.google-apps.folder" || data.capabilities?.canAddChildren === false) {
-      throw new Error("Resume storage destination must be a writable folder for the service account.");
-    }
-  }).catch(() => {
-    throw new Error(`Resume storage destination unavailable to the service account (${folderId}). Verify RESUME_STORAGE_DRIVE_FOLDER_ID and Shared Drive access.`);
-  });
+  const folderId = await ensureStorageFolder(rootId);
+  console.info("[Resume Storage] destination", { rootId, folderId, fileName, authentication: "service_account" });
   const escapedOrganizationId = organizationId.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   const organizationFilter = organizationId ? ` and properties has { key='organizationId' and value='${escapedOrganizationId}' }` : "";
   const existing = await drive().files.list({
     // Resume hashes are only reusable inside the owning organization. Older
     // files without organizationId intentionally miss this query and receive
     // a tenant-specific copy instead of failing at Postgres registration.
-    q: `'${folderId}' in parents and trashed = false and properties has { key='sha256' and value='${sha256}' }${organizationFilter}`,
+    // Includes the root so resumes stored before the app folder are still reused.
+    q: `${inAnyParent([folderId, rootId])} and trashed = false and properties has { key='sha256' and value='${sha256}' }${organizationFilter}`,
     fields: "files(id, name, mimeType, size, createdTime, properties)",
     pageSize: 10,
     includeItemsFromAllDrives: true,

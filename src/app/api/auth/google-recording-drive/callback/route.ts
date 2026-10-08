@@ -14,6 +14,7 @@ function settingsRedirect(requestUrl: URL, status: "connected" | "denied" | "err
 
 function userSafeReason(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
+  if (/unapproved permissions/i.test(message)) return "Google returned different Drive permissions than the portal asks for. Remove the portal under the Google Account's third-party access, then connect again.";
   if (/redirect_uri_mismatch/i.test(message)) return "The Google OAuth callback URL is not authorized for this portal domain.";
   if (/invalid_grant|authorization.*expired|code.*expired/i.test(message)) return "Google authorization expired. Please connect again.";
   if (/access_denied|unauthorized_client|forbidden|insufficient/i.test(message)) return "Google did not grant the required Drive permission.";

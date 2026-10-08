@@ -289,7 +289,7 @@ test("Live Avatar startup verifies the organization's connected Drive folder bef
   const storage = read("src/lib/interview-recording-storage.ts");
   const session = read("src/app/api/live-avatar/session/route.ts");
   const oauth = read("src/lib/recording-drive-oauth.ts");
-  assert.match(oauth, /https:\/\/www\.googleapis\.com\/auth\/drive\.file/);
+  assert.match(oauth, /RECORDING_DRIVE_SCOPES = USER_OAUTH_SCOPES\.recordingDrive/);
   assert.doesNotMatch(oauth, /auth\/drive\.readonly|auth\/drive"/);
   assert.match(oauth, /fields: "id,name,mimeType,driveId,capabilities\(canAddChildren\)"/);
   assert.match(oauth, /data\.capabilities\?\.canAddChildren !== true/);

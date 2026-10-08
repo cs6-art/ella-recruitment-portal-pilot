@@ -8,10 +8,10 @@ test("Google Drive is a separate OAuth connection from the calendar one", () => 
   const drive = read("src/lib/google-drive.ts");
   const tokens = read("src/lib/drive-tokens.ts");
   // non-restricted per-file scope only: no CASA, no Drive-wide read access
-  assert.match(drive, /DRIVE_FILE_SCOPE = "https:\/\/www\.googleapis\.com\/auth\/drive\.file"/);
+  assert.match(drive, /DRIVE_SCOPES = USER_OAUTH_SCOPES\.resumeDrive/);
   assert.doesNotMatch(drive, /drive\.readonly|auth\/drive"|calendar\.events/);
   // pre-migration drive.readonly connections must re-consent
-  assert.match(drive, /hasPickerScope\(connection\.scope\)/);
+  assert.match(drive, /checkGrantedScopes\("resumeDrive", connection\.scope\)/);
   // its own token store + encryption label, separate from Calendar_Connections
   assert.match(tokens, /TAB = "Drive_Connections"/);
   assert.match(tokens, /"drive-token-encryption"/);

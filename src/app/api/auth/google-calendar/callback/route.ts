@@ -15,6 +15,7 @@ function calendarErrorReason(error: unknown, expectedEmail = ""): string {
     : "The Google account you chose is not the calendar account this portal expects. Choose the correct account and connect again.";
   // Keep provider and storage diagnostics useful to HR without exposing raw
   // OAuth responses, tokens, spreadsheet IDs, or other server details.
+  if (/calendar_scope_not_approved/i.test(message)) return "Google did not grant both calendar permissions (availability and interview events). Connect again and approve both.";
   if (/redirect_uri_mismatch/i.test(message)) return "The Google OAuth callback URL is not authorized for this portal domain.";
   if (/invalid_grant|authorization.*expired|code.*expired/i.test(message)) return "The Google authorization expired. Please connect again.";
   if (/access_denied|unauthorized_client|forbidden/i.test(message)) return "Google did not grant this account access to the calendar integration.";

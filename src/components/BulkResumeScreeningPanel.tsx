@@ -124,7 +124,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
   const [queueRunning, setQueueRunning] = useState(false);
   const [queueProgress, setQueueProgress] = useState<{ done: number; total: number } | null>(null);
   const queueCancelRef = useRef(false);
-  const [driveStatus, setDriveStatus] = useState<{ connected: boolean; accountEmail: string } | null>(null);
+  const [driveStatus, setDriveStatus] = useState<{ connected: boolean; reconnectRequired?: boolean; accountEmail: string } | null>(null);
   const [msDriveStatus, setMsDriveStatus] = useState<{ configured: boolean; connected: boolean; accountEmail: string } | null>(null);
   const [cloudPicker, setCloudPicker] = useState<"google" | "microsoft" | null>(null);
   const [driveImporting, setDriveImporting] = useState(false);
@@ -237,7 +237,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
     try {
       const response = await fetch("/api/auth/google-drive/status", { cache: "no-store" });
       const data = await response.json();
-      if (data?.success === true) setDriveStatus({ connected: Boolean(data.connected), accountEmail: data.accountEmail || "" });
+      if (data?.success === true) setDriveStatus({ connected: Boolean(data.connected), reconnectRequired: data.reconnectRequired === true, accountEmail: data.accountEmail || "" });
     } catch {
       setDriveStatus({ connected: false, accountEmail: "" });
     }
@@ -740,7 +740,7 @@ export default function BulkResumeScreeningPanel({ roleOptions }: { roleOptions:
           </label>
           <div className="bulk-screening-action">
             <div className="bulk-screening-source-option">
-              <small>{driveStatus === null ? "Checking Google Drive connection…" : driveStatus.connected ? `Google Drive connected${driveStatus.accountEmail ? ` as ${driveStatus.accountEmail}` : ""}` : "Google Drive is not connected. You can keep uploading files from your computer; connect Drive only if you want to import from it."}</small>
+              <small>{driveStatus === null ? "Checking Google Drive connection…" : driveStatus.connected ? `Google Drive connected${driveStatus.accountEmail ? ` as ${driveStatus.accountEmail}` : ""}` : driveStatus.reconnectRequired ? "Reconnect Google Drive: the portal now only opens the files you pick, so your earlier connection was removed." : "Google Drive is not connected. You can keep uploading files from your computer; connect Drive only if you want to import from it."}</small>
             {driveStatus?.connected
               ? <button type="button" className="btn btn-secondary btn-with-icon" disabled={!roleId || uploading || driveImporting} onClick={() => setCloudPicker("google")}><GoogleDriveIcon />Choose from Google Drive</button>
               : roleId ? <a className="btn btn-secondary btn-with-icon" href="/api/auth/google-drive/connect"><GoogleDriveIcon />Connect Google Drive</a> : <button type="button" className="btn btn-secondary btn-with-icon" disabled><GoogleDriveIcon />Choose a role first</button>}

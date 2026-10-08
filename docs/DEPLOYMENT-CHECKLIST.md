@@ -22,7 +22,7 @@ Every variable is described in `.env.example`. The ones that decide whether thin
 | Email | `PILOT_OUTBOUND_EMAIL_ENABLED=true` (email is fail-closed under Postgres without it), `N8N_VERIFICATION_EMAIL_WEBHOOK_URL`, `N8N_WEBHOOK_SECRET`, `HEALTH_ALERT_EMAIL` |
 | Voice | `PILOT_VOICE_DRY_RUN` (keep `true` until the first supervised call), `VAPI_PHONE_NUMBER_ID_SG` / `_PH` / `_MY` (empty keeps the n8n default for that region) |
 | Video interview | `LIVEAVATAR_API_KEY`, `LIVEAVATAR_AVATAR_ID`, `LIVEAVATAR_VOICE_AGENT_ID`, `LIVEAVATAR_IS_SANDBOX=false`, `INTERVIEW_RECORDING_DRIVE_FOLDER_ID` (shared with the service account), `INTERVIEW_RECORDING_RETENTION_DAYS` (default 90; 0 keeps recordings), `INTERVIEW_ANALYSIS_OPENAI_API_KEY` |
-| Google | `GOOGLE_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`, `RESUME_STORAGE_DRIVE_FOLDER_ID` (a folder shared with the service account; a Shared Drive is strongly preferred) |
+| Google | `GOOGLE_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`, `RESUME_STORAGE_DRIVE_FOLDER_ID` (a Shared Drive ID with the service account as Content manager; the service account uses `drive.file` only and stores resumes in its own "Smile Resume Storage" folder) |
 | Payments | `HITPAY_API_KEY`, `HITPAY_SALT`, `HITPAY_WEBHOOK_SECRET`, `HITPAY_MODE`, `HITPAY_BASE_URL` (sandbox until live keys are set) |
 | Credits | `CREDITS_BACKEND=dual` (do not change without approval; the live wallet is Postgres) |
 

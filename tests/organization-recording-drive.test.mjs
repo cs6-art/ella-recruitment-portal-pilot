@@ -7,8 +7,8 @@ const read = (path) => fs.readFileSync(path, "utf8");
 test("recording Drive OAuth is separate from resume import and limited to the chosen app files", () => {
   const oauth = read("src/lib/recording-drive-oauth.ts");
   assert.match(oauth, /google_drive_recordings/);
-  assert.match(oauth, /auth\/drive\.file/);
-  assert.match(oauth, /auth\/userinfo\.email/);
+  assert.match(oauth, /RECORDING_DRIVE_SCOPES = USER_OAUTH_SCOPES\.recordingDrive/);
+  assert.match(read("src/lib/google-oauth-scopes.ts"), /recordingDrive: \[GOOGLE_SCOPE\.driveFile, GOOGLE_SCOPE\.userinfoEmail\]/);
   assert.doesNotMatch(oauth, /auth\/drive\.readonly|auth\/drive"/);
   assert.match(oauth, /recording-drive-token-encryption/);
   assert.match(oauth, /createRecordingDriveOAuthState\(organizationId: string, actorEmail: string\)/);

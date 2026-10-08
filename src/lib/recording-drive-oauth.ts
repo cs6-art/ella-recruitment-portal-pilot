@@ -5,13 +5,17 @@ import { google } from "googleapis";
 import { getDb } from "@/db/client";
 import { liveInterviewSessions } from "@/db/schema-recruitment";
 import { deleteOAuthConnection, readOAuthConnection, saveOAuthConnection } from "@/lib/oauth-connection-store";
+import { checkGrantedScopes, USER_OAUTH_SCOPES } from "@/lib/google-oauth-scopes";
 import { getOrganizationRecordingDrive } from "@/lib/organization-recording-drive";
 
 const PROVIDER = "google_drive_recordings" as const;
-export const RECORDING_DRIVE_SCOPES = [
-  "https://www.googleapis.com/auth/drive.file",
-  "https://www.googleapis.com/auth/userinfo.email",
-];
+// drive.file + userinfo.email, defined in google-oauth-scopes.ts.
+export const RECORDING_DRIVE_SCOPES = USER_OAUTH_SCOPES.recordingDrive;
+
+/** True when a stored connection's scopes are still the approved drive.file set. */
+export function recordingDriveScopesApproved(scope: string) {
+  return checkGrantedScopes("recordingDrive", scope).ok;
+}
 
 type RecordingDriveState = { organizationId: string; actorEmail: string; exp: number };
 
@@ -91,9 +95,11 @@ export function verifyRecordingDriveOAuthState(state: string): RecordingDriveSta
 export function getRecordingDriveConsentUrl(organizationId: string, actorEmail: string, requestOrigin: string) {
   return oauthClient(requestOrigin).generateAuthUrl({
     access_type: "offline",
-    include_granted_scopes: true,
+    // Never fold in earlier grants to this client (such as the retired
+    // Drive-wide read scope): the token must carry only RECORDING_DRIVE_SCOPES.
+    include_granted_scopes: false,
     prompt: "select_account consent",
-    scope: RECORDING_DRIVE_SCOPES,
+    scope: [...RECORDING_DRIVE_SCOPES],
     state: createRecordingDriveOAuthState(organizationId, actorEmail),
   });
 }
@@ -105,10 +111,13 @@ export async function exchangeRecordingDriveCode(code: string, organizationId: s
   const tokenInfo = await client.getTokenInfo(tokens.access_token);
   const accountEmail = normalizedEmail(tokenInfo.email || "");
   if (!accountEmail) throw new Error("Google did not identify the connected Drive account.");
-  const scope = tokens.scope || "";
-  if (!scope.split(/\s+/).includes("https://www.googleapis.com/auth/drive.file")) {
-    throw new Error("Google Drive file access was not granted.");
+  const granted = checkGrantedScopes("recordingDrive", tokenInfo.scopes);
+  if (!granted.ok) {
+    throw new Error(granted.unapproved.length
+      ? `Google Drive returned unapproved permissions: ${granted.unapproved.join(", ")}`
+      : "Google Drive file access was not granted.");
   }
+  const scope = tokenInfo.scopes.join(" ");
   const existing = await readOAuthConnection(PROVIDER, accountEmail, organizationId);
   const refreshToken = tokens.refresh_token || (existing ? decrypt(existing.refreshTokenEnc) : "");
   if (!refreshToken) throw new Error("Google did not issue a long-lived Drive authorization. Please try connecting again.");
@@ -128,6 +137,9 @@ export async function getRecordingDriveClient(organizationId: string, accountEma
   const email = normalizedEmail(accountEmail);
   const connection = await readOAuthConnection(PROVIDER, email, organizationId);
   if (!connection?.refreshTokenEnc) return null;
+  // Outdated permissions (e.g. a Drive-wide scope folded in by an earlier
+  // incremental grant) are never used; Settings asks for a reconnect.
+  if (!recordingDriveScopesApproved(connection.scope)) return null;
   const refreshToken = decrypt(connection.refreshTokenEnc);
   if (!refreshToken) return null;
 
@@ -142,11 +154,12 @@ export async function getRecordingDriveClient(organizationId: string, accountEma
     if (!accessToken) throw new Error("Google did not refresh the Drive connection.");
     const tokenInfo = await client.getTokenInfo(accessToken);
     if (normalizedEmail(tokenInfo.email || "") !== email) throw new Error("The saved Google Drive connection belongs to a different account.");
+    if (!checkGrantedScopes("recordingDrive", tokenInfo.scopes).ok) return null;
     await saveOAuthConnection(PROVIDER, email, {
       accessTokenEnc: encrypt(accessToken),
       refreshTokenEnc: encrypt(response.credentials.refresh_token || refreshToken),
       tokenExpiresAt: response.credentials.expiry_date ? new Date(response.credentials.expiry_date).toISOString() : null,
-      scope: response.credentials.scope || connection.scope,
+      scope: tokenInfo.scopes.join(" "),
       accountEmail: email,
       connectedAt: connection.connectedAt,
     }, organizationId);
@@ -154,6 +167,7 @@ export async function getRecordingDriveClient(organizationId: string, accountEma
     client.setCredentials({ access_token: decrypt(connection.accessTokenEnc), refresh_token: refreshToken });
     const tokenInfo = await client.getTokenInfo(client.credentials.access_token || "");
     if (normalizedEmail(tokenInfo.email || "") !== email) throw new Error("The saved Google Drive connection belongs to a different account.");
+    if (!checkGrantedScopes("recordingDrive", tokenInfo.scopes).ok) return null;
   }
   const accessToken = client.credentials.access_token;
   if (!accessToken) return null;
