@@ -130,9 +130,9 @@ Thank you for your review. We have corrected the scope mismatch and made the fol
 
 | Provider | Plan / tier | Endpoint | Data received | Training |
 | --- | --- | --- | --- | --- |
-| OpenAI | API, paid pay-as-you-go (business API terms) | api.openai.com, model gpt-5-mini | Text of resume files the user selects with the Google Picker (drive.file); interview transcripts | Not used for training under OpenAI API terms. No opt-in to data sharing. |
+| OpenAI | API, paid pay-as-you-go (business API terms) | api.openai.com, model gpt-4.1-mini (resume screening); gpt-4o-mini by default (interview analysis) | Text of resume files the user selects with the Google Picker (drive.file); interview transcripts | Not used for training under OpenAI API terms. No opt-in to data sharing. |
+| n8n (workflow automation, our instance) | Service that routes resume files and application data between the portal, Google and OpenAI | n8n.srv1457709.hstgr.cloud | Resume files and extracted resume text | Passes data to OpenAI only for screening; not used for training. [Confirm hosting provider before sending.] |
 
-Workflow automation: bulk resume screening is orchestrated by our n8n workflow, which passes the selected resume text to the OpenAI API. *(Manual item 5: confirm hosting and keep or remove this line.)*
 
 Other providers (not receiving Google user data): LiveAvatar (live interview video and audio). *(Manual item 4: add plan/tier.)*
 

@@ -8,6 +8,7 @@ export default function TermsOfServicePage() {
   return (
     <main className="container page" style={{ maxWidth: 760 }}>
       <h1>Terms of Service</h1>
+      <p><strong>Last updated: 8 October 2026</strong></p>
       <p>These terms apply to your use of the Smile Recruitment Portal (smile.mclinkgroup.com), operated by MPS Solutions Pte Ltd. By registering or logging in you agree to them.</p>
 
       <h2>The service</h2>
@@ -40,9 +41,13 @@ export default function TermsOfServicePage() {
       <p>The service is provided as is. We aim to keep it available but do not guarantee uninterrupted access. To the extent permitted by law, we are not liable for indirect or consequential loss arising from use of the portal.</p>
 
       <h2>Changes and contact</h2>
-      <p>We may update these terms and will post the current version on this page. Questions can be sent to McLink support.</p>
+      <p>We may update these terms and will post the current version on this page, with its last-updated date. Questions can be sent to <a href="mailto:cs6@mclinkgroup.com">cs6@mclinkgroup.com</a>.</p>
+      <p>
+        MPS Solutions Pte Ltd<br />
+        51 Ubi Ave 1, #05-11 Paya Ubi Industrial Park, Singapore 408933
+      </p>
 
-      <p><Link href="/">Back to the portal</Link></p>
+      <p><Link className="btn btn-primary" href="/">Back to the portal</Link></p>
     </main>
   );
 }

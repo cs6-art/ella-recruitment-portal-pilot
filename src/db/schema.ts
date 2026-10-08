@@ -16,6 +16,8 @@ export const organizations = pgTable("organizations", {
   onboardingStartedAt: timestamp("onboarding_started_at", { withTimezone: true }),
   /** Most active people the organization may have; null means no limit. Raised or removed by a McLink administrator. */
   maxMembers: integer("max_members"),
+  /** Days Live Avatar interview recordings are kept; null uses the platform default. Set by an organization's Settings administrator. */
+  interviewRecordingRetentionDays: integer("interview_recording_retention_days"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

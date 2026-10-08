@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import ActionFeedback from "@/components/ActionFeedback";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -114,6 +114,50 @@ export default function RecordingDriveConnect() {
   const [message, setMessage] = useState("");
   const pickerApiRef = useRef<PickerApi | null>(null);
   const pickerConfigRef = useRef<PickerConfig | null>(null);
+  const [retention, setRetention] = useState<{ days: number | null; platformDays: number } | null>(null);
+  const [retentionInput, setRetentionInput] = useState("");
+  const [retentionMessage, setRetentionMessage] = useState("");
+  const [retentionError, setRetentionError] = useState("");
+  const [savingRetention, setSavingRetention] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/organization/recording-retention", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data?.success !== true) return;
+        setRetention({ days: typeof data.days === "number" ? data.days : null, platformDays: Number(data.platformDays) || 0 });
+        setRetentionInput(typeof data.days === "number" ? String(data.days) : "");
+      })
+      .catch(() => undefined);
+  }, []);
+
+  async function saveRetention(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRetentionError("");
+    setRetentionMessage("");
+    setSavingRetention(true);
+    try {
+      const response = await fetch("/api/organization/recording-retention", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days: retentionInput.trim() === "" ? null : Number(retentionInput) }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.success !== true) throw new Error(data?.error || "The setting could not be saved.");
+      const platformDays = Number(data.platformDays) || 0;
+      setRetention({ days: typeof data.days === "number" ? data.days : null, platformDays });
+      setRetentionMessage(typeof data.days === "number"
+        ? `Interview recordings will be kept for ${data.days} days.`
+        : platformDays > 0
+          ? `Interview recordings will use the platform default of ${platformDays} days.`
+          : "Interview recordings will be kept until the applicant is deleted.");
+    } catch (caught) {
+      setRetentionError(clientErrorMessage(caught, "The setting could not be saved."));
+    } finally {
+      setSavingRetention(false);
+    }
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -310,6 +354,27 @@ export default function RecordingDriveConnect() {
         </div>
       </>}
       <p className="recording-drive-note">Choose a My Drive or Shared Drive folder where this account can add files. Recordings stay private and can only be played in the portal by authorized HR reviewers. This connection applies to this organization only.</p>
+      {retention && <form className="recording-retention-form" onSubmit={saveRetention}>
+        <label htmlFor="recording-retention-days">Keep interview recordings for (days)</label>
+        <div className="recording-drive-actions">
+          <input
+            id="recording-retention-days"
+            type="number"
+            inputMode="numeric"
+            min={7}
+            max={365}
+            step={1}
+            placeholder={retention.platformDays > 0 ? `Platform default (${retention.platformDays})` : "Platform default (keep until deleted)"}
+            value={retentionInput}
+            onChange={(event) => setRetentionInput(event.target.value)}
+            disabled={savingRetention}
+          />
+          <button type="submit" className="btn btn-secondary" disabled={savingRetention}>{savingRetention ? "Saving…" : "Save retention"}</button>
+        </div>
+        <small>Between 7 and 365 days. Leave blank to use the platform default. Recordings older than this are deleted automatically.</small>
+        {retentionMessage && <ActionFeedback kind="success">{retentionMessage}</ActionFeedback>}
+        {retentionError && <ActionFeedback kind="error">{retentionError}</ActionFeedback>}
+      </form>}
     </div>
   </section>;
 }

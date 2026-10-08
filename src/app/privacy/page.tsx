@@ -8,6 +8,7 @@ export default function PrivacyNoticePage() {
   return (
     <main className="container page" style={{ maxWidth: 760 }}>
       <h1>Privacy Policy</h1>
+      <p><strong>Last updated: 8 October 2026</strong></p>
       <p>This policy explains how information is handled in the Smile Recruitment Portal (smile.mclinkgroup.com), operated by MPS Solutions Pte Ltd. It covers people who apply for a role (Part 1) and recruiters who use the portal and connect Google services (Part 2).</p>
 
       <h2>Part 1: Applicants</h2>
@@ -28,17 +29,17 @@ export default function PrivacyNoticePage() {
       </ul>
 
       <h3>Who can see it</h3>
-      <p>The recruitment team of the organization you applied to. To provide the service, your information is processed by trusted providers acting for us, such as our hosting and database provider, Google (storage, calendar and email), and the AI, voice and video interview providers we use.</p>
+      <p>The recruitment team of the organization you applied to. To provide the service, your information is processed by trusted providers acting for us: our hosting provider (Vercel), our database provider (Neon), our workflow automation service (n8n), Google (storage, calendar and email), and the AI and interview providers we use (OpenAI and LiveAvatar).</p>
 
       <h3>How long we keep it</h3>
       <ul>
-        <li>Resume files are deleted 30 days after upload.</li>
-        <li>Interview recordings are deleted after 90 days unless the organization sets a different period.</li>
+        <li>Resume files stored by the portal are deleted 30 days after upload.</li>
+        <li>Interview recordings are deleted once they are older than the period your organization sets in Settings. The period can be between 7 and 365 days. Where your organization has not set one, the platform default of 90 days applies.</li>
         <li>Your application record, transcript and results are kept while the organization needs them for this recruitment, and are removed when the organization deletes your application.</li>
       </ul>
 
       <h3>Your choices</h3>
-      <p>You may ask to see, correct or delete your information, or withdraw your consent, by contacting the organization you applied to. If you do not agree to the recording on the interview page, the interview does not start; you can ask the recruitment team about another way to be interviewed.</p>
+      <p>You may ask to see, correct or delete your information, or withdraw your consent, by contacting the organization you applied to, or by emailing cs6@mclinkgroup.com. If you do not agree to the recording on the interview page, the interview does not start; you can ask the recruitment team about another way to be interviewed.</p>
 
       <h2>Part 2: Google user data (recruiters and organization staff)</h2>
       <p>Recruiters can optionally connect a Google account so the portal can work with their Google services. Connecting is always a choice, and you can disconnect at any time.</p>
@@ -66,13 +67,13 @@ export default function PrivacyNoticePage() {
         <li><strong>Least privilege:</strong> we request the narrowest scopes that make each feature work. For Drive this is <code>drive.file</code>, which only reaches files you pick in the Google file chooser; we cannot list or search the rest of your Drive.</li>
         <li><strong>Access control:</strong> data is separated by organization, and every request is checked against the signed-in user&apos;s role and organization. Staff of the organization see only what the portal screens display to them. Our own engineers do not browse Google user data, and any support access is limited, logged and only for resolving your request.</li>
         <li><strong>Secrets handling:</strong> tokens and API keys are kept in server-side configuration, never in the browser or in source code.</li>
-        <li><strong>Minimal retention:</strong> resume files are deleted 30 days after upload, and tokens are deleted when you disconnect.</li>
+        <li><strong>Minimal retention:</strong> resume files stored by the portal are deleted 30 days after upload. Connection tokens are deleted as described under Retention and deletion below.</li>
         <li><strong>Incident response:</strong> if we become aware of unauthorized access to Google user data, we will investigate promptly, contain it, and notify affected users and organizations as required by law.</li>
       </ul>
 
       <h3>Use of AI with Google user data</h3>
       <ul>
-        <li>When you select resumes from Google Drive for screening, the text of those files is sent to OpenAI (API, gpt-5-mini) solely to extract and score the resume for the role. Interview transcripts are analysed in the same way using the OpenAI API. Interview video and audio are handled by our live-interview provider (LiveAvatar). That provider does not receive Google user data other than what the interview itself contains.</li>
+        <li>When you select resumes from Google Drive for screening, the text of those files is sent to the OpenAI API (model gpt-4.1-mini) through our workflow automation service, n8n, solely to extract and score the resume for the role. Interview transcripts are analysed in the same way using the OpenAI API (model gpt-4o-mini by default). Interview video and audio are handled by our live-interview provider (LiveAvatar). That provider does not receive Google user data other than what the interview itself contains.</li>
         <li>We use these providers under their business API terms. Under those terms, data sent through the API is not used to train or improve their models. We do not enable any setting that allows training on this data.</li>
         <li>We do not use Google user data, including raw, aggregated or derived data, to create, train or improve any generalized or foundational AI or machine-learning model, and we do not allow any third party to do so.</li>
         <li>We do not self-host these models. Data sent to the AI providers is limited to what is needed for the single task, and is not shared with any other third party.</li>
@@ -80,9 +81,21 @@ export default function PrivacyNoticePage() {
       </ul>
 
       <h3>Retention and deletion</h3>
-      <p>Connection tokens are kept until you disconnect the Google account or your portal account is removed, and are then deleted. You can also revoke access at any time at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. To ask us to delete data we hold, contact your organization&apos;s administrator or McLink support.</p>
+      <ul>
+        <li><strong>Drive connection for resumes:</strong> deleted when you disconnect. Reconnecting replaces the stored connection with the new one.</li>
+        <li><strong>Calendar connection:</strong> deleted when you disconnect.</li>
+        <li><strong>Recording folder connection (organization-level):</strong> kept only while interview recordings saved with that Google account still exist. It is removed once those recordings are deleted under the retention period, or when the organization connects a different Google account and no recordings still use the old one.</li>
+      </ul>
+      <p>You can also revoke access at any time at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. To ask us to delete data we hold, email cs6@mclinkgroup.com or contact your organization&apos;s administrator.</p>
 
-      <p><Link href="/">Back to the portal</Link></p>
+      <h2>Contact</h2>
+      <p>
+        MPS Solutions Pte Ltd<br />
+        51 Ubi Ave 1, #05-11 Paya Ubi Industrial Park, Singapore 408933<br />
+        Email: <a href="mailto:cs6@mclinkgroup.com">cs6@mclinkgroup.com</a>
+      </p>
+
+      <p><Link className="btn btn-primary" href="/">Back to the portal</Link></p>
     </main>
   );
 }

@@ -21,6 +21,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import OpenAI from "openai";
 
 import { getTenantDb as getDb } from "@/db/client";
+import { organizations } from "@/db/schema";
 import {
   applicants,
   applications,
@@ -970,7 +971,11 @@ export async function getCandidateInterviewStatus(rawToken: string) {
   return { status: session.status as LiveInterviewStatus, completedAt: session.interviewCompletedAt?.toISOString() || "" };
 }
 
-/** Days an interview recording is kept before deletion. 0 (or a negative value) keeps recordings until the applicant is deleted. */
+/**
+ * Platform-default days an interview recording is kept before deletion, used
+ * when the organization has not chosen its own period. 0 (or a negative value)
+ * keeps recordings until the applicant is deleted.
+ */
 export function interviewRecordingRetentionDays() {
   const raw = process.env.INTERVIEW_RECORDING_RETENTION_DAYS?.trim();
   if (!raw) return 90;
@@ -979,20 +984,27 @@ export function interviewRecordingRetentionDays() {
 }
 
 /**
- * Deletes recordings older than the retention period from Drive. The
- * transcript, scores and HR decision stay on the applicant record; only the
- * video is removed. A failed Drive delete keeps the row so the next run retries.
+ * Deletes recordings older than their organization's retention period from
+ * Drive. Each organization's own period applies when it has one; otherwise the
+ * platform default does. The transcript, scores and HR decision stay on the
+ * applicant record; only the video is removed. A failed Drive delete keeps the
+ * row so the next run retries.
  */
 export async function purgeExpiredInterviewRecordings(options: { limit?: number } = {}) {
-  const days = interviewRecordingRetentionDays();
-  if (days === 0) return { purged: 0, failed: 0, skipped: "retention_disabled" as const };
-  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const platformDays = interviewRecordingRetentionDays();
+  // With no platform default and no organization period, recordings are kept.
+  const keepsByDefault = platformDays === 0;
+  const effectiveDays = sql`coalesce(${organizations.interviewRecordingRetentionDays}, ${platformDays})`;
   const db = getDb();
-  const expired = await db.select({ id: liveInterviewSessions.id, ref: liveInterviewSessions.recordingStorageRef, organizationId: liveInterviewSessions.organizationId, accountEmail: liveInterviewSessions.recordingStorageAccountEmail }).from(liveInterviewSessions).where(and(
-    eq(liveInterviewSessions.recordingStatus, "available"),
-    lt(liveInterviewSessions.interviewCompletedAt, cutoff),
-    sql`${liveInterviewSessions.recordingStorageRef} <> ''`,
-  )).limit(options.limit ?? 25);
+  const expired = await db.select({ id: liveInterviewSessions.id, ref: liveInterviewSessions.recordingStorageRef, organizationId: liveInterviewSessions.organizationId, accountEmail: liveInterviewSessions.recordingStorageAccountEmail }).from(liveInterviewSessions)
+    .innerJoin(organizations, eq(organizations.id, liveInterviewSessions.organizationId))
+    .where(and(
+      eq(liveInterviewSessions.recordingStatus, "available"),
+      sql`${liveInterviewSessions.interviewCompletedAt} < now() - (${effectiveDays} * interval '1 day')`,
+      sql`${liveInterviewSessions.recordingStorageRef} <> ''`,
+      keepsByDefault ? sql`${organizations.interviewRecordingRetentionDays} is not null` : sql`true`,
+    ))
+    .limit(options.limit ?? 25);
   let purged = 0;
   let failed = 0;
   for (const row of expired) {
