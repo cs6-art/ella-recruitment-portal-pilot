@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, integer, index, jsonb, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, index, jsonb, pgTable, smallint, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey(),
@@ -165,6 +165,59 @@ export const promoCodeRedemptions = pgTable(
     redeemedAt: timestamp("redeemed_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [unique("promo_code_redemptions_code_org_uidx").on(table.promoCodeId, table.organizationId), index("promo_code_redemptions_org_idx").on(table.organizationId, table.redeemedAt)],
+);
+
+/**
+ * Event launch promotion: the first `maxAllocations` new organizations receive
+ * `credits` welcome credits instead of the normal default (migration 0041).
+ * `allocatedCount` is only ever raised by the conditional UPDATE in
+ * `launch-promotion.ts`, which is what makes the cap concurrency-safe.
+ */
+export const launchPromotions = pgTable("launch_promotions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  key: text("key").notNull().unique(),
+  name: text("name").notNull(),
+  credits: integer("credits").notNull(),
+  maxAllocations: integer("max_allocations").notNull(),
+  allocatedCount: integer("allocated_count").notNull().default(0),
+  active: boolean("active").notNull().default(false),
+  startsAt: timestamp("starts_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const launchPromotionAllocations = pgTable(
+  "launch_promotion_allocations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    promotionId: uuid("promotion_id").notNull().references(() => launchPromotions.id),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    sequenceNumber: integer("sequence_number").notNull(),
+    credits: integer("credits").notNull(),
+    ledgerSourceEntryId: text("ledger_source_entry_id").notNull(),
+    allocatedAt: timestamp("allocated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("launch_promotion_allocations_org_uidx").on(table.promotionId, table.organizationId), unique("launch_promotion_allocations_sequence_uidx").on(table.promotionId, table.sequenceNumber)],
+);
+
+/** Structured user feedback from the sign-out prompt and Smile Bot (migration 0041). */
+export const portalFeedback = pgTable(
+  "portal_feedback",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    userEmail: text("user_email").notNull().default(""),
+    userName: text("user_name").notNull().default(""),
+    source: text("source").notNull(),
+    navigationEase: smallint("navigation_ease").notNull(),
+    taskCompletion: smallint("task_completion").notNull(),
+    aiUsefulness: smallint("ai_usefulness").notNull(),
+    experiencedIssue: boolean("experienced_issue").notNull(),
+    issueDescription: text("issue_description").notNull().default(""),
+    improvementSuggestion: text("improvement_suggestion").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("portal_feedback_created_idx").on(table.createdAt), index("portal_feedback_org_idx").on(table.organizationId, table.createdAt)],
 );
 
 export type CreditLedgerRow = typeof creditLedger.$inferSelect;

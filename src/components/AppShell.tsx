@@ -8,10 +8,11 @@ import { useEffect, useState } from "react";
 import UiIcon from "./UiIcon";
 import EllaCreditsMeter from "./EllaCreditsMeter";
 import HelpBot from "./HelpBot";
+import SignOutFeedbackModal from "./SignOutFeedbackModal";
 import NewApplicantsBell, { useNewApplicantFeed } from "./NewApplicantsBell";
 import { ConfirmationProvider } from "./ConfirmationModal";
 import styles from "./AppShell.module.css";
-import { canAdministerAccess } from "@/lib/access-control";
+import { canAdministerAccess, isPlatformAdmin } from "@/lib/access-control";
 import { usePortalBranding } from "./PortalBrandingContext";
 
 type AppShellUser = {
@@ -27,6 +28,8 @@ type AppShellUser = {
   canManageCredits?: boolean;
   canReviewDepartmentRole?: boolean;
   active?: boolean;
+  organizationId?: string;
+  platformAdmin?: boolean;
 };
 
 type AppShellProps = { user: AppShellUser; children: React.ReactNode };
@@ -43,6 +46,8 @@ function isPortalRoute(pathname: string) {
     "/credits",
     "/user-accounts",
     "/profile",
+    "/manual",
+    "/launch-monitor",
   ].some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
@@ -57,6 +62,7 @@ export default function AppShell({ user, children }: AppShellProps) {
   const pathname = usePathname();
   const portalRoute = isPortalRoute(pathname);
   const [signingOut, setSigningOut] = useState(false);
+  const [signOutPromptOpen, setSignOutPromptOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarPreferenceLoaded, setSidebarPreferenceLoaded] = useState(false);
@@ -85,6 +91,8 @@ export default function AppShell({ user, children }: AppShellProps) {
   const isSettings = pathname === "/settings";
   const isCredits = pathname === "/credits";
   const isUserAccounts = pathname === "/user-accounts";
+  const isManual = pathname === "/manual";
+  const isLaunchMonitor = pathname === "/launch-monitor";
   const isRoleRequestArea = pathname === "/roles" || (pathname.startsWith("/roles/") && pathname !== "/roles/new");
   const closeSidebar = () => setSidebarOpen(false);
 
@@ -134,21 +142,21 @@ export default function AppShell({ user, children }: AppShellProps) {
           {user.canEditSettings === true && <Link href="/settings" onClick={closeSidebar} className={`${styles.navLink} ${isSettings ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="settings" /></span><span>Settings</span></Link>}
           <Link href="/credits" onClick={closeSidebar} className={`${styles.navLink} ${isCredits ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="plus" /></span><span>Credits</span></Link>
           {canAdministerAccess(user) && <Link href="/user-accounts" onClick={closeSidebar} className={`${styles.navLink} ${isUserAccounts ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="users" /></span><span>User Accounts</span></Link>}
+          {isPlatformAdmin(user) && <Link href="/launch-monitor" onClick={closeSidebar} className={`${styles.navLink} ${isLaunchMonitor ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="dashboard" /></span><span>Launch Monitor</span></Link>}
         </nav>
 
         <div className={styles.sidebarSpacer} />
+        <div className={styles.helpSection}>
+          <div className={styles.workspaceLabel}>HELP</div>
+          <Link href="/manual" onClick={closeSidebar} className={`${styles.navLink} ${isManual ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="document" /></span><span>Explore Manual</span></Link>
+        </div>
         <div className={styles.accountSection}>
           <div className={styles.workspaceLabel}>ACCOUNT</div>
           <Link href="/profile" onClick={closeSidebar} className={`${styles.profileButton} ${isProfile ? styles.profileButtonActive : ""}`}><div className={styles.avatar}>{initials}</div><div className={styles.profileDetails}><strong>{userName}</strong>{userEmail && <span>{userEmail}</span>}{user.accessRole && <small>{user.accessRole}</small>}</div><span className={styles.profileArrow}><UiIcon name="chevron-right" /></span></Link>
-          {/* Disabling this button synchronously inside its own click handler
-              (the previous `disabled={signingOut}` set from the same onClick)
-              raced the browser's native "submit this GET form" default action:
-              React re-rendered the button as disabled before that default
-              action ran, so the very click meant to sign out silently did
-              nothing. Deferring the state update to the next tick lets the
-              native navigation kick off first; the disabled/"Signing out..."
-              state is then purely a cosmetic cue while the page unloads. */}
-          <form action="/api/auth/logout" method="get"><button type="submit" className={styles.signOutButton} onClick={() => { window.setTimeout(() => setSigningOut(true), 0); }} disabled={signingOut}><UiIcon name="logout" /><span className={styles.signOutText}>{signingOut ? "Signing out..." : "Sign Out"}</span></button></form>
+          {/* Sign Out opens an optional feedback prompt first. Both of its
+              buttons finish by navigating to the logout route, which clears the
+              session cookie and redirects home; nothing here can block that. */}
+          <button type="button" className={styles.signOutButton} onClick={() => setSignOutPromptOpen(true)} disabled={signingOut}><UiIcon name="logout" /><span className={styles.signOutText}>{signingOut ? "Signing out..." : "Sign Out"}</span></button>
         </div>
       </aside>
 
@@ -161,6 +169,7 @@ export default function AppShell({ user, children }: AppShellProps) {
         <div className={styles.content}>{children}</div>
       </div>
       <HelpBot />
+      {signOutPromptOpen && <SignOutFeedbackModal onClose={() => setSignOutPromptOpen(false)} onSignOut={() => { setSignOutPromptOpen(false); setSigningOut(true); window.location.href = "/api/auth/logout"; }} />}
     </div>
     </ConfirmationProvider>
   );

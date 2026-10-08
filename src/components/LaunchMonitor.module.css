@@ -1,0 +1,26 @@
+.page { display: grid; gap: 20px; margin-top: 8px; }
+.card { display: grid; gap: 14px; padding: 20px 22px; }
+.card h2 { margin: 0; color: var(--navy, #17324d); font-size: 18px; }
+.muted { margin: 4px 0 0; color: var(--muted, #5e6b78); font-size: 13px; line-height: 1.5; }
+.promoHead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.status { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+.on { background: #e3f5e9; color: #1d6b3a; }
+.off { background: #eef2f6; color: #52657a; }
+.progressNumbers { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+.progressNumbers b { color: #0e4471; font-size: 30px; font-variant-numeric: tabular-nums; }
+.progressNumbers span { color: #3d566d; font-size: 14px; font-weight: 700; }
+.progressNumbers strong { margin-left: auto; color: #1d6b3a; font-size: 14px; }
+.bar { height: 10px; border-radius: 999px; background: #dbe7f5; overflow: hidden; }
+.bar span { display: block; height: 100%; border-radius: 999px; background: var(--blue, #1a6fb3); transition: width .3s ease; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 0; }
+.facts div { padding: 10px 12px; border: 1px solid #e4ecf3; border-radius: 10px; background: #fbfdff; }
+.facts dt { color: var(--muted, #5e6b78); font-size: 11px; font-weight: 700; }
+.facts dd { margin: 4px 0 0; color: var(--navy, #17324d); font-size: 16px; font-weight: 800; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th, .table td { padding: 8px 10px; border-bottom: 1px solid #e4ecf3; text-align: left; vertical-align: top; }
+.table th { color: #3d566d; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.long { min-width: 200px; max-width: 360px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sub { display: block; color: var(--muted, #5e6b78); font-size: 11px; }
+.chip { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: #eef2f6; color: #52657a; font-size: 11px; font-weight: 700; }

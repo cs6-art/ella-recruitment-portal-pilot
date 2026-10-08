@@ -42,7 +42,7 @@ you tick a box, choose an option, click a button or click into a field, it walks
 beside that control and says a short tip about it, and it welcomes you to each page
 once per session. If you stop moving the mouse for about 8 seconds, or the mouse
 leaves the window, it steps off to the right edge, and it walks back to where it was
-as soon as you move again. In the Help & Feedback tab you can untick **Show Smile's
+as soon as you move again. In the Help tab you can untick **Show Smile's
 tips as I use the portal** and **Let Smile move around (it steps aside when I'm
 idle)**.
 
@@ -103,8 +103,9 @@ Client records are never mixed. Separation works like this:
    role requests, applicants, resumes, interview records, recordings, and bookings.
 3. After sign-in, every screen, search, list, and dashboard figure shows only your
    own organization's records. There is no setting that shows another client's data.
-4. Each organization has its own shared Smile Credits balance, used only by its
-   own screening and interviews.
+4. Credits are shared across your organization: each organization has one Smile
+   Credits balance, used by everyone in it for screening and interviews, and by no
+   other organization.
 5. Each organization's Settings are its own: branding, the Google Calendar
    connection, the Google Drive folder for Live Avatar recordings, and automated
    emails.
@@ -853,8 +854,8 @@ Current usage costs are:
   reserved when the interview starts, and only the minutes used are charged.
 
 Booking a time, creating a role request, commenting, and ordinary portal actions
-do not consume credits. The credit balance is shared by everyone in the
-organisation, and each charge records who or what triggered it (for a Live Avatar
+do not consume credits. Credits are shared across your organization: the credit
+balance is shared by everyone in the organisation, and each charge records who or what triggered it (for a Live Avatar
 interview, the applicant). A duplicate resume for the same role is skipped and is
 not charged. Failed or invalid resume screening is not charged.
 
@@ -1053,12 +1054,23 @@ automatically when their screening score meets a minimum (for example 80%). It o
 applies to applicants screened after it was switched on; everyone else waits for HR
 review. The invitation follows the role's interview type.
 
+## Welcome credits and Event Welcome Credits
+
+Every new organisation receives free welcome credits when it is created. They are
+added to the organisation's one shared balance and appear in the credit history as
+**Welcome Credits**. While McLink runs its launch promotion, the first 100 new
+organisations receive **250 credits** instead, shown as **Event Welcome Credits**.
+An organisation receives one welcome grant, once. Organisations that already
+existed are not changed. The **Credits** page shows **Organization Credits**: your
+organisation's name, how many credits are available, and the note "Credits are
+shared across your organization."
+
 ## Promo codes (free Smile Credits)
 
 A promo code adds **210 Smile Credits** to your organisation's shared balance.
 
 1. Open **Credits** in the menu.
-2. In the **Credit Balance** section, find **Have a promo code?**
+2. In the **Organization Credits** section, find **Have a promo code?**
 3. Type the code and select **Redeem**.
 
 When it works you see "Promo code applied. 210 credits have been added to your
@@ -1071,14 +1083,33 @@ expired.", "This promo code has already been used." (all its uses are taken), an
 disabled only by McLink credit managers, from the **Promo Codes** section of the
 Credits page.
 
-## Getting help and sending feedback (support email)
+## Getting help and sending feedback
 
-Select the smiling robot in the bottom-right corner to open Smile, then the **Help &
-Feedback** tab. It shows the support team's email (HRSG: hrsg@mclinkgroup.com) with
-**Copy email** and **Open email app** buttons. To send feedback, choose a topic
-(Question, Report an issue, Suggestion), type your message and select **Continue in
-email**: your email app opens with the message filled in, and nothing is sent until
-you press Send there. Include the page you were on and what you were trying to do.
+Select the smiling robot in the bottom-right corner to open Smile. It has three
+tabs: **Ask Smile** (this chat), **Help** and **Feedback**.
+
+The **Help** tab shows the support team's email (HRSG: hrsg@mclinkgroup.com) with
+**Copy email** and **Open email app** buttons, plus the two switches for Smile's
+tips and movement. Include the page you were on and what you were trying to do
+when you write to support.
+
+The **Feedback** tab is a short survey: three questions rated 1 to 5 (how easy the
+app was to navigate and understand, whether you could complete the recruitment
+tasks you expected, and how clear and useful the AI results were), a Yes or No
+question about errors, confusing steps or slow parts (choose Yes and a box opens
+for you to describe what happened), and a last question about the most important
+thing to improve before the app is fully launched. Select **Send feedback** to
+send it. It is saved in the portal for the McLink team; nothing opens in your
+email app. The same survey appears when you select **Sign Out**: choose **Submit
+Feedback & Sign Out**, or **Skip & Sign Out** to leave without answering. Feedback
+is always optional, and if it cannot be saved you can still sign out.
+
+## Explore Manual
+
+**Explore Manual** in the menu (under **HELP**) opens the full user manual inside
+the portal, with a tutorial video at the top once McLink has added one, a list of
+topics on the left (on a phone it is a collapsible **Topics** list) and a search box
+that filters the topics. It is available to every signed-in person.
 
 ---
 

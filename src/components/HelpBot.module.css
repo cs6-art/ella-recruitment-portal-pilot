@@ -285,7 +285,7 @@
 
 .tab {
   flex: 1;
-  padding: 9px 10px;
+  padding: 9px 6px;
   border: none;
   border-bottom: 3px solid transparent;
   background: transparent;
@@ -301,7 +301,7 @@
 
 .helpTab { display: flex; flex-direction: column; gap: 12px; }
 
-.helpCard, .feedbackForm {
+.helpCard {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -337,18 +337,10 @@
 .primaryButton:disabled { opacity: 0.5; cursor: not-allowed; }
 .secondaryButton:focus-visible, .primaryButton:focus-visible, .inlineLink:focus-visible { outline: var(--focus-outline); outline-offset: 2px; }
 
-.feedbackField { display: flex; flex-direction: column; gap: 4px; }
-.feedbackField span { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
-.feedbackField select, .feedbackField textarea {
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  font: inherit;
-  color: var(--ink);
-  background: var(--surface);
-}
-.feedbackField textarea { resize: vertical; min-height: 84px; }
-.feedbackNote { margin: 0; font-size: 0.75rem; color: var(--muted); }
+.feedbackTab { padding: 2px 2px 8px; }
+.feedbackThanks { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font-size: 0.9rem; }
+.feedbackThanks strong { color: var(--navy); }
+.feedbackThanks p { margin: 0; color: var(--muted); line-height: 1.5; }
 
 .inlineLink { padding: 0; border: none; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
 

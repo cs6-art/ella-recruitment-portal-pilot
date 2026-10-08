@@ -40,8 +40,12 @@ type CreditOrganization = { id: string; name: string; active: boolean };
 
 type LedgerResponse = {
   organizationId?: string;
+  organizationName?: string;
   organizations?: CreditOrganization[];
   balance: number;
+  /** Balance minus credits reserved by booked interviews: what new work may spend. */
+  available: number;
+  held: number;
   totals: { toppedUp: number; consumed: number };
   entries: LedgerEntry[];
   pricing: {
@@ -58,7 +62,7 @@ type LedgerResponse = {
 };
 
 type ActivityTypeFilter = "all" | "added" | "used";
-type ActivityEventFilter = "all" | "manual" | "promo_code" | "cv_analysis" | "voice_interview" | "live_avatar_interview";
+type ActivityEventFilter = "all" | "manual" | "welcome" | "promo_code" | "cv_analysis" | "voice_interview" | "live_avatar_interview";
 
 const defaultPricing = { cvAnalysis: 1, phoneInterview: 10, phoneInterviewNoAnswer: 5, phoneInterviewIncomplete: 8, liveAvatarInterview: 2, liveAvatarMaxMinutes: 20, discountThreshold: 2000, discountPercent: 10 };
 
@@ -66,12 +70,13 @@ const eventLabels: Record<string, string> = {
   manual_topup: "Manual top-up",
   manual_adjustment: "Manual adjustment",
   volume_discount: "Volume bonus",
-  welcome_credit: "Welcome credits",
+  welcome_credit: "Welcome Credits",
+  launch_welcome_credit: "Event Welcome Credits",
   promo_code: "Promotional Credits",
-  cv_analysis: "CV analysis",
-  phone_interview: "Voice interview",
-  phone_interview_no_answer: "Voice interview",
-  phone_interview_incomplete: "Voice interview",
+  cv_analysis: "Resume Screening",
+  phone_interview: "Voice Interview",
+  phone_interview_no_answer: "Voice Interview",
+  phone_interview_incomplete: "Voice Interview",
   live_avatar_interview: "Live Avatar Interview",
 };
 
@@ -88,6 +93,7 @@ function eventFilterFor(event: string): ActivityEventFilter {
   if (event.startsWith("phone_interview")) return "voice_interview";
   if (event === "live_avatar_interview") return "live_avatar_interview";
   if (event === "promo_code") return "promo_code";
+  if (event === "welcome_credit" || event === "launch_welcome_credit") return "welcome";
   return "manual";
 }
 
@@ -127,7 +133,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
       if (!response.ok || body.success !== true) throw new Error(body.error || "Unable to load Credits.");
       if (Array.isArray(body.organizations)) setOrganizationOptions(body.organizations);
       if (!organizationId && body.organizationId) setOwnOrganizationId(body.organizationId);
-      setData({ organizationId: body.organizationId, balance: body.balance, totals: body.totals, entries: body.entries || [], pricing: { ...defaultPricing, ...(body.pricing || {}) } });
+      setData({ organizationId: body.organizationId, organizationName: typeof body.organizationName === "string" ? body.organizationName : "", balance: body.balance, available: typeof body.available === "number" ? body.available : body.balance, held: typeof body.held === "number" ? body.held : 0, totals: body.totals, entries: body.entries || [], pricing: { ...defaultPricing, ...(body.pricing || {}) } });
       setError("");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load Credits.");
@@ -183,11 +189,14 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
   }
 
   const balance = data?.balance ?? 0;
+  // Spendable credits: the balance minus what booked interviews have reserved.
+  const available = data?.available ?? balance;
+  const held = data?.held ?? 0;
   const selectedOrganizationId = targetOrganizationId || ownOrganizationId;
   const selectedOrganization = organizationOptions.find((organization) => organization.id === selectedOrganizationId);
   const viewingOtherOrganization = Boolean(targetOrganizationId);
   const pricing = data?.pricing;
-  const headlineTone = balance <= 0 ? styles.empty : balance < 50 ? styles.low : "";
+  const headlineTone = available <= 0 ? styles.heroEmpty : available < 50 ? styles.heroLow : "";
   const normalizedSearch = activitySearch.trim().toLowerCase();
   const filteredEntries = recentFirst(data?.entries ?? []).filter((entry) => {
     const matchesType = activityType === "all"
@@ -212,17 +221,19 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
 
   return (
     <section className={`card ${styles.panel}`}>
-      <div className={styles.header}>
-        <div>
-          <h2>Credit Balance</h2>
-          <p>All signed-in users in this organization share one Smile Credits balance — {pricing ? `${nf.format(pricing.cvAnalysis)} credit per CV analysis; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer; Live Avatar interviews cost ${nf.format(pricing.liveAvatarInterview)} per minute (every started minute counts, up to ${nf.format(pricing.liveAvatarInterview * pricing.liveAvatarMaxMinutes)} for a ${nf.format(pricing.liveAvatarMaxMinutes)}-minute interview).` : "pricing is loaded from the active credit settings"}. AI actions are blocked when the balance runs out.</p>
+      <div className={styles.hero}>
+        <div className={styles.heroText}>
+          <span className={styles.heroEyebrow}>Organization Credits</span>
+          <h2>{data?.organizationName || "Your organization"}</h2>
+          {data && <div className={`${styles.heroBalance} ${headlineTone}`}><b>{nf.format(Math.max(0, available))}</b><span>credits available</span></div>}
+          {data && held > 0 && <p className={styles.reservedNote}>{nf.format(held)} held for booked or in-progress interviews. Balance: {nf.format(balance)}.</p>}
+          <p className={styles.sharedRule}>{viewingOtherOrganization ? `Credits are shared by everyone in ${data?.organizationName || "this organization"}.` : "Credits are shared across your organization."}</p>
+          <small>Everyone in the organization uses the same credit balance for resume screening and AI interviews.</small>
         </div>
-        {data && (
-          <div className={`${styles.headline} ${headlineTone}`}>
-            <b>{nf.format(Math.max(0, balance))}</b>
-            <span>credits left</span>
-          </div>
-        )}
+        <details className={styles.costs}>
+          <summary>How credits are used</summary>
+          <p>{pricing ? `${nf.format(pricing.cvAnalysis)} credit per resume screened; AI voice interviews cost ${nf.format(pricing.phoneInterview)} when complete, ${nf.format(pricing.phoneInterviewIncomplete)} when incomplete, or ${nf.format(pricing.phoneInterviewNoAnswer)} when there is no answer; Live Avatar interviews cost ${nf.format(pricing.liveAvatarInterview)} per minute (every started minute counts, up to ${nf.format(pricing.liveAvatarInterview * pricing.liveAvatarMaxMinutes)} for a ${nf.format(pricing.liveAvatarMaxMinutes)}-minute interview).` : "Costs are loaded from the active credit settings."} Everything else is free. AI actions are paused when the balance runs out.</p>
+        </details>
       </div>
 
       {canManage && organizationOptions.length > 1 && <div className={styles.orgPicker}>
@@ -244,7 +255,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
 
       {data && <>
         <div className={styles.stats}>
-          <div className={styles.stat}><b>{nf.format(balance)}</b><span>Current balance</span></div>
+          <div className={styles.stat}><b>{nf.format(available)}</b><span>Credits available now</span></div>
           <div className={styles.stat}><b>{nf.format(data.totals.toppedUp)}</b><span>Total added</span></div>
           <div className={styles.stat}><b>{nf.format(data.totals.consumed)}</b><span>Total consumed</span></div>
         </div>
@@ -289,8 +300,9 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
             <select aria-label="Filter credit activity event" value={activityEvent} onChange={(event) => { setActivityEvent(event.target.value as ActivityEventFilter); setActivityPage(1); }}>
               <option value="all">All events</option>
               <option value="manual">Manual changes</option>
+              <option value="welcome">Welcome credits</option>
               <option value="promo_code">Promotional credits</option>
-              <option value="cv_analysis">CV analysis</option>
+              <option value="cv_analysis">Resume screening</option>
               <option value="voice_interview">Voice interviews</option>
               <option value="live_avatar_interview">Live Avatar interviews</option>
             </select>
@@ -306,7 +318,7 @@ export default function EllaCreditsPanel({ canManage = false }: { canManage?: bo
             <tbody>{visibleEntries.map((entry) => (
               <tr key={entry.entryId}>
                 <td><span className={styles.cellClamp} title={formatWhen(entry.timestamp)}>{formatWhen(entry.timestamp)}</span></td>
-                <td><span className={styles.eventName}>{eventLabels[entry.event] || entry.event}</span>{entry.note && <small className={styles.eventNote} title={friendlyNote(entry.note)}>{friendlyNote(entry.note)}</small>}</td>
+                <td><span className={styles.eventName}>{eventLabels[entry.event] || entry.event}</span>{entry.note && friendlyNote(entry.note) !== (eventLabels[entry.event] || entry.event) && <small className={styles.eventNote} title={friendlyNote(entry.note)}>{friendlyNote(entry.note)}</small>}</td>
                 <td className={`${styles.delta} ${entry.creditsDelta >= 0 ? styles.deltaPlus : styles.deltaMinus}`}>{entry.creditsDelta > 0 ? `+${nf.format(entry.creditsDelta)}` : nf.format(entry.creditsDelta)}</td>
                 <td>{nf.format(entry.balanceAfter)}</td>
                 <td><span className={styles.cellClamp} title={entry.reference || entry.roleId || "—"}>{entry.reference || entry.roleId || "—"}</span></td>

@@ -21,6 +21,8 @@ const nextConfig = {
   // runtime; make sure the Markdown file ships with the serverless bundle.
   outputFileTracingIncludes: {
     "/api/help-bot": ["./src/lib/help-bot/knowledge.md"],
+    // The Explore Manual page renders the user manual from docs/ at request time.
+    "/manual": ["./docs/Smile-Recruitment-Portal-User-Manual.md"],
   },
   async headers() {
     return [

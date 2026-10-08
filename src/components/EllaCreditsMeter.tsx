@@ -26,7 +26,7 @@ type CreditPricing = {
   liveAvatarMaxMinutes: number;
 };
 
-type MeterData = { balance: number; pricing: CreditPricing | null };
+type MeterData = { balance: number; available: number; pricing: CreditPricing | null };
 
 // The meter is ambient. Mutations that change the balance fire
 // ELLA_CREDITS_REFRESH_EVENT (with an optimistic delta) and a short reconcile
@@ -44,7 +44,7 @@ async function fetchMeterData(): Promise<MeterData | null> {
   const pricing = data.pricing && Number.isFinite(Number(data.pricing.cvAnalysis)) && Number.isFinite(Number(data.pricing.phoneInterview))
     ? { cvAnalysis: Number(data.pricing.cvAnalysis), phoneInterview: Number(data.pricing.phoneInterview), phoneInterviewNoAnswer: Number(data.pricing.phoneInterviewNoAnswer ?? 5), phoneInterviewIncomplete: Number(data.pricing.phoneInterviewIncomplete ?? 8), liveAvatarInterview: Number(data.pricing.liveAvatarInterview ?? 2), liveAvatarMaxMinutes: Number(data.pricing.liveAvatarMaxMinutes ?? 20) }
     : null;
-  return { balance: Number(data.balance), pricing };
+  return { balance: Number(data.balance), available: Number.isFinite(Number(data.available)) ? Number(data.available) : Number(data.balance), pricing };
 }
 
 function formatCredits(value: number) {
@@ -60,13 +60,14 @@ export default function EllaCreditsMeter({ variant = "inline", collapsed = false
   const lastServerBalance = useRef<number | null>(null);
 
   // A fresh server value supersedes any optimistic adjustment, and flashes the
-  // meter when the number actually moved.
+  // meter when the number actually moved. The meter tracks spendable credits,
+  // so a new interview hold flashes it too.
   useEffect(() => {
     if (!data) return;
     const prev = lastServerBalance.current;
-    lastServerBalance.current = data.balance;
+    lastServerBalance.current = data.available;
     setOptimistic(0);
-    if (prev !== null && prev !== data.balance) {
+    if (prev !== null && prev !== data.available) {
       setFlash(true);
       if (flashTimer.current) clearTimeout(flashTimer.current);
       flashTimer.current = setTimeout(() => setFlash(false), 900);
@@ -90,7 +91,8 @@ export default function EllaCreditsMeter({ variant = "inline", collapsed = false
     };
   }, [refresh]);
 
-  const balance = data ? Math.max(0, data.balance + optimistic) : null;
+  // Spendable credits: the balance minus what booked interviews have reserved.
+  const balance = data ? Math.max(0, data.available + optimistic) : null;
   const pricing = data?.pricing ?? null;
   const shown = balance ?? 0;
   const tone = balance !== null && balance <= 0 ? styles.empty : balance !== null && balance < 50 ? styles.low : "";
@@ -102,9 +104,9 @@ export default function EllaCreditsMeter({ variant = "inline", collapsed = false
   return (
     <div
       className={`${styles.meter} ${variantClass} ${estimateClass} ${tone} ${flash ? styles.changed : ""} ${balance === null ? styles.loading : ""}`}
-      title={pricing ? `Credits — ${formatCredits(pricing.cvAnalysis)} per AI CV analysis, AI Voice Interview: ${formatCredits(pricing.phoneInterview)} complete, ${formatCredits(pricing.phoneInterviewIncomplete)} incomplete, ${formatCredits(pricing.phoneInterviewNoAnswer)} no answer, Live Avatar Interview: ${formatCredits(pricing.liveAvatarInterview)} per minute (up to ${formatCredits(pricing.liveAvatarInterview * pricing.liveAvatarMaxMinutes)})` : "Credits"}
+      title={pricing ? `Credits shared across your organization — ${formatCredits(pricing.cvAnalysis)} per AI CV analysis, AI Voice Interview: ${formatCredits(pricing.phoneInterview)} complete, ${formatCredits(pricing.phoneInterviewIncomplete)} incomplete, ${formatCredits(pricing.phoneInterviewNoAnswer)} no answer, Live Avatar Interview: ${formatCredits(pricing.liveAvatarInterview)} per minute (up to ${formatCredits(pricing.liveAvatarInterview * pricing.liveAvatarMaxMinutes)})`   : "Credits shared across your organization"}
       aria-live="polite"
-      aria-label={`Credits remaining: ${balance === null ? "loading" : formatCredits(shown)}`}
+      aria-label={`Organization credits remaining: ${balance === null ? "loading" : formatCredits(shown)}`}
     >
       <span className={styles.icon} aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

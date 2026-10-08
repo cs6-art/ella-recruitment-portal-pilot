@@ -103,8 +103,8 @@ export default function GettingStarted({ organizationId }: { organizationId: str
         key: "credits",
         title: "Add Smile Credits",
         detail: readiness.creditsAdded
-          ? "Your organization has credits available for resume screening and interviews."
-          : "Credits cover resume screening and AI interviews. Add credits before using those services.",
+          ? "Your organization has credits available for resume screening and interviews. Everyone in your organization uses this same balance."
+          : "Credits cover resume screening and AI interviews, and are shared across your organization. Add credits before using those services.",
         done: readiness.creditsAdded,
         required: true,
         marker: "",
@@ -250,6 +250,13 @@ export default function GettingStarted({ organizationId }: { organizationId: str
         <small>{refreshing ? "Updating…" : "Updates automatically"}</small>
       </div>
     </div>
+    <div className="getting-started-callout" role="note">
+      <span className="getting-started-callout-icon" aria-hidden="true">i</span>
+      <div>
+        <strong>Credits are shared across your organization.</strong>
+        <p>Everyone in your organization uses the same credit balance for resume screening and AI interviews. <Link href="/credits">See your credits</Link></p>
+      </div>
+    </div>
     <ol className="getting-started-steps">
       {steps.map((step, index) => (
         <li key={step.key} className={`getting-started-step${step.done ? " is-done" : ""}${step.key === nextStep?.key ? " is-next" : ""}${step.marker ? " is-marked" : ""}`}>
@@ -263,6 +270,6 @@ export default function GettingStarted({ organizationId }: { organizationId: str
         </li>
       ))}
     </ol>
-    <div className="getting-started-footer"><button type="button" className="getting-started-hide" onClick={hideChecklist}>Hide this checklist</button><button type="button" className="getting-started-refresh" onClick={() => void refresh(true)} disabled={refreshing}>{refreshing ? "Checking…" : "Refresh setup status"}</button></div>
+    <div className="getting-started-footer"><button type="button" className="getting-started-hide" onClick={hideChecklist}>Hide this checklist</button><Link className="getting-started-hide" href="/manual">Explore Manual</Link><button type="button" className="getting-started-refresh" onClick={() => void refresh(true)} disabled={refreshing}>{refreshing ? "Checking…" : "Refresh setup status"}</button></div>
   </section>;
 }

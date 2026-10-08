@@ -29,6 +29,8 @@ has different access. Ask your organisation owner or contact support (see
 - [O. Status reference](#o-status-reference)
 - [P. End-to-end workflow](#p-end-to-end-workflow)
 - [Q. Button and action reference](#q-button-and-action-reference)
+- [R. User Accounts](#r-user-accounts)
+- [S. Troubleshooting](#s-troubleshooting)
 
 ---
 
@@ -61,9 +63,9 @@ interview → You review → Face-to-face interview → Final decision.**
 
 1. Sign in. A new organisation sees a **Getting Started** card on the
    **Dashboard** listing the setup steps, with a button for each.
-2. Make sure you have **Smile Credits** (see [Section I](#i-credits)). New
-   organisations normally start with free welcome credits; you can also redeem
-   a promo code or buy more.
+2. Make sure you have **Smile Credits** (see [Section I](#i-credits)). Credits
+   are shared across your organisation. New organisations start with free
+   welcome credits; you can also redeem a promo code or buy more.
 3. Create your first role: **Role Requests → Create Role Request**.
 4. Add candidates: share the role's application link, or upload resumes in
    **Resume Screening**.
@@ -112,13 +114,16 @@ Credits balance is shown at the top of the menu.
 | **Settings** | Your organisation's branding, calendar connection, recording storage and automated emails. |
 | **Credits** | Your credit balance and history, buy credits and redeem promo codes. |
 | **User Accounts** | Your team: who has access, invitations (owner only). |
+| **Explore Manual** | This manual, with a tutorial video and a search box. It is under **HELP** at the bottom of the menu. |
 | **Profile** | Select your name at the bottom of the menu: your account details and your own Google Calendar. |
 
 Also on every page:
 
 - **The bell** (top right): new applicants since you last looked.
-- **The Smile robot** (bottom right): the Smile help assistant and the
-  **Help & Feedback** tab.
+- **The Smile robot** (bottom right): the Smile help assistant, the **Help** tab
+  and the **Feedback** tab.
+- **Sign Out** (bottom of the menu): asks for optional feedback first, see
+  [Section J](#j-smile-bot-help-and-feedback).
 
 There is no separate Reports page. See [Section L](#l-reports-and-exports) for
 exports.
@@ -132,7 +137,9 @@ The Dashboard refreshes by itself about every 30 seconds.
 ### Getting Started (new organisations)
 
 Shown to HR users until setup is complete. It shows how many required steps are
-done ("x of y required") and a button for each step:
+done ("x of y required") and a button for each step. A blue note near the top
+reminds you that **credits are shared across your organisation**: everyone uses
+the same credit balance. The steps are:
 
 - **Review organization name and branding** (optional)
 - **Add Smile Credits** (required)
@@ -472,8 +479,9 @@ Show** records a candidate who did not attend.
 
 ## I. Credits
 
-Smile Credits pay for the AI work. Your organisation has **one shared balance**
-that everyone in it uses.
+Smile Credits pay for the AI work. **Credits are shared across your
+organisation:** your organisation has **one balance** that everyone in it uses,
+and no other organisation can see or spend it.
 
 | Action | Credits |
 |---|---|
@@ -487,20 +495,33 @@ When the balance runs out, AI actions are paused until you add credits.
 ### Where to see your balance
 
 - At the top of the menu (on every page).
-- **Credits** page → **Credit Balance**: **Current balance**, **Total added**
-  and **Total consumed**.
+- **Credits** page → **Organization Credits**: your organisation's name, a large
+  **credits available** number and the note **"Credits are shared across your
+  organization."** Below it are **Credits available now**, **Total added** and
+  **Total consumed**. **How credits are used** lists what each action costs.
+
+### Welcome credits
+
+Every new organisation receives free welcome credits when it is created. They
+appear in the history as **Welcome Credits**. While McLink runs its launch
+promotion, the **first 100 new organisations** receive **250 credits** instead,
+shown as **Event Welcome Credits**. Either way an organisation receives one
+welcome grant, once, and it goes into the shared balance. Organisations that
+already existed are not changed.
 
 ### Credit history
 
 **Organization Credit History** lists every change: when, the event (for
-example CV analysis, Voice interview, Purchase, **Promotional Credits**), the
-change (+ or −), the balance after, the reference and who did it. Search it, or
-filter by **Credits added** / **Credits used** and by event type.
+example **Resume Screening**, **Voice Interview**, **Live Avatar Interview**,
+**Welcome Credits**, **Event Welcome Credits**, **Promotional Credits** or a
+purchase), the change (+ for credits added, − for credits used), the balance
+after, the reference and who did it. Search it, or filter by **Credits added** /
+**Credits used** and by event type.
 
 ### Redeem a promo code
 
 1. Open **Credits**.
-2. In **Credit Balance**, find **Have a promo code?**
+2. In **Organization Credits**, find **Have a promo code?**
 3. Type the code and select **Redeem**.
 
 You will see: **"Promo code applied. 210 credits have been added to your
@@ -544,10 +565,12 @@ full-body helper that watches what you do:
 - **It reacts to you.** Its head follows your cursor, and it reacts when you
   click it.
 
-Prefer a quiet page? On the **Help & Feedback** tab, untick **Show Smile's tips as
-I use the portal** and/or **Let Smile move around (it steps aside when I'm idle)**.
+Prefer a quiet page? On the **Help** tab, untick **Show Smile's tips as I use the
+portal** and/or **Let Smile move around (it steps aside when I'm idle)**.
 Select the robot again (or the **X**, or press **Esc**) to close. With a keyboard, press **Tab** until the robot
 is highlighted, then press **Enter**.
+
+Smile has three tabs: **Ask Smile**, **Help** and **Feedback**.
 
 ### Ask Smile
 
@@ -556,9 +579,9 @@ and press **Enter**, or select one of the suggested questions. Smile answers fro
 the portal guide. Smile can tell you your credit balance, but cannot see
 candidate records or make changes.
 
-### Help & Feedback
+### Help
 
-On the **Help & Feedback** tab:
+On the **Help** tab:
 
 - **Support email**: HRSG, **hrsg@mclinkgroup.com**.
 - **Copy email**: copies the address.
@@ -567,13 +590,41 @@ On the **Help & Feedback** tab:
 - **Let Smile move around (it steps aside when I'm idle)**: untick to keep the
   robot in its corner and never walk to a control. If tips are on, it still speaks
   from its corner. Both choices are remembered on your computer.
-- **Send feedback**: choose a topic (**Question**, **Report an issue** or
-  **Suggestion**), type your message and select **Continue in email**. Your email
-  app opens with the message filled in. Nothing is sent until you press **Send**
-  in your email app.
 
 When reporting a problem, say which page you were on, what you were trying to do
 and what you saw.
+
+### Feedback
+
+The **Feedback** tab is a short survey. It is the same survey you are offered
+when you sign out.
+
+1. **How easy was it to navigate and understand the app?** Choose 1 (Very
+   difficult) to 5 (Very easy).
+2. **Were you able to complete the recruitment tasks you expected to do?**
+   Choose 1 (Not at all) to 5 (Completely).
+3. **How clear and useful were the AI-generated results or recommendations?**
+   Choose 1 (Very unclear / not useful) to 5 (Very clear / useful).
+4. **Did you experience any errors, confusing steps, or slow parts while testing
+   the app?** Choose **Yes** or **No**. If you choose **Yes**, a box opens:
+   **Please describe what happened.**
+5. **What is the most important thing we should improve before the app is fully
+   launched?** (Optional.)
+
+Select **Send feedback**. You see **"Thank you for your feedback!"** Your answer
+is saved in the portal for the McLink team together with your organisation and
+name, so you do not need to type them. Nothing opens in your email app.
+
+### Sign Out and feedback
+
+When you select **Sign Out**, a window called **Before you sign out** shows the
+same survey. It is always optional:
+
+- **Skip & Sign Out** signs you out straight away.
+- **Submit Feedback & Sign Out** saves your answers, then signs you out.
+- If your feedback cannot be saved you see **"We couldn't save your feedback, but
+  you can still sign out."** and **Skip & Sign Out** still works.
+- The **X** (or **Esc**) closes the window and keeps you signed in.
 
 ---
 
@@ -672,8 +723,15 @@ Open the role → **Interview type** card → choose an option → **Save**.
 Look at the top of the menu, or open **Credits** for the balance and history.
 
 **Contact support**
-Select the Smile robot → **Help & Feedback** → **Copy email** or **Open email
-app**, or write to **hrsg@mclinkgroup.com**.
+Select the Smile robot → **Help** → **Copy email** or **Open email app**, or
+write to **hrsg@mclinkgroup.com**.
+
+**Give feedback**
+Select the Smile robot → **Feedback**, answer the questions and select **Send
+feedback**. You are also offered the same questions when you select **Sign Out**.
+
+**Read this manual**
+Select **Explore Manual** under **HELP** in the menu.
 
 **Reject an applicant**
 Open the applicant → type a short reason in **Note** → **Reject**.
@@ -787,11 +845,71 @@ Manual HR Review (too little to score; not a rejection).
 | Redeem | Credits | Applies a promo code (+210 credits). | Everyone in the organisation |
 | Buy Smile Credits | Credits | Buys a credit pack. | Everyone in the organisation |
 | Smile robot | Every page | Opens Smile Bot. | Everyone |
-| Copy email / Open email app / Continue in email | Smile → Help & Feedback | Contact the support team. | Everyone |
+| Copy email / Open email app | Smile → Help | Contact the support team. | Everyone |
+| Send feedback | Smile → Feedback | Saves your answers to the feedback survey. | Everyone |
+| Sign Out | Menu | Opens the optional feedback window, then signs you out. | Everyone |
+| Skip & Sign Out / Submit Feedback & Sign Out | Sign Out window | Signs you out without or with feedback. | Everyone |
+| Explore Manual | Menu → HELP | Opens this manual. | Everyone |
 | Save Email / Restore Original | Settings → Automated Emails | Edit candidate email wording. | Users who can change settings |
 | Change folder / Change Google account | Settings → Google Drive for Live Avatar recordings | Change where recordings are saved. | Users who can change settings |
 | Invite a teammate / Withdraw | User Accounts | Invite a colleague, or cancel an invitation. | Organisation Owner |
 
 ---
 
-**Support:** HRSG — hrsg@mclinkgroup.com, or Smile → **Help & Feedback**.
+**Support:** HRSG — hrsg@mclinkgroup.com, or Smile → **Help**.
+
+---
+
+## R. User Accounts
+
+**User Accounts** is in the menu for the **Organisation Owner** and other HR
+accounts that administer access. Everything here concerns your own organisation
+only.
+
+### How people join
+
+People join by registering with an email address your organisation allows (your
+company email domain, or an address the owner invited). They verify their email
+and can then log in. Everyone who registers is an **HR User**, and the first
+person is the **Organisation Owner**.
+
+### Invite a teammate (Organisation Owner)
+
+1. Open **User Accounts**.
+2. In **Invite a teammate**, type their **Email address**.
+3. Select **Invite teammate**.
+
+The person receives an email with a link to register with that address. Until
+they register they appear under **Invited, not registered yet**, where
+**Withdraw** cancels the invitation. If your organisation has a limit on the
+number of people, the card shows how many are used.
+
+### Manage your team
+
+**Directory Accounts** lists everyone: name, email, status, department and when
+they last signed in. The owner can edit a person's name and department, and
+**Deactivate** or **Reactivate** them. Deactivated accounts cannot sign in and are
+kept for the audit trail.
+
+You cannot deactivate your own account, the Organisation Owner, or the last
+active account.
+
+---
+
+## S. Troubleshooting
+
+| What you see | What it means | What to do |
+|---|---|---|
+| **Incorrect email or password.** | The email or password does not match. | Try again, or use the forgot-password link on the login page. |
+| **Please verify your email first.** | You registered but have not confirmed your email. | Open the verification email (valid for 24 hours), or ask for a new one with **Resend verification email**. |
+| **This email already has an account.** | You have already registered with this email. | Log in with your existing password. |
+| **This email address cannot register yet.** | Your email is not allowed to join an organisation. | Ask your organisation owner to invite you, or contact support. |
+| **Your recruitment portal account is inactive.** | An owner or administrator deactivated your account. | Ask your organisation owner. |
+| AI actions are paused | The credit balance has run out. | Open **Credits**, redeem a promo code or buy credits. |
+| **We couldn't save your feedback** | The feedback could not be saved. | You can still sign out; try again later. |
+| A menu item is missing | Your user type does not include it. | Ask your organisation owner (see [Section B](#b-user-types)). |
+| A page will not load | The connection may have dropped. | Refresh the page. If it keeps happening, contact support. |
+
+If something else goes wrong, select the Smile robot → **Help** and write to
+**hrsg@mclinkgroup.com**. Say which page you were on, what you were doing and what
+you saw.

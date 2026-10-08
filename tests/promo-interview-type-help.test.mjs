@@ -132,28 +132,26 @@ test("the applicant page only shows the send actions the role allows", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Smile Bot: Help & Feedback tab and mascot launcher
+// Smile Bot: Help and Feedback tabs and mascot launcher
 // ---------------------------------------------------------------------------
 
 test("support contact defaults to HRSG and is configurable", async () => {
-  const { supportContact, feedbackMailto } = await import("../src/lib/support-contact.ts");
+  const { supportContact } = await import("../src/lib/support-contact.ts");
   assert.deepEqual(supportContact({}), { email: "hrsg@mclinkgroup.com", name: "HRSG" });
   assert.deepEqual(supportContact({ SUPPORT_EMAIL: " Help@Example.com ", SUPPORT_NAME: "Helpdesk" }), { email: "help@example.com", name: "Helpdesk" });
   assert.deepEqual(supportContact({ SUPPORT_EMAIL: "not-an-email" }), { email: "hrsg@mclinkgroup.com", name: "HRSG" });
-  const link = feedbackMailto({ to: "hrsg@mclinkgroup.com", topic: "Report an issue", message: "Button & page broke", page: "/credits" });
-  assert.ok(link.startsWith("mailto:hrsg@mclinkgroup.com?subject="));
-  assert.match(decodeURIComponent(link), /Smile Recruitment Portal: Report an issue/);
-  assert.match(decodeURIComponent(link), /Button & page broke/);
-  assert.match(decodeURIComponent(link), /Page: \/credits/);
 });
 
-test("Smile Bot has one mascot launcher and a Help & Feedback tab", () => {
+test("Smile Bot has one mascot launcher plus Help and Feedback tabs", () => {
   const bot = read("src/components/HelpBot.tsx");
   assert.match(bot, /import \{ Mascot \} from "page-mascot";/);
   assert.equal((bot.match(/<Mascot /g) || []).length, 1);
   assert.doesNotMatch(bot, /styles\.launcher\b/, "the old pill launcher is replaced, not duplicated");
   assert.match(bot, /setAttribute\("aria-label", open \? "Close Smile help assistant" : "Open Smile help assistant"\)/);
-  assert.match(bot, />Help &amp; Feedback</);
+  assert.match(bot, />Help<\/button>/);
+  assert.match(bot, />Feedback<\/button>/);
+  assert.doesNotMatch(bot, /Suggestion/, "the old Suggestion wording is gone");
+  assert.doesNotMatch(bot, /feedbackMailto|Continue in email/, "feedback is saved in the portal, not sent by email app");
   // Movement: steps aside when idle or when the pointer leaves, returns when it is back; opt-outs exist.
   assert.match(bot, /prefersReducedMotion\(\)/);
   assert.match(bot, /ROAM_PREF_KEY/);
@@ -164,7 +162,7 @@ test("Smile Bot has one mascot launcher and a Help & Feedback tab", () => {
   assert.match(bot, /document\.documentElement\.addEventListener\("mouseleave", leave\)/);
   assert.match(bot, /const comeBack = \(\) => \{/);
   assert.doesNotMatch(bot, /ROAM_MAX_DISTANCE|Math\.random\(\)/, "no random wandering any more");
-  assert.match(bot, /Need help or found an issue\?/);
+  assert.match(bot, /Need help\?/);
   assert.match(bot, /Copy email/);
   assert.match(read("src/components/HelpBot.module.css"), /@media \(prefers-reduced-motion: reduce\)[^}]*\.mascotFloat/);
   assert.match(read("src/app/api/help-bot/route.ts"), /support: supportContact\(\)/);

@@ -1,0 +1,32 @@
+.form { display: grid; gap: 16px; text-align: left; }
+.intro { margin: 0; color: #536d84; font-size: 14px; line-height: 1.5; }
+.question { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.question legend, .legendText { padding: 0; color: #12395c; font-size: 14px; font-weight: 700; line-height: 1.4; }
+.openQuestion { gap: 8px; }
+
+/* 1-5 scale: always one horizontal row, even on a phone. */
+.scale { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.scaleOption { position: relative; display: block; cursor: pointer; }
+.scaleOption input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.scaleOption span { display: grid; place-items: center; min-height: 42px; border: 1px solid #c9d8e6; border-radius: 10px; background: #fff; color: #12395c; font-size: 16px; font-weight: 700; transition: background .12s, border-color .12s, color .12s; }
+.scaleOption:hover span { border-color: #247abd; background: #f1f8ff; }
+.scaleOption input:checked + span { border-color: #1a6fb3; background: #1a6fb3; color: #fff; }
+.scaleOption input:focus-visible + span { outline: 3px solid rgba(36, 122, 189, .4); outline-offset: 2px; }
+.scaleLabels { display: flex; justify-content: space-between; gap: 12px; color: #5f7488; font-size: 12px; line-height: 1.3; }
+.scaleLabels span:last-child { text-align: right; }
+
+.choices { display: flex; gap: 10px; }
+.choice { position: relative; display: block; min-width: 84px; cursor: pointer; }
+.choice input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.choice span { display: grid; place-items: center; min-height: 42px; padding: 0 18px; border: 1px solid #c9d8e6; border-radius: 10px; background: #fff; color: #12395c; font-weight: 700; }
+.choice:hover span { border-color: #247abd; background: #f1f8ff; }
+.choice input:checked + span { border-color: #1a6fb3; background: #1a6fb3; color: #fff; }
+.choice input:focus-visible + span { outline: 3px solid rgba(36, 122, 189, .4); outline-offset: 2px; }
+
+.detail { display: grid; gap: 6px; margin-top: 4px; color: #12395c; font-size: 14px; font-weight: 600; }
+.form textarea { width: 100%; min-height: 76px; padding: 10px 12px; border: 1px solid #c9d8e6; border-radius: 10px; color: #12395c; font: inherit; font-weight: 400; line-height: 1.45; resize: vertical; box-sizing: border-box; }
+.form textarea:focus { outline: 3px solid rgba(36, 122, 189, .3); border-color: #247abd; }
+
+.error { margin: 0; padding: 10px 12px; border: 1px solid #f0c4c0; border-radius: 10px; background: #fff0ef; color: #8f2a24; font-size: 14px; line-height: 1.45; }
+.actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; padding-top: 4px; }
+@media (max-width: 600px) { .actions { flex-direction: column-reverse; } .actions :global(.btn) { width: 100%; } }

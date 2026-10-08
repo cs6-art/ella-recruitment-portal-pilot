@@ -58,7 +58,7 @@ function sanitizeHistory(value: unknown): ClientMessage[] {
 
 export async function GET() {
   const enabled = isEnabled();
-  // The support contact is shown in the "Help & Feedback" tab, which works
+  // The support contact is shown in the "Help" tab, which works
   // even while the AI answers are not configured.
   return NextResponse.json({ success: true, enabled, configured: enabled && isConfigured(), support: supportContact() });
 }

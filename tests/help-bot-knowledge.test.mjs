@@ -138,7 +138,7 @@ test("organization separation questions are answered from the guide, not a canne
   }
   const context = retrieveContext("How are organizations separated?");
   assert.match(context.text, /Every record is stored under the organization/);
-  assert.match(context.text, /own shared Smile Credits balance/);
+  assert.match(context.text, /Credits are shared across your organization/);
 });
 
 test("stale canned how-to answers are left to the knowledge guide", () => {

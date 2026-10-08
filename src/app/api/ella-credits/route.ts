@@ -60,6 +60,18 @@ async function resolveTargetOrganization(user: SessionUserValue, requested: stri
   return { id: organization.id, name: organization.name };
 }
 
+// The organization name shown on the Credits page. Never the id.
+async function organizationDisplayName(organizationId: string, known?: string): Promise<string> {
+  if (known) return known;
+  if (!isDatabaseConfigured()) return "";
+  try {
+    const [organization] = await getDb().select({ name: organizations.name }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+    return organization?.name || "";
+  } catch {
+    return "";
+  }
+}
+
 async function currentUser() {
   return await getActiveSessionUser((await cookies()).get(COOKIE_NAME)?.value);
 }
@@ -97,16 +109,20 @@ export async function GET(request: Request) {
     const target = await resolveTargetOrganization(user, new URL(request.url).searchParams.get("organizationId"));
     if ("error" in target) return NextResponse.json({ success: false, error: target.error }, { status: target.status });
     const crossOrganization = canManageAllOrganizationCredits(user);
-    const [{ balance, totals, entries }, pricing, organizationList] = await Promise.all([
+    const [{ balance, held, available, totals, entries }, pricing, organizationList, organizationName] = await Promise.all([
       getCreditBalance({ organizationId: target.id, ownerEmail: user.email }),
       getCreditPricing(),
       crossOrganization ? listCreditOrganizations() : Promise.resolve(undefined),
+      organizationDisplayName(target.id, target.name),
     ]);
     return NextResponse.json({
       success: true,
       organizationId: target.id,
+      organizationName,
       ...(organizationList ? { organizations: organizationList } : {}),
       balance,
+      available: available ?? balance,
+      held: held ?? 0,
       totals,
       // Both storage backends can return a different natural row order. The
       // activity feed is explicitly newest-first so the UI always shows the

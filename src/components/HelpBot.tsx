@@ -7,12 +7,13 @@ import { Mascot } from "page-mascot";
 import UiIcon from "./UiIcon";
 import { useSmileGuide, type GuideSay } from "./useSmileGuide";
 import { HELP_BOT_STARTER_QUESTIONS } from "@/lib/help-bot/prompt";
-import { DEFAULT_SUPPORT_EMAIL, DEFAULT_SUPPORT_NAME, FEEDBACK_MESSAGE_MAX_LENGTH, FEEDBACK_TOPICS, feedbackMailto, type SupportContact } from "@/lib/support-contact";
+import SmileFeedbackTab from "./SmileFeedbackTab";
+import { DEFAULT_SUPPORT_EMAIL, DEFAULT_SUPPORT_NAME, type SupportContact } from "@/lib/support-contact";
 import { BUBBLE_HEADROOM, bubbleAlign, bubbleDuration, IDLE_AWAY_MS, pageIntroFor, placeBeside, type BubbleAlign, type Placement } from "@/lib/smile-tips";
 import styles from "./HelpBot.module.css";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
-type Tab = "ask" | "help";
+type Tab = "ask" | "help" | "feedback";
 const STARTER_RETURN_DELAY_MS = 4_000;
 // Preferences (per browser). "off" turns the behaviour off.
 const ROAM_PREF_KEY = "smile-bot:roam";
@@ -58,7 +59,7 @@ const GREETING =
   "Hi, I'm Smile. Ask me how to use the recruitment portal — creating role requests, screening, interviews, statuses, access, and more. I answer from the portal guide and can't see candidate records or make changes.";
 
 const NOT_CONFIGURED_MESSAGE =
-  "Smile is currently being configured and will be available soon. You can still reach the support team from the Help & Feedback tab.";
+  "Smile is currently being configured and will be available soon. You can still reach the support team from the Help tab.";
 
 /** Copy text, falling back to a hidden textarea where the Clipboard API is blocked. */
 async function copyText(text: string) {
@@ -79,16 +80,13 @@ async function copyText(text: string) {
   }
 }
 
-function HelpAndFeedback({ support, roam, onRoamChange, tips, onTipsChange }: { support: SupportContact; roam: boolean; onRoamChange: (value: boolean) => void; tips: boolean; onTipsChange: (value: boolean) => void }) {
-  const [topic, setTopic] = useState<string>(FEEDBACK_TOPICS[0]);
-  const [message, setMessage] = useState("");
+function HelpTab({ support, roam, onRoamChange, tips, onTipsChange }: { support: SupportContact; roam: boolean; onRoamChange: (value: boolean) => void; tips: boolean; onTipsChange: (value: boolean) => void }) {
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
-  const mailto = feedbackMailto({ to: support.email, topic, message, page: typeof window === "undefined" ? "" : window.location.pathname });
 
   return <div className={styles.helpTab}>
     <div className={styles.helpCard}>
-      <strong>Need help or found an issue?</strong>
-      <p>Contact our support team. Tell us what you were trying to do and on which page, and we&apos;ll get back to you.</p>
+      <strong>Need help?</strong>
+      <p>Contact our support team. Tell us what you were trying to do and on which page, and we&apos;ll get back to you. To share what you think of the portal, use the Feedback tab.</p>
       <div className={styles.supportRow}>
         <span className={styles.supportLabel}>{support.name}</span>
         <a className={styles.supportEmail} href={`mailto:${support.email}`}>{support.email}</a>
@@ -106,33 +104,6 @@ function HelpAndFeedback({ support, roam, onRoamChange, tips, onTipsChange }: { 
       <span className={styles.srStatus} role="status" aria-live="polite">{copyState === "copied" ? "Support email copied." : copyState === "failed" ? "Copy failed. Select the email address to copy it." : ""}</span>
     </div>
 
-    <form
-      className={styles.feedbackForm}
-      onSubmit={(event) => {
-        event.preventDefault();
-        window.location.href = mailto;
-      }}
-    >
-      <strong>Send feedback</strong>
-      <label className={styles.feedbackField}>
-        <span>Topic</span>
-        <select value={topic} onChange={(event) => setTopic(event.target.value)}>
-          {FEEDBACK_TOPICS.map((option) => <option key={option}>{option}</option>)}
-        </select>
-      </label>
-      <label className={styles.feedbackField}>
-        <span>Your message</span>
-        <textarea
-          value={message}
-          maxLength={FEEDBACK_MESSAGE_MAX_LENGTH}
-          rows={4}
-          placeholder="Describe your question, the issue you saw, or your idea."
-          onChange={(event) => setMessage(event.target.value)}
-        />
-      </label>
-      <button type="submit" className={styles.primaryButton} disabled={!message.trim()}>Continue in email</button>
-      <p className={styles.feedbackNote}>This opens your email app with your message filled in. Nothing is sent until you press Send there.</p>
-    </form>
 
     <div className={styles.roamGroup}>
       <strong>Smile on the page</strong>
@@ -543,12 +514,15 @@ export default function HelpBot() {
 
           <div className={styles.tabs} role="tablist" aria-label="Smile assistant sections">
             <button type="button" role="tab" id="smile-tab-ask" aria-selected={tab === "ask"} aria-controls="smile-tabpanel" className={styles.tab} onClick={() => setTab("ask")}>Ask Smile</button>
-            <button type="button" role="tab" id="smile-tab-help" aria-selected={tab === "help"} aria-controls="smile-tabpanel" className={styles.tab} onClick={() => setTab("help")}>Help &amp; Feedback</button>
+            <button type="button" role="tab" id="smile-tab-help" aria-selected={tab === "help"} aria-controls="smile-tabpanel" className={styles.tab} onClick={() => setTab("help")}>Help</button>
+            <button type="button" role="tab" id="smile-tab-feedback" aria-selected={tab === "feedback"} aria-controls="smile-tabpanel" className={styles.tab} onClick={() => setTab("feedback")}>Feedback</button>
           </div>
 
-          <div id="smile-tabpanel" role="tabpanel" aria-labelledby={tab === "ask" ? "smile-tab-ask" : "smile-tab-help"} className={styles.tabPanel}>
+          <div id="smile-tabpanel" role="tabpanel" aria-labelledby={`smile-tab-${tab}`} className={styles.tabPanel}>
             {tab === "help" ? (
-              <div className={styles.body} ref={scrollRef}><HelpAndFeedback support={support} roam={roam} onRoamChange={changeRoam} tips={tips} onTipsChange={changeTips} /></div>
+              <div className={styles.body} ref={scrollRef}><HelpTab support={support} roam={roam} onRoamChange={changeRoam} tips={tips} onTipsChange={changeTips} /></div>
+            ) : tab === "feedback" ? (
+              <div className={styles.body} ref={scrollRef}><SmileFeedbackTab /></div>
             ) : (
               <>
                 <div className={styles.body} ref={scrollRef}>

@@ -82,8 +82,19 @@ test("credit activity is recent-first, filterable, and keeps a stable table foot
   assert.match(panel, /Filter credit activity event/);
   assert.match(panel, /No activity matches the current filters/);
   assert.match(panel, /placeholder-\$\{index\}/);
-  assert.match(panel, /Voice interview/);
-  assert.match(panel, /All signed-in users in this organization share one Smile Credits balance/);
+  assert.match(panel, /Voice Interview/);
+  assert.match(panel, /Credits are shared across your organization\./);
+  assert.match(panel, /Everyone in the organization uses the same credit balance/);
   assert.match(styles, /min-height: 540px/);
   assert.match(styles, /table-layout: fixed/);
+});
+
+test("the Credits page and meter show spendable credits, and call out credits held for interviews", () => {
+  const panel = read("src/components/EllaCreditsPanel.tsx");
+  const meter = read("src/components/EllaCreditsMeter.tsx");
+  assert.match(read("src/app/api/ella-credits/balance/route.ts"), /available: available \?\? balance/);
+  assert.match(read("src/app/api/ella-credits/route.ts"), /available: available \?\? balance/);
+  assert.match(meter, /data\.available \+ optimistic/);
+  assert.match(panel, /<b>\{nf\.format\(Math\.max\(0, available\)\)\}<\/b><span>credits available<\/span>/);
+  assert.match(panel, /held for booked or in-progress interviews/);
 });
