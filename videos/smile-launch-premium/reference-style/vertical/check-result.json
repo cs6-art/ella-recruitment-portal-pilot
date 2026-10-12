@@ -1,0 +1,545 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 10,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "duplicate_audio_track",
+        "severity": "warning",
+        "message": "Multiple audible <audio>/<video> elements on track 11 overlap (assets/audio/sweep-short.wav at 1.72-2.3s, assets/audio/impact-soft.wav at 2.02-2.4s). This causes layered audio playback.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Use non-overlapping time windows or different track indices."
+      },
+      {
+        "code": "duplicate_audio_track",
+        "severity": "warning",
+        "message": "Multiple audible <audio>/<video> elements on track 11 overlap (assets/audio/cta-confirm.wav at 23.76-24.4s, assets/audio/impact-soft.wav at 24.08-24.4s). This causes layered audio playback.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Use non-overlapping time windows or different track indices."
+      },
+      {
+        "code": "studio_missing_editable_id",
+        "severity": "warning",
+        "message": "<div class=\"ground\" data-start=\"0\" data-track-index=\"0\"> has no id, so Studio cannot use a stable edit target for its timeline and canvas controls.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Projects\\ella-recruitment-portal-pilot\\videos\\smile-launch-premium\\reference-style\\vertical\\compositions\\scene-0.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Add a stable, human-readable id such as id=\"hero-title\" or id=\"scene-1-card\" to every timeline-visible element you want agents or Studio to edit."
+      },
+      {
+        "code": "studio_missing_editable_id",
+        "severity": "warning",
+        "message": "<div class=\"ground\" data-start=\"0\" data-track-index=\"0\"> has no id, so Studio cannot use a stable edit target for its timeline and canvas controls.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Projects\\ella-recruitment-portal-pilot\\videos\\smile-launch-premium\\reference-style\\vertical\\compositions\\scene-1.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Add a stable, human-readable id such as id=\"hero-title\" or id=\"scene-1-card\" to every timeline-visible element you want agents or Studio to edit."
+      },
+      {
+        "code": "studio_missing_editable_id",
+        "severity": "warning",
+        "message": "<div class=\"ground\" data-start=\"0\" data-track-index=\"0\"> has no id, so Studio cannot use a stable edit target for its timeline and canvas controls.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Projects\\ella-recruitment-portal-pilot\\videos\\smile-launch-premium\\reference-style\\vertical\\compositions\\scene-2.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Add a stable, human-readable id such as id=\"hero-title\" or id=\"scene-1-card\" to every timeline-visible element you want agents or Studio to edit."
+      },
+      {
+        "code": "studio_missing_editable_id",
+        "severity": "warning",
+        "message": "<div class=\"ground\" data-start=\"0\" data-track-index=\"0\"> has no id, so Studio cannot use a stable edit target for its timeline and canvas controls.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Projects\\ella-recruitment-portal-pilot\\videos\\smile-launch-premium\\reference-style\\vertical\\compositions\\scene-3.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Add a stable, human-readable id such as id=\"hero-title\" or id=\"scene-1-card\" to every timeline-visible element you want agents or Studio to edit."
+      },
+      {
+        "code": "studio_missing_editable_id",
+        "severity": "warning",
+        "message": "<div class=\"ground\" data-start=\"0\" data-track-index=\"0\"> has no id, so Studio cannot use a stable edit target for its timeline and canvas controls.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Projects\\ella-recruitment-portal-pilot\\videos\\smile-launch-premium\\reference-style\\vertical\\compositions\\scene-4.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Add a stable, human-readable id such as id=\"hero-title\" or id=\"scene-1-card\" to every timeline-visible element you want agents or Studio to edit."
+      },
+      {
+        "code": "studio_missing_editable_id",
+        "severity": "warning",
+        "message": "<div class=\"ground\" data-start=\"0\" data-track-index=\"0\"> has no id, so Studio cannot use a stable edit target for its timeline and canvas controls.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Projects\\ella-recruitment-portal-pilot\\videos\\smile-launch-premium\\reference-style\\vertical\\compositions\\scene-5.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Add a stable, human-readable id such as id=\"hero-title\" or id=\"scene-1-card\" to every timeline-visible element you want agents or Studio to edit."
+      },
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 2 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Projects\\ella-recruitment-portal-pilot\\videos\\smile-launch-premium\\reference-style\\vertical\\compositions\\scene-5.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      },
+      {
+        "code": "studio_missing_editable_id",
+        "severity": "warning",
+        "message": "<div class=\"ground\" data-start=\"0\" data-track-index=\"0\"> has no id, so Studio cannot use a stable edit target for its timeline and canvas controls.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Projects\\ella-recruitment-portal-pilot\\videos\\smile-launch-premium\\reference-style\\vertical\\compositions\\scene-6.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Add a stable, human-readable id such as id=\"hero-title\" or id=\"scene-1-card\" to every timeline-visible element you want agents or Studio to edit."
+      }
+    ],
+    "filesScanned": 8
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 7,
+    "findings": [
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 9.3,
+        "selector": "div.stage.screening > img:nth-of-type(1)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -103.55,
+          "top": 501.19,
+          "right": 1013.19,
+          "bottom": 1279.52,
+          "width": 1116.73,
+          "height": 778.33
+        },
+        "containerSelector": "div.stage.screening",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 64.8,
+          "top": 499.19,
+          "right": 1015.19,
+          "bottom": 1324.78,
+          "width": 950.39,
+          "height": 825.59
+        },
+        "overflow": {
+          "left": 168.35
+        },
+        "dataAttributes": {
+          "data-hf-id": "hf-ycu5",
+          "data-hf-authored-opacity": ""
+        },
+        "sourceFile": "compositions/scene-2.html",
+        "bbox": {
+          "x": -103.55,
+          "y": 501.19,
+          "width": 1116.73,
+          "height": 778.33
+        },
+        "firstSeen": 9.3,
+        "lastSeen": 9.3,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          9.3
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 18.5,
+        "selector": "div.stage.review > img:nth-of-type(1)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -103.55,
+          "top": 501.19,
+          "right": 1013.19,
+          "bottom": 1287.97,
+          "width": 1116.73,
+          "height": 786.78
+        },
+        "containerSelector": "div.stage.review",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 64.8,
+          "top": 499.19,
+          "right": 1015.19,
+          "bottom": 1324.78,
+          "width": 950.39,
+          "height": 825.59
+        },
+        "overflow": {
+          "left": 168.35
+        },
+        "dataAttributes": {
+          "data-hf-id": "hf-4xm9",
+          "data-hf-authored-opacity": ""
+        },
+        "sourceFile": "compositions/scene-4.html",
+        "bbox": {
+          "x": -103.55,
+          "y": 501.19,
+          "width": 1116.73,
+          "height": 786.78
+        },
+        "firstSeen": 18.5,
+        "lastSeen": 18.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          18.5
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 19.125,
+        "selector": "#s4 > div:nth-of-type(1) > div:nth-of-type(2) > h1:nth-of-type(1)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 332.61,
+          "top": 177.44,
+          "right": 747.38,
+          "bottom": 266.44,
+          "width": 414.77,
+          "height": 89
+        },
+        "containerSelector": "div.gallery > div:nth-of-type(2) > h3:nth-of-type(1)",
+        "text": "Let HR decide.",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {
+          "data-hf-id": "hf-y7dd"
+        },
+        "sourceFile": "compositions/scene-4.html",
+        "bbox": {
+          "x": 332.61,
+          "y": 177.44,
+          "width": 414.77,
+          "height": 89
+        },
+        "firstSeen": 19.125,
+        "lastSeen": 19.125,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          19.125
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 19.125,
+        "selector": "#s4 > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > span:nth-of-type(1)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 182.39,
+          "top": 1550.45,
+          "right": 748,
+          "bottom": 1588.45,
+          "width": 565.61,
+          "height": 38
+        },
+        "containerSelector": "div.gallery > div:nth-of-type(6) > div:nth-of-type(1)",
+        "text": "AI supports review. HR makes the decision.",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {
+          "data-hf-id": "hf-fcxn"
+        },
+        "sourceFile": "compositions/scene-4.html",
+        "bbox": {
+          "x": 182.39,
+          "y": 1550.45,
+          "width": 565.61,
+          "height": 38
+        },
+        "firstSeen": 19.125,
+        "lastSeen": 19.125,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          19.125
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 21.6,
+        "selector": "div.gallery > div:nth-of-type(2) > img:nth-of-type(1)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 552.98,
+          "top": 504.59,
+          "right": 991.58,
+          "bottom": 810.27,
+          "width": 438.59,
+          "height": 305.67
+        },
+        "containerSelector": "div.gallery > div:nth-of-type(2)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 550.98,
+          "top": 441.59,
+          "right": 993.58,
+          "bottom": 746.92,
+          "width": 442.59,
+          "height": 305.33
+        },
+        "overflow": {
+          "bottom": 63.35
+        },
+        "dataAttributes": {
+          "data-hf-id": "hf-ycu5",
+          "data-hf-authored-opacity": ""
+        },
+        "sourceFile": "compositions/scene-5.html",
+        "bbox": {
+          "x": 552.98,
+          "y": 504.59,
+          "width": 438.59,
+          "height": 305.67
+        },
+        "firstSeen": 21.6,
+        "lastSeen": 21.6,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.6
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 21.6,
+        "selector": "div.gallery > div:nth-of-type(3) > img:nth-of-type(1)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 88.39,
+          "top": 831.92,
+          "right": 526.98,
+          "bottom": 1246.14,
+          "width": 438.59,
+          "height": 414.22
+        },
+        "containerSelector": "div.gallery > div:nth-of-type(3)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 86.39,
+          "top": 768.92,
+          "right": 528.98,
+          "bottom": 1074.25,
+          "width": 442.59,
+          "height": 305.33
+        },
+        "overflow": {
+          "bottom": 171.89
+        },
+        "dataAttributes": {
+          "data-hf-id": "hf-xw2k",
+          "data-hf-authored-opacity": ""
+        },
+        "sourceFile": "compositions/scene-5.html",
+        "bbox": {
+          "x": 88.39,
+          "y": 831.92,
+          "width": 438.59,
+          "height": 414.22
+        },
+        "firstSeen": 21.6,
+        "lastSeen": 21.6,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.6
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 21.6,
+        "selector": "div.tile.focal > img:nth-of-type(1)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 552.98,
+          "top": 831.92,
+          "right": 991.58,
+          "bottom": 1140.92,
+          "width": 438.59,
+          "height": 309
+        },
+        "containerSelector": "div.tile.focal",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 550.98,
+          "top": 768.92,
+          "right": 993.58,
+          "bottom": 1074.25,
+          "width": 442.59,
+          "height": 305.33
+        },
+        "overflow": {
+          "bottom": 66.67
+        },
+        "dataAttributes": {
+          "data-hf-id": "hf-4xm9",
+          "data-hf-authored-opacity": ""
+        },
+        "sourceFile": "compositions/scene-5.html",
+        "bbox": {
+          "x": 552.98,
+          "y": 831.92,
+          "width": 438.59,
+          "height": 309
+        },
+        "firstSeen": 21.6,
+        "lastSeen": 21.6,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.6
+        ]
+      }
+    ],
+    "duration": 25,
+    "samples": [
+      2.5,
+      5.5,
+      9.3,
+      14.5,
+      18.5,
+      21.6,
+      24.6
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 7,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      2.5,
+      5.5,
+      14.5,
+      18.5,
+      24.6
+    ],
+    "checked": 29,
+    "passed": 29
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  },
+  "_meta": {
+    "version": "0.8.143",
+    "latestVersion": "0.8.143",
+    "updateAvailable": false
+  }
+}

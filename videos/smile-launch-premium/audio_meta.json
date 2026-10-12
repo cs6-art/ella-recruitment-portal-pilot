@@ -1,0 +1,32 @@
+{
+  "bgm": {
+    "path": "assets/audio/smile-original-score.wav",
+    "volume": 0.82,
+    "source": "host"
+  },
+  "voices": [],
+  "sfx": [
+    { "frame": 1, "file": "assets/audio/paper-flick.wav", "offset_s": 0.12, "duration_s": 0.42, "volume": 0.48, "source": "host" },
+    { "frame": 1, "file": "assets/audio/impact-soft.wav", "offset_s": 0.88, "duration_s": 0.34, "volume": 0.52, "source": "host" },
+    { "frame": 1, "file": "assets/audio/sweep-short.wav", "offset_s": 1.72, "duration_s": 0.58, "volume": 0.42, "source": "host" },
+    { "frame": 1, "file": "assets/audio/impact-soft.wav", "offset_s": 2.02, "duration_s": 0.34, "volume": 0.4, "source": "host" },
+    { "frame": 2, "file": "assets/audio/impact-soft.wav", "offset_s": 0.22, "duration_s": 0.34, "volume": 0.42, "source": "host" },
+    { "frame": 2, "file": "assets/audio/ui-tick.wav", "offset_s": 1.55, "duration_s": 0.12, "volume": 0.4, "source": "host" },
+    { "frame": 3, "file": "assets/audio/sweep-short.wav", "offset_s": 0.34, "duration_s": 0.58, "volume": 0.38, "source": "host" },
+    { "frame": 3, "file": "assets/audio/ui-tick.wav", "offset_s": 1.12, "duration_s": 0.12, "volume": 0.34, "source": "host" },
+    { "frame": 3, "file": "assets/audio/ui-tick.wav", "offset_s": 1.42, "duration_s": 0.12, "volume": 0.34, "source": "host" },
+    { "frame": 3, "file": "assets/audio/impact-soft.wav", "offset_s": 2.12, "duration_s": 0.34, "volume": 0.38, "source": "host" },
+    { "frame": 4, "file": "assets/audio/impact-soft.wav", "offset_s": 0.18, "duration_s": 0.34, "volume": 0.36, "source": "host" },
+    { "frame": 4, "file": "assets/audio/phone-tone.wav", "offset_s": 1.48, "duration_s": 0.24, "volume": 0.44, "source": "host" },
+    { "frame": 4, "file": "assets/audio/consent-click.wav", "offset_s": 3.04, "duration_s": 0.2, "volume": 0.42, "source": "host" },
+    { "frame": 4, "file": "assets/audio/ui-tick.wav", "offset_s": 3.74, "duration_s": 0.12, "volume": 0.32, "source": "host" },
+    { "frame": 5, "file": "assets/audio/ui-tick.wav", "offset_s": 1.12, "duration_s": 0.12, "volume": 0.34, "source": "host" },
+    { "frame": 5, "file": "assets/audio/impact-soft.wav", "offset_s": 2.68, "duration_s": 0.34, "volume": 0.42, "source": "host" },
+    { "frame": 6, "file": "assets/audio/sweep-short.wav", "offset_s": 0.14, "duration_s": 0.58, "volume": 0.42, "source": "host" },
+    { "frame": 6, "file": "assets/audio/ui-tick.wav", "offset_s": 0.82, "duration_s": 0.12, "volume": 0.34, "source": "host" },
+    { "frame": 6, "file": "assets/audio/ui-tick.wav", "offset_s": 1.38, "duration_s": 0.12, "volume": 0.34, "source": "host" },
+    { "frame": 6, "file": "assets/audio/ui-tick.wav", "offset_s": 1.94, "duration_s": 0.12, "volume": 0.34, "source": "host" },
+    { "frame": 7, "file": "assets/audio/cta-confirm.wav", "offset_s": 1.76, "duration_s": 0.62, "volume": 0.52, "source": "host" },
+    { "frame": 7, "file": "assets/audio/impact-soft.wav", "offset_s": 2.08, "duration_s": 0.34, "volume": 0.36, "source": "host" }
+  ]
+}

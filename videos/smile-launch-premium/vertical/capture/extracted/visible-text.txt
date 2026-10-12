@@ -1,0 +1,17 @@
+Smile Recruitment Portal
+
+Product: a coordinated recruitment workflow covering role creation/configuration, candidate applications, AI-assisted resume screening, optional interview invitations, voice or Live Avatar interviews, HR evidence review, face-to-face scheduling when needed, and final human decisions.
+
+Role setup: Smile can draft screening criteria and interview questions from a job description. HR reviews and corrects the draft before publishing.
+
+Resume screening: Smile evaluates a resume against role requirements and can present a 0–100 match score, summary, strengths, gaps, supporting evidence, and role settings used. This supports HR prioritization; it is not a final hiring decision or guaranteed measure of candidate quality.
+
+Interview formats: a scheduled 10-minute Voice Interview by phone, or a consent-based Live Avatar video interview of up to 20 minutes. The available format depends on the role. When both are enabled, the candidate chooses one format. Live Avatar recording consent precedes the interview.
+
+HR review: authorized HR users review screening evidence, transcripts, question-level results, and interview scores. HR makes the hiring decisions. A result labeled Not Scored — Manual HR Review is not a rejection.
+
+Scheduling: when the workflow requires a face-to-face interview, candidates can book available times using an assigned interviewer's or shared HR Google Calendar, when connected.
+
+Promotional CTA: Try Smile now.
+
+Demo values in the supplied illustrative UI plates are synthetic. No real candidate information is used.

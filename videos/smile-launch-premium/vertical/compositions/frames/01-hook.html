@@ -1,0 +1,56 @@
+<template><style>@font-face{font-family:Manrope;src:url("assets/fonts/captured-Manrope.ttf") format("truetype");font-weight:400 800;font-display:block}*{box-sizing:border-box}#root{position:relative;width:1080px;height:1920px;overflow:hidden;font-family:Manrope,Arial,sans-serif;font-synthesis:none}#root *{box-sizing:border-box}.clip{position:absolute;inset:0;width:100%;height:100%}.01-hook-ground{z-index:0}
+
+      #root{color:#fff}
+      .hook-bg{background:radial-gradient(ellipse at 76% 42%,#1b5579 0%,#12354f 36%,#0e273b 72%,#0a1c2d 100%)}
+      .hook-world{position:absolute;inset:0;transform-style:preserve-3d;overflow:hidden}
+      .hook-grid{position:absolute;inset:-20%;opacity:.18;background-image:linear-gradient(115deg,transparent 0 48%,rgba(255,255,255,.16) 48.2%,transparent 48.5%),linear-gradient(25deg,transparent 0 72%,rgba(255,255,255,.11) 72.2%,transparent 72.45%);background-size:240px 180px,320px 240px;mask-image:linear-gradient(90deg,transparent,#000 40%,#000)}
+      .hook-kicker{position:absolute;left:6.5%;top:15%;color:#afc7d8;font-size:clamp(14px,1.1vw,22px);font-weight:700;letter-spacing:.23em}
+      .hook-title{position:absolute;left:6%;top:28%;width:51%;z-index:4;font-size:clamp(78px,8.25vw,166px);font-weight:800;letter-spacing:-.09em;line-height:.86}
+      .hook-line{display:block;white-space:nowrap}
+      .hook-line-one{color:#fff}
+      .hook-line-two{color:#f7cf00}
+      .hook-time{position:absolute;left:6.4%;top:69%;font-size:clamp(26px,2.35vw,48px);font-weight:800;letter-spacing:-.04em;color:#fff;z-index:5}
+      .hook-question{color:#f7cf00}
+      .hook-stack{position:absolute;right:9%;top:14%;width:35%;height:73%;perspective:1300px;transform-style:preserve-3d;z-index:3}
+      .hook-paper{position:absolute;inset:4% 8% 2% 8%;border-radius:22px;background:#fdfefe;box-shadow:0 36px 95px rgba(0,0,0,.28);padding:8% 8%;color:#172033;backface-visibility:hidden}
+      .hook-paper-back{opacity:.48}
+      .hook-paper-mid{opacity:.72}
+      .hook-paper-front{}
+      .hook-paper i{display:block;width:18%;height:12%;border-radius:50%;background:#dbe8f0;margin-bottom:8%}
+      .hook-paper b{display:block;width:67%;height:13px;border-radius:12px;background:#174b70;margin-bottom:7%}
+      .hook-paper em{display:block;width:100%;height:8px;border-radius:8px;background:#e5eaf0;margin:5% 0}
+      .hook-paper em:nth-of-type(2n){width:78%}
+      .hook-paper strong{display:block;margin-top:16%;font-size:14px;letter-spacing:.15em;color:#617287}
+      .hook-paper-tag{position:absolute;right:8%;bottom:8%;padding:11px 16px;border-radius:999px;background:#f7cf00;color:#0e4471;font-size:13px;font-weight:800;letter-spacing:.1em}
+      .hook-file-dot{position:absolute;right:2%;bottom:2%;display:grid;place-items:center;width:90px;height:90px;border:1px solid rgba(247,207,0,.65);border-radius:50%;background:#f7cf00;color:#0e4471;font-size:28px;font-weight:800;box-shadow:0 12px 36px rgba(247,207,0,.25)}
+      .hook-footer{position:absolute;left:6.5%;bottom:18%;display:flex;align-items:center;gap:13px;color:#d5e6f0;font-size:14px;font-weight:700;letter-spacing:.16em;z-index:6}
+      .hook-footer-mark{width:22px;height:22px;border-radius:50%;background:#0071f7;box-shadow:12px 0 0 -4px #f7cf00}
+      .hook-sweep{position:absolute;top:-20%;left:-45%;width:20%;height:150%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);transform:skewX(-16deg);pointer-events:none}
+      @media (orientation:portrait){.hook-kicker{left:7%;top:11%;font-size:18px}.hook-title{left:7%;top:20%;width:88%;font-size:clamp(75px,11vw,126px)}.hook-time{left:7.5%;top:44%;font-size:clamp(27px,4.1vw,44px)}.hook-stack{left:13%;right:auto;top:53%;width:78%;height:38%}.hook-paper{inset:2% 10% 2% 10%;padding:7%}.hook-paper i{width:15%;height:14%}.hook-paper strong{margin-top:8%}.hook-file-dot{width:76px;height:76px}.hook-footer{left:7%;bottom:48%;font-size:13px}}
+    </style><div id="root" data-composition-id="01-hook" data-width="1080" data-height="1920" data-duration="3.42"><div id="ground-01-hook" class="01-hook-ground hook-bg clip" data-start="0" data-duration="3.42" data-track-index="0"></div>
+      <div class="hook-world">
+        <div class="hook-grid"></div>
+        <div class="hook-kicker">THE NEXT APPLICATION</div>
+        <div class="hook-title"><span class="hook-line hook-line-one">TOO MANY</span><span class="hook-line hook-line-two">APPLICANTS?</span></div>
+        <div class="hook-time">TOO LITTLE TIME<span class="hook-question">?</span></div>
+        <div class="hook-stack" aria-hidden="true">
+          <div class="hook-paper hook-paper-back"><i></i><b></b><em></em><em></em><em></em><em></em><em></em><strong>PROFILE</strong></div>
+          <div class="hook-paper hook-paper-mid"><i></i><b></b><em></em><em></em><em></em><em></em><em></em><strong>EXPERIENCE</strong></div>
+          <div class="hook-paper hook-paper-front"><i></i><b></b><em></em><em></em><em></em><em></em><em></em><div class="hook-paper-tag">APPLICATION</div></div>
+          <div class="hook-file-dot">01</div>
+        </div>
+        <div class="hook-footer"><span class="hook-footer-mark"></span> SMILE RECRUITMENT PORTAL</div>
+        <div class="hook-sweep"></div>
+      </div></div><script>(()=>{const root=document.querySelector('[data-composition-id="01-hook"]');if(!root||!window.gsap)return;window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true});window.__timelines["01-hook"]=tl;const width=1080,height=1920,portrait=true;
+      const q=s=>root.querySelector(s);
+      tl.fromTo(q('.hook-paper-back'),{x:460,y:110,z:-70,rotation:16,scale:.78,opacity:0},{x:0,y:0,z:-70,rotation:10,scale:1,opacity:.48,duration:.72,ease:'power3.out'},0);
+      tl.fromTo(q('.hook-paper-mid'),{x:370,y:85,z:-28,rotation:14,scale:.8,opacity:0},{x:0,y:0,z:-28,rotation:4,scale:1,opacity:.72,duration:.62,ease:'power3.out'},.09);
+      tl.fromTo(q('.hook-paper-front'),{x:300,y:130,z:20,rotation:19,scale:.74,opacity:0},{x:0,y:0,z:20,rotation:-3,scale:1,opacity:1,duration:.72,ease:'power3.out'},.16);
+      tl.fromTo(q('.hook-line-one'),{x:-180,filter:'blur(14px)',opacity:0},{x:0,filter:'blur(0px)',opacity:1,duration:.55,ease:'power4.out'},.16);
+      tl.fromTo(q('.hook-line-two'),{x:190,filter:'blur(14px)',opacity:0},{x:0,filter:'blur(0px)',opacity:1,duration:.54,ease:'power4.out'},.48);
+      tl.fromTo(q('.hook-time'),{y:52,scale:.9,opacity:0},{y:0,scale:1,opacity:1,duration:.48,ease:'back.out(1.2)'},1.6);
+      tl.fromTo(q('.hook-file-dot'),{scale:0,rotation:-60},{scale:1,rotation:0,duration:.5,ease:'back.out(1.5)'},1.95);
+      tl.to(q('.hook-stack'),{scale:1.055,x:-12,y:8,duration:2.35,ease:'power1.inOut'},.25);
+      tl.to(q('.hook-sweep'),{x:width*2.4,duration:1.1,ease:'power3.inOut'},.18);
+      tl.to(q('.hook-file-dot'),{scale:1.08,duration:.22,ease:'power2.out'},2.28);
+      tl.to(q('.hook-file-dot'),{scale:1,duration:.24,ease:'power2.inOut'},2.5);tl.seek(0)})();</script></template>

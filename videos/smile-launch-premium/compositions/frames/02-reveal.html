@@ -1,0 +1,50 @@
+<template><style>@font-face{font-family:Manrope;src:url("assets/fonts/captured-Manrope.ttf") format("truetype");font-weight:400 800;font-display:block}*{box-sizing:border-box}#root{position:relative;width:1920px;height:1080px;overflow:hidden;font-family:Manrope,Arial,sans-serif;font-synthesis:none}#root *{box-sizing:border-box}.clip{position:absolute;inset:0;width:100%;height:100%}.02-reveal-ground{z-index:0}
+
+      #root{color:#172033}
+      .reveal-bg{background:radial-gradient(ellipse at 74% 48%,#e6f2fb 0%,#f4f7fb 49%,#fff 100%)}
+      .reveal-world{position:absolute;inset:0;overflow:hidden}
+      .reveal-left{position:absolute;left:7%;top:19%;width:34%;z-index:3}
+      .reveal-kicker{display:flex;align-items:center;gap:12px;color:#0071f7;font-size:clamp(13px,1vw,19px);font-weight:800;letter-spacing:.15em}
+      .reveal-kicker span{width:31px;height:3px;background:#f7cf00}
+      .reveal-title{margin:36px 0 25px;font-size:clamp(82px,8.7vw,158px);font-weight:800;line-height:.84;letter-spacing:-.095em;color:#0e4471}
+      .reveal-title em{font-style:normal;color:#0071f7}
+      .reveal-brandline{display:flex;align-items:center;gap:18px;margin-top:35px;font-size:clamp(18px,1.5vw,27px);color:#0e4471}
+      .reveal-brandline img{width:64px;height:64px;object-fit:contain}
+      .reveal-caption{margin:28px 0 0 83px;color:#617287;font-size:clamp(16px,1.35vw,24px);line-height:1.38}
+      .reveal-panel{position:absolute;left:43%;top:12%;width:53%;height:76%;overflow:hidden;border-radius:22px;background:#fff;box-shadow:0 34px 85px rgba(14,68,113,.2);transform-style:preserve-3d;border:1px solid #dfe7f1}
+      .reveal-panel img{width:100%;height:100%;object-fit:cover;display:block}
+      .reveal-demo{position:absolute;right:18px;top:16px;padding:10px 13px;border:1px solid #f0d768;border-radius:8px;background:#fff8ce;color:#685800;font-size:12px;font-weight:800;letter-spacing:.08em}
+      .reveal-focus{position:absolute;left:20%;top:19%;width:44%;height:8%;border:2px solid rgba(0,113,247,.8);border-radius:12px;box-shadow:0 0 0 10px rgba(0,113,247,.08)}
+      .reveal-cursor{position:absolute;left:55%;top:31%;width:34px;height:42px;filter:drop-shadow(0 4px 4px rgba(0,0,0,.22))}
+      .reveal-cursor:before{content:'';position:absolute;inset:0;background:#0071f7;clip-path:polygon(0 0,100% 65%,58% 70%,77% 100%,62% 107%,44% 77%,20% 100%)}
+      .reveal-cursor span{position:absolute;right:-18px;top:-15px;width:14px;height:14px;border-radius:50%;background:#f7cf00;box-shadow:0 0 0 7px rgba(247,207,0,.28)}
+      .reveal-edge{position:absolute;left:0;top:0;bottom:0;width:8px;background:linear-gradient(#0e4471 0 34%,#0071f7 34% 78%,#f7cf00 78%)}
+      .reveal-thread{position:absolute;left:39%;top:53%;width:8%;height:3px;background:#f7cf00;transform:rotate(-8deg);transform-origin:left center}
+      @media (orientation:portrait){.reveal-left{left:7%;top:8%;width:86%}.reveal-kicker{font-size:15px}.reveal-title{margin:22px 0 15px;font-size:clamp(72px,10vw,100px);line-height:.84}.reveal-brandline{margin-top:18px;font-size:21px}.reveal-brandline img{width:50px;height:50px}.reveal-caption{margin:15px 0 0 66px;font-size:18px}.reveal-panel{left:7%;top:48%;width:86%;height:37%;border-radius:20px}.reveal-demo{right:10px;top:10px;font-size:10px}.reveal-focus{top:19%;height:8%}.reveal-cursor{transform:scale(.8)}.reveal-thread{left:48%;top:46%;width:6%}}
+    </style><div id="root" data-composition-id="02-reveal" data-width="1920" data-height="1080" data-duration="3.34"><div id="ground-02-reveal" class="02-reveal-ground reveal-bg clip" data-start="0" data-duration="3.34" data-track-index="0"></div>
+      <div class="reveal-world">
+        <div class="reveal-left">
+          <div class="reveal-kicker"><span></span> RECRUITMENT, CONNECTED</div>
+          <h1 class="reveal-title">Meet<br><em>Smile.</em></h1>
+          <div class="reveal-brandline"><img src="assets/smile-recruitment-portal-logo.png" alt="Smile mark"><strong>Smile Recruitment Portal</strong></div>
+          <div class="reveal-caption">From first application<br>to human review.</div>
+        </div>
+        <div class="reveal-panel">
+          <img src="assets/screening-panel.png" alt="Illustrative Smile Portal Resume Screening interface">
+          <div class="reveal-demo">ILLUSTRATIVE UI · DEMO DATA</div>
+          <div class="reveal-focus"></div>
+          <div class="reveal-cursor"><span></span></div>
+          <div class="reveal-edge"></div>
+        </div>
+        <div class="reveal-thread"></div>
+      </div></div><script>(()=>{const root=document.querySelector('[data-composition-id="02-reveal"]');if(!root||!window.gsap)return;window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true});window.__timelines["02-reveal"]=tl;const width=1920,height=1080,portrait=false;
+      const q=s=>root.querySelector(s);
+      tl.fromTo(q('.reveal-panel'),{x:330,y:90,rotationY:-17,rotationZ:1.2,scale:.86,opacity:0},{x:0,y:0,rotationY:0,rotationZ:0,scale:1,opacity:1,duration:.82,ease:'power3.out'},.18);
+      tl.fromTo(q('.reveal-kicker'),{x:-70,opacity:0},{x:0,opacity:1,duration:.5,ease:'power3.out'},.28);
+      tl.fromTo(q('.reveal-title'),{y:55,filter:'blur(10px)',opacity:0},{y:0,filter:'blur(0px)',opacity:1,duration:.65,ease:'power3.out'},.62);
+      tl.fromTo(q('.reveal-brandline'),{y:30,opacity:0},{y:0,opacity:1,duration:.45,ease:'power3.out'},1.35);
+      tl.fromTo(q('.reveal-caption'),{y:22,opacity:0},{y:0,opacity:1,duration:.42,ease:'power3.out'},1.82);
+      tl.fromTo(q('.reveal-focus'),{scaleX:.04,transformOrigin:'left center',opacity:0},{scaleX:1,opacity:1,duration:.54,ease:'power2.out'},1.1);
+      tl.fromTo(q('.reveal-cursor'),{x:-40,y:-20,opacity:0},{x:0,y:0,opacity:1,duration:.35,ease:'power3.out'},1.55);
+      tl.to(q('.reveal-thread'),{scaleX:1.8,opacity:.8,duration:.65,ease:'power2.out'},1.25);
+      tl.to(q('.reveal-panel'),{x:-10,scale:1.025,duration:1.2,ease:'power1.inOut'},1.75);tl.seek(0)})();</script></template>

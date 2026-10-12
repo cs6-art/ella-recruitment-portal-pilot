@@ -1,0 +1,36 @@
+Source review: C:\Projects\ella-recruitment-portal-pilot
+
+Verified product identity
+- README calls the application the McLink Recruitment Portal (Smile).
+- The portal describes Smile as its AI assistant.
+- This campaign uses the requested name “Ella Recruitment Portal Pilot”; the reconstructed app chrome keeps the source name “Smile Recruitment Portal.”
+
+Verified workflow
+- HR creates and publishes a role with screening criteria and interview questions.
+- Resumes can be uploaded in batches (up to 20), imported from Google Drive or OneDrive, submitted through an application link, or screened individually.
+- Smile screens resumes against role criteria. Applicant review exposes the score, recommendation, summary, strengths, gaps, and the role settings applied.
+- Depending on role settings, candidates can book an AI voice interview, take a Live Avatar interview, or choose between available formats.
+- Interview results and evidence are reviewed by HR. The portal does not make the final hiring decision.
+- The applicant profile includes AI screening evidence, interview review, transcript, and status tracking.
+
+Source UI wording used in the film
+- Resume Screening
+- Applicants
+- How AI Graded This Applicant
+- AI Screening Evidence
+- Voice Interview Review
+- Live Avatar Review
+- Schedule a call
+- Interview with our Avatar now
+- Approve / Reject
+
+Brand values copied from src/app/globals.css
+- Navy: #0e4471
+- Blue: #0071f7
+- Yellow: #f7cf00
+- Ink: #172033
+- Soft surface: #f4f7fb
+- Border: #dfe7f1
+- UI font stack begins with ui-sans-serif, system-ui.
+
+All on-screen candidate and role values are synthetic examples created for this noninteractive promotional composition. No production data is used.

@@ -1,0 +1,11 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+const p=new URL('./generate-reference-style.mjs',import.meta.url);
+let s=readFileSync(p,'utf8');
+s=s.replace("src:url('assets/fonts/captured-Manrope.ttf')}","src:url('assets/fonts/captured-Manrope.ttf');font-weight:400 800;font-display:block}");
+s=s.replace('.ring{position:absolute;top:38%;height:25%;','.ring{position:absolute;top:52%;height:30%;');
+s=s.replace('.consent{bottom:38px;','.ring{top:36.5%;height:21%}.consent{bottom:38px;');
+s=s.replace('.mini b{color:','.mini .brand .logo{width:70px;height:70px}.mini .brand b{font-size:82px;letter-spacing:-4px}.mini b{color:');
+s=s.replace("['05 · Scheduling','<div class=\"mini\"><b>Interview scheduling</b><br>Connected Google Calendar<br>when configured</div>'],['04 · HR review',plate('evidence-review-panel.png')]","['04 · HR review',plate('evidence-review-panel.png')],['05 · Scheduling','<div class=\"mini\"><b>Interview scheduling</b><br>Connected Google Calendar<br>when configured</div>']");
+s=s.replace('i===4','i===3').replace('fc=4%cols,fr=Math.floor(4/cols)','fc=3%cols,fr=Math.floor(3/cols)');
+s=s.replace("tl.from(q('.ribbon'),{y:25,opacity:0,duration:.4},1.85);","tl.from(q('.headline'),{y:20,opacity:0,duration:.4},1.6);tl.from(q('.ribbon'),{y:25,opacity:0,duration:.4},1.85);");
+writeFileSync(p,s);

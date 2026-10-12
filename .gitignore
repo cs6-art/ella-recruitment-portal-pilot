@@ -27,3 +27,16 @@ data/private-resumes/
 /reset-*.mjs
 /e2e-state.json
 /e2e-application-id.txt
+
+# Promo video projects: rendered videos stay local (uncommitted); generated
+# frame dumps / QC output / caches are regenerable, not project source.
+ella-portal-promo/**/*.mp4
+videos/**/*.mp4
+videos/**/snapshots/
+videos/**/.thumbnails/
+videos/**/proof-frames/
+videos/**/renders/qc/
+videos/**/review/
+videos/**/.hyperframes/
+ella-portal-promo/node_modules/
+videos/**/node_modules/

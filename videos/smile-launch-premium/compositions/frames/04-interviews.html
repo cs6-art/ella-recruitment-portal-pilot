@@ -1,0 +1,39 @@
+<template><style>@font-face{font-family:Manrope;src:url("assets/fonts/captured-Manrope.ttf") format("truetype");font-weight:400 800;font-display:block}*{box-sizing:border-box}#root{position:relative;width:1920px;height:1080px;overflow:hidden;font-family:Manrope,Arial,sans-serif;font-synthesis:none}#root *{box-sizing:border-box}.clip{position:absolute;inset:0;width:100%;height:100%}.04-interviews-ground{z-index:0}
+
+      #root{color:#fff}
+      .interview-bg{background:radial-gradient(ellipse at 80% 35%,#1d5273 0%,#14364f 41%,#0e273b 82%)}
+      .interview-world{position:absolute;inset:0;overflow:hidden}
+      .interview-heading{position:absolute;left:6.5%;top:17%;width:34%;z-index:3}
+      .interview-kicker{font-size:clamp(13px,1vw,18px);font-weight:800;letter-spacing:.16em;color:#a8c9dc}
+      .interview-heading h1{margin:28px 0 20px;font-size:clamp(70px,6.6vw,126px);line-height:.9;letter-spacing:-.09em;font-weight:800;color:#fff}
+      .interview-heading h1 em{font-style:normal;color:#f7cf00}
+      .interview-heading p{margin:0;color:#c2d5e2;font-size:clamp(18px,1.55vw,27px);line-height:1.35}
+      .interview-window{position:absolute;left:42%;top:8%;width:49%;height:78%;overflow:hidden;border-radius:21px;background:#fff;box-shadow:0 38px 95px rgba(0,0,0,.28);transform-style:preserve-3d}
+      .interview-window img{width:100%;height:100%;display:block;object-fit:cover}
+      .interview-watermark{position:absolute;right:12px;top:12px;padding:8px 10px;border:1px solid #f0d768;border-radius:7px;background:#fff8ce;color:#685800;font-size:10px;font-weight:850;letter-spacing:.05em}
+      .interview-call-ring,.interview-avatar-ring{position:absolute;top:35%;height:23%;width:41%;border:2px solid #0071f7;border-radius:16px;box-shadow:0 0 0 7px rgba(0,113,247,.09);opacity:0}
+      .interview-call-ring{left:6.4%}.interview-avatar-ring{right:6.4%;border-color:#f0bf00;box-shadow:0 0 0 7px rgba(247,207,0,.13)}
+      .interview-consent{position:absolute;right:8%;top:61%;padding:8px 10px;border-radius:7px;background:#fff8ce;color:#685800;font-size:9px;font-weight:900;letter-spacing:.06em;opacity:0}
+      .interview-choice-dot{position:absolute;right:8%;top:42%;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#0071f7;color:#fff;font-size:18px;box-shadow:0 0 0 7px rgba(0,113,247,.15);opacity:0}
+      .interview-facts{position:absolute;left:6.5%;bottom:13%;display:flex;gap:30px;color:#fff}
+      .interview-facts div{display:flex;flex-direction:column;gap:6px;padding-left:14px;border-left:3px solid #f7cf00}
+      .interview-facts b{font-size:clamp(18px,1.5vw,27px);letter-spacing:-.03em}.interview-facts span{font-size:clamp(13px,1vw,17px);color:#aec5d6}
+      .interview-rail{position:absolute;right:8%;bottom:17%;display:flex;align-items:center;gap:12px;color:#d1e4f0;font-size:11px;font-weight:800;letter-spacing:.16em}.interview-rail i{width:50px;height:2px;background:#f7cf00}
+      @media (orientation:portrait){.interview-heading{left:7%;top:6%;width:86%}.interview-kicker{font-size:15px}.interview-heading h1{margin:17px 0 12px;font-size:clamp(66px,9.7vw,96px)}.interview-heading p{font-size:19px}.interview-window{left:6%;top:36%;width:88%;height:39%;border-radius:18px}.interview-watermark{right:8px;top:8px;font-size:9px}.interview-facts{left:8%;bottom:19%;gap:20px}.interview-facts b{font-size:21px}.interview-facts span{font-size:13px}.interview-rail{right:8%;bottom:20%;font-size:9px}.interview-rail i{width:30px}.interview-call-ring,.interview-avatar-ring{top:36%;height:22%}.interview-consent{top:62%;font-size:8px}}
+    </style><div id="root" data-composition-id="04-interviews" data-width="1920" data-height="1080" data-duration="5.34"><div id="ground-04-interviews" class="04-interviews-ground interview-bg clip" data-start="0" data-duration="5.34" data-track-index="0"></div>
+      <div class="interview-world">
+        <div class="interview-heading"><div class="interview-kicker">CANDIDATE EXPERIENCE</div><h1>Voice or<br><em>Live Avatar.</em></h1><p>One format, based on the role.</p></div>
+        <div class="interview-window"><img src="assets/interview-choice-panel.png" alt="Smile Portal candidate interview choices — illustrative demo"><div class="interview-watermark">ILLUSTRATIVE UI · DEMO DATA</div><div class="interview-call-ring"></div><div class="interview-avatar-ring"></div><div class="interview-consent">CONSENT BEFORE RECORDING</div><div class="interview-choice-dot">✓</div></div>
+        <div class="interview-facts"><div><b>10 min</b><span>scheduled voice call</span></div><div><b>Up to 20 min</b><span>Live Avatar interview</span></div></div>
+        <div class="interview-rail"><span>VOICE</span><i></i><span>LIVE AVATAR</span></div>
+      </div></div><script>(()=>{const root=document.querySelector('[data-composition-id="04-interviews"]');if(!root||!window.gsap)return;window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true});window.__timelines["04-interviews"]=tl;const width=1920,height=1080,portrait=false;
+      const q=s=>root.querySelector(s);
+      tl.fromTo(q('.interview-window'),{x:280,rotationY:-12,scale:.88,opacity:0},{x:0,rotationY:0,scale:1,opacity:1,duration:.8,ease:'power3.out'},.12);
+      tl.fromTo(q('.interview-heading'),{x:-55,opacity:0},{x:0,opacity:1,duration:.55,ease:'power3.out'},.2);
+      tl.fromTo(q('.interview-call-ring'),{x:-55,rotationY:-20,opacity:0},{x:0,rotationY:0,opacity:1,duration:.5,ease:'power3.out'},1.05);
+      tl.to(q('.interview-call-ring'),{scale:1.025,boxShadow:'0 0 0 13px rgba(0,113,247,.13)',duration:.42,yoyo:true,repeat:1,ease:'sine.inOut'},1.62);
+      tl.fromTo(q('.interview-avatar-ring'),{x:65,rotationY:20,opacity:0},{x:0,rotationY:0,opacity:1,duration:.5,ease:'power3.out'},2.34);
+      tl.fromTo(q('.interview-consent'),{y:12,opacity:0},{y:0,opacity:1,duration:.32,ease:'power2.out'},3.04);
+      tl.fromTo(q('.interview-choice-dot'),{scale:0},{scale:1,opacity:1,duration:.32,ease:'back.out(1.5)'},3.55);
+      tl.fromTo(q('.interview-facts'),{y:25,opacity:0},{y:0,opacity:1,duration:.45,ease:'power3.out'},3.78);
+      tl.fromTo(q('.interview-rail'),{x:25,opacity:0},{x:0,opacity:1,duration:.35,ease:'power3.out'},4.25);tl.seek(0)})();</script></template>

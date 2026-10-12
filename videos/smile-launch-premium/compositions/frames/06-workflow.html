@@ -1,0 +1,31 @@
+<template><style>@font-face{font-family:Manrope;src:url("assets/fonts/captured-Manrope.ttf") format("truetype");font-weight:400 800;font-display:block}*{box-sizing:border-box}#root{position:relative;width:1920px;height:1080px;overflow:hidden;font-family:Manrope,Arial,sans-serif;font-synthesis:none}#root *{box-sizing:border-box}.clip{position:absolute;inset:0;width:100%;height:100%}.06-workflow-ground{z-index:0}
+
+      #root{color:#fff}
+      .flow-bg{background:radial-gradient(ellipse at 50% 60%,#1b5475 0%,#123b58 42%,#0e2d47 78%,#0b2238 100%)}
+      .flow-world{position:absolute;inset:0;overflow:hidden}
+      .flow-kicker{position:absolute;left:7%;top:10%;font-size:clamp(13px,1vw,18px);font-weight:850;letter-spacing:.17em;color:#aac8d9}
+      .flow-title{position:absolute;left:7%;top:15%;margin:0;font-size:clamp(54px,5vw,92px);font-weight:800;letter-spacing:-.075em;line-height:.95;color:#fff;max-width:80%}
+      .flow-canvas{position:absolute;inset:20% 0 10%;}
+      .flow-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+      .flow-path{fill:none;stroke:#69c3ff;stroke-width:5;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;filter:drop-shadow(0 0 10px rgba(0,113,247,.35))}
+      .flow-station{position:absolute;left:0;top:0;width:250px;min-height:142px;padding:19px 20px 17px 72px;border:1px solid rgba(193,221,238,.28);border-radius:17px;background:rgba(255,255,255,.09);backdrop-filter:blur(8px);box-shadow:0 20px 42px rgba(0,0,0,.14);opacity:0}
+      .flow-station b{position:absolute;left:18px;top:19px;display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#f7cf00;color:#0e4471;font-size:12px;font-weight:900}
+      .flow-station strong{display:block;margin:5px 0 8px;font-size:21px;letter-spacing:-.03em}.flow-station span{display:block;font-size:14px;line-height:1.25;color:#c4d9e6}
+      .flow-candidate{position:absolute;left:0;top:0;display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:999px;background:#fff;color:#0e4471;font-size:10px;font-weight:900;letter-spacing:.08em;box-shadow:0 10px 28px rgba(0,0,0,.25);z-index:5}
+      .flow-candidate span{width:9px;height:9px;border-radius:50%;background:#0071f7;box-shadow:0 0 0 5px rgba(0,113,247,.16)}
+      @media (orientation:portrait){.flow-kicker{left:8%;top:6%;font-size:14px}.flow-title{left:8%;top:9%;max-width:86%;font-size:clamp(52px,7.6vw,78px);line-height:.96}.flow-canvas{inset:21% 0 8%}.flow-svg{inset:0;width:100%;height:100%}.flow-station{width:42%;min-height:132px;padding:17px 12px 15px 58px;border-radius:16px}.flow-station b{width:34px;height:34px;left:12px;top:17px}.flow-station strong{font-size:18px}.flow-station span{font-size:13px}}
+    </style><div id="root" data-composition-id="06-workflow" data-width="1920" data-height="1080" data-duration="3.42"><div id="ground-06-workflow" class="06-workflow-ground flow-bg clip" data-start="0" data-duration="3.42" data-track-index="0"></div>
+      <div class="flow-world"><div class="flow-kicker">ONE CANDIDATE JOURNEY</div><h1 class="flow-title">One connected hiring workflow.</h1><div class="flow-canvas"><svg class="flow-svg" viewBox="0 0 1920 700" preserveAspectRatio="none"><path class="flow-path" d="M160 430 C300 430 300 250 490 250 S680 250 800 430 S1030 610 1190 430 S1410 250 1580 430 S1760 540 1840 430"/></svg><div class="flow-station flow-s1"><b>01</b><strong>Role setup</strong><span>Criteria reviewed by HR</span></div><div class="flow-station flow-s2"><b>02</b><strong>Screening</strong><span>Match + evidence</span></div><div class="flow-station flow-s3"><b>03</b><strong>AI interview</strong><span>Configured format</span></div><div class="flow-station flow-s4"><b>04</b><strong>HR review</strong><span>People decide</span></div><div class="flow-station flow-s5"><b>05</b><strong>Scheduling</strong><span>When the role needs it</span></div><div class="flow-candidate"><span></span><b>APPLICANT</b></div></div></div></div><script>(()=>{const root=document.querySelector('[data-composition-id="06-workflow"]');if(!root||!window.gsap)return;window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true});window.__timelines["06-workflow"]=tl;const width=1920,height=1080,portrait=false;
+      const q=s=>root.querySelector(s);
+      const svg=q('.flow-path');const pathLen=svg.getTotalLength();svg.style.strokeDasharray=pathLen;svg.style.strokeDashoffset=pathLen;
+      const p=portrait?[[width*.5,height*.22],[width*.5,height*.35],[width*.5,height*.48],[width*.5,height*.61],[width*.5,height*.74]]:[[width*.12,height*.62],[width*.255,height*.35],[width*.42,height*.62],[width*.62,height*.35],[width*.82,height*.62]];
+      const cardP=portrait?[[width*.26,height*.25],[width*.74,height*.38],[width*.26,height*.51],[width*.74,height*.64],[width*.26,height*.77]]:[[width*.12,height*.44],[width*.255,height*.33],[width*.42,height*.44],[width*.62,height*.33],[width*.82,height*.44]];
+      const cards=[...root.querySelectorAll('.flow-station')];
+      const svgEl=q('.flow-svg');svgEl.setAttribute('viewBox','0 0 '+width+' '+(height*.68));svgEl.setAttribute('preserveAspectRatio','none');
+      const local=p.map(([x,y])=>[x,y-height*.2]);
+      const d='M'+local[0][0]+' '+local[0][1]+' C'+(local[0][0]+width*.08)+' '+local[0][1]+','+(local[1][0]-width*.08)+' '+local[1][1]+','+local[1][0]+' '+local[1][1]+' S'+(local[2][0]-width*.08)+' '+local[2][1]+','+local[2][0]+' '+local[2][1]+' S'+(local[3][0]-width*.08)+' '+local[3][1]+','+local[3][0]+' '+local[3][1]+' S'+(local[4][0]-width*.08)+' '+local[4][1]+','+local[4][0]+' '+local[4][1];svg.setAttribute('d',d);const len=svg.getTotalLength();svg.style.strokeDasharray=len;svg.style.strokeDashoffset=len;
+      cards.forEach((el,i)=>{gsap.set(el,{xPercent:-50,yPercent:-50,x:cardP[i][0],y:cardP[i][1]-height*.2});});gsap.set(q('.flow-candidate'),{xPercent:-50,yPercent:-50,x:p[0][0],y:p[0][1]-height*.2});
+      tl.to(svg,{strokeDashoffset:0,duration:2.15,ease:'power2.inOut'},.18);
+      cards.forEach((el,i)=>tl.fromTo(el,{scale:.82,opacity:0},{scale:1,opacity:1,duration:.34,ease:'power3.out'},.22+i*.36));
+      for(let i=1;i<p.length;i++)tl.to(q('.flow-candidate'),{x:p[i][0],y:p[i][1]-height*.2,duration:.38,ease:'power2.inOut'},.45+(i-1)*.4);
+      tl.seek(0)})();</script></template>

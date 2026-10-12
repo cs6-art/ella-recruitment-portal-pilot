@@ -1,0 +1,14 @@
+{
+  "name": "ella-portal-promo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.8.143 preview",
+    "check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-hyperframes.ps1 check",
+    "render": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-hyperframes.ps1 render --quality delivery --output ella-recruitment-pilot.mp4",
+    "score": "node scripts/create-score.mjs"
+  },
+  "devDependencies": {
+    "gsap": "^3.14.2"
+  }
+}

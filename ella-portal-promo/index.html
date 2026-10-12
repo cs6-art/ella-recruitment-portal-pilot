@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Ella Recruitment Portal Pilot — promotional film</title>
+  <script src="assets/gsap.min.js"></script>
+  <style>
+    :root { --navy:#0e4471; --blue:#0071f7; --yellow:#f7cf00; --ink:#172033; --muted:#617287; --surface:#f4f7fb; --line:#dfe7f1; --white:#fff; --cream:#fbfaf6; }
+    * { box-sizing:border-box; }
+    html, body { width:1920px; height:1080px; margin:0; overflow:hidden; background:var(--cream); color:var(--ink); font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    #root { width:1920px; height:1080px; position:relative; overflow:hidden; background:var(--cream); }
+    .scene { position:absolute; inset:0; overflow:hidden; }
+    .clip { position:absolute; inset:0; }
+    .reveal { opacity:0; }
+    .brand { display:flex; align-items:center; gap:17px; color:var(--navy); font-size:22px; font-weight:720; letter-spacing:-.035em; }
+    .brand .logo-mark { width:52px; height:52px; }
+    .logo-mark { display:inline-block; flex:0 0 auto; background:url("assets/smile-recruitment-portal-logo.png") center / contain no-repeat; }
+    .eyebrow { display:flex; align-items:center; gap:12px; color:var(--blue); font-size:17px; font-weight:780; letter-spacing:.13em; text-transform:uppercase; }
+    .eyebrow:before { content:""; width:28px; height:3px; border-radius:4px; background:var(--yellow); }
+    .display { color:var(--navy); font-size:76px; font-weight:730; letter-spacing:-.065em; line-height:1.02; }
+    .subhead { color:var(--muted); font-size:25px; line-height:1.48; letter-spacing:-.02em; }
+    .watermark { position:absolute; z-index:9; top:21px; right:22px; padding:10px 14px; border:1px solid #f0d968; border-radius:8px; color:#655200; background:#fff9d8; font-size:12px; font-weight:820; letter-spacing:.09em; }
+    .watermark.top-watermark { top:20px; right:112px; }
+    .fine { color:var(--muted); font-size:13px; }
+    .pill { display:inline-flex; align-items:center; gap:8px; padding:9px 13px; border:1px solid var(--line); border-radius:999px; color:var(--navy); background:white; font-size:14px; font-weight:700; }
+    .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#2bb673; }
+    .shadow { box-shadow:0 28px 80px rgba(30,64,103,.12),0 4px 14px rgba(30,64,103,.06); }
+
+    /* Opening */
+    #scene-open { background:radial-gradient(ellipse at 88% 52%, #eaf2fa 0%, #f5f7f7 34%, var(--cream) 68%); }
+    .open-brand { position:absolute; top:70px; left:112px; }
+    .open-copy { position:absolute; top:270px; left:142px; width:780px; }
+    .open-copy .eyebrow { margin-bottom:30px; }
+    .open-copy .display { font-size:94px; perspective:900px; }
+    .headline-line { display:block; will-change:transform; }
+    .open-copy .subhead { max-width:590px; margin-top:30px; }
+    .open-note { margin-top:38px; color:#8290a1; font-size:15px; letter-spacing:.02em; }
+    .paper-stage { position:absolute; top:180px; right:150px; width:760px; height:740px; }
+    .paper { position:absolute; width:525px; height:660px; padding:48px 44px; border:1px solid #e7eaf0; border-radius:14px; background:#fff; box-shadow:0 30px 70px rgba(34,65,98,.11); will-change:transform; }
+    .paper.back { top:45px; left:174px; transform:rotate(8deg); opacity:.7; }
+    .paper.mid { top:22px; left:96px; transform:rotate(3deg); opacity:.88; }
+    .paper.front { top:0; left:10px; transform:rotate(-3deg); }
+    .paper-top { width:92px; height:12px; margin-bottom:34px; border-radius:9px; background:#d9e5f1; }
+    .paper-head { width:72%; height:18px; margin-bottom:14px; border-radius:8px; background:#214d75; opacity:.88; }
+    .paper-line { height:8px; margin:12px 0; border-radius:8px; background:#e8edf2; }
+    .paper-line.short { width:58%; }
+    .paper-line.midline { width:80%; }
+    .paper-avatar { width:76px; height:76px; margin:24px 0 20px; border-radius:50%; background:linear-gradient(145deg,#f2d8bc,#a9c5da); }
+    .paper-accent { position:absolute; right:38px; bottom:32px; display:grid; place-items:center; width:68px; height:68px; border-radius:50%; background:var(--yellow); color:var(--navy); font-size:30px; font-weight:800; transform:rotate(3deg); }
+    .open-rule { position:absolute; bottom:72px; left:112px; width:calc(100% - 224px); height:1px; background:var(--line); }
+    .open-foot { position:absolute; bottom:35px; left:112px; color:#8b98a8; font-size:13px; letter-spacing:.04em; }
+
+    /* Product shell used across the screening and evidence scenes */
+    .product-bg { background:#f6f8fb; }
+    .product-topline { position:absolute; top:0; left:0; width:100%; height:7px; background:linear-gradient(90deg,var(--navy) 0 34%,var(--blue) 34% 78%,var(--yellow) 78% 100%); }
+    .product-heading { position:absolute; top:92px; left:114px; width:400px; }
+    .product-heading .eyebrow { margin-bottom:24px; }
+    .product-heading .display { font-size:61px; }
+    .product-heading .subhead { margin-top:24px; font-size:21px; }
+    .side-note { position:absolute; left:114px; bottom:106px; display:flex; align-items:center; gap:12px; color:#62748a; font-size:15px; }
+    .side-note i { width:32px; height:32px; display:grid; place-items:center; border-radius:10px; background:#e9f2ff; color:var(--blue); font-style:normal; font-weight:800; }
+    .app { position:absolute; top:80px; left:560px; width:1248px; height:900px; border:1px solid #e0e7ef; border-radius:16px; background:white; box-shadow:0 24px 80px rgba(28,56,88,.13); overflow:hidden; }
+    .app-side { position:absolute; inset:0 auto 0 0; width:222px; padding:24px 15px; border-right:1px solid #edf0f4; background:#fff; }
+    .app-logo { display:flex; align-items:center; gap:9px; padding:2px 6px 28px; color:var(--navy); font-size:16px; font-weight:760; }
+    .app-logo .logo-mark { width:34px; height:34px; }
+    .app-menu { padding:10px 12px; margin:4px 0; display:flex; gap:11px; align-items:center; color:#58697e; font-size:13px; border-radius:8px; }
+    .app-menu .mi { width:18px; color:#96a5b5; font-size:15px; text-align:center; }
+    .app-menu.active { color:var(--blue); background:#edf5ff; font-weight:730; }
+    .app-main { position:absolute; left:222px; top:0; width:1026px; height:100%; background:#fbfcfe; }
+    .app-head { height:76px; display:flex; align-items:center; justify-content:space-between; padding:0 31px; border-bottom:1px solid #e9edf2; background:white; }
+    .crumb { font-size:13px; color:#8996a5; }
+    .avatar-small { width:31px; height:31px; border-radius:50%; display:grid; place-items:center; background:#dce9f5; color:var(--navy); font-size:12px; font-weight:800; }
+    .screen-title { padding:24px 32px 13px; display:flex; align-items:flex-start; justify-content:space-between; }
+    .screen-title h2 { margin:0; color:var(--navy); font-size:24px; letter-spacing:-.04em; }
+    .screen-title p { margin:6px 0 0; color:#8290a0; font-size:13px; }
+    .screen-body { padding:0 32px 30px; }
+    .role-select { display:flex; align-items:center; justify-content:space-between; width:100%; padding:12px 15px; border:1px solid #e2e8ef; border-radius:8px; background:white; color:#34445a; font-size:13px; }
+    .upload { position:relative; overflow:hidden; margin-top:14px; height:167px; border:1.5px dashed #9bbde6; border-radius:11px; display:flex; align-items:center; justify-content:center; flex-direction:column; background:#f8fbff; }
+    .scan-sweep { position:absolute; z-index:0; inset:0 auto 0 0; width:34%; opacity:0; pointer-events:none; background:linear-gradient(90deg,transparent,rgba(0,113,247,.11),transparent); }
+    .upload-icon,.upload strong,.upload > span,.import-row { position:relative; z-index:1; }
+    .upload-icon { width:42px; height:42px; display:grid; place-items:center; border-radius:13px; background:#e6f1ff; color:var(--blue); font-size:23px; }
+    .upload strong { margin-top:10px; color:#294665; font-size:14px; }
+    .upload span { margin-top:5px; color:#8795a4; font-size:11px; }
+    .import-row { display:flex; gap:10px; justify-content:center; margin-top:12px; }
+    .import-button { padding:8px 13px; border:1px solid #e1e7ee; border-radius:7px; background:white; color:#50647b; font-size:11px; font-weight:650; }
+    .table-card { margin-top:18px; border:1px solid #e5eaf0; border-radius:10px; background:white; overflow:hidden; }
+    .table-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; color:#253b54; font-size:13px; font-weight:720; border-bottom:1px solid #edf0f4; }
+    .table-row { min-height:55px; display:grid; grid-template-columns:1.3fr 1fr .8fr .9fr; align-items:center; padding:0 16px; border-bottom:1px solid #f0f2f5; color:#52647a; font-size:11px; opacity:0; will-change:transform,opacity; }
+    .table-row:last-child { border-bottom:0; }
+    .file-cell { display:flex; align-items:center; gap:9px; color:#344960; font-weight:650; }
+    .file-icon { width:25px; height:29px; display:grid; place-items:center; border-radius:5px; color:#c04646; background:#fff0ef; font-size:10px; font-weight:800; }
+    .status { display:inline-flex; align-items:center; gap:6px; color:#168354; font-size:10px; font-weight:750; }
+    .status .dot { width:6px; height:6px; }
+    .done-note { position:absolute; right:30px; bottom:24px; display:flex; gap:9px; align-items:center; color:#18845a; font-size:12px; font-weight:700; }
+
+    /* Interview choices */
+    #scene-interview { background:linear-gradient(112deg,#f7f9fc 0%,#f7f9fc 55%,#eaf2fb 100%); }
+    .interview-head { position:absolute; top:104px; left:128px; width:600px; }
+    .interview-head .eyebrow { margin-bottom:23px; }
+    .interview-head .display { font-size:72px; }
+    .interview-head .subhead { margin-top:22px; max-width:510px; }
+    .invite { position:absolute; top:128px; right:130px; width:836px; height:810px; padding:38px; border:1px solid #e1e8f0; border-radius:20px; background:white; }
+    .invite-top { display:flex; justify-content:space-between; align-items:flex-start; padding-bottom:24px; border-bottom:1px solid #edf0f4; }
+    .invite-top h2 { margin:0; color:var(--navy); font-size:22px; letter-spacing:-.04em; }
+    .invite-top p { margin:8px 0 0; color:#78889a; font-size:13px; }
+    .invite-profile { margin-top:24px; padding:18px 20px; display:flex; align-items:center; gap:17px; border:1px solid #e9edf3; border-radius:12px; background:#fcfdff; }
+    .profile-avatar { width:62px; height:62px; display:grid; place-items:center; border-radius:50%; background:linear-gradient(145deg,#d9e8f2,#9ebdd4); color:#24415c; font-size:22px; font-weight:750; }
+    .invite-profile strong { display:block; color:#233a53; font-size:16px; }
+    .invite-profile span { display:block; margin-top:5px; color:#8290a0; font-size:12px; }
+    .invite-label { margin:29px 0 14px; color:#263e58; font-size:14px; font-weight:750; }
+    .choice-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .choice { min-height:188px; padding:22px; border:1px solid #dce7f4; border-radius:13px; background:#fbfdff; will-change:transform,opacity; }
+    .choice.blue-choice { border-color:#a8cdf9; background:#f5faff; }
+    .choice-icon { width:40px; height:40px; display:grid; place-items:center; border-radius:11px; color:var(--blue); background:#e5f1ff; font-size:18px; font-weight:800; transform-origin:center; will-change:transform; }
+    .choice h3 { margin:17px 0 7px; color:#244665; font-size:16px; letter-spacing:-.02em; }
+    .choice p { margin:0; color:#7b8a99; font-size:12px; line-height:1.5; }
+    .choice-action { display:inline-block; margin-top:16px; color:var(--blue); font-size:12px; font-weight:780; }
+    .invite-foot { margin-top:19px; padding:13px 15px; border-radius:9px; background:#f4f7fb; color:#62758b; font-size:12px; }
+    .interview-aside { position:absolute; left:128px; bottom:116px; width:440px; }
+    .interview-aside .pill { margin-bottom:23px; }
+    .interview-aside p { color:#677b90; font-size:15px; line-height:1.55; }
+    /* Evidence and human review */
+    #scene-evidence { background:#f6f8fb; }
+    .evidence-note { position:absolute; left:111px; top:129px; width:330px; }
+    .evidence-note .eyebrow { margin-bottom:24px; }
+    .evidence-note h2 { margin:0; color:var(--navy); font-size:54px; line-height:1.04; letter-spacing:-.06em; }
+    .evidence-note p { margin:22px 0 0; color:#65788e; font-size:18px; line-height:1.55; }
+    .human-note { position:absolute; left:111px; bottom:122px; width:340px; padding:18px 20px; border-left:3px solid var(--yellow); background:white; color:#254461; font-size:16px; font-weight:720; line-height:1.45; box-shadow:0 8px 28px rgba(26,60,92,.06); }
+    .review-app { position:absolute; top:66px; left:498px; width:1310px; height:948px; border:1px solid #dfe6ee; border-radius:16px; overflow:hidden; background:white; box-shadow:0 24px 75px rgba(28,56,88,.12); }
+    .review-app .app-side { width:208px; }
+    .review-app .app-main { left:208px; width:1102px; }
+    .review-app .app-menu { font-size:12px; padding:10px; }
+    .review-app .app-head { height:64px; }
+    .review-title { padding:20px 28px 14px; display:flex; align-items:center; justify-content:space-between; }
+    .review-title h2 { margin:0; color:var(--navy); font-size:21px; letter-spacing:-.04em; }
+    .review-title .breadcrumb { color:#8290a0; font-size:11px; }
+    .candidate-summary { margin:0 28px 14px; padding:13px 16px; display:flex; align-items:center; justify-content:space-between; border:1px solid #e5eaf0; border-radius:10px; background:#fff; }
+    .candidate-id { display:flex; align-items:center; gap:12px; }
+    .candidate-id .profile-avatar { width:46px; height:46px; font-size:17px; }
+    .candidate-id strong { display:block; color:#27415c; font-size:13px; }
+    .candidate-id small { display:block; margin-top:4px; color:#8290a0; font-size:10px; }
+    .sample-score { text-align:right; }
+    .sample-score strong { display:block; color:var(--blue); font-size:22px; letter-spacing:-.04em; }
+    .sample-score small { color:#8996a5; font-size:9px; font-weight:750; letter-spacing:.09em; }
+    .review-columns { display:grid; grid-template-columns:1.02fr .98fr; gap:14px; padding:0 28px; }
+    .review-card { min-height:229px; padding:17px 18px; border:1px solid #e5eaf0; border-radius:10px; background:white; opacity:0; will-change:transform,opacity; }
+    .review-card h3 { margin:0 0 13px; color:#263f59; font-size:14px; letter-spacing:-.025em; }
+    .review-card .muted { color:#8391a0; font-size:10px; line-height:1.45; }
+    .score-row { display:flex; align-items:center; gap:12px; margin:9px 0; }
+    .score-row label { width:135px; color:#65778b; font-size:10px; }
+    .score-track { flex:1; height:7px; border-radius:9px; background:#edf1f6; overflow:hidden; }
+    .score-track span { display:block; height:100%; border-radius:9px; background:linear-gradient(90deg,#1685f8,#61b1ff); transform:scaleX(0); transform-origin:left center; will-change:transform; }
+    .evidence-item { opacity:0; will-change:transform,opacity; }
+    .score-row b { width:30px; color:#45617b; font-size:10px; text-align:right; }
+    .evidence-item { margin:8px 0; padding:9px 11px; border-radius:7px; background:#f6f9fc; color:#60748b; font-size:10px; line-height:1.4; }
+    .evidence-item strong { color:#36536f; }
+    .interview-tabs { margin:14px 28px 0; padding:0 4px; display:flex; gap:22px; border-bottom:1px solid #e9edf2; color:#8290a0; font-size:11px; }
+    .interview-tabs span { padding:0 0 10px; }
+    .interview-tabs .selected { border-bottom:2px solid var(--blue); color:var(--blue); font-weight:750; }
+    .interview-row { margin:12px 28px 0; padding:13px 15px; display:flex; align-items:center; justify-content:space-between; border:1px solid #e5eaf0; border-radius:9px; background:white; }
+    .interview-row strong { display:block; color:#28445f; font-size:11px; }
+    .interview-row small { display:block; margin-top:5px; color:#8793a1; font-size:9px; }
+    .decision-buttons { display:flex; gap:9px; }
+    .decision-buttons span { padding:8px 14px; border:1px solid #dfe6ed; border-radius:7px; color:#546a80; background:white; font-size:10px; font-weight:720; }
+    .decision-buttons span:first-child { color:white; border-color:var(--blue); background:var(--blue); }
+
+    /* Closing card */
+    #scene-close { display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at 50% 42%,#fff 0%,#fbfaf6 65%,#f2f5f7 100%); }
+    .close-rule { position:absolute; left:112px; right:112px; top:108px; height:1px; background:var(--line); }
+    .close-lockup { position:absolute; top:185px; left:0; width:100%; display:flex; align-items:center; flex-direction:column; text-align:center; }
+    .close-logo { display:block; width:86px; height:86px; margin-bottom:20px; background:url("assets/smile-recruitment-portal-logo.png") center / contain no-repeat; }
+    .close-kicker { margin-bottom:18px; color:var(--blue); font-size:15px; font-weight:800; letter-spacing:.15em; text-transform:uppercase; }
+    .close-title { max-width:1120px; margin:0; color:var(--navy); font-size:83px; line-height:1.02; letter-spacing:-.068em; perspective:900px; }
+    .close-title .word { display:inline-block; margin-right:.16em; will-change:transform,opacity; }
+    .close-capsule { margin-top:35px; padding:18px 30px; border-radius:999px; background:var(--blue); color:white; font-size:21px; font-weight:740; box-shadow:0 14px 34px rgba(0,113,247,.22); }
+    .close-micro { margin-top:24px; color:#64798f; font-size:18px; }
+    .close-name { position:absolute; bottom:99px; color:#718398; font-size:16px; font-weight:650; letter-spacing:.015em; }
+    .close-foot { position:absolute; bottom:43px; color:#9aa6b2; font-size:12px; letter-spacing:.04em; }
+
+    /* Supporting text uses darker brand-adjacent shades for legibility at video size. */
+    .eyebrow, .app-menu.active, .choice-action, .close-kicker { color:#005fbf; }
+    .app-menu .mi, .crumb, .screen-title p, .fine, .side-note, .role-select,
+    .table-row, .invite-top p, .invite-profile span, .choice p, .invite-foot,
+    .interview-aside p, .review-title .breadcrumb, .candidate-id small,
+    .sample-score small, .review-card .muted, .score-row label, .interview-tabs,
+    .interview-row small, .close-micro, .close-name, .close-foot, .open-note,
+    .open-foot { color:#52677e; }
+    .role-select span span, .upload span, .import-button, .evidence-note p { color:#52677e; }
+    .candidate-id strong { color:#24435f; }
+    .interview-tabs .selected { color:#005fbf; }
+    .choice-icon, .upload-icon, .side-note i, .sample-score strong { color:#005fbf; }
+    .status, .done-note { color:#0b744a; }
+    .decision-buttons span:first-child, .close-capsule { border-color:#005eb8; background:#005eb8; }
+  </style>
+</head>
+<body>
+  <main id="root" data-composition-id="main" data-start="0" data-duration="25" data-width="1920" data-height="1080">
+    <audio id="music-bed" src="assets/ella-promo-score.wav" preload="auto" data-start="0" data-duration="25" data-track-index="20" data-volume="0.72"></audio>
+
+    <section id="scene-open" class="scene clip" data-start="0" data-duration="3.2" data-track-index="0">
+      <div class="brand open-brand reveal" id="open-brand"><span class="logo-mark" aria-hidden="true"></span>Smile Recruitment Portal</div>
+      <div class="open-copy" id="open-copy">
+        <div class="eyebrow reveal" id="open-eyebrow">A clearer way to hire</div>
+        <h1 class="display reveal" id="open-title"><span class="headline-line">Hiring takes</span><span class="headline-line">too much time.</span></h1>
+        <p class="subhead reveal" id="open-sub">Make every next step clearer, from resume to human review.</p>
+        <div class="open-note reveal" id="open-note">Introducing the Ella Recruitment Portal Pilot</div>
+      </div>
+      <div class="paper-stage" id="paper-stage" aria-hidden="true">
+        <div class="paper back"><div class="paper-top"></div><div class="paper-head"></div><div class="paper-line"></div><div class="paper-line midline"></div><div class="paper-line"></div><div class="paper-line short"></div><div class="paper-avatar"></div><div class="paper-line"></div><div class="paper-line midline"></div></div>
+        <div class="paper mid"><div class="paper-top"></div><div class="paper-head"></div><div class="paper-line midline"></div><div class="paper-line"></div><div class="paper-line short"></div><div class="paper-avatar"></div><div class="paper-line"></div><div class="paper-line midline"></div></div>
+        <div class="paper front"><div class="paper-top"></div><div class="paper-head"></div><div class="paper-line"></div><div class="paper-line midline"></div><div class="paper-line short"></div><div class="paper-avatar"></div><div class="paper-line"></div><div class="paper-line midline"></div><div class="paper-line"></div><div class="paper-accent">✓</div></div>
+      </div>
+      <div class="open-rule"></div><div class="open-foot">AI-assisted workflow · Human-led decisions</div>
+    </section>
+
+    <section id="scene-screening" class="scene clip product-bg" data-start="3.2" data-duration="4.8" data-track-index="1">
+      <div class="product-topline"></div><div class="watermark top-watermark">ILLUSTRATIVE UI · DEMO DATA</div>
+      <div class="product-heading" id="screening-copy"><div class="eyebrow">Resume screening</div><h2 class="display">Less sorting.<br/>More signal.</h2><p class="subhead">Bring resumes together and review how they match the role.</p></div>
+      <div class="side-note"><i>↗</i><span>Screen against role criteria</span></div>
+      <div class="app shadow" id="screening-app">
+        <aside class="app-side">
+          <div class="app-logo"><span class="logo-mark" aria-hidden="true"></span>Smile Portal</div>
+          <div class="app-menu"><span class="mi">◫</span>Dashboard</div><div class="app-menu"><span class="mi">▤</span>Role Requests</div><div class="app-menu active"><span class="mi">⌕</span>Resume Screening</div><div class="app-menu"><span class="mi">♙</span>Applicants</div><div class="app-menu"><span class="mi">▦</span>Interview Calendar</div><div class="app-menu"><span class="mi">⚙</span>Settings</div><div class="app-menu"><span class="mi">◎</span>Credits</div>
+        </aside>
+        <div class="app-main">
+          <div class="app-head"><span class="crumb">Recruitment&nbsp; / &nbsp;Resume Screening</span><span class="avatar-small">HR</span></div>
+          <div class="screen-title"><div><h2>Resume Screening</h2><p>Upload applications and review role matches.</p></div><span class="pill"><span class="dot"></span>Screening ready</span></div>
+          <div class="screen-body">
+            <div class="role-select"><span><span>Role&nbsp;&nbsp;</span>Sample Product Analyst</span><span>⌄</span></div>
+            <div class="upload"><div class="scan-sweep" id="scan-sweep" aria-hidden="true"></div><div class="upload-icon" id="upload-icon">↑</div><strong>Drop resumes here or browse files</strong><span>Up to 20 resumes per batch · PDF or DOCX</span><div class="import-row"><span class="import-button">Google Drive</span><span class="import-button">OneDrive</span><span class="import-button">Application link</span></div></div>
+            <div class="table-card"><div class="table-head"><span>Recent screening activity</span><span class="fine">Sample queue</span></div>
+              <div class="table-row"><span class="file-cell"><b class="file-icon">PDF</b>sample_resume_01.pdf</span><span>Sample Product Analyst</span><span class="status"><i class="dot"></i>Screened</span><span>View applicant&nbsp; →</span></div>
+              <div class="table-row"><span class="file-cell"><b class="file-icon">PDF</b>sample_resume_02.pdf</span><span>Sample Product Analyst</span><span class="status"><i class="dot"></i>Screened</span><span>View applicant&nbsp; →</span></div>
+              <div class="table-row"><span class="file-cell"><b class="file-icon">DOC</b>sample_resume_03.docx</span><span>Sample Product Analyst</span><span class="status"><i class="dot"></i>Screened</span><span>View applicant&nbsp; →</span></div>
+            </div>
+            <div class="done-note"><i class="dot"></i>Screening completed</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="scene-interview" class="scene clip" data-start="8" data-duration="5.5" data-track-index="2">
+      <div class="product-topline"></div><div class="watermark top-watermark">ILLUSTRATIVE UI · DEMO DATA</div>
+      <div class="interview-head" id="interview-copy"><div class="eyebrow">Flexible interviews</div><h2 class="display">Meet candidates<br/>where they are.</h2><p class="subhead">Offer the interview format your role is set up to use.</p></div>
+      <div class="interview-aside" id="interview-aside"><span class="pill"><i class="dot"></i>Role-based options</span><p>One invitation. A clear next step for each candidate.</p></div>
+      <div class="invite shadow" id="invite-card">
+        <div class="invite-top"><div><h2>Choose an interview format</h2><p>Options shown depend on this role’s settings.</p></div><span class="pill">Application&nbsp; · &nbsp;Sample</span></div>
+        <div class="invite-profile"><div class="profile-avatar">S</div><div><strong>Sample Candidate 01</strong><span>Sample Product Analyst · Application received</span></div></div>
+        <div class="invite-label">How would you like to continue?</div>
+        <div class="choice-grid">
+          <article class="choice reveal"><div class="choice-icon">◷</div><h3>Schedule a call</h3><p>Choose a time for an AI voice interview.</p><span class="choice-action">See available times&nbsp; →</span></article>
+          <article class="choice blue-choice reveal"><div class="choice-icon">✧</div><h3>Interview with our Avatar now</h3><p>Start a Live Avatar interview when you’re ready.</p><span class="choice-action">Begin interview&nbsp; →</span></article>
+        </div>
+        <div class="invite-foot">Available formats depend on role settings.</div>
+      </div>
+    </section>
+
+    <section id="scene-evidence" class="scene clip" data-start="13.5" data-duration="5.5" data-track-index="3">
+      <div class="product-topline"></div><div class="watermark top-watermark">ILLUSTRATIVE UI · DEMO DATA</div>
+      <div class="evidence-note" id="evidence-copy"><div class="eyebrow">Evidence for HR</div><h2>Context for a more confident review.</h2><p>See the screening evidence and interview details together before deciding.</p></div>
+      <div class="human-note" id="human-note">AI supports review.<br/>HR makes the decision.</div>
+      <div class="review-app" id="review-app">
+        <aside class="app-side"><div class="app-logo"><span class="logo-mark" aria-hidden="true"></span>Smile Portal</div><div class="app-menu"><span class="mi">◫</span>Dashboard</div><div class="app-menu"><span class="mi">▤</span>Role Requests</div><div class="app-menu"><span class="mi">⌕</span>Resume Screening</div><div class="app-menu active"><span class="mi">♙</span>Applicants</div><div class="app-menu"><span class="mi">▦</span>Interview Calendar</div><div class="app-menu"><span class="mi">⚙</span>Settings</div><div class="app-menu"><span class="mi">◎</span>Credits</div></aside>
+        <div class="app-main"><div class="app-head"><span class="crumb">Applicants&nbsp; / &nbsp;Sample Candidate 01</span><span class="avatar-small">HR</span></div>
+          <div class="review-title"><div><div class="breadcrumb">Applicants&nbsp; / &nbsp;Profile</div><h2>Applicant review</h2></div><span class="pill"><i class="dot"></i>In review</span></div>
+          <div class="candidate-summary"><div class="candidate-id"><div class="profile-avatar">S</div><div><strong>Sample Candidate 01</strong><small>Sample Product Analyst&nbsp; · &nbsp;Demo profile</small></div></div><div class="sample-score"><strong><span id="sample-score-count">0</span>%</strong><small>ILLUSTRATIVE SAMPLE SCORE</small></div></div>
+          <div class="review-columns">
+            <article class="review-card"><h3>How AI Graded This Applicant</h3><p class="muted">Illustrative role-match breakdown for demo purposes.</p><div class="score-row"><label>Role requirements</label><div class="score-track"><span style="width:82%"></span></div><b>82</b></div><div class="score-row"><label>Relevant experience</label><div class="score-track"><span style="width:74%"></span></div><b>74</b></div><div class="score-row"><label>Skills alignment</label><div class="score-track"><span style="width:88%"></span></div><b>88</b></div><p class="muted">Review the source resume and role criteria alongside this summary.</p></article>
+            <article class="review-card"><h3>AI Screening Evidence</h3><div class="evidence-item"><strong>Strengths</strong><br/>Relevant experience appears in the sample resume.</div><div class="evidence-item"><strong>Gaps to review</strong><br/>Confirm role-specific requirements with the candidate.</div><div class="evidence-item"><strong>Recommendation</strong><br/>Review supporting evidence before taking action.</div></article>
+          </div>
+          <div class="interview-tabs"><span>Overview</span><span>Voice Interview Review</span><span class="selected">Live Avatar Review</span><span>Transcript</span></div>
+          <div class="interview-row"><div><strong>Live Avatar Review</strong><small>Sample interview · transcript and question review available</small></div><div class="decision-buttons"><span>Approve</span><span>Reject</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="scene-close" class="scene clip" data-start="19" data-duration="6" data-track-index="4">
+      <div class="close-rule"></div>
+      <div class="close-lockup" id="close-lockup"><span class="close-logo logo-mark" aria-hidden="true"></span><div class="close-kicker">Ella Recruitment Portal Pilot</div><h2 class="close-title" id="close-title"><span class="word">Recruit</span><span class="word">smarter</span><span class="word">with</span><span class="word">AI.</span></h2><div class="close-capsule">Try Smile now&nbsp; →</div><div class="close-micro">AI supports your review. People make the call.</div></div>
+      <div class="close-name">McLink Recruitment Portal · Smile AI Assistant</div><div class="close-foot">AI-assisted hiring workflow · Human-led decisions</div>
+    </section>
+  </main>
+  <script>
+    window.__timelines = window.__timelines || {};
+    const tl = gsap.timeline({ paused:true });
+    tl.fromTo(["#open-brand","#open-eyebrow","#open-sub","#open-note"], {autoAlpha:0,y:24}, {autoAlpha:1,y:0,duration:.48,stagger:.13,ease:"power3.out"}, .12);
+    tl.fromTo("#open-title", {autoAlpha:0}, {autoAlpha:1,duration:.12}, .31);
+    tl.fromTo("#open-title .headline-line", {autoAlpha:0,y:72,rotationX:-25}, {autoAlpha:1,y:0,rotationX:0,duration:.68,stagger:.16,ease:"power4.out"}, .34);
+    tl.fromTo("#paper-stage", {autoAlpha:0,x:55,scale:.97}, {autoAlpha:1,x:0,scale:1,duration:.72,ease:"power3.out"}, .38);
+    tl.fromTo(".paper.front", {y:28,rotation:-8}, {y:0,rotation:-3,duration:.68,ease:"power3.out"}, .56);
+    tl.fromTo(".paper.mid", {x:-32,rotation:0}, {x:0,rotation:3,duration:.58,ease:"power3.out"}, .68);
+    tl.fromTo(".paper.back", {x:36,rotation:13}, {x:0,rotation:8,duration:.58,ease:"power3.out"}, .8);
+    tl.to(".paper-accent", {scale:1.09,duration:.42,yoyo:true,repeat:3,ease:"sine.inOut"}, 1.3);
+
+    tl.fromTo("#screening-copy", {autoAlpha:0,x:-28}, {autoAlpha:1,x:0,duration:.62,ease:"power3.out"}, 3.35);
+    tl.fromTo("#screening-app", {autoAlpha:0,x:35,y:12}, {autoAlpha:1,x:0,y:0,duration:.72,ease:"power3.out"}, 3.4);
+    tl.fromTo("#scan-sweep", {opacity:0,xPercent:-300}, {opacity:.8,xPercent:300,duration:1.1,ease:"power1.inOut"}, 4.12);
+    tl.to("#scan-sweep", {opacity:0,duration:.22,ease:"power1.out"}, 5.23);
+    tl.fromTo("#screening-app .table-row", {autoAlpha:0,y:20}, {autoAlpha:1,y:0,duration:.46,stagger:.22,ease:"power3.out"}, 4.24);
+    tl.fromTo(".import-button", {autoAlpha:0,y:12}, {autoAlpha:1,y:0,duration:.34,stagger:.13,ease:"power2.out"}, 4.48);
+    tl.to("#upload-icon", {y:-7,duration:.34,yoyo:true,repeat:5,ease:"sine.inOut"}, 4.26);
+    tl.fromTo("#screening-app .status .dot", {scale:.7}, {scale:1,duration:.24,stagger:.18,repeat:3,yoyo:true,ease:"sine.inOut"}, 5.2);
+
+    tl.fromTo("#interview-copy", {autoAlpha:0,x:-32}, {autoAlpha:1,x:0,duration:.62,ease:"power3.out"}, 8.2);
+    tl.fromTo("#interview-aside", {autoAlpha:0,y:20}, {autoAlpha:1,y:0,duration:.55,ease:"power3.out"}, 8.55);
+    tl.fromTo("#invite-card", {autoAlpha:0,x:38,scale:.985}, {autoAlpha:1,x:0,scale:1,duration:.74,ease:"power3.out"}, 8.25);
+    tl.fromTo("#invite-card .choice", {autoAlpha:0,y:36,scale:.94,rotationY:3}, {autoAlpha:1,y:0,scale:1,rotationY:0,duration:.62,stagger:.24,ease:"back.out(1.25)"}, 9.2);
+    tl.fromTo("#invite-card .choice-icon", {scale:.45,rotation:-14}, {scale:1,rotation:0,duration:.42,stagger:.24,ease:"back.out(1.7)"}, 9.62);
+    tl.to("#invite-card .choice.blue-choice", {y:-6,duration:.62,yoyo:true,repeat:2,ease:"sine.inOut"}, 10.25);
+    tl.to("#interview-aside .pill .dot", {scale:1.55,duration:.38,yoyo:true,repeat:3,ease:"sine.inOut"}, 9.55);
+
+    tl.fromTo("#evidence-copy", {autoAlpha:0,x:-26}, {autoAlpha:1,x:0,duration:.6,ease:"power3.out"}, 13.7);
+    tl.fromTo("#human-note", {autoAlpha:0,y:16}, {autoAlpha:1,y:0,duration:.55,ease:"power3.out"}, 14.1);
+    tl.fromTo("#review-app", {autoAlpha:0,x:32}, {autoAlpha:1,x:0,duration:.7,ease:"power3.out"}, 13.75);
+    tl.fromTo("#review-app .review-card", {autoAlpha:0,y:20}, {autoAlpha:1,y:0,duration:.46,stagger:.16,ease:"power3.out"}, 14.28);
+    tl.fromTo("#review-app .score-track span", {scaleX:0}, {scaleX:1,duration:.78,stagger:.18,ease:"power3.out"}, 14.76);
+    tl.fromTo("#review-app .evidence-item", {autoAlpha:0,y:12}, {autoAlpha:1,y:0,duration:.38,stagger:.16,ease:"power2.out"}, 15.12);
+    const scoreCounter = { value:0 };
+    tl.to(scoreCounter, {value:82,duration:.9,ease:"power2.out",snap:{value:1},onUpdate:()=>{document.getElementById("sample-score-count").textContent=Math.round(scoreCounter.value);}}, 14.76);
+    tl.fromTo("#review-app .interview-row", {autoAlpha:0,y:18}, {autoAlpha:1,y:0,duration:.42,ease:"power3.out"}, 16.1);
+    tl.fromTo("#review-app .decision-buttons span:first-child", {scale:.9}, {scale:1,duration:.42,ease:"back.out(1.6)"}, 16.75);
+    tl.to("#human-note", {x:5,duration:.42,yoyo:true,repeat:3,ease:"sine.inOut"}, 15.2);
+
+    tl.fromTo(".close-rule", {scaleX:0}, {scaleX:1,duration:.62,ease:"power2.out"}, 19.08);
+    tl.fromTo("#close-lockup .close-logo", {autoAlpha:0,scale:.55,rotation:-16}, {autoAlpha:1,scale:1,rotation:0,duration:.66,ease:"back.out(1.45)"}, 19.22);
+    tl.fromTo("#close-lockup .close-kicker", {autoAlpha:0,y:18}, {autoAlpha:1,y:0,duration:.44,ease:"power3.out"}, 19.48);
+    tl.fromTo("#close-title .word", {autoAlpha:0,y:86,rotationX:-32}, {autoAlpha:1,y:0,rotationX:0,duration:.64,stagger:.13,ease:"power4.out"}, 19.72);
+    tl.fromTo(".close-capsule", {autoAlpha:0,y:25,scale:.82}, {autoAlpha:1,y:0,scale:1,duration:.5,ease:"back.out(1.7)"}, 20.48);
+    tl.fromTo(".close-micro, .close-name, .close-foot", {autoAlpha:0,y:14}, {autoAlpha:1,y:0,duration:.42,stagger:.08,ease:"power3.out"}, 20.76);
+    tl.to(".close-capsule", {scale:1.035,duration:.5,yoyo:true,repeat:3,ease:"sine.inOut"}, 21.8);
+    window.__timelines.main = tl;
+    tl.seek(0);
+  </script>
+</body>
+</html>

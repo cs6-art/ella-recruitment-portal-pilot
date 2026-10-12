@@ -1,0 +1,31 @@
+◆  Checking v4
+
+Lint
+  ◇ 0 errors, 0 warnings
+
+Runtime
+  ◇ 0 errors, 0 warnings
+
+Layout
+  ℹ t=20.375s content_overlap section.screen.review-screen > div:nth-of-type(1) > span:nth-of-type(1) inside section.screen.calendar-screen > div:nth-of-type(1) > span:nth-of-type(1) "VOICE INTERVIEW REVIEW · MAYA CHEN" — Two text blocks overlap and may render unreadable.
+        Fix: Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.
+  ℹ t=20.375s content_overlap section.screen.review-screen > div:nth-of-type(1) > span:nth-of-type(2) inside section.screen.calendar-screen > div:nth-of-type(1) > span:nth-of-type(2) "HUMAN DECISION PENDING" — Two text blocks overlap and may render unreadable.
+        Fix: Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.
+  ℹ t=22.875s content_overlap div.calendar-caption inside div.product-name "EXAMPLE AVAILABLE TIMES · CHOOSE ONE" — Two text blocks overlap and may render unreadable.
+        Fix: Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.
+  ℹ t=22.875s content_overlap div.slot.slot-a inside div.closing > h2:nth-of-type(1) "10:00–11:00 One-hour slot" — Two text blocks overlap and may render unreadable.
+        Fix: Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.
+  ℹ t=22.875s content_overlap div.slot.slot-b inside div.closing > h2:nth-of-type(1) "13:30–14:30 One-hour slot" — Two text blocks overlap and may render unreadable.
+        Fix: Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.
+  0 error(s), 0 warning(s), 5 info(s)
+
+Motion
+  ◇ 0 errors, 0 warnings
+
+Contrast
+  ◇ 77/77 text checks pass WCAG AA
+
+Snapshots
+  ◇ disabled
+
+◇  Check passed

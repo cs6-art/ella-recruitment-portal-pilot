@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: Manrope;
+        src: url("assets/font/Manrope.ttf") format("truetype");
+        font-weight: 400 800;
+        font-display: block;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #fff7f4;
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        color: #1c2634;
+        font-family: Manrope, Arial, sans-serif;
+        background:
+          radial-gradient(ellipse 55% 54% at 5% 89%, rgba(247, 195, 182, .48), transparent 76%),
+          radial-gradient(ellipse 50% 55% at 92% 8%, rgba(251, 205, 192, .54), transparent 73%),
+          radial-gradient(ellipse 68% 67% at 52% 48%, #fffdfb 0%, #fffaf8 61%, transparent 100%),
+          #fff7f4;
+      }
+      #root::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(132, 93, 83, .052) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(132, 93, 83, .052) 1px, transparent 1px);
+        background-size: 22px 22px;
+        pointer-events: none;
+      }
+      .watermark {
+        position: absolute;
+        z-index: 20;
+        top: 51px;
+        right: 253px;
+        padding: 10px 15px;
+        border: 1px solid #ead3ca;
+        border-radius: 999px;
+        background: rgba(255,255,255,.82);
+        color: #71615e;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: .8px;
+      }
+      .app-window {
+        position: absolute;
+        left: 250px;
+        top: 127px;
+        width: 1420px;
+        height: 828px;
+        overflow: hidden;
+        border: 1px solid rgba(77, 67, 72, .10);
+        border-radius: 20px;
+        background: #fff;
+        box-shadow: 0 30px 82px rgba(105, 70, 64, .15), 0 3px 8px rgba(105, 70, 64, .08);
+        transform-origin: 50% 56%;
+      }
+      .portal-sidebar {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 252px;
+        padding: 25px 16px;
+        border-right: 1px solid #edf0f4;
+        background: #fff;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        margin: 4px 7px 35px;
+        color: #153b5b;
+        font-size: 17px;
+        font-weight: 800;
+        letter-spacing: -.45px;
+      }
+      .brand img { width: 35px; height: 35px; object-fit: contain; }
+      .nav-item {
+        height: 46px;
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        margin: 4px 0;
+        padding: 0 12px;
+        border-radius: 9px;
+        color: #596a7d;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .nav-icon {
+        width: 18px;
+        color: #626e7b;
+        font-size: 17px;
+        text-align: center;
+      }
+      .nav-item.active {
+        color: #075fae;
+        background: #eef5fd;
+        font-weight: 800;
+      }
+      .nav-item.active .nav-icon { color: #075fae; }
+      .portal-main {
+        position: absolute;
+        inset: 0 0 0 252px;
+        background: #fbfcfe;
+      }
+      .topbar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 66px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 30px;
+        border-bottom: 1px solid #e9edf2;
+        background: #fff;
+        color: #667586;
+        font-size: 14px;
+      }
+      .hr-avatar {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: #e4edf7;
+        color: #214766;
+        font-size: 13px;
+        font-weight: 800;
+      }
+      .view {
+        position: absolute;
+        inset: 66px 0 0;
+        padding: 30px 34px 26px;
+      }
+      #applicants-list-view, #applicant-view {
+        opacity: 0;
+        visibility: hidden;
+      }
+      .page-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 21px;
+      }
+      .page-heading h1 {
+        margin: 0;
+        color: #123f67;
+        font-size: 30px;
+        line-height: 1.12;
+        letter-spacing: -.9px;
+      }
+      .page-heading p {
+        margin: 8px 0 0;
+        color: #617287;
+        font-size: 15px;
+      }
+      .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #2ca36f; }
+      .field-label {
+        display: block;
+        margin-bottom: 7px;
+        color: #30465d;
+        font-size: 13px;
+        font-weight: 750;
+      }
+      .role-field {
+        height: 58px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 18px;
+        border: 1px solid #dce4ec;
+        border-radius: 10px;
+        background: #fff;
+        color: #31465d;
+        font-size: 15px;
+      }
+      .role-field strong { color: #173e60; font-weight: 750; }
+      .role-hint { color: #5c6f83; }
+      .dropzone {
+        position: relative;
+        height: 138px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        margin-top: 17px;
+        border: 1.5px dashed #adc5dd;
+        border-radius: 13px;
+        background: linear-gradient(120deg, #f9fbfe 0%, #f3f8fe 100%);
+      }
+      .upload-icon {
+        width: 48px;
+        height: 48px;
+        display: grid;
+        place-items: center;
+        border-radius: 14px;
+        background: #e4f0fc;
+        color: #075fae;
+        font-size: 25px;
+        font-weight: 700;
+      }
+      .drop-copy strong {
+        display: block;
+        color: #274866;
+        font-size: 17px;
+      }
+      .drop-copy small {
+        display: block;
+        margin-top: 6px;
+        color: #5f7285;
+        font-size: 12px;
+      }
+      .source-pills {
+        position: absolute;
+        right: 24px;
+        bottom: 17px;
+        display: flex;
+        gap: 8px;
+      }
+      .source-pill {
+        padding: 7px 10px;
+        border: 1px solid #e0e7ee;
+        border-radius: 7px;
+        background: #fff;
+        color: #4f6378;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .files-card {
+        margin-top: 18px;
+        overflow: hidden;
+        border: 1px solid #e2e8ee;
+        border-radius: 11px;
+        background: #fff;
+      }
+      .files-head {
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 17px;
+        border-bottom: 1px solid #edf0f4;
+        color: #273f57;
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .files-head small { color: #607286; font-size: 11px; font-weight: 600; }
+      .file-row {
+        height: 55px;
+        display: grid;
+        grid-template-columns: 1.15fr .82fr .72fr;
+        align-items: center;
+        padding: 0 17px;
+        border-bottom: 1px solid #f0f3f6;
+        color: #50657a;
+        font-size: 12px;
+        opacity: 0;
+      }
+      .file-row:last-child { border-bottom: 0; }
+      .file-name { display: flex; align-items: center; gap: 10px; color: #344f68; font-weight: 750; }
+      .file-type {
+        width: 29px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        border-radius: 6px;
+        background: #fff0ee;
+        color: #b24848;
+        font-size: 10px;
+        font-weight: 850;
+      }
+      .queue-state { display: inline-flex; align-items: center; gap: 7px; color: #167a54; font-weight: 800; }
+      .records-card {
+        display: none;
+        margin-top: 18px;
+        overflow: hidden;
+        border: 1px solid #e2e8ee;
+        border-radius: 11px;
+        background: #fff;
+        opacity: 0;
+      }
+      .records-head { height: 45px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #edf0f4; color: #273f57; font-size: 13px; font-weight: 800; }
+      .records-head small { color: #607286; font-size: 10px; font-weight: 600; }
+      .record-row { min-height: 48px; display: grid; grid-template-columns: 1.1fr .95fr .75fr .55fr .95fr; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid #f0f3f6; color: #405b73; font-size: 10px; }
+      .record-row:last-child { border-bottom: 0; }
+      .record-status { color: #8a651d; font-weight: 800; }
+      .record-result { color: #5d7083; }
+      .state-processing { color: #9a6c17; }
+      .state-processing .status-dot { background: #d69c2a; }
+      .screen-action-row {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 14px;
+        margin-top: 17px;
+      }
+      .batch-note { margin-right: auto; color: #5d7083; font-size: 12px; }
+      .screen-button, .view-button, .approve-button, .reject-button {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 18px;
+        border: 1px solid transparent;
+        border-radius: 9px;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .screen-button, .view-button, .approve-button { color: #fff; background: #0869bf; box-shadow: 0 4px 10px rgba(8,105,191,.17); }
+      .screening-progress {
+        position: absolute;
+        left: 34px;
+        right: 34px;
+        bottom: 26px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 14px 17px;
+        border: 1px solid #d6e7f6;
+        border-radius: 10px;
+        background: #f5faff;
+        opacity: 0;
+      }
+      .progress-copy { min-width: 245px; color: #294b6b; font-size: 13px; font-weight: 750; }
+      .progress-track { flex: 1; height: 8px; overflow: hidden; border-radius: 8px; background: #dfe9f1; }
+      .progress-fill { width: 0; height: 100%; border-radius: inherit; background: #187cc9; }
+      .progress-state { color: #5f7285; font-size: 11px; }
+      .completion-card {
+        position: absolute;
+        right: 33px;
+        bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 11px 12px 11px 16px;
+        border: 1px solid #cfe8d7;
+        border-radius: 10px;
+        background: #f5fbf7;
+        opacity: 0;
+      }
+      .completion-copy strong { display: block; color: #285641; font-size: 13px; }
+      .completion-copy small { display: block; margin-top: 3px; color: #61796a; font-size: 11px; }
+      .view-button { min-height: 38px; padding: 0 13px; font-size: 12px; }
+      .candidate-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        opacity: 0;
+      }
+      .candidate-head h1 { margin: 0; color: #123f67; font-size: 28px; line-height: 1.1; letter-spacing: -.85px; }
+      .candidate-head p { margin: 7px 0 0; color: #5c6f83; font-size: 13px; }
+      .demo-status {
+        padding: 8px 13px;
+        border: 1px solid #dce6ed;
+        border-radius: 999px;
+        background: #fff;
+        color: #496652;
+        font-size: 12px;
+        font-weight: 750;
+      }
+      .candidate-summary {
+        height: 75px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 17px;
+        border: 1px solid #e1e7ed;
+        border-radius: 10px;
+        background: #fff;
+        opacity: 0;
+      }
+      .candidate-name { display: flex; align-items: center; gap: 12px; color: #28445e; }
+      .candidate-monogram {
+        width: 43px;
+        height: 43px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: #e2edf5;
+        color: #244967;
+        font-size: 17px;
+        font-weight: 800;
+      }
+      .candidate-name strong { display: block; font-size: 14px; }
+      .candidate-name small { display: block; margin-top: 4px; color: #5f7285; font-size: 11px; }
+      .match-score { text-align: right; }
+      .match-score strong { display: block; color: #075fae; font-size: 22px; }
+      .match-score small { color: #606e7b; font-size: 9px; font-weight: 850; letter-spacing: 1px; }
+      .evidence-panel {
+        margin-top: 15px;
+        padding: 16px 18px 15px;
+        border: 1px solid #e1e7ed;
+        border-radius: 11px;
+        background: #fff;
+        opacity: 0;
+        transform-origin: 50% 55%;
+      }
+      .panel-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 13px;
+      }
+      .panel-heading h2 { margin: 0; color: #27445f; font-size: 16px; letter-spacing: -.25px; }
+      .panel-heading small { color: #5f6f7f; font-size: 11px; }
+      .section-label { margin-bottom: 10px; color: #405c74; font-size: 12px; font-weight: 850; letter-spacing: .25px; }
+      .analysis-fields {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .analysis-field {
+        min-height: 50px;
+        padding: 8px 11px;
+        border-radius: 8px;
+        background: #f6f8fb;
+        opacity: 0;
+      }
+      .analysis-field span { display: block; color: #5f7285; font-size: 10px; }
+      .analysis-field strong { display: block; margin-top: 4px; color: #314b64; font-size: 12px; }
+      .summary-box {
+        padding: 10px 12px;
+        border-left: 3px solid #d5b45f;
+        border-radius: 0 7px 7px 0;
+        background: #fffaf0;
+        opacity: 0;
+      }
+      .summary-box strong, .evidence-box strong { color: #38536d; font-size: 11px; }
+      .summary-box p { margin: 4px 0 0; color: #5b6e81; font-size: 11px; line-height: 1.4; }
+      .evidence-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+      .evidence-box {
+        min-height: 60px;
+        padding: 9px 11px;
+        border: 1px solid #edf0f3;
+        border-radius: 8px;
+        background: #fff;
+        opacity: 0;
+      }
+      .evidence-box p { margin: 4px 0 0; color: #5b6e81; font-size: 11px; line-height: 1.35; }
+      .criteria-card {
+        margin-top: 12px;
+        padding: 11px 15px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid #e1e7ed;
+        border-radius: 9px;
+        background: rgba(255,255,255,.96);
+        opacity: 0;
+      }
+      .criteria-icon {
+        width: 29px;
+        height: 29px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: #edf5fd;
+        color: #0a65b6;
+        font-size: 14px;
+        font-weight: 850;
+      }
+      .criteria-copy { flex: 1; color: #445e75; font-size: 11px; }
+      .criteria-copy strong { display: block; margin-bottom: 4px; color: #2e4d68; font-size: 12px; }
+      .criteria-chips { display: flex; gap: 7px; }
+      .criteria-chips span { padding: 6px 8px; border: 1px solid #e5ebf0; border-radius: 999px; background: #fff; color: #5b6f83; font-size: 9px; }
+      .decision-panel {
+        margin-top: 12px;
+        padding: 12px 15px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid #e1e7ed;
+        border-radius: 9px;
+        background: #fff;
+        opacity: 0;
+      }
+      .decision-copy { flex: 1; }
+      .decision-copy strong { display: block; color: #2d4b66; font-size: 12px; }
+      .decision-copy small { display: block; margin-top: 4px; color: #5f7183; font-size: 10px; }
+      .decision-input { width: 245px; padding: 10px 11px; border: 1px solid #e0e6eb; border-radius: 7px; color: #5d6f81; font-size: 10px; }
+      .decision-buttons { display: flex; gap: 8px; }
+      .approve-button, .reject-button { min-height: 37px; padding: 0 14px; font-size: 12px; }
+      .reject-button { border-color: #dce3e9; color: #4d6276; background: #fff; }
+      .cursor {
+        position: absolute;
+        z-index: 30;
+        left: 1030px;
+        top: 710px;
+        width: 38px;
+        height: 48px;
+        opacity: 0;
+        filter: drop-shadow(0 2px 2px rgba(12, 28, 42, .28));
+      }
+      .cursor svg { width: 100%; height: 100%; }
+      .decision-note {
+        position: absolute;
+        left: 50%;
+        bottom: 64px;
+        transform: translateX(-50%);
+        color: #5d504e;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: .1px;
+        opacity: 0;
+      }
+      .list-heading { margin-bottom: 18px; }
+      .list-heading h1 { margin: 0; color: #123f67; font-size: 30px; letter-spacing: -.9px; }
+      .list-heading p { margin: 8px 0 0; color: #5c6f83; font-size: 14px; }
+      .applicant-table {
+        width: 100%;
+        overflow: hidden;
+        border: 1px solid #e1e7ed;
+        border-radius: 11px;
+        background: #fff;
+      }
+      .applicant-table-head, .applicant-table-row {
+        display: grid;
+        grid-template-columns: 1.35fr 1.05fr .8fr .6fr 1.05fr .5fr;
+        align-items: center;
+      }
+      .applicant-table-head {
+        min-height: 50px;
+        padding: 0 17px;
+        border-bottom: 1px solid #e9edf2;
+        color: #526a80;
+        font-size: 11px;
+        font-weight: 800;
+      }
+      .applicant-table-row {
+        min-height: 82px;
+        padding: 0 17px;
+        color: #405b73;
+        font-size: 12px;
+        opacity: 0;
+      }
+      .applicant-table-row > span:first-child strong { display: block; color: #264762; font-size: 13px; }
+      .applicant-table-row > span:first-child small { display: block; margin-top: 5px; color: #5f7285; font-size: 10px; }
+      .list-status { display: inline-flex; align-items: center; gap: 7px; color: #435f4f; font-weight: 750; }
+      .list-view-link {
+        width: fit-content;
+        padding: 8px 13px;
+        border: 1px solid #d9e4ec;
+        border-radius: 7px;
+        background: #fff;
+        color: #075fae;
+        font-size: 11px;
+        font-weight: 800;
+      }
+      .list-note { margin-top: 14px; color: #5d7083; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="7.5" data-width="1920" data-height="1080">
+      <div class="watermark">ILLUSTRATIVE UI · DEMO DATA · TIMING CONDENSED</div>
+      <div class="app-window" id="app-window">
+        <aside class="portal-sidebar">
+          <div class="brand"><img src="assets/brand/smile-logo.png" alt="" />Smile Portal</div>
+          <div class="nav-item"><span class="nav-icon">◫</span>Dashboard</div>
+          <div class="nav-item"><span class="nav-icon">▤</span>Role Requests</div>
+          <div class="nav-item nav-screening active"><span class="nav-icon">⌕</span>Resume Screening</div>
+          <div class="nav-item nav-applicants"><span class="nav-icon">♙</span>Applicants</div>
+          <div class="nav-item"><span class="nav-icon">▦</span>Interview Calendar</div>
+          <div class="nav-item"><span class="nav-icon">⚙</span>Settings</div>
+          <div class="nav-item"><span class="nav-icon">◎</span>Credits</div>
+        </aside>
+        <main class="portal-main">
+          <div class="topbar">
+            <span id="breadcrumb">Recruitment&nbsp; / &nbsp;Resume Screening</span>
+            <span class="hr-avatar">HR</span>
+          </div>
+
+          <section class="view" id="screening-view">
+            <div class="page-heading">
+              <div>
+                <h1>Resume Screening</h1>
+                <p>Select a role, add resumes, and review the screening results.</p>
+              </div>
+            </div>
+            <span class="field-label">Select the role these resumes are for</span>
+            <div class="role-field" id="role-field"><strong>Sample Product Analyst · DEMO ROLE</strong><span>⌄</span></div>
+            <div class="dropzone" id="dropzone">
+              <div class="upload-icon" id="upload-icon">↑</div>
+              <div class="drop-copy">
+                <strong>Drop resumes here or browse files</strong>
+                <small>PDF, DOC, or DOCX files up to 10 MB each</small>
+              </div>
+              <div class="source-pills"><span class="source-pill">Computer upload</span><span class="source-pill">Google Drive</span><span class="source-pill">OneDrive</span></div>
+            </div>
+            <div class="records-card" id="records-card">
+              <div class="records-head"><span>Screening records</span><small>Sample Product Analyst · demo records</small></div>
+              <div class="record-row"><span>sample_resume_01.pdf</span><span>Sample Candidate 01</span><span>Computer upload</span><strong class="record-status">Processing</strong><span class="record-result">AI analysis running</span></div>
+              <div class="record-row"><span>sample_resume_02.docx</span><span>Sample Candidate 02</span><span>Computer upload</span><strong class="record-status">Processing</strong><span class="record-result">AI analysis running</span></div>
+            </div>
+            <div class="files-card" id="files-card">
+              <div class="files-head"><span>Resumes ready to screen</span><small>Sample files · selected role</small></div>
+              <div class="file-row"><span class="file-name"><i class="file-type">PDF</i>sample_resume_01.pdf</span><span>From your computer · Ready to screen</span><span>Remove</span></div>
+              <div class="file-row"><span class="file-name"><i class="file-type">DOC</i>sample_resume_02.docx</span><span>From your computer · Ready to screen</span><span>Remove</span></div>
+            </div>
+            <div class="screen-action-row" id="screen-action-row">
+              <span class="batch-note">Screening results are compared with this role’s requirements.</span>
+              <button class="screen-button" id="screen-button" type="button">Screen 2 resumes</button>
+            </div>
+            <div class="screening-progress" id="screening-progress">
+              <div class="progress-copy">Screening progress</div>
+              <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+              <span class="progress-state" id="progress-state">Processing</span>
+            </div>
+            <div class="completion-card" id="completion-card">
+              <div class="completion-copy"><strong>Bulk screening completed</strong><small>2 resumes screened successfully · demo data</small></div>
+              <button class="view-button" id="view-processed" type="button">View Processed Applicants&nbsp; →</button>
+            </div>
+          </section>
+
+          <section class="view" id="applicants-list-view">
+            <div class="list-heading">
+              <h1>Applicants</h1>
+              <p>Review every applicant as they move through the recruitment workflow.</p>
+            </div>
+            <div class="applicant-table">
+              <div class="applicant-table-head"><span>Candidate</span><span>Role</span><span>Interview Type</span><span>Match</span><span>Current Status</span><span>Action</span></div>
+              <div class="applicant-table-row" id="applicant-list-row">
+                <span><strong>Sample Candidate 01</strong><small>sample-candidate@example.invalid · DEMO</small></span>
+                <span>Sample Product Analyst</span>
+                <span>Not selected</span>
+                <span>82%<small>Sample</small></span>
+                <span class="list-status"><i class="status-dot"></i>Pending HR Review</span>
+                <span class="list-view-link" id="list-view-link">View</span>
+              </div>
+            </div>
+            <p class="list-note">One illustrative applicant row · demo data</p>
+          </section>
+
+          <section class="view" id="applicant-view">
+            <div class="candidate-head" id="candidate-head">
+              <div>
+                <h1>Applicant review</h1>
+                <p>Applicants&nbsp; / &nbsp;Sample Candidate 01 · Sample Product Analyst</p>
+              </div>
+            </div>
+            <div class="candidate-summary" id="candidate-summary">
+              <div class="candidate-name"><span class="candidate-monogram">S</span><span><strong>Sample Candidate 01</strong><small>Sample Product Analyst&nbsp; · &nbsp;Demo profile</small></span></div>
+              <div class="match-score"><strong>82%</strong><small>ILLUSTRATIVE MATCH SCORE</small></div>
+            </div>
+            <article class="evidence-panel" id="evidence-panel">
+              <div class="panel-heading"><h2>AI Screening Evidence</h2><small>AI CV Analysis</small></div>
+              <div class="analysis-fields">
+                <div class="analysis-field"><span>CV Analysis Status</span><strong>Screened</strong></div>
+                <div class="analysis-field"><span>CV Recommendation</span><strong>Example result</strong></div>
+                <div class="analysis-field"><span>HR Decision</span><strong>Pending</strong></div>
+              </div>
+              <div class="summary-box"><strong>AI Analysis Summary</strong><p>Illustrative sample summary saved for HR review against the selected role.</p></div>
+              <div class="evidence-columns">
+                <div class="evidence-box"><strong>Strengths</strong><p>Example evidence from the submitted resume.</p></div>
+                <div class="evidence-box"><strong>Gaps</strong><p>Example items for HR to review against role criteria.</p></div>
+              </div>
+            </article>
+            <div class="criteria-card" id="criteria-card">
+              <span class="criteria-icon">✓</span>
+              <span class="criteria-copy"><strong>How AI Graded This Applicant</strong>Shows the role settings Smile applied to this screening.</span>
+              <span class="criteria-chips"><span>Screening criteria</span><span>Keywords to look for</span></span>
+            </div>
+            <div class="decision-panel" id="decision-panel">
+              <div class="decision-copy"><strong>Human review</strong><small>AI supports review. HR makes the decision.</small></div>
+              <div class="decision-input">Review comments · required when rejecting</div>
+              <div class="decision-buttons"><button class="approve-button" type="button">Approve</button><button class="reject-button" type="button">Reject</button></div>
+            </div>
+          </section>
+        </main>
+        <div class="cursor" id="cursor" aria-hidden="true">
+          <svg viewBox="0 0 36 46" fill="none"><path d="M3 2.5v33.1l8.6-8.1 5.4 13.1 6.3-2.6-5.5-12.8 12-.3L3 2.5Z" fill="white" stroke="#18232c" stroke-width="2.7" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+      <div class="decision-note" id="decision-note">AI supports review. HR makes the decision.</div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
+      tl.fromTo("#app-window", { opacity: 0, y: 22, scale: .98 }, { opacity: 1, y: 0, scale: 1, duration: .5 }, .08);
+      tl.fromTo("#role-field", { borderColor: "#dce4ec", boxShadow: "0 0 0 rgba(8,105,191,0)" }, { borderColor: "#78a9d3", boxShadow: "0 0 0 3px rgba(8,105,191,.08)", duration: .28, yoyo: true, repeat: 1 }, .36);
+      tl.fromTo(".file-row", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: .38, stagger: .14 }, .58);
+      tl.fromTo("#screen-button", { scale: .93 }, { scale: 1, duration: .3, ease: "back.out(1.7)" }, 1.02);
+      tl.to("#screen-button", { scale: .94, duration: .1, ease: "power1.in" }, 1.33);
+      tl.to("#screen-button", { scale: 1, duration: .15, ease: "power2.out" }, 1.44);
+      tl.to("#files-card, #screen-action-row", { y: -8, opacity: 0, duration: .26, ease: "power2.inOut" }, 1.52);
+      tl.set("#records-card", { display: "block" }, 1.52);
+      tl.fromTo("#records-card", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: .32 }, 1.55);
+      tl.set("#files-card, #screen-action-row", { display: "none" }, 1.8);
+      tl.fromTo("#screening-progress", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: .3 }, 1.52);
+      tl.to("#progress-fill", { width: "100%", duration: .58, ease: "power1.inOut" }, 1.7);
+      tl.to("#progress-state", { textContent: "Screened", duration: .01 }, 2.27);
+      tl.to(".record-status", { textContent: "Screened", duration: .01 }, 2.27);
+      tl.to(".record-result", { textContent: "Screening completed", duration: .01 }, 2.27);
+      tl.fromTo("#completion-card", { opacity: 0, y: 13, scale: .98 }, { opacity: 1, y: 0, scale: 1, duration: .32, ease: "back.out(1.2)" }, 2.27);
+      tl.fromTo("#cursor", { opacity: 0, x: -16, y: 12 }, { opacity: 1, x: 0, y: 0, duration: .28 }, 2.63);
+      tl.to("#cursor", { x: 72, y: 35, duration: .34, ease: "power2.inOut" }, 2.92);
+      tl.to("#cursor", { scale: .9, duration: .09, yoyo: true, repeat: 1, transformOrigin: "50% 50%" }, 3.25);
+      tl.to("#cursor", { opacity: 0, duration: .12 }, 3.34);
+      tl.to("#screening-progress", { opacity: 0, duration: .2 }, 2.3);
+      tl.to("#screening-view", { x: -90, duration: .32, ease: "power2.inOut" }, 3.34);
+      tl.set("#screening-view", { visibility: "hidden" }, 3.66);
+      tl.set("#applicants-list-view", { x: 90, opacity: 1, visibility: "visible" }, 3.66);
+      tl.to("#applicants-list-view", { x: 0, duration: .34, ease: "power2.inOut" }, 3.66);
+      tl.to(".nav-screening", { color: "#596a7d", backgroundColor: "transparent", duration: .2 }, 3.38);
+      tl.to(".nav-screening .nav-icon", { color: "#626e7b", duration: .2 }, 3.38);
+      tl.to(".nav-applicants", { color: "#075fae", backgroundColor: "#eef5fd", fontWeight: 800, duration: .2 }, 3.38);
+      tl.to(".nav-applicants .nav-icon", { color: "#075fae", duration: .2 }, 3.38);
+      tl.to("#breadcrumb", { textContent: "Recruitment  /  Applicants", duration: .01 }, 3.66);
+      tl.fromTo("#applicant-list-row", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: .3 }, 3.9);
+      tl.fromTo("#cursor", { opacity: 0, x: 300, y: -420 }, { opacity: 1, x: 260, y: -446, duration: .28, immediateRender: false }, 4.16);
+      tl.to("#cursor", { scale: .9, duration: .09, yoyo: true, repeat: 1, transformOrigin: "50% 50%" }, 4.45);
+      tl.to("#cursor", { opacity: 0, duration: .1 }, 4.56);
+      tl.to("#applicants-list-view", { x: -90, duration: .32, ease: "power2.inOut" }, 4.56);
+      tl.set("#applicants-list-view", { visibility: "hidden" }, 4.88);
+      tl.set("#applicant-view", { x: 90, opacity: 1, visibility: "visible" }, 4.88);
+      tl.to("#applicant-view", { x: 0, duration: .34, ease: "power2.inOut" }, 4.88);
+      tl.to("#breadcrumb", { textContent: "Applicants  /  Sample Candidate 01", duration: .01 }, 4.88);
+      tl.fromTo("#candidate-head", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: .32 }, 5.08);
+      tl.fromTo("#candidate-summary", { opacity: 0, y: 12, scale: .99 }, { opacity: 1, y: 0, scale: 1, duration: .36 }, 5.26);
+      tl.fromTo("#evidence-panel", { opacity: 0, y: 18, scale: .985, rotation: 1.5 }, { opacity: 1, y: 0, scale: 1, rotation: 0, duration: .44, ease: "back.out(1.12)" }, 5.46);
+      tl.fromTo(".analysis-field", { opacity: 0, y: 13, rotation: -2.8, scale: .98 }, { opacity: 1, y: 0, rotation: 0, scale: 1, duration: .35, stagger: .1, ease: "power2.out" }, 5.72);
+      tl.fromTo(".summary-box", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: .3 }, 6.09);
+      tl.fromTo(".evidence-box", { opacity: 0, y: 14, rotation: 2.5, scale: .98 }, { opacity: 1, y: 0, rotation: 0, scale: 1, duration: .35, stagger: .14, ease: "power2.out" }, 6.18);
+      tl.fromTo("#criteria-card", { opacity: 0, y: 15 }, { opacity: 1, y: 0, duration: .32 }, 6.7);
+      tl.fromTo("#decision-panel", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: .36 }, 6.82);
+      tl.fromTo("#decision-note", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: .32 }, 6.98);
+      tl.to({}, { duration: .001 }, 7.499);
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

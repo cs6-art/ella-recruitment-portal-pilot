@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js" integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2" crossorigin="anonymous"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #000;
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #F4F7FB;
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="25"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div
+        id="el-01-hook"
+        class="scene"
+        data-composition-id="01-hook"
+        data-composition-src="compositions/frames/01-hook.html"
+        data-start="0"
+        data-duration="3.42"
+        data-track-index="0"
+      ></div>
+
+      <div
+        id="el-02-reveal"
+        class="scene"
+        data-composition-id="02-reveal"
+        data-composition-src="compositions/frames/02-reveal.html"
+        data-start="3"
+        data-duration="3.34"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-03-screening"
+        class="scene"
+        data-composition-id="03-screening"
+        data-composition-src="compositions/frames/03-screening.html"
+        data-start="6"
+        data-duration="4.42"
+        data-track-index="0"
+      ></div>
+
+      <div
+        id="el-04-interviews"
+        class="scene"
+        data-composition-id="04-interviews"
+        data-composition-src="compositions/frames/04-interviews.html"
+        data-start="10"
+        data-duration="5.34"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-05-review"
+        class="scene"
+        data-composition-id="05-review"
+        data-composition-src="compositions/frames/05-review.html"
+        data-start="15"
+        data-duration="4.38"
+        data-track-index="0"
+      ></div>
+
+      <div
+        id="el-06-workflow"
+        class="scene"
+        data-composition-id="06-workflow"
+        data-composition-src="compositions/frames/06-workflow.html"
+        data-start="19"
+        data-duration="3.42"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-07-close"
+        class="scene"
+        data-composition-id="07-close"
+        data-composition-src="compositions/frames/07-close.html"
+        data-start="22"
+        data-duration="3"
+        data-track-index="0"
+      ></div>
+
+      <!-- BGM -->
+      <audio
+        id="el-bgm"
+        src="assets/audio/smile-original-score.wav"
+        data-start="0"
+        data-duration="25"
+        data-track-index="11"
+        data-volume="0.82"
+      ></audio>
+
+      <!-- SFX -->
+      <audio
+        id="el-sfx-0"
+        src="assets/audio/paper-flick.wav"
+        data-start="0.12"
+        data-duration="0.42"
+        data-track-index="20"
+        data-volume="0.48"
+      ></audio>
+      <audio
+        id="el-sfx-1"
+        src="assets/audio/impact-soft.wav"
+        data-start="0.88"
+        data-duration="0.34"
+        data-track-index="21"
+        data-volume="0.52"
+      ></audio>
+      <audio
+        id="el-sfx-2"
+        src="assets/audio/sweep-short.wav"
+        data-start="1.72"
+        data-duration="0.58"
+        data-track-index="22"
+        data-volume="0.42"
+      ></audio>
+      <audio
+        id="el-sfx-3"
+        src="assets/audio/impact-soft.wav"
+        data-start="2.02"
+        data-duration="0.34"
+        data-track-index="23"
+        data-volume="0.4"
+      ></audio>
+      <audio
+        id="el-sfx-4"
+        src="assets/audio/impact-soft.wav"
+        data-start="3.22"
+        data-duration="0.34"
+        data-track-index="24"
+        data-volume="0.42"
+      ></audio>
+      <audio
+        id="el-sfx-5"
+        src="assets/audio/ui-tick.wav"
+        data-start="4.55"
+        data-duration="0.12"
+        data-track-index="25"
+        data-volume="0.4"
+      ></audio>
+      <audio
+        id="el-sfx-6"
+        src="assets/audio/sweep-short.wav"
+        data-start="6.34"
+        data-duration="0.58"
+        data-track-index="26"
+        data-volume="0.38"
+      ></audio>
+      <audio
+        id="el-sfx-7"
+        src="assets/audio/ui-tick.wav"
+        data-start="7.12"
+        data-duration="0.12"
+        data-track-index="27"
+        data-volume="0.34"
+      ></audio>
+      <audio
+        id="el-sfx-8"
+        src="assets/audio/ui-tick.wav"
+        data-start="7.42"
+        data-duration="0.12"
+        data-track-index="28"
+        data-volume="0.34"
+      ></audio>
+      <audio
+        id="el-sfx-9"
+        src="assets/audio/impact-soft.wav"
+        data-start="8.12"
+        data-duration="0.34"
+        data-track-index="29"
+        data-volume="0.38"
+      ></audio>
+      <audio
+        id="el-sfx-10"
+        src="assets/audio/impact-soft.wav"
+        data-start="10.18"
+        data-duration="0.34"
+        data-track-index="30"
+        data-volume="0.36"
+      ></audio>
+      <audio
+        id="el-sfx-11"
+        src="assets/audio/phone-tone.wav"
+        data-start="11.48"
+        data-duration="0.24"
+        data-track-index="31"
+        data-volume="0.44"
+      ></audio>
+      <audio
+        id="el-sfx-12"
+        src="assets/audio/consent-click.wav"
+        data-start="13.04"
+        data-duration="0.2"
+        data-track-index="32"
+        data-volume="0.42"
+      ></audio>
+      <audio
+        id="el-sfx-13"
+        src="assets/audio/ui-tick.wav"
+        data-start="13.74"
+        data-duration="0.12"
+        data-track-index="33"
+        data-volume="0.32"
+      ></audio>
+      <audio
+        id="el-sfx-14"
+        src="assets/audio/ui-tick.wav"
+        data-start="16.12"
+        data-duration="0.12"
+        data-track-index="34"
+        data-volume="0.34"
+      ></audio>
+      <audio
+        id="el-sfx-15"
+        src="assets/audio/impact-soft.wav"
+        data-start="17.68"
+        data-duration="0.34"
+        data-track-index="35"
+        data-volume="0.42"
+      ></audio>
+      <audio
+        id="el-sfx-16"
+        src="assets/audio/sweep-short.wav"
+        data-start="19.14"
+        data-duration="0.58"
+        data-track-index="36"
+        data-volume="0.42"
+      ></audio>
+      <audio
+        id="el-sfx-17"
+        src="assets/audio/ui-tick.wav"
+        data-start="19.82"
+        data-duration="0.12"
+        data-track-index="37"
+        data-volume="0.34"
+      ></audio>
+      <audio
+        id="el-sfx-18"
+        src="assets/audio/ui-tick.wav"
+        data-start="20.38"
+        data-duration="0.12"
+        data-track-index="38"
+        data-volume="0.34"
+      ></audio>
+      <audio
+        id="el-sfx-19"
+        src="assets/audio/ui-tick.wav"
+        data-start="20.94"
+        data-duration="0.12"
+        data-track-index="39"
+        data-volume="0.34"
+      ></audio>
+      <audio
+        id="el-sfx-20"
+        src="assets/audio/cta-confirm.wav"
+        data-start="23.76"
+        data-duration="0.62"
+        data-track-index="40"
+        data-volume="0.52"
+      ></audio>
+      <audio
+        id="el-sfx-21"
+        src="assets/audio/impact-soft.wav"
+        data-start="24.08"
+        data-duration="0.34"
+        data-track-index="41"
+        data-volume="0.36"
+      ></audio>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = gsap.timeline({ paused: true });
+      // ── frame transitions (injected by transitions.mjs) ──
+      (function () { var tl = window.__timelines["main"];
+        tl.to("#el-01-hook", { scale: 2.5, opacity: 0, filter: "blur(8px)", duration: 0.42, ease: "power3.in" }, 3);
+        tl.fromTo("#el-02-reveal", { scale: 0.5, opacity: 0, filter: "blur(8px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.42, ease: "power3.out" }, 3);
+        tl.to("#el-02-reveal", { x: -1920, duration: 0.34, ease: "power3.inOut" }, 6);
+        tl.fromTo("#el-03-screening", { x: 1920, opacity: 1 }, { x: 0, opacity: 1, duration: 0.34, ease: "power3.inOut" }, 6);
+        tl.to("#el-03-screening", { scale: 2.5, opacity: 0, filter: "blur(8px)", duration: 0.42, ease: "power3.in" }, 10);
+        tl.fromTo("#el-04-interviews", { scale: 0.5, opacity: 0, filter: "blur(8px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.42, ease: "power3.out" }, 10);
+        tl.to("#el-04-interviews", { y: -1080, duration: 0.34, ease: "power3.inOut" }, 15);
+        tl.fromTo("#el-05-review", { y: 1080, opacity: 1 }, { y: 0, opacity: 1, duration: 0.34, ease: "power3.inOut" }, 15);
+        tl.to("#el-05-review", { scale: 2.5, opacity: 0, filter: "blur(8px)", duration: 0.38, ease: "power3.in" }, 19);
+        tl.fromTo("#el-06-workflow", { scale: 0.5, opacity: 0, filter: "blur(8px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.38, ease: "power3.out" }, 19);
+        tl.to("#el-06-workflow", { scale: 2.5, opacity: 0, filter: "blur(8px)", duration: 0.42, ease: "power3.in" }, 22);
+        tl.fromTo("#el-07-close", { scale: 0.5, opacity: 0, filter: "blur(8px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.42, ease: "power3.out" }, 22);
+        tl.to({}, { duration: 25 }, 0); // full-span anchor — main.duration() == composition total (Studio master duration)
+      })();
+    </script>
+  </body>
+</html>

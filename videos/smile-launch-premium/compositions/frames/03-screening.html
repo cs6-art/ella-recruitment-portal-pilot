@@ -1,0 +1,36 @@
+<template><style>@font-face{font-family:Manrope;src:url("assets/fonts/captured-Manrope.ttf") format("truetype");font-weight:400 800;font-display:block}*{box-sizing:border-box}#root{position:relative;width:1920px;height:1080px;overflow:hidden;font-family:Manrope,Arial,sans-serif;font-synthesis:none}#root *{box-sizing:border-box}.clip{position:absolute;inset:0;width:100%;height:100%}.03-screening-ground{z-index:0}
+
+      #root{color:#172033}
+      .screen-bg{background:linear-gradient(135deg,#f4f7fb,#eef4fa 62%,#e2edf8)}
+      .screen-world{position:absolute;inset:0;overflow:hidden}
+      .screen-copy{position:absolute;left:6.5%;top:17%;width:26%;z-index:4}
+      .screen-kicker{color:#006bea;font-size:clamp(13px,1vw,18px);font-weight:800;letter-spacing:.15em}
+      .screen-copy h1{margin:30px 0 24px;font-size:clamp(78px,7vw,132px);line-height:.86;letter-spacing:-.09em;color:#0e4471;font-weight:800}
+      .screen-copy h1 em{font-style:normal;color:#0071f7}
+      .screen-sub{font-size:clamp(19px,1.65vw,30px);line-height:1.28;font-weight:650;color:#172033}
+      .screen-disclaimer{margin-top:27px;padding-left:13px;border-left:3px solid #f7cf00;color:#617287;font-size:clamp(14px,1.1vw,19px);line-height:1.4}
+      .screen-window{position:absolute;left:35%;top:9%;width:62%;height:82%;overflow:hidden;border:1px solid #dfe7f1;border-radius:20px;background:#fff;box-shadow:0 28px 80px rgba(14,68,113,.16);transform-style:preserve-3d}
+      .screen-window img{display:block;width:100%;height:100%;object-fit:cover}
+      .screen-watermark{position:absolute;right:16px;top:14px;padding:9px 12px;border:1px solid #f0d768;border-radius:7px;background:#fff8ce;color:#685800;font-size:11px;font-weight:850;letter-spacing:.08em}
+      .screen-laser{position:absolute;left:17%;top:35%;width:80%;height:2px;background:linear-gradient(90deg,transparent,#0071f7,#f7cf00,transparent);box-shadow:0 0 18px rgba(0,113,247,.75);transform:scaleX(0);transform-origin:left center}
+      .screen-drop-outline{position:absolute;left:17%;top:24%;width:80%;height:19%;border:2px solid rgba(0,113,247,.72);border-radius:13px;box-shadow:0 0 0 8px rgba(0,113,247,.06);transform:scaleX(.02);transform-origin:left center}
+      .screen-result{position:absolute;left:61%;top:60%;width:190px;padding:15px 18px;border-radius:14px;background:#0e4471;color:#fff;box-shadow:0 18px 40px rgba(14,68,113,.28);display:flex;flex-direction:column;align-items:flex-start}
+      .screen-result span{font-size:10px;letter-spacing:.13em;font-weight:800;color:#d5edff}.screen-result strong{font-size:47px;line-height:1.05;letter-spacing:-.06em}.screen-result small{font-size:22px}.screen-result i{font-style:normal;font-size:9px;letter-spacing:.15em;color:#f7cf00;font-weight:800}
+      .screen-cursor{position:absolute;left:50%;top:47%;width:28px;height:38px;filter:drop-shadow(0 3px 5px rgba(0,0,0,.3))}.screen-cursor:before{content:'';position:absolute;inset:0;background:#0071f7;clip-path:polygon(0 0,100% 64%,57% 70%,78% 100%,62% 106%,44% 76%,20% 100%)}
+      .screen-stamp{position:absolute;right:4%;bottom:18%;font-size:12px;font-weight:800;letter-spacing:.16em;color:#8d9bad}
+      @media (orientation:portrait){.screen-copy{left:7%;top:7%;width:86%}.screen-kicker{font-size:16px}.screen-copy h1{margin:18px 0 15px;font-size:clamp(70px,10vw,100px)}.screen-sub{font-size:22px;line-height:1.18}.screen-disclaimer{margin-top:13px;font-size:15px}.screen-window{left:5%;top:37%;width:90%;height:45%;border-radius:18px}.screen-watermark{font-size:10px;right:8px;top:8px}.screen-result{left:59%;top:65%;width:150px;padding:10px 12px}.screen-result strong{font-size:35px}.screen-result span{font-size:8px}.screen-result i{font-size:7px}.screen-stamp{right:7%;bottom:18%;font-size:11px}}
+    </style><div id="root" data-composition-id="03-screening" data-width="1920" data-height="1080" data-duration="4.42"><div id="ground-03-screening" class="03-screening-ground screen-bg clip" data-start="0" data-duration="4.42" data-track-index="0"></div>
+      <div class="screen-world">
+        <div class="screen-copy"><div class="screen-kicker">RESUME SCREENING</div><h1>Screen<br><em>with AI.</em></h1><div class="screen-sub">Match scores.<br>Strengths. Gaps. Evidence.</div><div class="screen-disclaimer">AI-assisted insights for HR review.</div></div>
+        <div class="screen-window"><img src="assets/screening-panel.png" alt="Smile Portal Resume Screening interface — illustrative demo"><div class="screen-watermark">ILLUSTRATIVE UI · DEMO DATA</div><div class="screen-laser"></div><div class="screen-drop-outline"></div><div class="screen-result"><span>AI MATCH</span><strong>82<small>%</small></strong><i>DEMO SCORE</i></div><div class="screen-cursor"></div></div>
+        <div class="screen-stamp">01 / REVIEW</div>
+      </div></div><script>(()=>{const root=document.querySelector('[data-composition-id="03-screening"]');if(!root||!window.gsap)return;window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true});window.__timelines["03-screening"]=tl;const width=1920,height=1080,portrait=false;
+      const q=s=>root.querySelector(s);
+      tl.fromTo(q('.screen-window'),{x:260,rotationY:-11,scale:.88,opacity:0},{x:0,rotationY:0,scale:1,opacity:1,duration:.72,ease:'power3.out'},.06);
+      tl.fromTo(q('.screen-copy'),{x:-65,opacity:0},{x:0,opacity:1,duration:.6,ease:'power3.out'},.2);
+      tl.fromTo(q('.screen-drop-outline'),{scaleX:.02},{scaleX:1,duration:.65,ease:'power3.out'},.7);
+      tl.fromTo(q('.screen-laser'),{scaleX:0},{scaleX:1,duration:.58,ease:'power2.out'},1.05);
+      tl.fromTo(q('.screen-result'),{y:80,scale:.78,opacity:0},{y:0,scale:1,opacity:1,duration:.56,ease:'back.out(1.25)'},2.05);
+      tl.fromTo(q('.screen-cursor'),{x:-38,y:-24,opacity:0},{x:0,y:0,opacity:1,duration:.3,ease:'power3.out'},1.72);
+      tl.fromTo(q('.screen-stamp'),{x:22,opacity:0},{x:0,opacity:1,duration:.4,ease:'power3.out'},2.45);
+      tl.to(q('.screen-window'),{scale:1.025,x:-12,duration:1.25,ease:'power1.inOut'},2.25);tl.seek(0)})();</script></template>
