@@ -3,11 +3,10 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import ManualMarkdown from "@/components/ManualMarkdown";
-import ManualVideo from "@/components/ManualVideo";
 import ManualViewer from "@/components/ManualViewer";
 import PageHeader from "@/components/ui/PageHeader";
 import { loadManual } from "@/lib/manual";
-import { resolveManualVideo } from "@/lib/manual-video";
+import { resolveManualTutorials } from "@/lib/manual-tutorials";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -19,22 +18,22 @@ export default async function ManualPage() {
   if (!user) redirect("/");
 
   const manual = loadManual();
-  const video = resolveManualVideo(process.env.MANUAL_VIDEO_URL);
+  const tutorials = resolveManualTutorials(manual.sections);
 
   return (
     <main className="container page">
       <PageHeader
         eyebrow="HELP"
         title="Explore Manual"
-        description="Learn how to use the Recruitment Portal, step by step. Watch the tutorial video, then pick a topic or search for what you need."
+        description="Learn how to use the Recruitment Portal, step by step. Watch a topic walkthrough, or search the manual for what you need."
       />
       <ManualViewer
-        video={<ManualVideo video={video} />}
         intro={manual.intro ? <ManualMarkdown>{manual.intro}</ManualMarkdown> : null}
         sections={manual.sections.map((section) => ({
           id: section.id,
           title: section.title,
           searchText: section.searchText,
+          tutorial: tutorials.get(section.id),
           content: <ManualMarkdown>{section.body}</ManualMarkdown>,
         }))}
       />

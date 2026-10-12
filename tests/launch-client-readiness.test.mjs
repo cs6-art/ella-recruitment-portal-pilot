@@ -10,7 +10,7 @@ import {
   parseFeedback,
 } from "../src/lib/feedback.ts";
 import { parseManual, slugifyHeading } from "../src/lib/manual.ts";
-import { resolveManualVideo } from "../src/lib/manual-video.ts";
+import { MANUAL_TUTORIALS, resolveManualTutorials } from "../src/lib/manual-tutorials.ts";
 import { welcomeCredits } from "../src/lib/welcome-credit-config.ts";
 
 const read = (path) => fs.readFileSync(path, "utf8");
@@ -210,7 +210,8 @@ test("the credits API stays scoped to the signed-in organization", () => {
 test("the manual page needs a signed-in user and is easy to find", () => {
   const page = read("src/app/manual/page.tsx");
   assert.match(page, /if \(!user\) redirect\("\/"\)/);
-  assert.match(page, /resolveManualVideo\(process\.env\.MANUAL_VIDEO_URL\)/);
+  assert.match(page, /resolveManualTutorials\(manual\.sections\)/);
+  assert.doesNotMatch(page, /MANUAL_VIDEO_URL/);
   const shell = read("src/components/AppShell.tsx");
   assert.match(shell, /"\/manual",/, "the shell treats /manual as a portal page");
   assert.match(shell, /<Link href="\/manual"[\s\S]*Explore Manual/);
@@ -239,25 +240,54 @@ test("the manual covers the real menu and every internal link points at a real h
   assert.doesNotMatch(text, /Help & Feedback|Continue in email/);
 });
 
-test("the tutorial video is configurable, never autoplays and is not hardcoded", () => {
-  assert.equal(resolveManualVideo(undefined), null);
-  assert.equal(resolveManualVideo(""), null);
-  assert.deepEqual(resolveManualVideo("/videos/tutorial.mp4"), { kind: "file", src: "/videos/tutorial.mp4", mimeType: "video/mp4" });
-  assert.deepEqual(resolveManualVideo("https://cdn.example.com/walkthrough.webm"), { kind: "file", src: "https://cdn.example.com/walkthrough.webm", mimeType: "video/webm" });
-  assert.deepEqual(resolveManualVideo("https://www.youtube.com/watch?v=abcdEFG1234"), { kind: "embed", src: "https://www.youtube-nocookie.com/embed/abcdEFG1234" });
-  assert.deepEqual(resolveManualVideo("https://youtu.be/abcdEFG1234"), { kind: "embed", src: "https://www.youtube-nocookie.com/embed/abcdEFG1234" });
-  assert.deepEqual(resolveManualVideo("https://vimeo.com/123456789"), { kind: "embed", src: "https://player.vimeo.com/video/123456789" });
-  assert.deepEqual(resolveManualVideo("https://www.loom.com/share/0123456789abcdef0123456789abcdef"), { kind: "embed", src: "https://www.loom.com/embed/0123456789abcdef0123456789abcdef" });
-  assert.deepEqual(resolveManualVideo("https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/view?usp=sharing"), { kind: "embed", src: "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/preview" });
-  for (const unsafe of ["http://example.com/a.mp4", "https://evil.example.com/page", "javascript:alert(1)", "//evil.example.com/a.mp4", "/videos/../secret.mp4", "/notes.txt", "not a url"]) {
-    assert.equal(resolveManualVideo(unsafe), null, unsafe);
+test("the manual maps exactly A to Q to the supplied YouTube tutorials", () => {
+  const manual = parseManual(read("docs/Smile-Recruitment-Portal-User-Manual.md"));
+  const resolved = resolveManualTutorials(manual.sections);
+  const expected = [
+    ["a-quick-start", "b6aZWtOx1Mc"],
+    ["b-user-types", "LYS8qBSqxQs"],
+    ["c-navigation-overview", "LAff9qGLrQU"],
+    ["d-dashboard", "yYPJssYbabM"],
+    ["e-role-requests", "3x5RBwmVoXo"],
+    ["f-applicants", "ijGBq4ycGDw"],
+    ["g-resume-screening", "eqbymr5N0uk"],
+    ["h-interviews", "MJXgCJbyMPQ"],
+    ["i-credits", "PoZcmVoiX8Y"],
+    ["j-smile-bot-help-and-feedback", "JPX8L-mnzjM"],
+    ["k-settings", "9wXs0PwLWDU"],
+    ["l-reports-and-exports", "Bd7mG_kNGXQ"],
+    ["m-alerts-and-notifications", "MSOzXPAfwKo"],
+    ["n-common-tasks", "UW4RPSN2f7A"],
+    ["o-status-reference", "lo0cTwK1Ya4"],
+    ["p-end-to-end-workflow", "qHloM0oDsLg"],
+    ["q-button-and-action-reference", "2lTtjgScgMw"],
+  ];
+  assert.deepEqual(Object.entries(MANUAL_TUTORIALS), expected);
+  assert.equal(resolved.size, 17);
+  for (const [index, [sectionId, youtubeId]] of expected.entries()) {
+    const tutorial = resolved.get(sectionId);
+    assert.equal(tutorial.youtubeId, youtubeId);
+    assert.equal(tutorial.guideNumber, index + 1);
+    assert.equal(tutorial.total, 17);
+    assert.equal(tutorial.previous?.sectionId, expected[index - 1]?.[0]);
+    assert.equal(tutorial.next?.sectionId, expected[index + 1]?.[0]);
   }
-  const video = read("src/components/ManualVideo.tsx");
-  assert.match(video, /controls preload="none" playsInline/);
+  assert.equal(resolved.get("h-interviews").sectionTitle, "H. Interviews");
+});
+
+test("tutorial players are collapsed, lazy, responsive, privacy-enhanced and have a fallback", () => {
+  const video = read("src/components/ManualTutorial.tsx");
+  const viewer = read("src/components/ManualViewer.tsx");
+  assert.match(video, /playing && !failed/);
+  assert.match(video, /youtube-nocookie\.com\/embed\/\$\{youtubeId\}/);
   assert.match(video, /loading="lazy"/);
-  assert.doesNotMatch(video, /<video[^>]*autoPlay|autoplay=1|[?&]autoplay/i, "never autoplays");
-  assert.match(video, /Tutorial video coming soon/);
-  assert.doesNotMatch(video, /youtube|vimeo|\.mp4/i, "no video is hardcoded");
+  assert.match(video, /allowFullScreen/);
+  assert.match(video, /open this tutorial on YouTube/);
+  assert.match(video, /Previous tutorial/);
+  assert.match(video, /Next tutorial/);
+  assert.doesNotMatch(video, /\n\s*autoPlay(?:\s|=|>)/, "navigation never mounts an auto-playing iframe");
+  assert.match(viewer, /setPlayingTutorialId\(null\)/, "changing sections stops and unmounts the prior player");
+  assert.match(viewer, /Video walkthrough available/);
   assert.match(read("src/components/ManualViewer.module.css"), /\.videoFrame \{[^}]*aspect-ratio: 16 \/ 9/);
 });
 

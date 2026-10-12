@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 
 import { panelScrollTarget, pickActiveSection, sectionScrollTop } from "@/lib/manual-scrollspy";
+import type { ManualTutorial as ManualTutorialData } from "@/lib/manual-tutorials";
+import ManualTutorial from "./ManualTutorial";
 import styles from "./ManualViewer.module.css";
 
-export type ManualViewerSection = { id: string; title: string; searchText: string; content: ReactNode };
+export type ManualViewerSection = { id: string; title: string; searchText: string; tutorial?: ManualTutorialData; content: ReactNode };
 
 type ManualViewerProps = {
-  /** Tutorial video, rendered on the server. */
-  video: ReactNode;
   /** The manual's introduction (what it describes, version). */
   intro: ReactNode;
   sections: ManualViewerSection[];
@@ -49,11 +49,15 @@ function hashId() {
  * and passed in, so this component only handles filtering and navigation.
  * The topic being read is highlighted automatically as the page scrolls.
  */
-export default function ManualViewer({ video, intro, sections }: ManualViewerProps) {
+export default function ManualViewer({ intro, sections }: ManualViewerProps) {
   const [query, setQuery] = useState("");
   const normalized = query.trim().toLowerCase();
   const visible = useMemo(() => (normalized ? sections.filter((section) => section.searchText.includes(normalized)) : sections), [normalized, sections]);
   const [activeId, setActiveId] = useState(sections[0]?.id ?? "");
+  const activeIdRef = useRef(activeId);
+  const [expandedTutorialId, setExpandedTutorialId] = useState<string | null>(null);
+  const [playingTutorialId, setPlayingTutorialId] = useState<string | null>(null);
+  const [failedTutorialId, setFailedTutorialId] = useState<string | null>(null);
   const [stickyTop, setStickyTop] = useState(16);
   const navRef = useRef<HTMLElement | null>(null);
   const mobileRef = useRef<HTMLDetailsElement | null>(null);
@@ -66,6 +70,11 @@ export default function ManualViewer({ video, intro, sections }: ManualViewerPro
   const frame = useRef(0);
 
   useEffect(() => { visibleRef.current = visible; }, [visible]);
+
+  const updateActiveId = useCallback((id: string) => {
+    activeIdRef.current = id;
+    setActiveId(id);
+  }, []);
 
   const measure = useCallback(() => {
     if (lockUntil.current) {
@@ -84,8 +93,13 @@ export default function ManualViewer({ video, intro, sections }: ManualViewerPro
     const scroller = document.scrollingElement || document.documentElement;
     const atBottom = window.scrollY > 0 && window.innerHeight + window.scrollY >= scroller.scrollHeight - 4;
     const next = pickActiveSection(boxes, { line: offset + Math.min(140, window.innerHeight * 0.25), atBottom, viewportHeight: window.innerHeight });
-    if (next) setActiveId(next);
-  }, []);
+    if (next && next !== activeIdRef.current) {
+      updateActiveId(next);
+      // Scrolling into another section must stop the old iframe and its audio.
+      setPlayingTutorialId(null);
+      setFailedTutorialId(null);
+    }
+  }, [updateActiveId]);
 
   const scheduleMeasure = useCallback(() => {
     cancelAnimationFrame(frame.current);
@@ -96,7 +110,11 @@ export default function ManualViewer({ video, intro, sections }: ManualViewerPro
   const goTo = useCallback((id: string, history: "push" | "none", smooth: boolean) => {
     const element = document.getElementById(id);
     if (!element) return false;
-    setActiveId(id);
+    updateActiveId(id);
+    const targetSection = sections.find((section) => section.id === id);
+    setExpandedTutorialId(targetSection?.tutorial ? id : null);
+    setPlayingTutorialId(null);
+    setFailedTutorialId(null);
     lockUntil.current = Date.now() + PROGRAMMATIC_SCROLL_LOCK_MS;
     const top = sectionScrollTop({ sectionTop: element.getBoundingClientRect().top, scrollY: window.scrollY, stickyOffset: stickyOffset() });
     // The page may be too short to bring the section to the top: aim for the furthest reachable point.
@@ -107,7 +125,7 @@ export default function ManualViewer({ video, intro, sections }: ManualViewerPro
     // Already there (or an instant jump): release the lock on the next frame.
     scheduleMeasure();
     return true;
-  }, [scheduleMeasure]);
+  }, [scheduleMeasure, sections, updateActiveId]);
 
   // Keep the topic list and anchored headings clear of the sticky header.
   useEffect(() => {
@@ -181,6 +199,31 @@ export default function ManualViewer({ video, intro, sections }: ManualViewerPro
     scheduleMeasure();
   }, [visible, scheduleMeasure]);
 
+  useEffect(() => {
+    if (playingTutorialId && !visible.some((section) => section.id === playingTutorialId)) {
+      setPlayingTutorialId(null);
+      setFailedTutorialId(null);
+    }
+  }, [playingTutorialId, visible]);
+
+  const toggleTutorial = useCallback((sectionId: string) => {
+    userTookOver.current = true;
+    if (expandedTutorialId === sectionId) {
+      setExpandedTutorialId(null);
+      setPlayingTutorialId(null);
+      setFailedTutorialId(null);
+      return;
+    }
+    setExpandedTutorialId(sectionId);
+    setPlayingTutorialId(null);
+    setFailedTutorialId(null);
+  }, [expandedTutorialId]);
+
+  const navigateTutorial = useCallback((sectionId: string) => {
+    userTookOver.current = true;
+    goTo(sectionId, "push", true);
+  }, [goTo]);
+
   // Keep the active topic visible inside the (scrollable) topic list.
   useEffect(() => {
     const panel = navRef.current;
@@ -228,6 +271,11 @@ export default function ManualViewer({ video, intro, sections }: ManualViewerPro
               {...(desktop ? { "data-topic-desktop": section.id } : {})}
             >
               {section.title}
+              {section.tutorial && (
+                <span className={styles.topicVideoIcon} title="Video walkthrough available" aria-label="Video walkthrough available">
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" /><path d="m8.3 6.7 5 3.3-5 3.3z" /></svg>
+                </span>
+              )}
             </a>
           </li>
         );
@@ -255,12 +303,31 @@ export default function ManualViewer({ video, intro, sections }: ManualViewerPro
       </nav>
 
       <div id="manual-content" className={styles.content}>
-        {video}
         <div className={styles.intro}>{intro}</div>
         {visible.length === 0 && <p className={styles.noResults}>No topics match “{query.trim()}”. Try a different word, such as “credits” or “interview”.</p>}
         {visible.map((section) => (
           <section key={section.id} id={section.id} className={styles.section} aria-labelledby={`${section.id}-heading`}>
             <h2 id={`${section.id}-heading`}>{section.title}</h2>
+            {section.tutorial && (
+              <ManualTutorial
+                tutorial={section.tutorial}
+                expanded={expandedTutorialId === section.id}
+                playing={playingTutorialId === section.id}
+                failed={failedTutorialId === section.id}
+                onToggle={() => toggleTutorial(section.id)}
+                onPlay={() => {
+                  userTookOver.current = true;
+                  setExpandedTutorialId(section.id);
+                  setFailedTutorialId(null);
+                  setPlayingTutorialId(section.id);
+                }}
+                onFailure={() => {
+                  setPlayingTutorialId(null);
+                  setFailedTutorialId(section.id);
+                }}
+                onNavigate={navigateTutorial}
+              />
+            )}
             {section.content}
           </section>
         ))}

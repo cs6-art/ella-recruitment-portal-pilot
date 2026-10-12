@@ -116,7 +116,7 @@ Credits balance is shown at the top of the menu.
 | **Settings** | Your organisation's branding, calendar connection, recording storage and automated emails. |
 | **Credits** | Your credit balance and history, buy credits and redeem promo codes. |
 | **User Accounts** | Your team: who has access, invitations (owner only). |
-| **Explore Manual** | This manual, with a tutorial video and a search box. It is under **HELP** at the bottom of the menu. |
+| **Explore Manual** | This manual, with topic video walkthroughs and a search box. It is under **HELP** at the bottom of the menu. |
 | **Profile** | Select your name at the bottom of the menu: your account details and your own Google Calendar. |
 
 Also on every page:

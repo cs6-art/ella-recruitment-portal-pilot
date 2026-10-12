@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import fs from "node:fs";
 import { test, expect } from "@playwright/test";
+import { MANUAL_TUTORIALS } from "../../src/lib/manual-tutorials.ts";
 
 const widths = [1440, 1024, 768, 390];
 
@@ -90,4 +91,71 @@ test("settings access and logout work for settings administrator", async ({ page
   await expectNoHorizontalOverflow(page);
   await page.getByRole("button", { name: /Sign out/i }).click();
   await expect.poll(() => new URL(page.url()).pathname).toBe("/");
+});
+
+test("manual topics open their matching walkthroughs and stay usable on desktop and mobile", async ({ page }) => {
+  test.setTimeout(90_000);
+  await signIn(page, creator);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/manual", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Explore Manual" })).toBeVisible();
+    const search = page.getByRole("searchbox", { name: "Search the manual" });
+    await search.fill("manual-hydration-check-no-match");
+    await expect(page.getByText("No topics match your search.")).toBeVisible();
+    await search.fill("");
+    const mobileTopics = page.locator('nav[aria-label="Manual topics"] details');
+    if (width <= 860) await mobileTopics.locator("summary").click();
+    await expect(page.locator('nav[aria-label="Manual topics"] a:visible span[title="Video walkthrough available"]')).toHaveCount(17);
+    await expect(page.locator("iframe")).toHaveCount(0);
+
+    for (const [sectionId, youtubeId] of Object.entries(MANUAL_TUTORIALS)) {
+      if (width <= 860 && !(await mobileTopics.evaluate((element) => element.open))) {
+        await mobileTopics.locator("summary").click();
+      }
+      const topic = page.locator(`nav[aria-label="Manual topics"] a[href="#${sectionId}"]:visible`);
+      await topic.click();
+      await expect(page.locator(`nav[aria-label="Manual topics"] a[href="#${sectionId}"][aria-current="location"]`)).toHaveCount(2);
+      await expect(page.locator(`#${sectionId}-heading`)).toBeVisible();
+      const tutorial = page.locator(`#manual-tutorial-${sectionId}`);
+      await expect(tutorial).toBeVisible();
+      await expect(tutorial.locator("img")).toHaveAttribute("src", `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`);
+      await expect(page.locator("iframe")).toHaveCount(0, { timeout: 1000 });
+      await expectNoHorizontalOverflow(page);
+    }
+
+    if (width <= 860 && !(await mobileTopics.evaluate((element) => element.open))) {
+      await mobileTopics.locator("summary").click();
+    }
+    const firstTopic = page.locator('nav[aria-label="Manual topics"] a[href="#a-quick-start"]:visible');
+    await firstTopic.click();
+    const firstTutorial = page.locator("#manual-tutorial-a-quick-start");
+    const tutorialNavigation = firstTutorial.locator('nav[aria-label="Tutorial navigation"]');
+    await expect(tutorialNavigation.getByRole("button", { name: /Previous tutorial/ })).toBeDisabled();
+    await tutorialNavigation.getByRole("button", { name: /Next tutorial/ }).click();
+    await expect(page.locator('nav[aria-label="Manual topics"] a[href="#b-user-types"][aria-current="location"]')).toHaveCount(2);
+    if (width <= 860 && !(await mobileTopics.evaluate((element) => element.open))) {
+      await mobileTopics.locator("summary").click();
+    }
+    await page.locator('nav[aria-label="Manual topics"] a[href="#a-quick-start"]:visible').click();
+
+    await page.locator("#manual-tutorial-a-quick-start").getByRole("button", { name: /Play A\. Quick start video walkthrough/ }).click();
+    const activePlayer = page.locator("iframe");
+    await expect(activePlayer).toHaveCount(1);
+    await expect(activePlayer).toHaveAttribute("src", "https://www.youtube-nocookie.com/embed/b6aZWtOx1Mc?rel=0&autoplay=1");
+    await page.locator("#manual-tutorial-a-quick-start").locator('nav[aria-label="Tutorial navigation"]').getByRole("button", { name: /Next tutorial/ }).click();
+    await expect(page.locator("iframe")).toHaveCount(0);
+
+    await search.fill("Status reference");
+    const statusTopic = page.locator('nav[aria-label="Manual topics"] a[href="#o-status-reference"]:visible');
+    if (width <= 860 && !(await mobileTopics.evaluate((element) => element.open))) {
+      await mobileTopics.locator("summary").click();
+    }
+    await statusTopic.click();
+    await expect(statusTopic).toHaveAttribute("aria-current", "location");
+    await search.fill("");
+    await expectNoHorizontalOverflow(page);
+  }
 });

@@ -1137,11 +1137,12 @@ is always optional, and if it cannot be saved you can still sign out.
 ## Explore Manual
 
 **Explore Manual** in the menu (under **HELP**) opens the full user manual inside
-the portal, with a tutorial video at the top once McLink has added one, a list of
+the portal, with a video walkthrough under each matching topic heading, a list of
 topics on the left (on a phone it is a collapsible **Topics** list) and a search box
-that filters the topics. The topic you are reading is highlighted automatically as
-you scroll, and the address bar keeps a link to it. It is available to every
-signed-in person.
+that filters the topics. Select a topic or choose **Previous tutorial** or
+**Next tutorial** to move between walkthroughs; playback starts only when you press
+Play. The topic you are reading is highlighted automatically as you scroll, and
+the address bar keeps a link to it. It is available to every signed-in person.
 
 ---
 

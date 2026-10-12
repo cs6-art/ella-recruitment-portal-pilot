@@ -10,7 +10,7 @@
 .topicsMobile { display: none; }
 .topicsMobile summary { cursor: pointer; padding: 6px 0; }
 .topicList { display: grid; gap: 2px; margin: 6px 0 0; padding: 0; list-style: none; }
-.topicList a { display: block; padding: 7px 10px; border-radius: 8px; color: #2c4a63; font-size: 14px; line-height: 1.35; text-decoration: none; box-shadow: inset 0 0 0 transparent; transition: background-color .2s ease, color .2s ease, box-shadow .2s ease; }
+.topicList a { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: #2c4a63; font-size: 14px; line-height: 1.35; text-decoration: none; box-shadow: inset 0 0 0 transparent; transition: background-color .2s ease, color .2s ease, box-shadow .2s ease; }
 .topicList a:hover { background: #eef6fd; color: #0e4471; }
 .topicList a:focus-visible { outline: 3px solid rgba(36, 122, 189, .35); outline-offset: 1px; background: #eef6fd; color: #0e4471; }
 /* The section being read: light Smile blue, navy text, a left indicator and stronger weight. */
@@ -19,11 +19,34 @@
 .topicDim { opacity: .4; }
 
 .content { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
-.videoCard { padding: 18px; border: 1px solid #d7e3ee; border-radius: 14px; background: #fff; }
-.videoCard h2 { margin: 0 0 12px; color: #12395c; font-size: 18px; }
-.videoFrame { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 10px; background: #0d2438; }
-.videoFrame video, .videoFrame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
-.videoPlaceholder { display: grid; place-items: center; background: linear-gradient(135deg, #e9f3fc, #f6fafe); border: 1px dashed #a9c6e0; color: #3d566d; font-size: 16px; font-weight: 700; text-align: center; padding: 16px; box-sizing: border-box; }
+.topicVideoIcon { display: inline-flex; flex: 0 0 auto; width: 16px; height: 16px; margin-left: auto; color: #3387c5; }
+.topicVideoIcon svg, .tutorialToggleIcon svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.topicVideoIcon svg path, .tutorialToggleIcon svg path { fill: currentColor; stroke: none; }
+
+.tutorial { margin: -2px 0 18px; }
+.tutorialToggle { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 8px 12px; border: 1px solid #d7e3ee; border-radius: 10px; background: #f8fbfe; color: #12395c; text-align: left; cursor: pointer; transition: border-color .18s ease, background-color .18s ease; }
+.tutorialToggle:hover { border-color: #9fc5e5; background: #f0f7fd; }
+.tutorialToggle:focus-visible, .videoPoster:focus-visible, .tutorialNavigation button:focus-visible { outline: 3px solid rgba(36, 122, 189, .35); outline-offset: 2px; }
+.tutorialToggleIcon { display: inline-flex; flex: 0 0 auto; width: 22px; height: 22px; color: #247abd; }
+.tutorialToggleLabel { font-size: 14px; font-weight: 700; }
+.tutorialGuide { margin-left: auto; color: #657d92; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.tutorialChevron, .tutorialChevronOpen { width: 17px; height: 17px; flex: 0 0 auto; fill: none; stroke: #58738a; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; transition: transform .18s ease; }
+.tutorialChevronOpen { transform: rotate(180deg); }
+.tutorialPanel { margin-top: 10px; padding: 12px; border: 1px solid #d7e3ee; border-radius: 12px; background: #fbfdff; }
+.videoFrame { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid #d7e3ee; border-radius: 10px; background: #10283c; }
+.videoFrame iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #000; }
+.videoPoster { position: absolute; inset: 0; display: grid; place-items: center; width: 100%; height: 100%; padding: 0; overflow: hidden; border: 0; background: linear-gradient(135deg, #dbeaf6, #f2f7fb); cursor: pointer; }
+.videoThumbnail { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.playButton { position: relative; display: grid; place-items: center; width: 64px; height: 64px; border: 1px solid rgba(255, 255, 255, .8); border-radius: 50%; background: rgba(0, 113, 247, .94); box-shadow: 0 4px 18px rgba(10, 35, 58, .32); color: #fff; transition: transform .18s ease, background-color .18s ease; }
+.playButton svg { width: 27px; height: 27px; margin-left: 3px; fill: currentColor; }
+.videoPoster:hover .playButton { transform: scale(1.07); background: #005fcf; }
+.videoUnavailable { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 18px; box-sizing: border-box; background: linear-gradient(135deg, #e9f3fc, #f6fafe); color: #3d566d; font-size: 14px; text-align: center; }
+.videoUnavailable a, .tutorialFallback a { color: #176daf; font-weight: 700; }
+.tutorialFallback { margin: 9px 0 0; color: #647b8f; font-size: 12px; line-height: 1.5; }
+.tutorialNavigation { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
+.tutorialNavigation button { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 6px 10px; border: 1px solid #cbd9e5; border-radius: 8px; background: #fff; color: #1b5b91; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.tutorialNavigation button:hover:not(:disabled) { border-color: #7eb2db; background: #eff7fd; }
+.tutorialNavigation button:disabled { color: #9baab7; background: #f5f7f9; cursor: default; }
 
 .intro, .section { padding: 22px 24px; border: 1px solid #d7e3ee; border-radius: 14px; background: #fff; color: #2c4a63; font-size: 15px; line-height: 1.65; }
 .intro:empty { display: none; }
@@ -44,7 +67,7 @@
 .noResults { margin: 0; padding: 18px; border: 1px dashed #c9d8e6; border-radius: 12px; color: #5f7488; }
 
 @media (prefers-reduced-motion: reduce) {
-  .topicList a { transition: none; }
+  .topicList a, .tutorialToggle, .tutorialChevron, .tutorialChevronOpen, .playButton { transition: none; }
 }
 
 @media (max-width: 860px) {
@@ -54,4 +77,13 @@
   .topicsMobile { display: block; }
   .intro, .section { padding: 16px; }
   .section h2 { font-size: 19px; }
+  .tutorialPanel { padding: 9px; }
+  .playButton { width: 54px; height: 54px; }
+}
+
+@media (max-width: 420px) {
+  .tutorialToggle { gap: 7px; padding: 8px; }
+  .tutorialToggleLabel { font-size: 13px; }
+  .tutorialGuide { font-size: 11px; }
+  .tutorialNavigation button { gap: 5px; padding: 6px 8px; font-size: 12px; }
 }
