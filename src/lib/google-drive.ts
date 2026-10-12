@@ -168,6 +168,25 @@ export async function getDriveConnectionStatus(email: string): Promise<{ connect
     await discardStaleConnection(email, "stored scope");
     return { connected: false, reconnectRequired: true, accountEmail: "", connectedAt: "" };
   }
+  try {
+    // Validate with Google even while the locally saved token is unexpired:
+    // removing third-party access does not remove our saved credentials.
+    if (!await authorizeDrive(email)) {
+      return { connected: false, reconnectRequired: false, accountEmail: "", connectedAt: "" };
+    }
+  } catch (error) {
+    const oauthError = error as {
+      message?: string;
+      response?: { status?: number; data?: { error?: string } };
+    };
+    const code = oauthError.response?.data?.error;
+    const revoked = code === "invalid_grant" || code === "invalid_token"
+      || oauthError.response?.status === 401
+      || /invalid_grant|invalid_token|token has been expired or revoked/i.test(oauthError.message || "");
+    // Temporary Google/network errors remain errors, not revoked consent.
+    if (!revoked) throw error;
+    return { connected: false, reconnectRequired: false, accountEmail: "", connectedAt: "" };
+  }
   return { connected: true, reconnectRequired: false, accountEmail: connection.email, connectedAt: connection.connectedAt };
 }
 

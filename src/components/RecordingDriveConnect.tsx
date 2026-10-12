@@ -364,14 +364,14 @@ export default function RecordingDriveConnect() {
             min={7}
             max={365}
             step={1}
-            placeholder={retention.platformDays > 0 ? `Platform default (${retention.platformDays})` : "Platform default (keep until deleted)"}
+            placeholder={retention.platformDays > 0 ? String(retention.platformDays) : "Forever"}
             value={retentionInput}
             onChange={(event) => setRetentionInput(event.target.value)}
             disabled={savingRetention}
           />
           <button type="submit" className="btn btn-secondary" disabled={savingRetention}>{savingRetention ? "Saving…" : "Save retention"}</button>
         </div>
-        <small>Between 7 and 365 days. Leave blank to use the platform default. Recordings older than this are deleted automatically.</small>
+        <small>Between 7 and 365 days. {retention?.platformDays ? `Leave blank to use the default of ${retention.platformDays} days.` : "Leave blank to keep recordings until the applicant is deleted."} Recordings older than this are deleted automatically.</small>
         {retentionMessage && <ActionFeedback kind="success">{retentionMessage}</ActionFeedback>}
         {retentionError && <ActionFeedback kind="error">{retentionError}</ActionFeedback>}
       </form>}
