@@ -15,11 +15,11 @@ test("first registrant of a client organization claims ownership", () => {
   assert.match(registration, /organizationId !== DEFAULT_ORGANIZATION_ID\) await claimOrganizationOwnershipIfNone/);
 });
 
-test("team management is limited to the owner, the owner is protected, and the last account is kept", () => {
+test("team management is limited to the owner, and the owner is protected", () => {
   const api = read("src/app/api/user-directory/route.ts");
   assert.match(api, /Only the organization owner can manage team members\./);
   assert.match(api, /The organization owner cannot be deactivated/);
-  assert.match(api, /You cannot deactivate the last active account\./);
+  assert.doesNotMatch(api, /You cannot deactivate the last active account\./);
   assert.match(api, /platformAdmin && user\.isOrganizationOwner === true/);
 });
 

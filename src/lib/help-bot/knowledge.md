@@ -89,8 +89,8 @@ register.
 **Who becomes the organization owner?** The first person to register into a client
 organization and verify their email. The owner can invite teammates and is the
 only person (besides a McLink platform administrator) who can deactivate or
-reactivate colleagues. The owner cannot be deactivated by anyone except McLink,
-and the last active account of an organization is protected. A McLink platform
+reactivate colleagues. The owner cannot be deactivated by anyone except McLink.
+A McLink platform
 administrator can hand ownership to another account.
 
 **How are organizations kept separate? Are client records mixed together?**
@@ -241,8 +241,7 @@ Ownership and team rules: the first person to register into a client organizatio
 becomes its **owner**. The owner invites teammates by email (they join when they
 register with that address and verify it), and is the only person besides a McLink
 platform administrator who can deactivate or reactivate accounts. The owner cannot
-be deactivated by other users, and the organization's last active account is
-protected. Deactivated accounts record who deactivated them and when, and the
+be deactivated by other users. Deactivated accounts record who deactivated them and when, and the
 account list shows each person's last sign-in. A McLink platform administrator
 decides who may register into each organization (allowed domains and emails) and
 can transfer ownership. McLink's own organization has no owner concept. A company that

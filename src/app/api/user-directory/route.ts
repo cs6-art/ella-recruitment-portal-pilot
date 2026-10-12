@@ -210,7 +210,6 @@ async function saveAccount(request: Request, originalEmail?: string) {
     const current = users.find((existing) => existing.email === normalizedOriginalEmail);
     if (current && current.active && !normalizedUser.active) {
       if (current.isOrganizationOwner && !platformAdmin) return responseError("The organization owner cannot be deactivated. Contact McLink to transfer ownership first.", 400);
-      if (users.filter((existing) => existing.active && existing.email !== current.email).length === 0) return responseError("You cannot deactivate the last active account.", 400);
     }
     const duplicate = users.some((existing) => existing.email === normalizedEmail && existing.email !== normalizedOriginalEmail);
     if (duplicate) return responseError("An account already exists for that email address.", 409);
