@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import ActionFeedback from "@/components/ActionFeedback";
@@ -9,6 +10,10 @@ import { internationalNumber, phoneGuide, phonePlaceholder, phoneProblem } from 
 import ValidationSummary from "@/components/ValidationSummary";
 import { requestEllaCreditsRefresh } from "@/lib/ella-credits-events";
 import { clientErrorMessage } from "@/lib/client-error";
+import SampleResumePicker from "@/components/onboarding/SampleResumePicker";
+import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
+import { requestOnboardingRefresh, showGuide } from "@/lib/onboarding-events";
+import { sampleJobById, type SampleResume } from "@/lib/sample-catalog";
 
 type RoleOption = {
   roleId: string;
@@ -28,6 +33,8 @@ type Props = {
   showRoleSelect?: boolean;
   submitInUploadCard?: boolean;
   successRedirectTo?: string;
+  /** HR screening only: offer the built-in sample resumes. */
+  allowSamples?: boolean;
 };
 
 type FormState = {
@@ -85,8 +92,10 @@ export default function CandidateApplicationForm({
   showRoleSelect = false,
   submitInUploadCard = false,
   successRedirectTo,
+  allowSamples = false,
 }: Props) {
   const router = useRouter();
+  const { state: onboarding } = useOnboarding();
   // Candidates apply through the public form and must agree to the privacy
   // notice themselves. HR staff screening a resume on someone's behalf (the
   // role picker variant) handle consent outside this form.
@@ -107,6 +116,48 @@ export default function CandidateApplicationForm({
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
+  // A built-in sample: the server supplies its PDF and fixed fictional details.
+  const [sample, setSample] = useState<SampleResume | null>(null);
+  const [credit, setCredit] = useState<{ available: number; cost: number } | null>(null);
+  const [creditShortfall, setCreditShortfall] = useState(false);
+  const sampleRoles = onboarding?.sampleRecommendations ?? {};
+  const recommendedSampleId = sampleJobById(sampleRoles[form.resumeRoleId])?.matchingResumeId || "";
+  const suggestedRole = sample && !form.resumeRoleId ? roleOptions.find((option) => sampleRoles[option.roleId] === sample.intendedJobId) : undefined;
+
+  // HR sees the screening cost and the organization's shared balance before submitting.
+  useEffect(() => {
+    if (!showRoleSelect) return;
+    let active = true;
+    fetch("/api/ella-credits/balance", { credentials: "same-origin", cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!active || data?.success !== true) return;
+        const available = Number(data.available ?? data.balance);
+        const cost = Number(data.pricing?.cvAnalysis ?? 1);
+        if (Number.isFinite(available)) setCredit({ available, cost: Number.isFinite(cost) && cost > 0 ? cost : 1 });
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [showRoleSelect, message]);
+
+  function applySampleResume(resume: SampleResume) {
+    const country = countryOptions.find((option) => option.country === resume.candidate.country);
+    const local = country ? resume.candidate.phone.replace(country.code, "") : resume.candidate.phone.replace(/^\+/, "");
+    setSample(resume);
+    setForm((current) => ({ ...current, candidateName: resume.candidate.name, email: resume.candidate.email, country: country?.country || current.country, countryCode: country?.code || current.countryCode, localContactNumber: local }));
+    setResumeFile(null);
+    setFileInputKey((value) => value + 1);
+    setFieldErrors({});
+    setError("");
+    setMessage("");
+    setCreditShortfall(false);
+    window.setTimeout(() => showGuide("screen-submit", `${resume.candidate.name}'s sample resume is ready. Choose the role to screen against, check the credit cost, then press Screen resume.`), 150);
+  }
+
+  function clearSample() {
+    setSample(null);
+    setForm((current) => ({ ...current, candidateName: "", email: "", countryCode: "+63", country: "PH", localContactNumber: "" }));
+  }
 
   const selectedRoleLabel = useMemo(
     () => roleOptions.find((option) => option.roleId === form.resumeRoleId)?.label || "",
@@ -133,11 +184,14 @@ export default function CandidateApplicationForm({
   function validate() {
     const nextErrors: Partial<Record<keyof FormState | "resumeFile", string>> = {};
 
-    if (!form.candidateName.trim()) nextErrors.candidateName = "Full name is required.";
-    if (!/^\S+@\S+\.\S+$/.test(form.email.trim().toLowerCase())) nextErrors.email = "Enter a valid email address.";
-    const contactProblem = phoneProblem(selectedCountry, form.localContactNumber);
-    if (contactProblem) nextErrors.localContactNumber = contactProblem;
-    if (!resumeFile) nextErrors.resumeFile = "Choose a PDF, DOC, or DOCX resume file.";
+    // A sample's details and file come from the server, so only the role is checked.
+    if (!sample) {
+      if (!form.candidateName.trim()) nextErrors.candidateName = "Full name is required.";
+      if (!/^\S+@\S+\.\S+$/.test(form.email.trim().toLowerCase())) nextErrors.email = "Enter a valid email address.";
+      const contactProblem = phoneProblem(selectedCountry, form.localContactNumber);
+      if (contactProblem) nextErrors.localContactNumber = contactProblem;
+      if (!resumeFile) nextErrors.resumeFile = "Choose a PDF, DOC, or DOCX resume file, or use a sample resume.";
+    }
     if (showRoleSelect && !form.resumeRoleId.trim()) nextErrors.resumeRoleId = "Choose a role.";
 
     setFieldErrors(nextErrors);
@@ -174,6 +228,7 @@ export default function CandidateApplicationForm({
     setSaving(true);
     setError("");
     setMessage("");
+    setCreditShortfall(false);
 
     const validation = validate();
     if (Object.keys(validation).length > 0) {
@@ -201,11 +256,15 @@ export default function CandidateApplicationForm({
       body.append("applicantCountry", selectedCountry.country);
       body.append("applicationSource", "Direct Application");
       body.append("consent", String(requireConsent));
-      if (resumeFile) body.append("resumeFile", resumeFile, resumeFile.name);
+      if (sample) body.append("sampleResumeId", sample.id);
+      else if (resumeFile) body.append("resumeFile", resumeFile, resumeFile.name);
 
       const response = await fetch(submitUrl, { method: "POST", body });
       const result = await response.json();
+      // Not enough credits: keep the role and sample selected so HR can retry after topping up.
+      if (response.status === 402) setCreditShortfall(true);
       if (!response.ok || result.success !== true) throw new Error(result.error || "Unable to submit application.");
+      requestOnboardingRefresh();
 
       const creditsCharged = Number(result.creditsCharged);
       requestEllaCreditsRefresh(Number.isFinite(creditsCharged) && creditsCharged > 0 ? -creditsCharged : undefined);
@@ -213,6 +272,7 @@ export default function CandidateApplicationForm({
       setMessage(result.message || `Application submitted. Application ID: ${result.applicationId}`);
       setForm({ candidateName: "", email: "", countryCode: "+63", country: "PH", localContactNumber: "", resumeRoleId: roleId || "" });
       setResumeFile(null);
+      setSample(null);
       setConsentGiven(false);
       setFileInputKey((value) => value + 1);
       if (fileInput.current) fileInput.current.value = "";
@@ -244,7 +304,7 @@ export default function CandidateApplicationForm({
         <div className="candidate-form-fields">
           <label className="field">
             <span>Full Name *</span>
-            <input id="candidate-name" required value={form.candidateName} disabled={saving} onChange={(event) => update("candidateName", event.target.value)} />
+            <input id="candidate-name" required value={form.candidateName} disabled={saving} readOnly={Boolean(sample)} onChange={(event) => update("candidateName", event.target.value)} />
             {readFieldError(fieldErrors, "candidateName") && <small>{readFieldError(fieldErrors, "candidateName")}</small>}
           </label>
 
@@ -252,11 +312,11 @@ export default function CandidateApplicationForm({
             <span>Contact Number *</span>
             <div className="contact-number-controls">
               <label>
-                <CountrySelect ariaLabel="Country code" value={form.country} disabled={saving} onChange={updateCountry} />
+                <CountrySelect ariaLabel="Country code" value={form.country} disabled={saving || Boolean(sample)} onChange={updateCountry} />
               </label>
               <label>
                 <span className="sr-only">Local contact number</span>
-                <input id="candidate-contact-number" required aria-label="Local contact number" inputMode="numeric" placeholder={phonePlaceholder(selectedCountry)} value={form.localContactNumber} disabled={saving} onChange={(event) => update("localContactNumber", cleanDigits(event.target.value))} />
+                <input id="candidate-contact-number" required aria-label="Local contact number" inputMode="numeric" placeholder={phonePlaceholder(selectedCountry)} value={form.localContactNumber} disabled={saving} readOnly={Boolean(sample)} onChange={(event) => update("localContactNumber", cleanDigits(event.target.value))} />
               </label>
             </div>
             <small>{phoneGuide(selectedCountry)}</small>
@@ -265,7 +325,7 @@ export default function CandidateApplicationForm({
 
           <label className="field">
             <span>Email Address *</span>
-            <input id="candidate-email" required type="email" value={form.email} disabled={saving} onChange={(event) => update("email", event.target.value)} />
+            <input id="candidate-email" required type="email" value={form.email} disabled={saving} readOnly={Boolean(sample)} onChange={(event) => update("email", event.target.value)} />
             {readFieldError(fieldErrors, "email") && <small>{readFieldError(fieldErrors, "email")}</small>}
           </label>
 
@@ -278,27 +338,46 @@ export default function CandidateApplicationForm({
               </select>
               {roleOptions.length === 0 && <small>No published roles are available for your organization.</small>}
               {readFieldError(fieldErrors, "resumeRoleId") && <small>{readFieldError(fieldErrors, "resumeRoleId")}</small>}
+              {suggestedRole && <small>Suggested role for this sample: <button type="button" className="inline-link-button" onClick={() => update("resumeRoleId", suggestedRole.roleId)}>{suggestedRole.label}</button></small>}
             </label>
           ) : <input type="hidden" name="roleId" value={form.resumeRoleId || roleId} />}
 
           <div className="field full resume-upload-field">
             <span>Resume Upload *</span>
-            <label className="resume-file-picker">
-                <input
-                id="candidate-resume"
-                key={fileInputKey}
-                ref={fileInput}
-                type="file"
-                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                disabled={saving}
-                onChange={(event) => selectResumeFile(event.target.files?.[0] || null)}
-              />
-              <span className="resume-file-button">Choose a resume file</span>
-              <span className="resume-file-name">{resumeFile?.name || "No file selected"}</span>
-            </label>
-            <small>PDF, DOC, or DOCX · up to 10 MB</small>
+            {sample ? (
+              <div className="sample-applied" role="status">
+                <span><strong>Sample resume:</strong> {sample.fileName} · fictional candidate, never contacted. <a href={`/api/samples/resumes/${encodeURIComponent(sample.id)}`} target="_blank" rel="noreferrer">Preview</a></span>
+                <button type="button" className="btn btn-secondary" disabled={saving} onClick={clearSample}>Remove sample</button>
+              </div>
+            ) : <>
+              <label className="resume-file-picker" data-guide-target="resume-upload">
+                  <input
+                  id="candidate-resume"
+                  key={fileInputKey}
+                  ref={fileInput}
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  disabled={saving}
+                  onChange={(event) => selectResumeFile(event.target.files?.[0] || null)}
+                />
+                <span className="resume-file-button">Choose a resume file</span>
+                <span className="resume-file-name">{resumeFile?.name || "No file selected"}</span>
+              </label>
+              <small>PDF, DOC, or DOCX · up to 10 MB</small>
+            </>}
             {readFieldError(fieldErrors, "resumeFile") && <small>{readFieldError(fieldErrors, "resumeFile")}</small>}
-            {submitInUploadCard && <div className="resume-inline-submit"><div><strong>Ready to screen this resume?</strong><small>{roleOptions.length === 0 && showRoleSelect ? "Publish a role for your organization before starting a CV analysis." : "Start the billable CV screening and save the screening record."}</small></div><button type="submit" className="btn btn-primary" disabled={saving || (showRoleSelect && roleOptions.length === 0)}>{saving ? "Starting..." : submitLabel}</button></div>}
+            {allowSamples && !sample && <>
+              <div className="sample-divider" aria-hidden="true">OR</div>
+              <SampleResumePicker recommendedId={recommendedSampleId} onUse={applySampleResume} disabled={saving} />
+            </>}
+            {submitInUploadCard && <div className="resume-inline-submit" data-guide-target="screen-submit"><div><strong>Ready to screen this resume?</strong><small>{roleOptions.length === 0 && showRoleSelect
+              ? "Publish a role for your organization before starting a CV analysis."
+              : credit
+                ? `Screening uses ${credit.cost} Smile Credit${credit.cost === 1 ? "" : "s"} from your organization's shared balance (${credit.available} available), charged when Smile finishes the screening. Choosing or previewing a sample is free.`
+                : "Start the billable CV screening and save the screening record. Screening uses 1 Smile Credit."}</small>
+              {credit && credit.available < credit.cost && <small className="resume-credit-warning">Not enough Smile Credits to screen. <Link href="/credits">Add credits</Link>, then come back. Your selections stay here.</small>}
+            </div><button type="submit" className="btn btn-primary" disabled={saving || (showRoleSelect && roleOptions.length === 0)}>{saving ? "Starting..." : submitLabel}</button></div>}
+            {creditShortfall && <ActionFeedback kind="error">Your organization doesn&apos;t have enough Smile Credits to screen this resume, so nothing was charged or saved. <Link href="/credits">Open Credits</Link> to add more; your role and sample are still selected.</ActionFeedback>}
           </div>
         </div>
 

@@ -10,6 +10,8 @@ import {
   voiceAttemptContext,
 } from "@/lib/internal-recruitment-queries";
 
+import { isReservedDemoPhone } from "@/lib/sample-safety";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -53,6 +55,9 @@ export const POST = withInternalAuth("voice_attempts", async (request) => {
 
   const phoneNumber = normalizePhone(context.applicantPhone || context.preferredMobile || context.phone || context.attempt.preferredMobile || context.attempt.contactNumber);
   if (!/^\+[1-9]\d{7,14}$/.test(phoneNumber)) return block("valid_applicant_phone_required", 422);
+  // Defense in depth: sample candidates never receive booking links, but a
+  // number from the range reserved for fiction is never dialled.
+  if (isReservedDemoPhone(phoneNumber)) return block("sample_candidate", 409);
 
   try {
     await assertCreditsAvailable(1, "phone_interview", { organizationId: context.organizationId, ownerEmail: context.creditOwnerEmail });

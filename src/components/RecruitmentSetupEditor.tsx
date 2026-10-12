@@ -31,6 +31,7 @@ import { parseVoiceInterviewSlots, type VoiceInterviewSlot } from "@/lib/voice-i
 import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count";
 import { formatPortalDateTime } from "@/lib/portal-time";
 import { clientErrorMessage } from "@/lib/client-error";
+import { requestOnboardingRefresh } from "@/lib/onboarding-events";
 
 type Setup = {
   roleTitle?: string;
@@ -659,6 +660,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
       // checkboxes appear to clear even though the draft was accepted.
       if (action !== "save_draft" && action !== "autosave_draft") onSaved?.(typeof result.status === "string" ? result.status : undefined);
       if (action === "publish_role") {
+        requestOnboardingRefresh();
         router.push("/roles?published=1");
       }
     } catch (caught) {
@@ -943,7 +945,7 @@ export default function RecruitmentSetupEditor({ roleId, status, setup, editable
 
       <div className="setup-action-bar">
         <div className="vapi-save-note"><strong>{editable ? "Review the prompt before saving." : status === "Job Posted" ? "Read-only — this role is already published" : "Read-only setup"}</strong><small>{status === "Job Posted" ? `This is the setup Smile uses for applicants to this role.${updatedByEmail ? ` Last updated by ${updatedByEmail}.` : ""}` : updatedByEmail ? `Last updated by ${updatedByEmail}` : "The standard template remains available for this role."}</small></div>
-        <div className="vapi-save-actions">
+        <div className="vapi-save-actions" data-guide-target="publish-role">
           {editable && <>
             {setupHasChanges && <button type="button" className="btn btn-secondary" disabled={saving} onClick={resetChanges}>Reset changes</button>}
             <button type="button" className="btn btn-secondary" aria-busy={savingAction === "save_draft"} disabled={saving} onClick={() => void save("save_draft")}>{actionLabel("save_draft", "Save")}</button>

@@ -161,9 +161,39 @@ administrators. The first person to register becomes the organization owner (see
 User Accounts and organizations). Other HR accounts can view the team; only the owner (or McLink) can invite people and
 deactivate or reactivate accounts.
 
+## Guided setup for a new organisation (Your Recruitment Setup)
+
+A newly registered organisation sees **Your Recruitment Setup** at the top of the
+Dashboard. Five steps unlock one at a time: (1) create your first role request,
+(2) configure and publish the role, (3) add your first resume, (4) screen the
+resume, (5) review your first applicant. A step completes only when it really
+happens (a role saved, a role published, a resume submitted, a screening result
+stored, or the reviewer selects **I've reviewed this screening** on a screened
+applicant, or records a decision). Progress belongs to the organisation, so every
+teammate sees the same step, after refresh or on another device. The sidebar shows
+**Your setup** with a **Continue Setup** button, and Smile's **Setup** tab has
+buttons that open the right page and highlight the control to use. Resume
+Screening and Applicants show a lock until earlier steps are done; that is guidance
+only, not a permission. Optional next steps (AI interviews, interview evidence,
+face-to-face scheduling) never block setup. Organisations that already used the
+portal are not affected.
+
+**Sample job descriptions:** the role form offers three: Sales Executive, Customer
+Service Representative and Accounts Executive. **Preview Template** shows the text;
+**Use This Template** fills the form for HR to edit. Nothing is saved, published or
+charged until HR creates the role.
+
+**Sample resumes:** the **Screen one resume** form offers three fictional
+candidates written to match those roles. **Use This Sample** fills in the candidate
+and the PDF. Screening runs through the normal AI screening and uses 1 Smile Credit
+when it succeeds; Smile never fakes or fixes a score. Sample candidates use reserved
+example.com addresses, are marked **Sample**, and are never emailed, called,
+invited to an interview or sent a calendar invite.
+
 ## Getting started checklist for a new organisation
 
-HR users see a **Getting Started** card on the Dashboard until setup is done. It
+HR users see a **Getting Started** card on the Dashboard after the guided setup,
+until the workspace settings are done. It
 shows "x of y required" and updates by itself every 30 seconds. Its steps:
 
 - **Review organization name and branding** (optional) — the name and subtitle
@@ -1109,7 +1139,9 @@ is always optional, and if it cannot be saved you can still sign out.
 **Explore Manual** in the menu (under **HELP**) opens the full user manual inside
 the portal, with a tutorial video at the top once McLink has added one, a list of
 topics on the left (on a phone it is a collapsible **Topics** list) and a search box
-that filters the topics. It is available to every signed-in person.
+that filters the topics. The topic you are reading is highlighted automatically as
+you scroll, and the address bar keeps a link to it. It is available to every
+signed-in person.
 
 ---
 

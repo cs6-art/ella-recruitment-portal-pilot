@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import RoleDetails from "@/components/RoleDetails";
+import OnboardingPageGuide from "@/components/onboarding/OnboardingPageGuide";
 import {
   COOKIE_NAME,
   getActiveSessionUser,
@@ -43,6 +44,7 @@ export default async function RoleDetailsPage({
 
   return (
     <>
+      <OnboardingPageGuide nav="roles" steps={["publish_role"]} showMe="publish-role" contained />
       <RoleDetails
         roleId={decodedRoleId}
         userEmail={user.email}

@@ -93,7 +93,8 @@ test("Sign Out shows optional feedback and can never trap the person", () => {
 
 test("Smile Bot has a Feedback tab and no Suggestion wording", () => {
   const bot = read("src/components/HelpBot.tsx");
-  assert.match(bot, /type Tab = "ask" \| "help" \| "feedback"/);
+  // "guide" is the guided-setup tab, shown only to organizations in guided setup.
+  assert.match(bot, /type Tab = "guide" \| "ask" \| "help" \| "feedback"/);
   assert.match(bot, /<SmileFeedbackTab \/>/);
   assert.doesNotMatch(bot, /Suggestion/);
   for (const file of ["src/lib/support-contact.ts", "src/lib/help-bot/knowledge.md", "docs/Smile-Recruitment-Portal-User-Manual.md"]) {

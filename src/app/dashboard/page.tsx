@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { organizations } from "@/db/schema";
 import DashboardMetrics from "@/components/DashboardMetrics";
+import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
 import UiIcon from "@/components/UiIcon";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
 
@@ -54,6 +55,7 @@ export default async function DashboardPage() {
         />
       : <main className="container page dashboard-page">
           <header className="dashboard-welcome dashboard-welcome-limited"><div><h1>Hello, {userName}</h1><p>Here’s what needs your attention today.</p></div></header>
+          <OnboardingChecklist />
           <LimitedAccessCard canEditSettings={user.canEditSettings} />
         </main>}
   </>;

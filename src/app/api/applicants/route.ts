@@ -29,6 +29,8 @@ import { portalDateBoundary } from "@/lib/portal-time";
 import { createExcelExportResponse } from "@/lib/excel-export";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { numericMatchScore } from "@/lib/score-format";
+import { applySampleResume } from "@/lib/sample-intake";
+import { sampleSourceDetail } from "@/lib/sample-safety";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -197,6 +199,11 @@ export async function POST(request: Request) {
     if (!rate.allowed) return NextResponse.json({ success: false, error: "Too many candidate submissions. Try again later." }, { status: 429, headers: rateLimitHeaders(rate) });
 
     const intake = await readCandidateIntakeRequest(request);
+    // A built-in sample resume: the server supplies the file and the fictional
+    // candidate details (see sample-intake.ts).
+    const { sample, error: sampleError } = applySampleResume(intake);
+    if (sampleError) return responseError(sampleError, 422);
+    if (sample && !isPostgresRecruitmentTarget()) return responseError("Sample resumes are not available on this portal.", 409);
     const parsed = candidateApplicationSubmissionSchema.safeParse(candidateBodyForValidation(intake.body, intake.resumeFile));
 
     if (!parsed.success) {
@@ -223,7 +230,7 @@ export async function POST(request: Request) {
       }
       const applicationId = `APP-${crypto.randomUUID()}`;
       if (intake.resumeFile) storedResume = await storeResumeFile(intake.resumeFile, { organizationId: user.organizationId });
-      const created = await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: "direct", sourceDetail: "hr_manual", consentAt: new Date().toISOString(), creditOwnerEmail: user.email, organizationId: user.organizationId, resume: storedResume ? { ...storedResume.record, extractedText: storedResume.extractedText } : undefined });
+      const created = await targetCreateApplication({ externalId: applicationId, roleId, candidateName: parsed.data.candidateName, email: parsed.data.email, phone: normalizePreferredMobile(parsed.data.preferredMobile), preferredMobile: normalizePreferredMobile(parsed.data.preferredMobile), applicantCountry: parsed.data.applicantCountry, source: "direct", sourceDetail: sample ? sampleSourceDetail(sample.id) : "hr_manual", consentAt: new Date().toISOString(), creditOwnerEmail: user.email, organizationId: user.organizationId, resume: storedResume ? { ...storedResume.record, extractedText: storedResume.extractedText } : undefined });
       const reused = created.screeningReused === true;
       // A reused CV analysis is a completed screening: apply the role's Interview automation now.
       if (reused) await maybeAutoAdvance(applicationId);

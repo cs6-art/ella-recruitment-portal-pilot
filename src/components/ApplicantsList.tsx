@@ -18,6 +18,7 @@ import { useNewApplicantFeed } from "@/components/NewApplicantsBell";
 import { applicantStageLabel } from "@/lib/applicant-stage-labels";
 import { numericMatchScore } from "@/lib/score-format";
 import { downloadResponseFile } from "@/lib/download-response-file";
+import { isReservedDemoEmail } from "@/lib/sample-safety";
 
 type Props = {
   applicants: ApplicantSummary[];
@@ -676,7 +677,7 @@ export default function ApplicantsList({ applicants: initialApplicants, initialT
                     {canManageApplicants && <td className="selection-column">{applicant.isHistoricalDemo ? <span className="applicant-readonly-label">Demo</span> : <input type="checkbox" aria-label={`Select ${applicant.candidateName || applicant.applicationId}`} checked={selectedIds.has(applicant.applicationId)} disabled={deletingIds.has(applicant.applicationId)} onChange={() => toggleApplicantSelection(applicant.applicationId)} />}</td>}
                     {/* data-label values let the responsive CSS render each row as a
                         labeled card when the table cannot fit the content column. */}
-                    <td data-label="Candidate"><Link className="applicant-name-link" href={applicantDetailHref(applicant.applicationId)}><strong>{applicant.candidateName || "Unnamed candidate"}{newApplicantIds.has(applicant.applicationId) && <span className="applicant-new-badge">NEW</span>}</strong><span>{applicant.email || "Email not provided"}</span></Link></td>
+                    <td data-label="Candidate"><Link className="applicant-name-link" href={applicantDetailHref(applicant.applicationId)}><strong>{applicant.candidateName || "Unnamed candidate"}{newApplicantIds.has(applicant.applicationId) && <span className="applicant-new-badge">NEW</span>}{isReservedDemoEmail(applicant.email) && <span className="sample-candidate-badge" title="Created from a built-in sample resume. Never contacted.">Sample</span>}</strong><span>{applicant.email || "Email not provided"}</span></Link></td>
                     <td data-label="Role"><strong>{applicant.selectedRole || "Role not provided"}</strong><span className="applicant-subtext">{applicant.roleId || "Role reference not available"}</span></td>
                     <td data-label="Applied">{applicant.appliedAt ? formatDate(applicant.appliedAt) : "Date not provided"}</td>
                     <td data-label="Interview Type">{applicant.interviewMode === "pending" ? "Not selected" : applicant.interviewMode === "avatar" ? "Live Avatar Interview" : "Voice Interview"}</td>

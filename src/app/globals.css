@@ -6998,3 +6998,18 @@ textarea:focus { border-color: var(--color-link); box-shadow: var(--focus-ring);
 .interview-type-option span { display: grid; gap: 2px; }
 .interview-type-option small { color: var(--muted); font-size: 0.8rem; line-height: 1.4; }
 .interview-type-option:focus-within { outline: var(--focus-outline); outline-offset: 2px; }
+
+/* Guided setup spotlight (GuideSpotlight): a guided border around the control to use next. */
+[data-guide-active="true"] { position: relative; z-index: 2; border-radius: 12px; outline: 3px solid #0071f7 !important; outline-offset: 4px; box-shadow: 0 0 0 9px rgba(0, 113, 247, .14) !important; animation: guideSpot 1.8s ease-in-out 2; scroll-margin: 120px; }
+@keyframes guideSpot { 0%, 100% { outline-color: #0071f7; } 50% { outline-color: #7db8ff; } }
+@media (prefers-reduced-motion: reduce) { [data-guide-active="true"] { animation: none; } }
+
+/* Sample job description inside the role form's "Populate from a job description" panel. */
+.sample-divider { display: flex; align-items: center; gap: 12px; margin: 14px 0 10px; color: #7b8c9e; font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.sample-divider::before, .sample-divider::after { content: ""; flex: 1; height: 1px; background: #dbe6f1; }
+.sample-applied { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding: 10px 12px; border: 1px solid #bfe3d1; border-radius: 10px; background: #f1fbf6; color: #24533f; font-size: 13px; }
+.resume-inline-submit small.resume-credit-warning { color: #a3271b; font-weight: 700; }
+.inline-link-button { padding: 0; border: 0; background: none; color: var(--blue); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.sample-candidate-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: #fff3c4; color: #6b5200; font-size: 11px; font-weight: 800; letter-spacing: .02em; vertical-align: middle; white-space: nowrap; }
+.sample-candidate-note { margin: 0 0 16px; padding: 10px 14px; border: 1px solid #f0dc9a; border-radius: 10px; background: #fffaea; color: #5f4a0b; font-size: 13.5px; }
+.onboarding-guide-container { padding-top: 24px; padding-bottom: 0; }

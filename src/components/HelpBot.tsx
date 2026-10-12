@@ -8,12 +8,14 @@ import UiIcon from "./UiIcon";
 import { useSmileGuide, type GuideSay } from "./useSmileGuide";
 import { HELP_BOT_STARTER_QUESTIONS } from "@/lib/help-bot/prompt";
 import SmileFeedbackTab from "./SmileFeedbackTab";
+import OnboardingGuideTab from "./onboarding/OnboardingGuideTab";
+import { useOnboarding } from "./onboarding/OnboardingProvider";
 import { DEFAULT_SUPPORT_EMAIL, DEFAULT_SUPPORT_NAME, type SupportContact } from "@/lib/support-contact";
 import { BUBBLE_HEADROOM, bubbleAlign, bubbleDuration, IDLE_AWAY_MS, pageIntroFor, placeBeside, type BubbleAlign, type Placement } from "@/lib/smile-tips";
 import styles from "./HelpBot.module.css";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
-type Tab = "ask" | "help" | "feedback";
+type Tab = "guide" | "ask" | "help" | "feedback";
 const STARTER_RETURN_DELAY_MS = 4_000;
 // Preferences (per browser). "off" turns the behaviour off.
 const ROAM_PREF_KEY = "smile-bot:roam";
@@ -131,6 +133,13 @@ export default function HelpBot() {
   const [error, setError] = useState("");
   const [showStarters, setShowStarters] = useState(true);
   const pathname = usePathname();
+  // A new organization's guided setup gets its own tab, opened first while setup is in progress.
+  const { state: onboarding, guidedActive } = useOnboarding();
+  const showGuideTab = onboarding?.mode === "guided";
+  const tabChosenRef = useRef(false);
+  const guidedRef = useRef(false);
+  useEffect(() => { guidedRef.current = guidedActive; if (guidedActive && !tabChosenRef.current) setTab("guide"); }, [guidedActive]);
+  const chooseTab = (next: Tab) => { tabChosenRef.current = true; setTab(next); };
   // Smile stands at `pos` (offset from its corner: x left, y up). When the user
   // is idle, or the pointer leaves the window, it steps out of the way; when the
   // pointer is back it returns to its `anchor` (the corner, or beside the last
@@ -172,7 +181,7 @@ export default function HelpBot() {
         setConfigured(data.configured);
         setSupport(data.support);
         // Without AI answers the help tab is the useful one.
-        if (!data.configured) setTab("help");
+        if (!data.configured && !guidedRef.current) setTab("help");
       });
     return () => { active = false; };
   }, []);
@@ -375,7 +384,8 @@ export default function HelpBot() {
   // New page: drop back to the corner and introduce the page once per session.
   useEffect(() => {
     if (!enabled || !pathname || pathRef.current === pathname) { pathRef.current = pathname || ""; if (!enabled) return; }
-    const intro = tips ? pageIntroFor(pathname || "") : null;
+    // During guided setup, the step-aware introductions (OnboardingProvider) replace the generic page tips.
+    const intro = tips && !guidedRef.current ? pageIntroFor(pathname || "") : null;
     anchorRef.current = { x: 0, y: 0 };
     if (!awayRef.current) moveTo({ x: 0, y: 0 }, 400);
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -513,13 +523,16 @@ export default function HelpBot() {
           </header>
 
           <div className={styles.tabs} role="tablist" aria-label="Smile assistant sections">
-            <button type="button" role="tab" id="smile-tab-ask" aria-selected={tab === "ask"} aria-controls="smile-tabpanel" className={styles.tab} onClick={() => setTab("ask")}>Ask Smile</button>
-            <button type="button" role="tab" id="smile-tab-help" aria-selected={tab === "help"} aria-controls="smile-tabpanel" className={styles.tab} onClick={() => setTab("help")}>Help</button>
-            <button type="button" role="tab" id="smile-tab-feedback" aria-selected={tab === "feedback"} aria-controls="smile-tabpanel" className={styles.tab} onClick={() => setTab("feedback")}>Feedback</button>
+            {showGuideTab && <button type="button" role="tab" id="smile-tab-guide" aria-selected={tab === "guide"} aria-controls="smile-tabpanel" className={styles.tab} onClick={() => chooseTab("guide")}>Setup</button>}
+            <button type="button" role="tab" id="smile-tab-ask" aria-selected={tab === "ask"} aria-controls="smile-tabpanel" className={styles.tab} onClick={() => chooseTab("ask")}>Ask Smile</button>
+            <button type="button" role="tab" id="smile-tab-help" aria-selected={tab === "help"} aria-controls="smile-tabpanel" className={styles.tab} onClick={() => chooseTab("help")}>Help</button>
+            <button type="button" role="tab" id="smile-tab-feedback" aria-selected={tab === "feedback"} aria-controls="smile-tabpanel" className={styles.tab} onClick={() => chooseTab("feedback")}>Feedback</button>
           </div>
 
           <div id="smile-tabpanel" role="tabpanel" aria-labelledby={`smile-tab-${tab}`} className={styles.tabPanel}>
-            {tab === "help" ? (
+            {tab === "guide" && showGuideTab ? (
+              <div className={styles.body} ref={scrollRef}><OnboardingGuideTab onClose={() => setOpen(false)} /></div>
+            ) : tab === "help" ? (
               <div className={styles.body} ref={scrollRef}><HelpTab support={support} roam={roam} onRoamChange={changeRoam} tips={tips} onTipsChange={changeTips} /></div>
             ) : tab === "feedback" ? (
               <div className={styles.body} ref={scrollRef}><SmileFeedbackTab /></div>
@@ -593,7 +606,9 @@ export default function HelpBot() {
             )}
           </div>
           <p className={styles.disclaimer}>
-            {tab === "ask"
+            {tab === "guide"
+              ? "Setup steps update automatically from your organization's real activity."
+              : tab === "ask"
               ? "Answers come from the portal guide and your signed-in access context. Smile can't see candidate records or make changes."
               : `Support: ${support.name} · ${support.email}`}
           </p>

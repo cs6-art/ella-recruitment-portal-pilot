@@ -85,6 +85,7 @@ export async function POST(request: Request) {
           : result.error === "invalid_transition" ? "already_approved"
           : result.error === "unknown_application" ? "not_found"
           : result.error === "insufficient_credits" ? "insufficient_credits"
+          : result.error === "sample_candidate" ? "sample_candidate"
           : "failed";
       }
     } catch (error) {

@@ -32,7 +32,9 @@ export type UiIconName =
   | "trash"
   | "help"
   | "bell"
-  | "send";
+  | "send"
+  | "lock"
+  | "sparkle";
 
 type UiIconProps = {
   name: UiIconName;
@@ -73,6 +75,8 @@ export default function UiIcon({ name, size = 18, strokeWidth = 1.8, className }
       {name === "info" && <><circle cx="12" cy="12" r="9" /><path d="M12 10.5v5M12 7.5h.01" /></>}
       {name === "alert" && <><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.5h.01" /></>}
       {name === "check-circle" && <><circle cx="12" cy="12" r="9" /><path d="m8 12.2 2.8 2.8L16 9.6" /></>}
+      {name === "lock" && <><rect x="5" y="10.5" width="14" height="10" rx="2" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></>}
+      {name === "sparkle" && <path d="M12 3.5 13.9 9l5.6 1.9-5.6 1.9L12 18.5l-1.9-5.7L4.5 10.9 10.1 9z" />}
       {name === "edit" && <><path d="m4 16.5-.8 4.3 4.3-.8L19 8.5 15.5 5z" /><path d="m13.5 7 3.5 3.5" /></>}
       {name === "trash" && <><path d="M5 7h14M10 4h4l1 3H9zM7 7l.8 13h8.4L17 7M10 10v7M14 10v7" /></>}
       {name === "help" && <><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 20.5l1.4-5.2A8.5 8.5 0 1 1 21 11.5z" /><path d="M9.6 9.4a2.5 2.5 0 0 1 4.9.6c0 1.7-2.5 2.2-2.5 3.9M12 17.5h.01" /></>}

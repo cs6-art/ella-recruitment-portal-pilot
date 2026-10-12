@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import ApplicantsList from "@/components/ApplicantsList";
+import OnboardingPageGuide from "@/components/onboarding/OnboardingPageGuide";
 import PageHeader from "@/components/ui/PageHeader";
 import { filterVisibleApplicants, isDepartmentReviewer } from "@/lib/access-control";
 import { getApplicantMetrics, getApplicantsPage } from "@/lib/candidate-applications";
@@ -52,6 +53,8 @@ export default async function ApplicantsPage() {
   if (!user) redirect("/");
   if (user.canReviewRole !== true && user.canApproveRole !== true && user.canReviewDepartmentRole !== true) redirect("/dashboard");
   return (
-    <Suspense fallback={<ApplicantsLoading />}><ApplicantsData user={user} /></Suspense>
+    <OnboardingPageGuide nav="applicants" steps={["screen_resume"]} contained>
+      <Suspense fallback={<ApplicantsLoading />}><ApplicantsData user={user} /></Suspense>
+    </OnboardingPageGuide>
   );
 }

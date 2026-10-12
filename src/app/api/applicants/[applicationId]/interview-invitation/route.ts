@@ -43,7 +43,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
     const result = await sendInterviewInvitation({ applicationExternalId: applicationId, organizationId: user.organizationId, kind: parsed.data.kind, actor: { name: user.name, email: user.email }, comments: parsed.data.comment, switchType: parsed.data.switchType });
     const message = interviewInvitationMessage(parsed.data.kind, result.outcome, result.activeKind, { canSwitch: result.canSwitch, switched: result.switched });
     if (result.outcome !== "sent") {
-      const status = result.outcome === "not_found" ? 404 : result.outcome === "not_allowed_for_role" ? 422 : result.outcome === "failed" ? 500 : result.outcome === "insufficient_credits" ? 402 : 409;
+      const status = result.outcome === "not_found" ? 404 : result.outcome === "not_allowed_for_role" ? 422 : result.outcome === "failed" ? 500 : result.outcome === "insufficient_credits" ? 402 : result.outcome === "sample_candidate" ? 422 : 409;
       return NextResponse.json({ success: false, outcome: result.outcome, activeKind: result.activeKind, canSwitch: result.canSwitch === true, error: message }, { status });
     }
     revalidatePath(`/applicants/${encodeURIComponent(applicationId)}`);

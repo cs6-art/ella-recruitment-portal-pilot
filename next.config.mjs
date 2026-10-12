@@ -16,7 +16,7 @@ const nextConfig = {
   // PDF parsing uses a native canvas package for the DOM geometry primitives
   // that PDF.js needs in Node. Keep both packages external so Vercel loads the
   // supported Node modules (and the correct native binary) at runtime.
-  serverExternalPackages: ["@napi-rs/canvas", "pdf-parse", "ws"],
+  serverExternalPackages: ["@napi-rs/canvas", "pdf-parse", "ws", ...(process.env.E2E_EXTERNAL_GOOGLEAPIS === "1" ? ["googleapis"] : [])],
   // The Smile Help assistant reads its approved knowledge source from disk at
   // runtime; make sure the Markdown file ships with the serverless bundle.
   outputFileTracingIncludes: {
@@ -51,6 +51,16 @@ const nextConfig = {
       // reject immediately (no permission prompt) on this route. Scope a
       // same-origin allowance to just the interview route so the rest of
       // the app stays locked down.
+      // Built-in sample resumes (fictional content) are previewed inside the
+      // portal's own Resume Screening page, so only this route may be framed,
+      // and only by the portal itself. This later rule overrides DENY above.
+      {
+        source: "/api/samples/resumes/:sampleId",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        ],
+      },
       {
         source: "/avatar/:token",
         headers: [

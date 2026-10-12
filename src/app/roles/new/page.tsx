@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import RoleRequestForm from "@/components/RoleRequestForm";
+import OnboardingPageGuide from "@/components/onboarding/OnboardingPageGuide";
 import PageHeader from "@/components/ui/PageHeader";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import {
@@ -33,6 +34,7 @@ export default async function NewRolePage() {
           title="Create Role Request"
           description="Submit a Staff Addition or Replacement Request for HR Review."
         />
+        <OnboardingPageGuide nav="roles" steps={["create_role"]} showMe="sample-jd" />
 
         <RoleRequestForm
           user={{

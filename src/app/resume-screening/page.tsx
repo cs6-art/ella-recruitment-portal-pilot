@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import BulkResumeScreeningPanel from "@/components/BulkResumeScreeningPanel";
 import CandidateApplicationForm from "@/components/CandidateApplicationForm";
+import OnboardingPageGuide from "@/components/onboarding/OnboardingPageGuide";
 import PageHeader from "@/components/ui/PageHeader";
 import ResumeScreeningInviteGenerator from "@/components/ResumeScreeningInviteGenerator";
 import { canManagePipeline } from "@/lib/access-control";
@@ -43,6 +44,8 @@ export default async function ResumeScreeningPage() {
           description="Select a role, add resumes, and review the screening results. Upload files from your computer or import them from cloud storage."
         />
         {isBulkResumeUatMode() ? <div className="uat-mode-banner">UAT MODE · Bulk resume data is routed to the configured UAT destinations.</div> : null}
+        {/* A guided organization adds its first resume with the single-resume form below. */}
+        <OnboardingPageGuide nav="resume-screening" steps={["add_candidate"]} showMe="sample-resume" gate>
         <BulkResumeScreeningPanel roleOptions={roleOptions} />
         <ResumeScreeningInviteGenerator roleOptions={roleOptions} />
         <CandidateApplicationForm
@@ -55,7 +58,9 @@ export default async function ResumeScreeningPage() {
           roleOptions={roleOptions}
           submitInUploadCard
           successRedirectTo="/applicants"
+          allowSamples
         />
+        </OnboardingPageGuide>
       </main>
     </>
   );

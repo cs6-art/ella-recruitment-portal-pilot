@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { and, eq } from "drizzle-orm";
 import { evaluationFieldPreferencesFromStored } from "@/lib/recruitment-setup-schema";
+import { isSampleApplication } from "@/lib/sample-safety";
 import { isManualOverride, readInterviewAutomation } from "@/lib/interview-automation";
 import { approvalInterviewKinds, readRoleInterviewType, roleAllowsInterview, type RoleInterviewType } from "@/lib/interview-type";
 
@@ -1006,6 +1007,8 @@ export async function approveForInterview(input: { applicationExternalId: string
   // offered) so the candidate is not invited into an interview that cannot
   // run. (Credits are held later, at booking/start.)
   const row = await getApplication(input.applicationExternalId);
+  // Approving would invite the candidate to interview: never for sample (demo) candidates.
+  if (row && isSampleApplication(row.application)) return { updated: false as const, duplicate: false as const, error: "sample_candidate" as const, invitationsIssued: false };
   const interviewType = readRoleInterviewType(row?.application.organizationId === input.organizationId ? row.roleSetup : undefined);
   if (!(await interviewCreditsCovered(input.organizationId, interviewType === "avatar" ? "avatar" : "voice"))) {
     return { updated: false as const, duplicate: false as const, error: "insufficient_credits" as const, invitationsIssued: false };
@@ -1033,7 +1036,7 @@ export async function approveForInterview(input: { applicationExternalId: string
 }
 
 export type InterviewInvitationKind = "voice" | "avatar";
-export type InterviewInvitationOutcome = "sent" | "already_invited" | "interview_exists" | "not_eligible" | "not_found" | "not_allowed_for_role" | "insufficient_credits" | "failed";
+export type InterviewInvitationOutcome = "sent" | "already_invited" | "interview_exists" | "not_eligible" | "not_found" | "not_allowed_for_role" | "insufficient_credits" | "sample_candidate" | "failed";
 
 const INTERVIEW_INVITE_STAGES = new Set(["resume_review", "resume_approved", "voice_booking_pending"]);
 
@@ -1076,6 +1079,7 @@ export async function sendInterviewInvitation(input: { applicationExternalId: st
   const id = input.applicationExternalId.trim();
   const row = await getApplication(id);
   if (!row || row.application.organizationId !== input.organizationId) return { outcome: "not_found" };
+  if (isSampleApplication(row.application)) return { outcome: "sample_candidate" };
   // The role decides which interview HR may send (Voice only / Avatar only / Both).
   const interviewType = readRoleInterviewType(row.roleSetup);
   if (!roleAllowsInterview(interviewType, input.kind)) return { outcome: "not_allowed_for_role", interviewType };

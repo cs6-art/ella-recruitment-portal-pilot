@@ -14,6 +14,7 @@ import { DECISION_COMMENT_MAX_LENGTH, decisionComment } from "@/lib/applicant-de
 import { getPublicAppBaseUrl } from "@/lib/public-url";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/lib/rate-limit";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
+import { SAMPLE_CANDIDATE_BLOCKED_MESSAGE } from "@/lib/sample-safety";
 
 const stages = new Set<ApplicantDecisionStage>(["resume", "voice", "final"]);
 const decisions = new Set<ApplicantDecision>(["Approve", "Reject", "Manual Review"]);
@@ -26,6 +27,7 @@ const decisionSchema = z.object({
 
 function publicDecisionError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
+  if (/sample_candidate/i.test(message)) return SAMPLE_CANDIDATE_BLOCKED_MESSAGE;
   if (/insufficient_credits/i.test(message)) return "Not enough Smile Credits for an interview. Top up credits, then approve again.";
   if (/screening_required/i.test(message)) return "This applicant hasn't been screened yet. Use Send Phone Interview or Send Avatar Interview to skip screening, or wait for screening to finish.";
   if (/booking_tokens|booking token|booking invitation|avatar interview invitation|voice interview invitation/i.test(message)) {

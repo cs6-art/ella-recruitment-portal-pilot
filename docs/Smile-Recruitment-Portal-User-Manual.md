@@ -61,8 +61,10 @@ interview → You review → Face-to-face interview → Final decision.**
 
 ### Where to begin
 
-1. Sign in. A new organisation sees a **Getting Started** card on the
-   **Dashboard** listing the setup steps, with a button for each.
+1. Sign in. A new organisation sees **Your Recruitment Setup** on the
+   **Dashboard**: five steps that unlock one at a time (see
+   [Guided setup](#guided-setup-for-a-new-organisation)). The sidebar shows the same
+   progress and a **Continue Setup** button on every page.
 2. Make sure you have **Smile Credits** (see [Section I](#i-credits)). Credits
    are shared across your organisation. New organisations start with free
    welcome credits; you can also redeem a promo code or buy more.
@@ -134,9 +136,45 @@ exports.
 
 The Dashboard refreshes by itself about every 30 seconds.
 
-### Getting Started (new organisations)
+### Guided setup for a new organisation
 
-Shown to HR users until setup is complete. It shows how many required steps are
+A newly registered organisation sees **Your Recruitment Setup** at the top of
+the Dashboard. It walks your team through a first real recruitment, one step at
+a time:
+
+1. **Create your first role request**: upload or paste a job description, or
+   choose one of three **sample job descriptions** (Sales Executive, Customer
+   Service Representative, Accounts Executive).
+2. **Configure & publish the role**: review the screening criteria and AI
+   interview questions, choose the interview type, then publish.
+3. **Add your first resume**: upload one, or choose a **sample resume**.
+4. **Screen the resume**: Smile screens it in the background. This uses 1 Smile
+   Credit, charged only when the screening succeeds.
+5. **Review your first applicant**: read the match score, summary, strengths and
+   gaps, then select **I've reviewed this screening**.
+
+Each step unlocks when the previous one has really happened (for example, a role
+is actually published), and the checklist, the sidebar's **Your setup** box and
+Smile all update by themselves. Progress belongs to the organisation, so a
+teammate who signs in sees the same step. While a step is locked, **Resume
+Screening** and **Applicants** show a lock in the menu and explain what to do
+first; this is guidance, not a permission change. Steps that need the HR role
+show a note to anyone without it.
+
+Optional next steps (AI interviews, interview evidence, face-to-face scheduling)
+are listed below the checklist. They never block your setup. When the five
+steps are done, a small **You're ready to recruit with Smile!** card replaces
+the checklist; select **Hide** to remove it. Organisations that were already
+using the portal are not affected.
+
+**Sample candidates** created from a sample resume use fictional details and a
+reserved example.com address. They are marked **Sample** and are never emailed,
+called, invited to an interview or sent a calendar invite.
+
+### Getting Started (workspace settings)
+
+Shown to HR users of a new organisation after the guided setup, until the
+workspace settings are complete. It shows how many required steps are
 done ("x of y required") and a button for each step. A blue note near the top
 reminds you that **credits are shared across your organisation**: everyone uses
 the same credit balance. The steps are:
@@ -203,7 +241,11 @@ Excel**.
 2. Save time: upload the job description (PDF, DOC or DOCX) or paste it into
    **Job Description**, then select **Generate draft** (or **Generate AI
    questions**). Smile fills in the screening criteria and interview questions.
-   **Always read and correct what Smile fills in.**
+   **Always read and correct what Smile fills in.** No job description yet? Under
+   **Try a sample job description**, pick Sales Executive, Customer Service
+   Representative or Accounts Executive, select **Preview Template** to read it,
+   then **Use This Template**. It fills the form (you can edit or **Undo** it);
+   nothing is published and no credits are used.
 3. Complete the **Role request** section.
 4. Choose the **Interview Type** (see below).
 5. Complete **Screening and Interview** (HR users).
@@ -381,7 +423,13 @@ Open **Resume Screening**. Every resume is screened against the role you choose.
 2. **Choose from Google Drive** (after **Connect Google Drive**).
 3. **Choose from OneDrive** (after **Connect OneDrive**, if your organisation has
    it).
-4. **Screen one resume**: a form for a single candidate.
+4. **Screen one resume**: a form for a single candidate. To try the portal
+   without a real resume, use **Try a sample resume**: choose a sample, select
+   **Preview Resume**, then **Use This Sample**. It fills in a fictional candidate
+   and the sample PDF. When the role you chose was created from a sample job
+   description, the matching sample is marked **Recommended**. The page shows the
+   credit cost before you select **Screen resume**; the real AI screening decides
+   the result.
 5. **Send an Application Link**: email a candidate a link to apply themselves.
 
 Candidates can also apply directly using the role's application link.

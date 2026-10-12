@@ -18,6 +18,10 @@ import type { RoleAiDraft } from "@/lib/role-ai-draft-schema";
 import { clientErrorMessage } from "@/lib/client-error";
 import { InterviewTypeOptions, saveRoleInterviewType } from "@/components/InterviewTypeCard";
 import { DEFAULT_ROLE_INTERVIEW_TYPE, type RoleInterviewType } from "@/lib/interview-type";
+import SampleJobPicker from "@/components/onboarding/SampleJobPicker";
+import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
+import { requestOnboardingRefresh, showGuide } from "@/lib/onboarding-events";
+import type { SampleJobDescription } from "@/lib/sample-catalog";
 
 type RoleRequestFormProps = {
   user: {
@@ -184,6 +188,10 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
   const [jobDescriptionFile, setJobDescriptionFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState("");
+  // A built-in sample JD only fills the form; HR still reviews, generates and publishes as usual.
+  const [sampleJob, setSampleJob] = useState<{ id: string; title: string; previous: Pick<FormState, "jobDescription" | "jobTitle" | "department" | "employmentType"> } | null>(null);
+  const recordedSampleRole = useRef("");
+  const { post: postOnboarding } = useOnboarding();
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   const draftSaveInFlight = useRef<Promise<void> | null>(null);
   const draftClientId = useRef(globalThis.crypto.randomUUID());
@@ -194,6 +202,33 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
   useEffect(() => {
     setSavedFormKey(initialFormKey);
   }, [initialFormKey]);
+
+  function applySampleJob(job: SampleJobDescription) {
+    setSampleJob({ id: job.id, title: job.title, previous: { jobDescription: form.jobDescription, jobTitle: form.jobTitle, department: form.department, employmentType: form.employmentType } });
+    setForm((current) => ({ ...current, jobDescription: job.content, jobTitle: job.title, department: job.department, employmentType: job.employmentType }));
+    setFieldErrors((current) => ({ ...current, jobDescription: "", jobTitle: "", department: "" }));
+    setJobDescriptionFile(null);
+    const fileInput = document.getElementById("jobDescriptionFile") as HTMLInputElement | null;
+    if (fileInput) fileInput.value = "";
+    setParseError("");
+    // Next: let Smile draft the criteria and questions from this text.
+    window.setTimeout(() => showGuide("generate-ai", `${job.title} template added below. Now press Generate AI questions so Smile can draft the screening criteria and interview questions for you to review.`), 150);
+  }
+
+  function undoSampleJob() {
+    if (!sampleJob) return;
+    const previous = sampleJob.previous;
+    setForm((current) => ({ ...current, ...previous }));
+    setSampleJob(null);
+  }
+
+  /** Remember the template a saved role came from, so Resume Screening can suggest the matching sample resume. */
+  async function rememberSampleRole(savedRoleId: string) {
+    if (!sampleJob || !savedRoleId || recordedSampleRole.current === `${savedRoleId}:${sampleJob.id}`) return;
+    recordedSampleRole.current = `${savedRoleId}:${sampleJob.id}`;
+    const saved = await postOnboarding({ action: "record_sample_role", roleId: savedRoleId, sampleJobId: sampleJob.id });
+    if (!saved.ok) recordedSampleRole.current = "";
+  }
 
   function scrollToErrorSummary() {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -255,7 +290,10 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
         if (!effectiveRoleId) {
           setDraftRoleId(result.roleId);
           window.history.replaceState(null, "", `/roles/${encodeURIComponent(result.roleId)}/edit`);
+          // A saved draft completes "Create your first role request" in the guided setup.
+          requestOnboardingRefresh();
         }
+        void rememberSampleRole(result.roleId);
         setSavedFormKey(JSON.stringify(snapshot));
         setDraftSavedAt(new Date().toISOString());
       } catch (caught) {
@@ -519,6 +557,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
     await autosaveDraft();
     if (draftSaveInFlight.current) await draftSaveInFlight.current;
     await persistInterviewType(roleId || draftRoleId, !roleId);
+    requestOnboardingRefresh();
     router.push("/roles");
   }
 
@@ -664,6 +703,8 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
         }
         finalStatus = publishResult.status || "Job Posted";
       }
+      if (savedRoleId) await rememberSampleRole(savedRoleId);
+      requestOnboardingRefresh();
       setSuccess({
         roleId: savedRoleId || "Not provided",
         status: finalStatus,
@@ -721,15 +762,20 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
                   <strong>Populate from a job description</strong>
                   <small className="field-help">Upload a PDF, DOC, or DOCX, or use the job description below. Smile will prepare role details, screening criteria, and interview questions for HR to review.</small>
                 </div>
-                <div className="ai-draft-controls">
+                <div className="ai-draft-controls" data-guide-target="jd-upload">
                   {/* Keep the picker aligned with the server document extractor. */}
                   <input id="jobDescriptionFile" type="file" accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx" onChange={(event) => { setJobDescriptionFile(event.target.files?.[0] || null); setParseError(""); }} />
-                  <button type="button" className="btn btn-secondary" onClick={populateFromJobDescription} disabled={parsing || (!jobDescriptionFile && form.jobDescription.trim().length < 20)}>
+                  <button type="button" className="btn btn-secondary" data-guide-target="generate-ai" onClick={populateFromJobDescription} disabled={parsing || (!jobDescriptionFile && form.jobDescription.trim().length < 20)}>
                     {parsing ? "Generating AI guidance…" : jobDescriptionFile ? "Generate draft" : "Generate AI questions"}
                   </button>
                 </div>
                 {jobDescriptionFile && <small className="field-help">Selected: {jobDescriptionFile.name}</small>}
                 {parseError && <div className="error-box message-box" role="alert"><span className="message-box-icon" aria-hidden="true"><UiIcon name="alert" size={17} /></span><span>{parseError}</span></div>}
+                {(!isEditing || isDraftRole) && <>
+                  <div className="sample-divider" aria-hidden="true">OR</div>
+                  <SampleJobPicker onUse={applySampleJob} disabled={loading || parsing} />
+                  {sampleJob && <div className="sample-applied" role="status"><span><strong>{sampleJob.title}</strong> sample added to the Job Description below. It&apos;s yours to edit.</span><button type="button" className="btn btn-secondary" onClick={undoSampleJob}>Undo</button></div>}
+                </>}
               </div>
               <label htmlFor="jobDescription">Job Description <strong className="required-mark">*</strong></label>
               <textarea id="jobDescription" {...fieldErrorProps("jobDescription")} required value={form.jobDescription} onChange={(event) => update("jobDescription", event.target.value)} placeholder="Describe the purpose and main scope of this role." />
@@ -803,7 +849,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
 
         {unified ? (
           <>
-            <section className="section">
+            <section className="section" data-guide-target="review-setup">
               <div className="section-title">
                 <span className="section-number">2</span>
                 <h2>Screening and Interview</h2>
@@ -984,7 +1030,7 @@ export default function RoleRequestForm({ user, roleId, status = "", initialValu
 
         {(
           <>
-          <div className="form-actions">
+          <div className="form-actions" data-guide-target="publish-role">
             <a className="btn btn-secondary" href="/roles">Cancel</a>
             {unified && <button type="button" className="btn btn-secondary" disabled={loading || parsing} onClick={() => void saveDraftAndExit()}>Save as draft</button>}
             <button type="submit" className="btn btn-primary" disabled={loading || (isEditing && !isDraftRole && !hasChanges)}>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import UiIcon from "./UiIcon";
 import EllaCreditsMeter from "./EllaCreditsMeter";
@@ -14,6 +14,10 @@ import { ConfirmationProvider } from "./ConfirmationModal";
 import styles from "./AppShell.module.css";
 import { canAdministerAccess, isPlatformAdmin } from "@/lib/access-control";
 import { usePortalBranding } from "./PortalBrandingContext";
+import OnboardingProvider, { useOnboarding } from "./onboarding/OnboardingProvider";
+import OnboardingSidebarProgress from "./onboarding/OnboardingSidebarProgress";
+import GuideSpotlight from "./onboarding/GuideSpotlight";
+import type { OnboardingNavKey } from "@/lib/onboarding";
 
 type AppShellUser = {
   name?: string;
@@ -60,7 +64,23 @@ function getInitials(name?: string, email?: string) {
 
 export default function AppShell({ user, children }: AppShellProps) {
   const pathname = usePathname();
+  // The root layout owns the shell so it can survive route transitions. Public
+  // candidate and authentication pages still share the root layout, but must
+  // not inherit the authenticated portal navigation.
+  if (!isPortalRoute(pathname)) return <>{children}</>;
+  return <OnboardingProvider><PortalShell user={user}>{children}</PortalShell></OnboardingProvider>;
+}
+
+function PortalShell({ user, children }: AppShellProps) {
+  const pathname = usePathname();
   const portalRoute = isPortalRoute(pathname);
+  const { state: onboarding } = useOnboarding();
+  const lockedNav = new Set<OnboardingNavKey>(onboarding?.lockedNav ?? []);
+  const guidedNav = onboarding?.guidedNav ?? null;
+  const navState = (key: OnboardingNavKey) => lockedNav.has(key) ? ` ${styles.navLinkLocked}` : guidedNav === key ? ` ${styles.navLinkGuided}` : "";
+  const navMarker = (key: OnboardingNavKey) => lockedNav.has(key)
+    ? <span className={styles.navLock} title="Locked until the earlier setup steps are done"><UiIcon name="lock" size={12} /><span className="sr-only"> (locked in your guided setup)</span></span>
+    : guidedNav === key ? <span className={styles.navGuideDot} title="Your next setup step"><span className="sr-only"> (your next setup step)</span></span> : null;
   const [signingOut, setSigningOut] = useState(false);
   const [signOutPromptOpen, setSignOutPromptOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -110,11 +130,6 @@ export default function AppShell({ user, children }: AppShellProps) {
     else delete document.documentElement.dataset.sidebarCollapsed;
   }, [sidebarCollapsed, sidebarPreferenceLoaded]);
 
-  // The root layout owns the shell so it can survive route transitions. Public
-  // candidate and authentication pages still share the root layout, but must
-  // not inherit the authenticated portal navigation.
-  if (!portalRoute) return <>{children}</>;
-
   return (
     <ConfirmationProvider>
     <div className={styles.shell}>
@@ -128,14 +143,15 @@ export default function AppShell({ user, children }: AppShellProps) {
         </div>
 
         <EllaCreditsMeter variant="sidebar" collapsed={sidebarCollapsed} />
+        <OnboardingSidebarProgress collapsed={sidebarCollapsed} onNavigate={closeSidebar} />
 
         <div className={styles.workspaceLabel}>WORKSPACE</div>
         <nav className={styles.navigation} aria-label="Main navigation">
           <Link href="/dashboard" onClick={closeSidebar} className={`${styles.navLink} ${isDashboard ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="dashboard" /></span><span>Dashboard</span></Link>
-          {showRoleRequests && <Link href="/roles" onClick={closeSidebar} className={`${styles.navLink} ${isRoleList || isRoleDetails || isRoleCreate ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="roles" /></span><span>Role Requests</span></Link>}
-          {showOperationalTools && <Link href="/resume-screening" onClick={closeSidebar} className={`${styles.navLink} ${isResumeScreening ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="document" /></span><span>Resume Screening</span></Link>}
+          {showRoleRequests && <Link href="/roles" onClick={closeSidebar} className={`${styles.navLink} ${isRoleList || isRoleDetails || isRoleCreate ? styles.navLinkActive : ""}${navState("roles")}`}><span className={styles.navIcon}><UiIcon name="roles" /></span><span>Role Requests</span>{navMarker("roles")}</Link>}
+          {showOperationalTools && <Link href="/resume-screening" onClick={closeSidebar} className={`${styles.navLink} ${isResumeScreening ? styles.navLinkActive : ""}${navState("resume-screening")}`}><span className={styles.navIcon}><UiIcon name="document" /></span><span>Resume Screening</span>{navMarker("resume-screening")}</Link>}
           {(showApplicants || showOperationalTools) && <div className={styles.applicantBookingGroup}>
-            {showApplicants && <Link href="/applicants" onClick={closeSidebar} className={`${styles.navLink} ${isApplicants ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="applicants" /></span><span>Applicants</span>{applicantNotificationCount > 0 && <span className={styles.navBadge} aria-label={`${applicantNotificationCount} new applicants`}>{applicantNotificationBadge}</span>}</Link>}
+            {showApplicants && <Link href="/applicants" onClick={closeSidebar} className={`${styles.navLink} ${isApplicants ? styles.navLinkActive : ""}${navState("applicants")}`}><span className={styles.navIcon}><UiIcon name="applicants" /></span><span>Applicants</span>{applicantNotificationCount > 0 && <span className={styles.navBadge} aria-label={`${applicantNotificationCount} new applicants`}>{applicantNotificationBadge}</span>}{navMarker("applicants")}</Link>}
             <button type="button" className={styles.collapseButton} onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"} aria-expanded={!sidebarCollapsed}><UiIcon name={sidebarCollapsed ? "chevron-right" : "chevron-left"} /></button>
             {showOperationalTools && <Link href="/bookings" onClick={closeSidebar} className={`${styles.navLink} ${isBookings ? styles.navLinkActive : ""}`}><span className={styles.navIcon}><UiIcon name="calendar" /></span><span>Interview Calendar</span></Link>}
           </div>}
@@ -161,14 +177,15 @@ export default function AppShell({ user, children }: AppShellProps) {
       </aside>
 
       <div className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ""}`}>
-        <header className={styles.mobileHeader}><Link href="/dashboard" className={styles.mobileBrand} onClick={closeSidebar}><span className={styles.brandIcon}><Image className={styles.brandLogo} src="/smile-recruitment-portal-logo.png" alt="" width={38} height={38} /></span><strong>{branding.name} {branding.subtitle}</strong></Link><div className={styles.mobileHeaderActions}><EllaCreditsMeter variant="mobile" /><button type="button" className={styles.menuButton} onClick={() => setSidebarOpen(true)} aria-expanded={sidebarOpen} aria-controls="portal-navigation"><UiIcon name="menu" /><span>Menu</span></button></div></header>
+        <header className={styles.mobileHeader} data-sticky-offset><Link href="/dashboard" className={styles.mobileBrand} onClick={closeSidebar}><span className={styles.brandIcon}><Image className={styles.brandLogo} src="/smile-recruitment-portal-logo.png" alt="" width={38} height={38} /></span><strong>{branding.name} {branding.subtitle}</strong></Link><div className={styles.mobileHeaderActions}><EllaCreditsMeter variant="mobile" /><button type="button" className={styles.menuButton} onClick={() => setSidebarOpen(true)} aria-expanded={sidebarOpen} aria-controls="portal-navigation"><UiIcon name="menu" /><span>Menu</span></button></div></header>
         {/* Single instance: absolutely positioned on desktop, a slim right-aligned
             row on mobile. Rendering it twice would double the poll traffic. */}
-        {showApplicants && <div className={styles.topBar}><NewApplicantsBell userEmail={userEmail} /></div>}
+        {showApplicants && <div className={styles.topBar} data-sticky-offset><NewApplicantsBell userEmail={userEmail} /></div>}
         {!isDashboard && !isRoleRequestArea && !isApplicantDetail && <div className={styles.pageToolbar}><Link href="/dashboard" className="portal-back-button" aria-label="Back to Dashboard"><UiIcon name="arrow-left" />Back to Dashboard</Link></div>}
         <div className={styles.content}>{children}</div>
       </div>
       <HelpBot />
+      <Suspense fallback={null}><GuideSpotlight /></Suspense>
       {signOutPromptOpen && <SignOutFeedbackModal onClose={() => setSignOutPromptOpen(false)} onSignOut={() => { setSignOutPromptOpen(false); setSigningOut(true); window.location.href = "/api/auth/logout"; }} />}
     </div>
     </ConfirmationProvider>

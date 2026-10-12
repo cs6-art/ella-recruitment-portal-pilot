@@ -59,7 +59,9 @@ export const roleRequestSchema = z.object({
   salaryExpectationGuidance: z.string().trim().max(1000).default(""),
   requesterName: z.string().trim().min(2).max(150),
   requesterEmail: z.string().trim().toLowerCase().email(),
-  hodEmail: z.string().trim().toLowerCase().email().default(""),
+  // Empty until the organization connects its interview calendar; a new
+  // organization must still be able to create its first role.
+  hodEmail: z.string().trim().toLowerCase().refine((value) => value === "" || z.string().email().safeParse(value).success, "Invalid email").default(""),
 }).superRefine((value, context) => {
   if (value.requestType === "Staff Replacement" && !value.replacementEmployee) {
     context.addIssue({

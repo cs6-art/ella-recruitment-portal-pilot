@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import GettingStarted from "@/components/GettingStarted";
+import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
+import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import UiIcon, { type UiIconName } from "@/components/UiIcon";
 import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 import { formatPortalDateTime } from "@/lib/portal-time";
@@ -142,6 +144,7 @@ export default function DashboardMetrics({
   const [slowMessage, setSlowMessage] = useState(false);
   const requestInFlight = useRef(false);
   const personalScope = scope === "personal";
+  const { guidedActive } = useOnboarding();
 
   const refresh = useCallback(async (manual = false) => {
     if (requestInFlight.current) return;
@@ -197,6 +200,7 @@ export default function DashboardMetrics({
   if (initialLoading && !metrics) {
     return <main className="container page dashboard-page" aria-busy="true">
       <header className="dashboard-welcome"><div><h1>Hello, {userName}</h1><p>Here’s what needs your attention today.</p><span className="dashboard-update-note">Updates every 30 seconds</span></div></header>
+      <OnboardingChecklist />
       <DashboardSkeleton />
     </main>;
   }
@@ -204,6 +208,7 @@ export default function DashboardMetrics({
   if (!metrics) {
     return <main className="container page dashboard-page">
       <header className="dashboard-welcome"><div><h1>Hello, {userName}</h1><p>Here’s what needs your attention today.</p></div></header>
+      <OnboardingChecklist />
       <div className="dashboard-load-error" role="alert"><p>{refreshError || "We couldn’t load your dashboard."}</p><button type="button" className="btn btn-secondary" disabled={refreshing} onClick={() => void refresh(true)}>{refreshing ? "Refreshing…" : "Try again"}</button></div>
       {slowMessage && <p className="dashboard-slow-message" role="status">This is taking longer than expected. You can continue viewing the dashboard.</p>}
     </main>;
@@ -287,7 +292,9 @@ export default function DashboardMetrics({
     {slowMessage && <p className="dashboard-slow-message" role="status">This is taking longer than expected. You can continue viewing the dashboard.</p>}
     <p className="sr-only" role="status" aria-live="polite">{refreshing ? "Refreshing dashboard information." : ""}</p>
 
-    {canReviewRole && showGettingStarted && organizationId && !personalScope && <GettingStarted organizationId={organizationId} />}
+    <OnboardingChecklist />
+    {/* The guided journey covers the first role; the workspace checklist returns once it is done. */}
+    {canReviewRole && showGettingStarted && organizationId && !personalScope && !guidedActive && <GettingStarted organizationId={organizationId} />}
 
     <section className="dashboard-kpi-grid" aria-label="Dashboard summary" aria-busy={refreshing}>
       {kpis.map((kpi) => <DashboardKpiCard key={kpi.label} kpi={kpi} />)}

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
 import PageHeader from "@/components/ui/PageHeader";
+import OnboardingPageGuide from "@/components/onboarding/OnboardingPageGuide";
 import InterviewAutomationCard from "@/components/InterviewAutomationCard";
 import RecruitmentSetupEditor from "@/components/RecruitmentSetupEditor";
 import RoleRequestForm, { type RoleRequestFormValues } from "@/components/RoleRequestForm";
@@ -145,6 +146,7 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
           description="Update the vacancy details and HR screening information before the request moves forward."
           actions={<a className="btn btn-secondary portal-back-link roles-back-button" href={`/roles/${encodeURIComponent(role.roleId)}`}>Back to Role Details</a>}
         />
+        <OnboardingPageGuide nav="roles" steps={["publish_role"]} showMe="review-setup" />
         <RoleRequestForm
           user={{ name: String(user.name ?? ""), email: String(user.email ?? "") }}
           canApproveRole={user.canApproveRole === true}

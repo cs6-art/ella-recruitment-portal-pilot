@@ -17,6 +17,7 @@ import { notificationEmail, notificationEventLabel, notificationStatusLabel, not
 import type { ApplicantInterviewMode } from "@/lib/applicant-stage-labels";
 import { PORTAL_TIME_ZONE } from "@/lib/portal-time";
 import { pilotOutboundEmailEnabled } from "@/lib/pilot-email-policy";
+import { isSampleApplication, SAMPLE_SOURCE_PREFIX } from "@/lib/sample-safety";
 import { avatarInterviewLink } from "@/lib/public-url";
 import { STALE_PROCESSING_MS } from "@/lib/bulk-resume-config";
 import type { LiveAvatarEvaluation, LiveAvatarTranscriptTurn } from "@/lib/live-avatar-screening";
@@ -62,6 +63,7 @@ const NOTIFICATION_MAX_AGE_HOURS = Number.isFinite(configuredNotificationMaxAgeH
   ? Math.min(configuredNotificationMaxAgeHours, 24 * 14)
   : 48;
 const NOTIFICATION_STALE_ERROR = `Not sent: queued more than ${NOTIFICATION_MAX_AGE_HOURS}h ago and is no longer current.`;
+const NOTIFICATION_SAMPLE_ERROR = "Not sent: sample candidate (built-in demo resume). Smile never emails sample candidates.";
 /**
  * The complete, deliberately short list of application-side notification
  * emails the pilot is allowed to send. Enforced here, at the single claim
@@ -3079,8 +3081,11 @@ export async function createBookingToken(input: { applicationExternalId: string;
   return db.transaction(async (tx) => {
     // Lock before the lookup so concurrent workflow retries cannot create two
     // random tokens for the same application and interview type.
-    const [application] = await tx.select({ id: applications.id, roleId: applications.roleId, organizationId: applications.organizationId, currentStage: applications.currentStage, email: applications.email }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
+    const [application] = await tx.select({ id: applications.id, roleId: applications.roleId, organizationId: applications.organizationId, currentStage: applications.currentStage, email: applications.email, sourceDetail: applications.sourceDetail }).from(applications).where(eq(applications.externalId, input.applicationExternalId)).for("update").limit(1);
     if (!application) return { token: null, created: false, notificationHistoryId: null, error: "unknown_application" as const };
+    // Sample (demo) candidates never get an interview or booking link, so no
+    // email, call, Live Avatar session or calendar invite can follow.
+    if (isSampleApplication(application)) return { token: null, created: false, notificationHistoryId: null, error: "sample_candidate" as const };
     // Keep the rule at the shared token boundary too, including internal API
     // callers. Lock the role so a concurrent interview-type change cannot
     // race a new invitation into existence under the old setting.
@@ -3251,6 +3256,11 @@ export async function notificationQueue(stage?: string) {
       inArray(applicationStatusHistory.notificationStatus, ["", "pending", "failed"]),
       inArray(applicationStatusHistory.notificationEventType, ENABLED_APPLICATION_NOTIFICATION_EVENT_TYPES),
       lt(applicationStatusHistory.changedAt, staleCutoff),
+    ));
+    // Sample (demo) candidates: retire their emails explicitly, never claim them.
+    await tx.update(applicationStatusHistory).set({ notificationStatus: "not_configured", notificationError: NOTIFICATION_SAMPLE_ERROR }).where(and(
+      inArray(applicationStatusHistory.notificationStatus, ["", "pending", "failed"]),
+      sql`${applicationStatusHistory.applicationId} IN (SELECT a.id FROM applications a WHERE a.source_detail LIKE ${`${SAMPLE_SOURCE_PREFIX}%`} OR lower(split_part(a.email, '@', 2)) IN ('example.com', 'example.net', 'example.org'))`,
     ));
     await tx.update(roleStatusHistory).set({ notificationStatus: "not_configured", notificationError: NOTIFICATION_STALE_ERROR }).where(and(
       inArray(roleStatusHistory.notificationStatus, ["", "pending", "failed"]),

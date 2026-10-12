@@ -19,6 +19,7 @@ export type BulkApprovalOutcome =
   | "not_found"
   | "insufficient_credits"
   | "not_allowed_for_role"
+  | "sample_candidate"
   | "failed";
 
 const SKIP_REASONS: Record<Exclude<BulkApprovalOutcome, "approved" | "failed">, [string, string]> = {
@@ -30,6 +31,7 @@ const SKIP_REASONS: Record<Exclude<BulkApprovalOutcome, "approved" | "failed">, 
   not_found: ["could not be found", "could not be found"],
   insufficient_credits: ["skipped because there are not enough Smile Credits for an interview", "skipped because there are not enough Smile Credits for an interview"],
   not_allowed_for_role: ["skipped because their role doesn't use this interview type", "skipped because their role doesn't use this interview type"],
+  sample_candidate: ["skipped because it is a sample candidate (sample candidates are never contacted)", "skipped because they are sample candidates (sample candidates are never contacted)"],
 };
 
 const DONE: Record<BulkApplicantAction, string> = {
@@ -46,7 +48,7 @@ export function summarizeBulkApproval(outcomes: BulkApprovalOutcome[], action: B
   const counts = outcomes.reduce<Record<BulkApprovalOutcome, number>>((totals, outcome) => {
     totals[outcome] += 1;
     return totals;
-  }, { approved: 0, already_approved: 0, already_invited: 0, interview_exists: 0, screening_pending: 0, not_eligible: 0, not_found: 0, insufficient_credits: 0, not_allowed_for_role: 0, failed: 0 });
+  }, { approved: 0, already_approved: 0, already_invited: 0, interview_exists: 0, screening_pending: 0, not_eligible: 0, not_found: 0, insufficient_credits: 0, not_allowed_for_role: 0, sample_candidate: 0, failed: 0 });
 
   const parts: string[] = [];
   parts.push(counts.approved > 0 ? `${applicants(counts.approved)} ${DONE[action]}.` : action === "approve" ? "No applicants were approved." : "No interviews were sent.");
@@ -75,6 +77,7 @@ export function interviewInvitationMessage(kind: "voice" | "avatar", outcome: st
     case "interview_exists": return activeKind === "avatar" ? "This applicant already has a Live Avatar interview." : "This applicant is already past the interview invitation step.";
     case "not_eligible": return "This applicant was rejected or withdrew, so an interview can't be sent.";
     case "not_found": return "Applicant not found.";
+    case "sample_candidate": return "This is a sample candidate created from a demo resume, so no interview is sent. Sample candidates are never emailed, called or invited.";
     case "not_allowed_for_role": return kind === "avatar"
       ? "This role uses Voice Interviews only. Change the role's interview type to send a Live Avatar interview."
       : "This role uses Avatar Interviews only. Change the role's interview type to send a voice interview.";

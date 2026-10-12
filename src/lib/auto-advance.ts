@@ -4,6 +4,7 @@ import { getApplication, listApprovedWithoutInterviewInvitation, listAutoAdvance
 import { autoAdvanceComment, evaluateAutoAdvance, isManualOverride, readInterviewAutomation } from "@/lib/interview-automation";
 import { isRoleOpenForSelection } from "@/lib/recruitment-role-eligibility";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
+import { isSampleApplication } from "@/lib/sample-safety";
 import { approveForInterview, issueInterviewInvitations, type InterviewApprovalMode } from "@/lib/recruitment-target-portal";
 
 /** Recorded on automatic approvals; the history timeline shows it as an automatic update. */
@@ -34,6 +35,8 @@ export async function maybeAutoAdvance(applicationExternalId: string): Promise<A
   try {
     const row = await getApplication(id);
     if (!row) return { advanced: false, reason: "unknown_application" };
+    // Sample (demo) candidates are never invited automatically.
+    if (isSampleApplication(row.application)) return { advanced: false, reason: "sample_candidate" };
     const automation = readInterviewAutomation(row.roleSetup);
     if (!automation.enabled) return { advanced: false, reason: "disabled" };
     if (!roleAcceptsAutomation(row)) return { advanced: false, reason: "role_not_open" };
