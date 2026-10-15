@@ -141,7 +141,7 @@ export async function intakeTargetResumeBatch(input: {
       stage = "contact_extraction";
       const storedQueueId = queueIdForHash(input.roleId, stored.record.sha256, submissionId);
       queueKey = storedQueueId;
-      const contact = extractResumeContactDetails(stored.extractedText);
+      const contact = extractResumeContactDetails(stored.extractedText, { fileName: source.name });
       const candidateName = contact.candidateName || fallbackCandidateName(source.name);
       if (!contact.candidateEmail) throw new Error("The resume must contain a readable candidate email address.");
       stage = "resume_persistence";

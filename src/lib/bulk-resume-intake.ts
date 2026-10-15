@@ -177,7 +177,7 @@ export async function intakeResumeBatch(input: {
       }
 
       const fileUrl = driveFileUrl(stored.record.fileId);
-      const extractedContact = extractResumeContactDetails(stored.extractedText);
+      const extractedContact = extractResumeContactDetails(stored.extractedText, { fileName: source.name });
       const applicationId = `${isUat ? "UAT-" : ""}APP-${crypto.createHash("sha256").update(`${roleId}:${stored.record.sha256}`).digest("hex").slice(0, 24)}`;
       const attemptCount = String(Number(previous?.attemptCount || 0) + 1);
       await appendBulkResumeQueueEvent({

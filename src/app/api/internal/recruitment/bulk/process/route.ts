@@ -84,6 +84,9 @@ export const POST = withInternalAuth("bulk_queue", async (request) => {
   const result = await processTargetBulkScreening({
     dedupeKey: String(body.dedupeKey),
     screening: body.screening,
+    // Sent beside (not inside) the strict screening object so the n8n worker
+    // can ship it before or after this deploy without breaking validation.
+    candidateName: typeof body.candidateName === "string" ? body.candidateName : undefined,
     actorEmail: typeof body.actorEmail === "string" ? body.actorEmail : undefined,
     actorName: typeof body.actorName === "string" ? body.actorName : undefined,
   });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { evaluateVoiceInterview } from "../src/lib/voice-interview-evaluation.ts";
-import { extractResumeContactDetails } from "../src/lib/resume-contact-extraction.ts";
+import { extractResumeContactDetails, verifiedResumeName } from "../src/lib/resume-contact-extraction.ts";
 import { applyScreeningEvidenceGuard, parseScreeningResult } from "../src/lib/recruitment-screening.ts";
 
 test("completed voice repair records strengths and concerns from interview evidence", () => {
@@ -56,4 +56,48 @@ test("resume screening guard differentiates a non-QA resume from a QA role", () 
   assert.equal(result.match_score, 49);
   assert.match(result.gaps[0], /QA|test automation/i);
   assert.match(result.ai_summary, /Direct-evidence check/i);
+});
+
+test("resume name extraction skips section headings and job-title lines", () => {
+  const heading = extractResumeContactDetails([
+    "PROFESSIONAL EXPERIENCE",
+    "Data Center Technician",
+    "ALLEN PESIGAN",
+    "allen.pesigan@example.com",
+  ].join("\n"));
+  assert.equal(heading.candidateName, "Allen Pesigan");
+
+  const company = extractResumeContactDetails([
+    "DATA CENTER OPERATIONS ASIA",
+    "Shanna Fate Macatangay",
+    "shanna.m@example.com | 0917 123 4567",
+  ].join("\n"));
+  assert.equal(company.candidateName, "Shanna Fate Macatangay");
+});
+
+test("resume name extraction strips glued locations, rejoins spaced letters and uses email/filename hints", () => {
+  assert.equal(extractResumeContactDetails("VALERIE LOPEZ Philippines\nvlopez@example.com").candidateName, "Valerie Lopez");
+  assert.equal(extractResumeContactDetails("J U A N    D E L A    C R U Z\njdc@example.com").candidateName, "Juan Dela Cruz");
+  // Both lines pass the filters; the one matching the email wins over position.
+  assert.equal(extractResumeContactDetails("Bright Future Academy\nMaria Santos\nmaria.santos@example.com").candidateName, "Maria Santos");
+  assert.equal(extractResumeContactDetails("Bright Future Academy\nMaria Santos\nms@example.com", { fileName: "Santos_Maria_CV.pdf" }).candidateName, "Maria Santos");
+  // Nothing name-like in the text: fall back to the email address.
+  assert.equal(extractResumeContactDetails("PROFESSIONAL SUMMARY\nallen.pesigan@example.com").candidateName, "Allen Pesigan");
+});
+
+test("AI candidate names are accepted only when grounded in the resume", () => {
+  const resume = "VAL RIE LOPEZ Philippines\nvlopez@example.com\nPROFESSIONAL EXPERIENCE";
+  assert.equal(verifiedResumeName("Valerie Lopez", resume, "vlopez@example.com"), "Valerie Lopez");
+  assert.equal(verifiedResumeName("VALERIE LOPEZ", resume), "Valerie Lopez");
+  assert.equal(verifiedResumeName("Jennifer Lopez", resume), "");
+  assert.equal(verifiedResumeName("Lopez", resume), "");
+  assert.equal(verifiedResumeName("", resume), "");
+  assert.equal(verifiedResumeName(undefined, resume), "");
+  assert.equal(verifiedResumeName("José Peña", "JOSE PENA\njp@example.com"), "José Peña");
+});
+
+test("screening results accept an optional candidate_name", () => {
+  const base = { match_score: 70, recommendation: "For HR Review", ai_summary: "ok", strengths: [], gaps: [], interview_questions: ["a", "b", "c"] };
+  assert.equal(parseScreeningResult(base).candidate_name, undefined);
+  assert.equal(parseScreeningResult({ ...base, candidate_name: " Valerie Lopez " }).candidate_name, "Valerie Lopez");
 });

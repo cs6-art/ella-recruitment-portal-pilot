@@ -7,6 +7,9 @@ const screeningResultSchema = z.object({
   strengths: z.array(z.string().trim().min(1)).max(20),
   gaps: z.array(z.string().trim().min(1)).max(20),
   interview_questions: z.array(z.string().trim().min(1)).length(3),
+  // Optional: the candidate's full name as read by the AI. Only used after
+  // verifiedResumeName confirms it appears in the resume.
+  candidate_name: z.string().trim().max(120).optional(),
 }).strict();
 
 export type ValidatedScreeningResult = z.infer<typeof screeningResultSchema>;

@@ -9,6 +9,7 @@ import {
 } from "@/lib/internal-recruitment-queries";
 import { applyScreeningEvidenceGuard, parseScreeningResult, screeningDbValues } from "@/lib/recruitment-screening";
 import { maybeAutoAdvance } from "@/lib/auto-advance";
+import { verifiedResumeName } from "@/lib/resume-contact-extraction";
 
 function text(value: unknown) {
   return String(value ?? "").trim();
@@ -23,6 +24,8 @@ function text(value: unknown) {
 export async function processTargetBulkScreening(input: {
   dedupeKey: string;
   screening: unknown;
+  /** AI-read name; trusted only after verifiedResumeName. */
+  candidateName?: string;
   actorEmail?: string;
   actorName?: string;
 }) {
@@ -59,8 +62,10 @@ export async function processTargetBulkScreening(input: {
       resumeText: text(context.resumeFile?.extractedText),
     });
     const cost = await creditCostFor("cv_analysis");
+    const candidateName = verifiedResumeName(input.candidateName || aiResult.candidate_name, text(context.resumeFile?.extractedText), text(context.item.candidateEmail));
     const result = await finalizeBulkScreening({
       dedupeKey,
+      candidateName,
       screening: { ...screeningDbValues(aiResult), raw: aiResult },
       ledger: {
         type: "Deduction",

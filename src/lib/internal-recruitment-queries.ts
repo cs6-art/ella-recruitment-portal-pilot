@@ -2627,6 +2627,8 @@ export async function finalizeBulkScreening(input: {
     raw?: unknown;
   };
   ledger: LedgerAppend;
+  /** AI-read name already verified against the resume; replaces the upload-time guess. */
+  candidateName?: string;
   actorEmail?: string;
   actorName?: string;
 }) {
@@ -2640,6 +2642,8 @@ export async function finalizeBulkScreening(input: {
     // finish quietly with no result, history or credit charge.
     if (queue.status === "screened" || queue.status === "skipped") return { processed: false, duplicate: true, error: null };
     if (queue.status !== "processing") return { processed: false, duplicate: false, error: "queue_not_claimed" as const };
+    const verifiedName = input.candidateName?.trim() || "";
+    const candidateName = verifiedName || queue.candidateName;
 
     // Legacy queue rows already have an application. New bulk rows deliberately
     // do not: create the applicant/application inside this same transaction as
@@ -2652,6 +2656,12 @@ export async function finalizeBulkScreening(input: {
         .innerJoin(roles, eq(roles.id, applications.roleId))
         .where(eq(applications.id, queue.applicationId)).for("update").limit(1);
       if (existingApplication) applicationRow = existingApplication;
+      // Legacy rows: only correct a name that is still the upload-time guess,
+      // never one HR has edited since.
+      if (existingApplication && verifiedName && existingApplication.application.candidateName === queue.candidateName) {
+        await tx.update(applications).set({ candidateName: verifiedName }).where(eq(applications.id, existingApplication.application.id));
+        existingApplication.application.candidateName = verifiedName;
+      }
     } else {
       const [role] = await tx.select({ id: roles.id, externalId: roles.externalId, organizationId: roles.organizationId, departmentSnapshot: roles.departmentSnapshot, requesterEmail: roles.requesterEmail, requesterName: roles.requesterName })
         .from(roles)
@@ -2670,8 +2680,8 @@ export async function finalizeBulkScreening(input: {
         .where(and(eq(applicants.organizationId, role.organizationId), eq(applicants.primaryEmail, email)))
         .limit(1);
       const [applicant] = existingApplicant
-        ? await tx.update(applicants).set({ fullName: queue.candidateName || existingApplicant.fullName, phoneE164: queue.preferredMobile || "", country: queue.applicantCountry || "", updatedAt: new Date() }).where(eq(applicants.id, existingApplicant.id)).returning()
-        : await tx.insert(applicants).values({ organizationId: role.organizationId, primaryEmail: email, fullName: queue.candidateName || "", phoneE164: queue.preferredMobile || "", country: queue.applicantCountry || "" }).returning();
+        ? await tx.update(applicants).set({ fullName: candidateName || existingApplicant.fullName, phoneE164: queue.preferredMobile || "", country: queue.applicantCountry || "", updatedAt: new Date() }).where(eq(applicants.id, existingApplicant.id)).returning()
+        : await tx.insert(applicants).values({ organizationId: role.organizationId, primaryEmail: email, fullName: candidateName || "", phoneE164: queue.preferredMobile || "", country: queue.applicantCountry || "" }).returning();
       if (!applicant) return { processed: false, duplicate: false, error: "applicant_persistence_failed" as const };
       const externalId = bulkScreeningApplicationExternalId(role.externalId, queue.resumeSha256, queue.submissionId);
       const [created] = await tx.insert(applications).values({
@@ -2682,7 +2692,7 @@ export async function finalizeBulkScreening(input: {
         source: queue.source === "drive" ? "drive_import" : queue.source === "onedrive" ? "onedrive_import" : "bulk_upload",
         sourceDetail: `${queue.driveFileId}|${queue.resumeSha256}`,
         departmentSnapshot: role.departmentSnapshot,
-        candidateName: queue.candidateName || applicant.fullName,
+        candidateName: candidateName || applicant.fullName,
         email,
         phone: queue.preferredMobile || "",
         preferredMobile: queue.preferredMobile || "",
@@ -2765,7 +2775,7 @@ export async function finalizeBulkScreening(input: {
       notificationIntendedRecipient: application.email,
     }).onConflictDoNothing({ target: applicationStatusHistory.actionRequestId });
     await tx.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, application.id));
-    await tx.update(bulkScreeningQueueItems).set({ applicationId: application.id, status: "screened", errorMessage: "", processedAt: new Date(), updatedAt: new Date() })
+    await tx.update(bulkScreeningQueueItems).set({ applicationId: application.id, candidateName, status: "screened", errorMessage: "", processedAt: new Date(), updatedAt: new Date() })
       .where(eq(bulkScreeningQueueItems.id, queue.id));
     return { processed: true, duplicate: false, error: null, result, credit, applicationId: application.externalId };
   });
