@@ -70,7 +70,7 @@ import { buildNumberedInterviewQuestions } from "@/lib/interview-question-count"
 import { evaluationFieldsForSetup } from "@/lib/recruitment-setup-schema";
 import { generateRoleId } from "@/lib/role-id";
 import { checkCalendarAvailability, createFinalInterviewEvent, deleteFinalInterviewEvent, getCalendarBusyWindows, resolveFinalInterviewCalendarEmail, updateFinalInterviewEvent } from "@/lib/google-calendar";
-import { hasValidFutureTime, isBeforeTargetHiringDate, isFinalInterviewSlotDuration, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
+import { hasValidFutureTime, isWithinVoiceBookingWindow, voiceBookingExpiresAt, isBeforeTargetHiringDate, isFinalInterviewSlotDuration, isVirtualSlotId, slotKey, virtualSlotsForRole } from "@/lib/interview-availability-rules";
 import { getPortalConfigNumber } from "@/lib/portal-config";
 import { applicationLinkWithOrganization } from "@/lib/public-url";
 import { COOKIE_NAME, getActiveSessionUser } from "@/lib/session";
@@ -523,6 +523,8 @@ async function targetBookingContextInTenant(kind: "voice" | "final", tokenHash: 
   const voiceCounts = kind === "voice" ? await bookedVoiceCountsByInterval() : new Map<string, number>();
   let available = [...persistedAvailable, ...virtualAvailable]
     .filter((slot) => kind !== "voice" || !isVoiceTimeFull(voiceCounts, slot))
+    // Voice links are bookable for exactly 48 hours after they were sent.
+    .filter((slot) => kind !== "voice" || isWithinVoiceBookingWindow(slot, token.token.createdAt))
     .sort((left, right) => `${left.date} ${left.startTime}`.localeCompare(`${right.date} ${right.startTime}`));
   if (kind === "final" && available.length > 0) {
     // Calendar availability is the applicant-facing source of truth. Check
@@ -987,7 +989,7 @@ export async function issueInterviewInvitations(applicationExternalId: string, i
     if (!avatarOnly.token) throw new Error(avatarOnly.error || "Unable to create the avatar interview invitation.");
     return { voiceBookingNotificationHistoryId: null, avatarNotificationHistoryId: avatarOnly.notificationHistoryId };
   }
-  const invitation = await createBookingToken({ applicationExternalId, kind: "voice", expiresAt });
+  const invitation = await createBookingToken({ applicationExternalId, kind: "voice", expiresAt: voiceBookingExpiresAt().toISOString() });
   if (!invitation.token) throw new Error(invitation.error || "Unable to create the voice interview booking invitation.");
   if (kinds.includes("avatar")) {
     const avatarInvitation = await createBookingToken({ applicationExternalId, kind: "avatar", expiresAt, notify: false });

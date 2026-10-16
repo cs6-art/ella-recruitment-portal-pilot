@@ -2111,8 +2111,8 @@ export async function sendVoiceBookingInvitation(applicationId: string, reviewer
   if (!baseUrl) throw new Error("The public booking URL is not configured.");
   const token = crypto.randomBytes(32).toString("hex");
   const now = new Date().toISOString();
-  const expiryDays = await getPortalConfigNumber("Booking_Link_Expiry_Days", 7);
-  const expiresAt = new Date(Date.now() + Math.max(1, Math.min(30, expiryDays)) * 24 * 60 * 60 * 1000).toISOString();
+  // Voice links are bookable for exactly 48 hours after they are sent.
+  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
   const link = bookingLink(baseUrl, "voice", token);
   const updates: CellUpdate[] = [
     { tab: "High_Match_Profile", row: found.rowNumber, header: "Booking_Token", value: token },

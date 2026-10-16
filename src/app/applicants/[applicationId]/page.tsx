@@ -6,12 +6,13 @@ import type { ReactNode } from "react";
 import ApplicantDetailActions from "@/components/ApplicantDetailActions";
 import ApplicantDecisionPanel from "@/components/ApplicantDecisionPanel";
 import ApplicantLiveRefresh from "@/components/ApplicantLiveRefresh";
+import ApplicantNotes from "@/components/ApplicantNotes";
 import MarkApplicantSeen from "@/components/MarkApplicantSeen";
 import ApplicantReviewCoach from "@/components/onboarding/ApplicantReviewCoach";
 import CandidateHistoryTimeline from "@/components/CandidateHistoryTimeline";
 import LiveInterviewReview from "@/components/LiveInterviewReview";
 import UiIcon, { type UiIconName } from "@/components/UiIcon";
-import { canDecideApplicant, canEditApplicant, canViewApplicant } from "@/lib/access-control";
+import { canAdministerAccess, canDecideApplicant, canEditApplicant, canViewApplicant } from "@/lib/access-control";
 import {
   applicantStageClass,
   getApplicantById,
@@ -30,6 +31,7 @@ import { getLiveInterviewReview, type LiveInterviewReview as LiveReview } from "
 import { INTERVIEW_STATE_LABELS } from "@/lib/live-interview";
 import { isPostgresRecruitmentTarget } from "@/lib/recruitment-target-mode";
 import { getRole } from "@/lib/internal-recruitment-queries";
+import { listApplicantNotes } from "@/lib/applicant-notes";
 import { DEFAULT_ROLE_INTERVIEW_TYPE, readRoleInterviewType, ROLE_INTERVIEW_TYPE_LABELS } from "@/lib/interview-type";
 import { isReservedDemoEmail, SAMPLE_CANDIDATE_BLOCKED_MESSAGE } from "@/lib/sample-safety";
 
@@ -433,6 +435,7 @@ export default async function ApplicantDetailsPage({ params, searchParams }: { p
 
   // Poll interview-choice, active-interview, review, and final-booking stages
   // together so HR sees changes before, during, and after an interview.
+  const notes = isPostgresRecruitmentTarget() ? await listApplicantNotes(applicant.applicationId, user.organizationId).catch(() => null) : null;
   const currentStageKey = applicant.currentStage.trim().toLowerCase();
   const sampleCandidate = isReservedDemoEmail(applicant.email);
   return <main className="container page applicant-details-page">
@@ -446,6 +449,7 @@ export default async function ApplicantDetailsPage({ params, searchParams }: { p
       <CombinedScreeningEvidence applicant={applicant} liveReview={liveReview} liveReviewUnavailable={liveReviewResult.unavailable} canRetryLiveReview={canDecideApplicant(user)} />
       <AiGradingCriteria applicant={applicant} liveReview={liveReview} />
       <ApplicantDecisionPanel applicationId={applicant.applicationId} roleInterviewType={roleInterviewType} screened={!isPostgresRecruitmentTarget() || applicant.resumeStatus.trim().toLowerCase() === "processed"} canSendInterview={isPostgresRecruitmentTarget()} currentStage={applicant.currentStage} resumeDecision={applicant.resumeDecision} resumeComments={resumeComments} voiceDecision={applicant.voiceDecision} voiceComments={voiceComments} voiceStatus={applicant.voiceCallStatus || applicant.voiceStatus} finalInterviewStatus={applicant.finalInterviewStatus} finalStatus={applicant.finalStatus} finalComments={finalComments} finalBookingLink={applicant.finalBookingLink} voiceBookingLink={interviewMode === "voice" ? externalUrl(applicant.voiceBookingLink) : ""} voiceRetryEligible={!/(?:^|[^a-z])failed(?:[^a-z]|$)|blocked|system[_ -]?failure|provider[_ -]?failure|technical[_ -]?failure|dispatch[_ -]?fail/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus}`) && /no[_ -]?answer|no[_ -]?show|incomplete|not connected|voicemail|busy|declined|cancell?ed/i.test(`${applicant.voiceCallStatus} ${applicant.voiceStatus} ${applicant.voiceBookingStatus}`)} canReview={canDecideApplicant(user)} interviewMode={interviewMode} />
+      {canDecideApplicant(user) && <ApplicantNotes applicationId={applicant.applicationId} initialNotes={notes || []} available={notes !== null} currentEmail={user.email} isAdmin={canAdministerAccess(user)} />}
       <section className="card applicant-detail-card"><DetailCardHeader icon="document" title="Resume / CV" description="The candidate's submitted resume document." /><ResumeResource value={applicant.resumeText} fileId={applicant.resumeFileId} fileName={applicant.resumeFileName} expiresAt={applicant.resumeFileExpiresAt} /></section>
       <section className="card applicant-detail-card"><DetailCardHeader icon="microphone" title="Interview Questions" description="Questions prepared for the candidate's interview." /><InterviewQuestions value={applicant.interviewQuestions} /></section>
       <CandidateHistoryTimeline history={history} interviewMode={liveReview ? "avatar" : applicant.interviewMode} />

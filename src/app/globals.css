@@ -7013,3 +7013,15 @@ textarea:focus { border-color: var(--color-link); box-shadow: var(--focus-ring);
 .sample-candidate-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: #fff3c4; color: #6b5200; font-size: 11px; font-weight: 800; letter-spacing: .02em; vertical-align: middle; white-space: nowrap; }
 .sample-candidate-note { margin: 0 0 16px; padding: 10px 14px; border: 1px solid #f0dc9a; border-radius: 10px; background: #fffaea; color: #5f4a0b; font-size: 13.5px; }
 .onboarding-guide-container { padding-top: 24px; padding-bottom: 0; }
+.booking-window-note { margin: -4px 0 12px; color: var(--muted); font-size: 13.5px; }
+.applicant-notes-card .field textarea { min-height: 92px; }
+.applicant-notes-card .field small, .applicant-notes-card h2 small { color: var(--muted); font-weight: 400; }
+.applicant-notes-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.applicant-notes-empty { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+.applicant-notes-list { display: grid; gap: 10px; margin: 16px 0 0; padding: 0; list-style: none; }
+.applicant-note { padding: 12px 14px; border: 1px solid var(--line, #e2e8f0); border-radius: 10px; background: #fff; }
+.applicant-note textarea { width: 100%; min-height: 80px; }
+.applicant-note-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 13px; color: var(--muted); }
+.applicant-note-meta strong { color: inherit; font-weight: 700; }
+.applicant-note-meta em { font-style: normal; font-size: 12px; }
+.applicant-note-body { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -1,5 +1,6 @@
 import { parseVoiceInterviewSlots, type VoiceInterviewSlot } from "@/lib/voice-interview-availability";
 import { scheduledInstant } from "@/lib/interview-time";
+export { VOICE_BOOKING_WINDOW_HOURS, isWithinVoiceBookingWindow, voiceBookingExpiresAt } from "@/lib/voice-booking-window";
 import { isRoleTargetDatePassed } from "@/lib/recruitment-role-eligibility";
 
 // Slot status is the appointment lifecycle. Applicant outcomes such as

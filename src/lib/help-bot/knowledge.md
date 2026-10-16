@@ -1156,3 +1156,11 @@ the address bar keeps a link to it. It is available to every signed-in person.
 - Use your company account, not a personal account, for recruitment work.
 - Do not delete records unless you are sure — deleting an applicant also removes
   the related screening information, history, and interview times.
+
+## HR notes on an applicant
+
+On an applicant page, HR can add private notes in the "HR Notes" card without approving, rejecting or sending an interview. Notes are saved on their own, show who wrote them and when, and are visible only to the HR team (candidates never see them). The author or an HR administrator can edit or delete a note.
+
+## AI voice interview booking link
+
+A voice interview booking link works for exactly 48 hours after it is sent. The candidate only sees times within those 48 hours, and the link expires after that. Send a new booking link if it lapses.

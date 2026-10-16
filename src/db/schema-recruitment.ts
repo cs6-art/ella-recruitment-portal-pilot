@@ -486,6 +486,23 @@ export const bookingTokens = pgTable(
   (t) => [index("booking_tokens_application_id_kind_idx").on(t.applicationId, t.kind)],
 );
 
+/** Standalone HR-only notes on an application; mirrors drizzle/0045_application_notes.sql. */
+export const applicationNotes = pgTable(
+  "application_notes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    applicationId: uuid("application_id").notNull().references(() => applications.id),
+    body: text("body").notNull(),
+    authorName: text("author_name").notNull().default(""),
+    authorEmail: text("author_email").notNull().default(""),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+    deletedAt: ts("deleted_at"),
+  },
+  (t) => [index("application_notes_application_created_idx").on(t.applicationId, t.createdAt)],
+);
+
 export const applicationStatusHistory = pgTable(
   "application_status_history",
   {

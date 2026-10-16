@@ -24,6 +24,7 @@ import type { LiveAvatarEvaluation, LiveAvatarTranscriptTurn } from "@/lib/live-
 import { readRoleInterviewType, roleAllowsInterview } from "@/lib/interview-type";
 import { evaluateVoiceInterview } from "@/lib/voice-interview-evaluation";
 import { MAX_CONCURRENT_VOICE_INTERVIEWS } from "@/lib/voice-interview-capacity";
+import { voiceBookingExpiresAt } from "@/lib/interview-availability-rules";
 import {
   applicants,
   applicantAliases,
@@ -3177,7 +3178,7 @@ export async function createBookingToken(input: { applicationExternalId: string;
     const link = input.link || (input.kind === "avatar"
       ? avatarInterviewLink(portalOrigin, rawToken || tokenHash)
       : `${portalOrigin.replace(/\/$/, "")}/book/${input.kind}/${rawToken || tokenHash}`);
-    const [token] = await tx.insert(bookingTokens).values({ organizationId: application.organizationId, applicationId: application.id, kind: input.kind, tokenHash, link, expiresAt: isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: bookingTokens.tokenHash }).returning();
+    const [token] = await tx.insert(bookingTokens).values({ organizationId: application.organizationId, applicationId: application.id, kind: input.kind, tokenHash, link, expiresAt: input.kind === "voice" ? voiceBookingExpiresAt() : isoOrNull(input.expiresAt) }).onConflictDoNothing({ target: bookingTokens.tokenHash }).returning();
     if (!token) {
       const [existing] = await tx.select().from(bookingTokens).where(eq(bookingTokens.tokenHash, tokenHash)).limit(1);
       return { token: existing ?? null, created: false, notificationHistoryId: null, error: null };
