@@ -45,7 +45,7 @@ test("the webhook verifies the signature before any processing and is idempotent
 test("amount is server-calculated and a provider mismatch is never credited", () => {
   const payments = read("src/lib/payments.ts");
   assert.match(payments, /findCreditPack\(input\.packId/);
-  assert.match(payments, /customCreditPack\(input\.credits\)/);
+  assert.match(payments, /customCreditPack\(input\.credits, currency\)/);
   assert.match(payments, /amountCents: pack\.amountCents/);
   assert.match(payments, /providerCents !== payment\.amountCents/);
   assert.match(payments, /providerCents === null/);

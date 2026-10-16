@@ -27,11 +27,11 @@ type Payment = {
 
 const nf = new Intl.NumberFormat("en-US");
 const amountFormat = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const CURRENCY_SYMBOLS: Record<string, string> = { SGD: "S$", PHP: "₱" };
+const CURRENCY_SYMBOLS: Record<string, string> = { SGD: "S$", PHP: "₱", MYR: "RM" };
 function formatMoney(amount: number, currency = "SGD") {
   return `${CURRENCY_SYMBOLS[currency] ?? `${currency} `}${amountFormat.format(amount)}`;
 }
-const CURRENCY_LABELS: Record<string, string> = { SGD: "SGD (PayNow, cards)", PHP: "PHP (QR Ph, cards)" };
+const CURRENCY_LABELS: Record<string, string> = { SGD: "SGD (PayNow, cards)", PHP: "PHP (QR Ph, cards)", MYR: "MYR (FPX online banking, cards)" };
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));

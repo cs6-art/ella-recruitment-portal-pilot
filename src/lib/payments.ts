@@ -41,7 +41,7 @@ export type CreatePurchaseInput = {
   packId?: string;
   /** Custom quantity; the server prices it at the fixed per-credit rate. */
   credits?: number;
-  /** Checkout currency; defaults to SGD. PHP is what makes HitPay offer QR Ph. */
+  /** Checkout currency; defaults to SGD. PHP makes HitPay offer QR Ph; MYR makes it offer FPX. */
   currency?: PaymentCurrency;
   actorEmail: string;
   actorName: string;

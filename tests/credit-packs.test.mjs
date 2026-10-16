@@ -76,3 +76,28 @@ test("custom purchases price any whole credit quantity at the fixed rate and rej
   assert.equal(customCreditPack(MAX_CUSTOM_CREDITS)?.amountCents, MAX_CUSTOM_CREDITS * 40);
   for (const bad of [0, -1, 1.5, MAX_CUSTOM_CREDITS + 1, "10", null, NaN]) assert.equal(customCreditPack(bad), null);
 });
+
+test("MYR is offered only when ELLA_CREDIT_PRICE_MYR_CENTS is set, and prices credits in sen", async () => {
+  const { enabledCurrencies, parsePaymentCurrency, creditPacksIn, customCreditPack } = await import("../src/lib/credit-packs.ts");
+  const previous = process.env.ELLA_CREDIT_PRICE_MYR_CENTS;
+  try {
+    delete process.env.ELLA_CREDIT_PRICE_MYR_CENTS;
+    assert.equal(enabledCurrencies().includes("MYR"), false);
+    assert.equal(parsePaymentCurrency("myr"), null);
+
+    process.env.ELLA_CREDIT_PRICE_MYR_CENTS = "140";
+    assert.equal(enabledCurrencies().includes("MYR"), true);
+    assert.equal(parsePaymentCurrency("myr"), "MYR");
+    for (const pack of creditPacksIn("MYR")) {
+      assert.equal(pack.currency, "MYR");
+      assert.equal(pack.amountCents, pack.credits * 140);
+    }
+    assert.equal(customCreditPack(10, "MYR")?.amountCents, 1400);
+
+    process.env.ELLA_CREDIT_PRICE_MYR_CENTS = "abc";
+    assert.equal(enabledCurrencies().includes("MYR"), false);
+  } finally {
+    if (previous === undefined) delete process.env.ELLA_CREDIT_PRICE_MYR_CENTS;
+    else process.env.ELLA_CREDIT_PRICE_MYR_CENTS = previous;
+  }
+});

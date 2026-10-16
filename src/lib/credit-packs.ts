@@ -33,8 +33,8 @@ export function creditPriceCents(): number {
   return Number.isInteger(value) && value > 0 ? value : DEFAULT_CREDIT_PRICE_CENTS;
 }
 
-/** Currencies a buyer can pay in. HitPay offers methods by currency: PayNow for SGD, QR Ph for PHP. */
-export type PaymentCurrency = "SGD" | "PHP";
+/** Currencies a buyer can pay in. HitPay offers methods by currency: PayNow for SGD, QR Ph for PHP, FPX for MYR. */
+export type PaymentCurrency = "SGD" | "PHP" | "MYR";
 
 /** Per-credit price in centavos for PHP checkouts (e.g. 1800 = ₱18.00). PHP is offered only when this is set,
  * so the exchange rate is always an explicit operator decision made server-side. */
@@ -45,8 +45,19 @@ export function creditPricePhpCentavos(): number | null {
   return Number.isInteger(value) && value > 0 ? value : null;
 }
 
+/** Per-credit price in sen for MYR checkouts (e.g. 140 = RM1.40). MYR is offered only when this is set. */
+export function creditPriceMyrSen(): number | null {
+  const raw = process.env.ELLA_CREDIT_PRICE_MYR_CENTS?.trim();
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
 export function enabledCurrencies(): PaymentCurrency[] {
-  return creditPricePhpCentavos() === null ? ["SGD"] : ["SGD", "PHP"];
+  const currencies: PaymentCurrency[] = ["SGD"];
+  if (creditPricePhpCentavos() !== null) currencies.push("PHP");
+  if (creditPriceMyrSen() !== null) currencies.push("MYR");
+  return currencies;
 }
 
 export function parsePaymentCurrency(value: unknown): PaymentCurrency | null {
@@ -55,7 +66,9 @@ export function parsePaymentCurrency(value: unknown): PaymentCurrency | null {
 }
 
 export function creditPriceFor(currency: PaymentCurrency): number {
-  return currency === "PHP" ? (creditPricePhpCentavos() ?? creditPriceCents()) : creditPriceCents();
+  if (currency === "PHP") return creditPricePhpCentavos() ?? creditPriceCents();
+  if (currency === "MYR") return creditPriceMyrSen() ?? creditPriceCents();
+  return creditPriceCents();
 }
 
 export function amountCentsForCredits(credits: number, currency: PaymentCurrency = "SGD"): number {
