@@ -140,8 +140,8 @@ test("the promotion is one conditional UPDATE guarded by the cap, with database 
   assert.match(migration, /VALUES \('event-launch-first-100', 'Event Launch — First 100 Organizations', 250, 100, false\)/, "seeded 250 credits, 100 slots, inactive");
 });
 
-test("the normal welcome credits are preserved and the promotion is checked once per new organization", () => {
-  assert.equal(welcomeCredits(undefined), 40);
+test("the normal welcome grant is 25 credits and the promotion is checked once per new organization", () => {
+  assert.equal(welcomeCredits(undefined), 25);
   const grant = read("src/lib/organization-welcome-credits.ts");
   assert.match(grant, /promotion \? promotion\.credits : welcomeCredits\(\)/);
   assert.match(grant, /"welcome_credit"/);

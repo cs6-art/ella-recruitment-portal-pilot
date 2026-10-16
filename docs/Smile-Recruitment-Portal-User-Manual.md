@@ -550,9 +550,9 @@ When the balance runs out, AI actions are paused until you add credits.
 
 ### Welcome credits
 
-Every new organisation receives free welcome credits when it is created. They
+Every new organisation receives 25 free welcome credits when it is created. They
 appear in the history as **Welcome Credits**. While McLink runs its launch
-promotion, the **first 100 new organisations** receive **250 credits** instead,
+promotion, the **first 100 new organisations** receive **25 credits** instead,
 shown as **Event Welcome Credits**. Either way an organisation receives one
 welcome grant, once, and it goes into the shared balance. Organisations that
 already existed are not changed.

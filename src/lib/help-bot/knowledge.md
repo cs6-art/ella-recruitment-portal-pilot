@@ -1085,10 +1085,10 @@ review. The invitation follows the role's interview type.
 
 ## Welcome credits and Event Welcome Credits
 
-Every new organisation receives free welcome credits when it is created. They are
+Every new organisation receives 25 free welcome credits when it is created. They are
 added to the organisation's one shared balance and appear in the credit history as
 **Welcome Credits**. While McLink runs its launch promotion, the first 100 new
-organisations receive **250 credits** instead, shown as **Event Welcome Credits**.
+organisations receive **25 credits** instead, shown as **Event Welcome Credits**.
 An organisation receives one welcome grant, once. Organisations that already
 existed are not changed. The **Credits** page shows **Organization Credits**: your
 organisation's name, how many credits are available, and the note "Credits are

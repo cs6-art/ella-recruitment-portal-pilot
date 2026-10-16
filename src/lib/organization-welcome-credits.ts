@@ -17,7 +17,7 @@ type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
  * organization-creation transaction so the org never exists without its grant.
  *
  * Which grant: one of the first N organizations created while the event
- * launch promotion is active receives the promotion's credits (250) as an
+ * launch promotion is active receives the promotion's credits (25) as an
  * "Event Welcome Credits" ledger entry instead of the normal default; every
  * other new organization receives the normal welcome credits (`welcomeCredits()`),
  * exactly as before. Either way the organization gets ONE grant, never both.

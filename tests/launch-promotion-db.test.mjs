@@ -7,7 +7,7 @@
 //   LAUNCH_TEST_DATABASE_URL=postgres://postgres:pw@localhost:5432/launchtest npm run test -- tests/launch-promotion-db.test.mjs
 //
 // It applies every migration in drizzle/, then registers 105 organizations at
-// the same instant and proves exactly 100 receive the 250-credit grant.
+// the same instant and proves exactly 100 receive the 25-credit grant.
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -47,19 +47,21 @@ test("first-100 promotion against a real Postgres", { skip }, async () => {
 
     // Seeded inactive: an organization created now gets the normal default, and activation never touches it.
     const existing = await createOrg("existing");
-    assert.equal(existing.credits, 40);
+    assert.equal(existing.credits, 25);
     const seeded = await promo.getLaunchPromotionStatus(db);
-    assert.deepEqual([seeded.active, seeded.allocatedCount, seeded.maxAllocations, seeded.credits], [false, 0, 100, 250]);
+    assert.deepEqual([seeded.active, seeded.allocatedCount, seeded.maxAllocations, seeded.credits], [false, 0, 100, 25]);
     await promo.setLaunchPromotionActive(db, true);
-    assert.equal(await balanceOf(existing.id), 40);
+    assert.equal(await balanceOf(existing.id), 25);
 
     // 105 organizations register at the same instant.
     const results = await Promise.all(Array.from({ length: 105 }, (_, index) => createOrg(`burst${index}`)));
-    assert.equal(results.filter((result) => result.credits === 250).length, 100);
-    assert.equal(results.filter((result) => result.credits === 40).length, 5);
+    assert.ok(results.every((result) => result.credits === 25));
     const status = await promo.getLaunchPromotionStatus(db);
     assert.deepEqual([status.allocatedCount, status.remaining], [100, 0]);
     const allocations = await db.select().from(schema.launchPromotionAllocations);
+    const promotedIds = new Set(allocations.map((row) => row.organizationId));
+    assert.equal(results.filter((result) => promotedIds.has(result.id)).length, 100);
+    assert.equal(results.filter((result) => !promotedIds.has(result.id)).length, 5);
     assert.deepEqual(allocations.map((row) => row.sequenceNumber).sort((a, b) => a - b), Array.from({ length: 100 }, (_, index) => index + 1));
 
     // One grant entry per organization, labelled correctly, balance equal to the grant.
@@ -67,16 +69,16 @@ test("first-100 promotion against a real Postgres", { skip }, async () => {
     for (const result of results) {
       const rows = ledger.filter((row) => row.organization_id === result.id);
       assert.equal(rows.length, 1);
-      assert.equal(rows[0].event, result.credits === 250 ? "launch_welcome_credit" : "welcome_credit");
+      assert.equal(rows[0].event, promotedIds.has(result.id) ? "launch_welcome_credit" : "welcome_credit");
       assert.equal(rows[0].credits_delta, result.credits);
       assert.equal(await balanceOf(result.id), result.credits);
     }
-    const promoted = results.find((result) => result.credits === 250);
+    const promoted = results.find((result) => promotedIds.has(result.id));
     assert.equal(ledger.find((row) => row.organization_id === promoted.id).note, "Event Welcome Credits");
 
     // Never twice, and the database itself refuses to exceed the cap.
     await db.transaction(async (tx) => assert.equal(await grantWelcomeCredits(tx, promoted.id), 0));
-    assert.equal(await balanceOf(promoted.id), 250);
+    assert.equal(await balanceOf(promoted.id), 25);
     await assert.rejects(() => pool.query("update launch_promotions set allocated_count = 101"), /launch_promotions_allocated_within_cap/);
 
     // A creation that fails after claiming gives its slot back.
@@ -91,7 +93,7 @@ test("first-100 promotion against a real Postgres", { skip }, async () => {
 
     // Without the migration, organization creation still works with the normal default.
     await pool.query("alter table launch_promotions rename to launch_promotions_off");
-    assert.equal((await createOrg("nomigration")).credits, 40);
+    assert.equal((await createOrg("nomigration")).credits, 25);
     await pool.query("alter table launch_promotions_off rename to launch_promotions");
   } finally {
     await pool.end();
